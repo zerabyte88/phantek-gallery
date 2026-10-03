@@ -3,24 +3,10 @@ name: Build Android APK (Manual)
 on:
   # HANYA manual trigger (tidak berjalan otomatis saat commit/push)
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Tipe Build'
-        required: true
-        default: 'release'
-        type: choice
-        options:
-          - release
-          - debug
-      split_per_abi:
-        description: 'Bagi APK per-ABI (arm64, armv7)?'
-        required: false
-        default: false
-        type: boolean
 
 jobs:
   build:
-    name: Build APK (${{ github.event.inputs.build_type || 'release' }})
+    name: Build Split APK (ARM 64-bit & 32-bit)
     runs-on: ubuntu-latest
 
     steps:
@@ -66,40 +52,24 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build APK (ARM Only)
-        run: |
-          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
-          SPLIT_FLAG=""
-          if [ "${{ github.event.inputs.split_per_abi }}" = "true" ]; then
-            SPLIT_FLAG="--split-per-abi"
-          fi
+      - name: Build Split APK (ARM Only)
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
 
-          if [ "$BUILD_TYPE" = "release" ]; then
-            flutter build apk --release --target-platform android-arm,android-arm64 $SPLIT_FLAG
-          else
-            flutter build apk --debug --target-platform android-arm,android-arm64 $SPLIT_FLAG
-          fi
-
-      - name: Rename APK for Easy Identification
+      - name: Organize APK Artifacts
         run: |
-          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
           cd build/app/outputs/flutter-apk/
-          # Pastikan file x86 dibersihkan jika ada
-          rm -f *x86*
-          if [ -f "app-$BUILD_TYPE.apk" ]; then
-            cp "app-$BUILD_TYPE.apk" "Phantek-Gallery-$BUILD_TYPE.apk"
-          fi
-          if [ -f "app-arm64-v8a-$BUILD_TYPE.apk" ]; then
-            cp "app-arm64-v8a-$BUILD_TYPE.apk" "Phantek-Gallery-arm64-v8a-$BUILD_TYPE.apk"
-          fi
-          if [ -f "app-armeabi-v7a-$BUILD_TYPE.apk" ]; then
-            cp "app-armeabi-v7a-$BUILD_TYPE.apk" "Phantek-Gallery-armeabi-v7a-$BUILD_TYPE.apk"
-          fi
+          # Pindahkan dan beri nama jelas untuk kedua arsitektur ARM
+          mv app-arm64-v8a-release.apk Phantek-Gallery-arm64-v8a.apk
+          mv app-armeabi-v7a-release.apk Phantek-Gallery-armeabi-v7a.apk
+          # Hapus file .apk lain (termasuk universal APK jika ter-generate) agar tepat 2 file tersisa
+          rm -f app-*.apk *x86*
+          echo "Hasil build APK:"
+          ls -la *.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: phantek-gallery-${{ github.event.inputs.build_type || 'release' }}-apk
+          name: phantek-gallery-release-apks
           path: build/app/outputs/flutter-apk/*.apk
           retention-days: 30
           if-no-files-found: error

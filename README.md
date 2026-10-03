@@ -208,11 +208,11 @@ Phantek Gallery declares only the permissions necessary for local media discover
 
 ## CI/CD Workflow
 
-The repository includes an automated GitHub Actions workflow configured in `.github/workflows/build-apk.yml`. It supports manual dispatch (`workflow_dispatch`) to compile release or debug APKs on Ubuntu runners with:
+The repository includes an automated GitHub Actions workflow configured in `.github/workflows/build-apk.yml`. It supports one-click manual dispatch (`workflow_dispatch`) to compile release APKs on Ubuntu runners with:
 
 - Automated JDK 17 and Flutter stable setup.
 - Keystore decoding via repository secrets (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`).
-- Optional per-ABI packaging.
+- Default split-per-ABI packaging producing strictly two ARM APKs (64-bit `arm64-v8a` and 32-bit `armeabi-v7a`), without building heavy universal or x86 APKs.
 - Artifact upload retaining APK builds for 30 days.
 
 ---
