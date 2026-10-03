@@ -10,4 +10,3 @@ GeneratedPluginRegistrant.java
 key.properties
 *.jks
 *.keystore
-!app/phantek.jks
