@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
@@ -77,18 +78,17 @@ class UpdateService {
               json['published_at'] as String? ?? '') ??
           DateTime.now();
 
-      // Look for any .apk asset in release assets
+      // Look for .apk assets in release assets and pick the matching ABI variant
       final assets =
           (json['assets'] as List? ?? []).cast<Map<String, dynamic>>();
-      final apkAsset = assets.firstWhere(
-        (a) => (a['name'] as String? ?? '').endsWith('.apk'),
-        orElse: () => <String, dynamic>{},
-      );
+      final apkAssets = assets
+          .where((a) => (a['name'] as String? ?? '').endsWith('.apk'))
+          .toList();
 
-      final apkUrl =
-          apkAsset['browser_download_url'] as String? ?? '';
+      final apkAsset = selectBestApkAsset(apkAssets);
+      final apkUrl = apkAsset['browser_download_url'] as String? ?? '';
       if (apkUrl.isEmpty) {
-        return const UpdateCheckFailed('No APK asset found in release');
+        return const UpdateCheckFailed('No compatible APK asset found in release');
       }
 
       // Supports both "v1.2.0+5" and "v1.2.0" tag formats
@@ -142,6 +142,61 @@ class UpdateService {
       if (r < l) return false;
     }
     return false;
+  }
+
+  /// Selects the best APK asset matching the device's CPU architecture (e.g. arm64-v8a vs armeabi-v7a).
+  static Map<String, dynamic> selectBestApkAsset(
+    List<Map<String, dynamic>> rawApkAssets, [
+    Abi? overrideAbi,
+  ]) {
+    final apkAssets =
+        rawApkAssets.map((e) => Map<String, dynamic>.from(e)).toList();
+    if (apkAssets.isEmpty) return <String, dynamic>{};
+    if (apkAssets.length == 1) return apkAssets.first;
+
+    final currentAbi = overrideAbi ?? Abi.current();
+    final is64Bit = currentAbi == Abi.androidArm64 ||
+        currentAbi == Abi.androidX64 ||
+        currentAbi == Abi.androidRiscv64;
+    final is32Bit =
+        currentAbi == Abi.androidArm || currentAbi == Abi.androidIA32;
+
+    if (is64Bit) {
+      // 1. Prefer 64-bit APK (arm64-v8a / arm64 / v8a)
+      final arm64 = apkAssets.firstWhere(
+        (a) {
+          final name = (a['name'] as String? ?? '').toLowerCase();
+          return name.contains('arm64') || name.contains('v8a');
+        },
+        orElse: () => <String, dynamic>{},
+      );
+      if (arm64.isNotEmpty) return arm64;
+    } else if (is32Bit) {
+      // 1. Prefer 32-bit APK (armeabi-v7a / v7a / arm32)
+      final arm32 = apkAssets.firstWhere(
+        (a) {
+          final name = (a['name'] as String? ?? '').toLowerCase();
+          return name.contains('armeabi') ||
+              name.contains('v7a') ||
+              (name.contains('arm') && !name.contains('arm64'));
+        },
+        orElse: () => <String, dynamic>{},
+      );
+      if (arm32.isNotEmpty) return arm32;
+    }
+
+    // 2. Fallback to universal APK (not tagged with specific ABI)
+    final universal = apkAssets.firstWhere(
+      (a) {
+        final name = (a['name'] as String? ?? '').toLowerCase();
+        return !name.contains('arm') && !name.contains('x86');
+      },
+      orElse: () => <String, dynamic>{},
+    );
+    if (universal.isNotEmpty) return universal;
+
+    // 3. Fallback to first available APK
+    return apkAssets.first;
   }
 
   // ── Download ──────────────────────────────────────────────────────────

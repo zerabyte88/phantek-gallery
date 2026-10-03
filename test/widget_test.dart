@@ -1,3 +1,4 @@
+import 'dart:ffi';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,7 @@ import 'package:phantek_gallery/features/gallery/presentation/widgets/album_grid
 import 'package:phantek_gallery/features/gallery/presentation/album_detail_screen.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/filter_sort_bar.dart';
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
+import 'package:phantek_gallery/features/update/data/update_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -396,6 +398,30 @@ void main() {
       // item_1 restored and scanned back, item_2 still in deletedIds
       expect(afterRefresh.map((e) => e.id).toSet(), containsAll({'item_1', 'item_3'}));
       expect(afterRefresh.any((e) => e.id == 'item_2'), isFalse);
+    });
+
+    test('UpdateService selectBestApkAsset picks correct 64-bit and 32-bit variant', () {
+      final assets = [
+        {'name': 'Phantek-Gallery-armeabi-v7a.apk', 'browser_download_url': 'https://example.com/v7a.apk'},
+        {'name': 'Phantek-Gallery-arm64-v8a.apk', 'browser_download_url': 'https://example.com/arm64.apk'},
+      ];
+
+      // On 64-bit ARM device:
+      final selected64 = UpdateService.selectBestApkAsset(assets, Abi.androidArm64);
+      expect(selected64['name'], 'Phantek-Gallery-arm64-v8a.apk');
+      expect(selected64['browser_download_url'], 'https://example.com/arm64.apk');
+
+      // On 32-bit ARM device:
+      final selected32 = UpdateService.selectBestApkAsset(assets, Abi.androidArm);
+      expect(selected32['name'], 'Phantek-Gallery-armeabi-v7a.apk');
+      expect(selected32['browser_download_url'], 'https://example.com/v7a.apk');
+
+      // Fallback to universal when specific ABI is missing:
+      final universalAssets = [
+        {'name': 'app-release.apk', 'browser_download_url': 'https://example.com/app-release.apk'},
+      ];
+      final selectedUniversal = UpdateService.selectBestApkAsset(universalAssets, Abi.androidArm64);
+      expect(selectedUniversal['name'], 'app-release.apk');
     });
   });
 }
