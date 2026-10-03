@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/models/settings_model.dart';
 import '../../../../core/providers/settings_provider.dart';
+import '../../../../core/widgets/bouncy_tap.dart';
 
 /// Developer & About card placed at the bottom of the Settings screen.
 /// Includes Easter Egg: tapping developer avatar 10 times unlocks AMOLED Sakura theme.
@@ -157,7 +158,7 @@ class _DeveloperAboutCardState extends ConsumerState<DeveloperAboutCard> {
                   ),
                 ),
                 child: const Text(
-                  'v1.1.0',
+                  'v1.1.1',
                   style: TextStyle(
                     color: Color(0xFF00E676),
                     fontWeight: FontWeight.bold,
@@ -178,9 +179,9 @@ class _DeveloperAboutCardState extends ConsumerState<DeveloperAboutCard> {
           const SizedBox(height: 20),
 
           // ── Key-Value Information Rows ──────────────────────────
-          _buildInfoRow('App Version', 'v1.1.0'),
+          _buildInfoRow('App Version', 'v1.1.1'),
           const SizedBox(height: 10),
-          _buildInfoRow('Build', '11002 (Release APK)'),
+          _buildInfoRow('Build', '11003 (Release APK)'),
           const SizedBox(height: 10),
           _buildInfoRow('Architecture', 'ARM64-v8a (MediaKit)'),
           const SizedBox(height: 10),
@@ -258,39 +259,42 @@ class _DeveloperAboutCardState extends ConsumerState<DeveloperAboutCard> {
           const SizedBox(height: 18),
 
           // ── Bottom Action Button: View Repository on GitHub ─────
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: OutlinedButton(
-              onPressed: () => _openUrl(_githubRepoUrl),
-              style: OutlinedButton.styleFrom(
-                backgroundColor: const Color(0xFF16191D),
-                side: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  width: 1,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.open_in_new,
-                    color: _cyan,
-                    size: 16,
+          BouncyTap(
+            onTap: () => _openUrl(_githubRepoUrl),
+            child: SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton(
+                onPressed: () => _openUrl(_githubRepoUrl),
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: const Color(0xFF16191D),
+                  side: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    width: 1,
                   ),
-                  SizedBox(width: 8),
-                  Text(
-                    'View Repository on GitHub',
-                    style: TextStyle(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.open_in_new,
                       color: _cyan,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
+                      size: 16,
                     ),
-                  ),
-                ],
+                    SizedBox(width: 8),
+                    Text(
+                      'View Repository on GitHub',
+                      style: TextStyle(
+                        color: _cyan,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

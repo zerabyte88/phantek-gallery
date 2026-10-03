@@ -99,10 +99,15 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
       themeMode: flutterThemeMode,
       onGenerateRoute: generateRoute,
       initialRoute: AppRoutes.gallery,
-      builder: (context, child) => UpdateListener(
-        // Wraps the entire widget tree so update dialogs can appear
-        // over any screen without needing a navigator key.
-        child: child ?? const SizedBox.shrink(),
+      builder: (context, child) => AnimatedTheme(
+        data: Theme.of(context),
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+        child: UpdateListener(
+          // Wraps the entire widget tree so update dialogs can appear
+          // over any screen without needing a navigator key.
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
     );
   }
