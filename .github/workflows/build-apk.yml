@@ -29,7 +29,7 @@ jobs:
       - name: Check Flutter Version
         run: flutter --version
 
-      - name: Setup Signing Keystore (Optional Secrets)
+      - name: Setup Signing Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -45,8 +45,16 @@ jobs:
           keyAlias=$KEY_ALIAS
           storeFile=phantek.jks
           EOF
+          elif [ -f "android/app/phantek.jks" ]; then
+            echo "Menggunakan repository phantek.jks keystore..."
+            cat <<EOF > android/key.properties
+          storePassword=phantek123
+          keyPassword=phantek123
+          keyAlias=phantek
+          storeFile=phantek.jks
+          EOF
           else
-            echo "Tidak ada secrets signing, build akan menggunakan fallback debug/local signing..."
+            echo "Keystore tidak ditemukan!"
           fi
 
       - name: Install Dependencies

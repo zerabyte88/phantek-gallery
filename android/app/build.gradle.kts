@@ -24,14 +24,23 @@ android {
     }
 
     signingConfigs {
-        if (keystorePropertiesFile.exists()) {
-            create("release") {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
                 keyAlias     = keystoreProperties["keyAlias"]     as String
                 keyPassword  = keystoreProperties["keyPassword"]  as String
                 val rawPath = keystoreProperties["storeFile"] as String
                 val candidate = file(rawPath)
                 storeFile = if (candidate.exists()) candidate else rootProject.file(rawPath)
                 storePassword = keystoreProperties["storePassword"] as String
+            } else {
+                // Consistent release signing fallback so all builds share the exact same key
+                val defaultKeystore = file("phantek.jks")
+                if (defaultKeystore.exists()) {
+                    storeFile     = defaultKeystore
+                    storePassword = "phantek123"
+                    keyAlias      = "phantek"
+                    keyPassword   = "phantek123"
+                }
             }
         }
     }
@@ -55,10 +64,7 @@ android {
         release {
             isMinifyEnabled   = false  // keep false – media paths must not be obfuscated
             isShrinkResources = false
-            signingConfig = if (keystorePropertiesFile.exists())
-                signingConfigs.getByName("release")
-            else
-                signingConfigs.getByName("debug")  // fallback for CI without keystore
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
