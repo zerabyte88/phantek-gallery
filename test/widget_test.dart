@@ -1,4 +1,3 @@
-import 'dart:ffi';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -414,12 +413,12 @@ void main() {
       ];
 
       // On 64-bit ARM device:
-      final selected64 = UpdateService.selectBestApkAsset(assets, Abi.androidArm64);
+      final selected64 = UpdateService.selectBestApkAsset(assets, 'arm64-v8a');
       expect(selected64['name'], 'Phantek-Gallery-arm64-v8a.apk');
       expect(selected64['browser_download_url'], 'https://example.com/arm64.apk');
 
       // On 32-bit ARM device:
-      final selected32 = UpdateService.selectBestApkAsset(assets, Abi.androidArm);
+      final selected32 = UpdateService.selectBestApkAsset(assets, 'armeabi-v7a');
       expect(selected32['name'], 'Phantek-Gallery-armeabi-v7a.apk');
       expect(selected32['browser_download_url'], 'https://example.com/v7a.apk');
 
@@ -427,7 +426,7 @@ void main() {
       final universalAssets = [
         {'name': 'app-release.apk', 'browser_download_url': 'https://example.com/app-release.apk'},
       ];
-      final selectedUniversal = UpdateService.selectBestApkAsset(universalAssets, Abi.androidArm64);
+      final selectedUniversal = UpdateService.selectBestApkAsset(universalAssets, 'arm64-v8a');
       expect(selectedUniversal['name'], 'app-release.apk');
     });
   });
