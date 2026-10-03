@@ -39,12 +39,10 @@ jobs:
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "Mengonfigurasi release keystore dari GitHub Secrets..."
             echo "$KEYSTORE_BASE64" | base64 --decode > android/app/phantek.jks
-            cat <<EOF > android/key.properties
-storePassword=${KEYSTORE_PASSWORD:-phantek123}
-keyPassword=${KEY_PASSWORD:-phantek123}
-keyAlias=${KEY_ALIAS:-phantek}
-storeFile=phantek.jks
-EOF
+            echo "storePassword=${KEYSTORE_PASSWORD:-phantek123}" > android/key.properties
+            echo "keyPassword=${KEY_PASSWORD:-phantek123}" >> android/key.properties
+            echo "keyAlias=${KEY_ALIAS:-phantek}" >> android/key.properties
+            echo "storeFile=phantek.jks" >> android/key.properties
           else
             echo "::error::Secret KEYSTORE_BASE64 tidak ditemukan di GitHub Repository Secrets! Tambahkan secret ini agar APK release dapat ditandatangani."
             exit 1
