@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -147,19 +147,30 @@ class UpdateService {
   /// Selects the best APK asset matching the device's CPU architecture (e.g. arm64-v8a vs armeabi-v7a).
   static Map<String, dynamic> selectBestApkAsset(
     List<Map<String, dynamic>> rawApkAssets, [
-    Abi? overrideAbi,
+    String? overrideAbi,
   ]) {
     final apkAssets =
         rawApkAssets.map((e) => Map<String, dynamic>.from(e)).toList();
     if (apkAssets.isEmpty) return <String, dynamic>{};
     if (apkAssets.length == 1) return apkAssets.first;
 
-    final currentAbi = overrideAbi ?? Abi.current();
-    final is64Bit = currentAbi == Abi.androidArm64 ||
-        currentAbi == Abi.androidX64 ||
-        currentAbi == Abi.androidRiscv64;
-    final is32Bit =
-        currentAbi == Abi.androidArm || currentAbi == Abi.androidIA32;
+    // Read device ABI via Android shell property (works on all Android versions).
+    // ponytail: synchronous Process.run is fine here — only called once during update check.
+    String deviceAbi = overrideAbi ?? '';
+    if (deviceAbi.isEmpty) {
+      try {
+        final result = Process.runSync('getprop', ['ro.product.cpu.abi']);
+        deviceAbi = (result.stdout as String).trim();
+      } catch (_) {
+        deviceAbi = 'arm64-v8a'; // safe default for modern Android devices
+      }
+    }
+
+    final is64Bit = deviceAbi.contains('arm64') ||
+        deviceAbi.contains('x86_64') ||
+        deviceAbi.contains('riscv64');
+    final is32Bit = !is64Bit &&
+        (deviceAbi.contains('armeabi') || deviceAbi.contains('x86'));
 
     if (is64Bit) {
       // 1. Prefer 64-bit APK (arm64-v8a / arm64 / v8a)
@@ -222,17 +233,16 @@ class UpdateService {
       final total    = response.contentLength ?? 0;
       var received   = 0;
 
-      final sink = apkFile.openWrite();
-      await response.stream.listen(
-        (chunk) {
-          sink.add(chunk);
-          received += chunk.length;
-          if (total > 0) onProgress(received / total);
-        },
-        onDone: () async => sink.close(),
-        cancelOnError: true,
-      ).asFuture<void>();
-      await sink.close();
+      // Collect all bytes before writing – ensures the file is complete
+      // before we return it. The old listener+onDone approach was not awaited
+      // properly and produced truncated APKs.
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in response.stream) {
+        builder.add(chunk);
+        received += chunk.length;
+        if (total > 0) onProgress(received / total);
+      }
+      await apkFile.writeAsBytes(builder.takeBytes());
     } catch (e) {
       // Clean up incomplete file on error.
       if (await apkFile.exists()) await apkFile.delete();
