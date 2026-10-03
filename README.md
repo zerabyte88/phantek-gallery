@@ -6,12 +6,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-059669?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Platform" />
-  <img src="https://img.shields.io/badge/FLUTTER-3.47.0-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
+  <img src="https://img.shields.io/badge/FLUTTER-3.47+-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
+  <img src="https://img.shields.io/badge/APPLICATION_ID-com.phantek.virgo.spica-6366F1?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Application ID" />
   <img src="https://img.shields.io/badge/VERSION-v1.0.0-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" />
   <img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" />
 </p>
 
-Phantek Gallery is a high-performance, offline-first photo and video gallery application for Android. Built with Flutter and powered by the MPV playback engine via MediaKit, it delivers smooth media rendering, responsive navigation, and complete data privacy without third-party tracking or mandatory cloud dependencies.
+Phantek Gallery is a high-performance, offline-first photo and video gallery application for Android (`com.phantek.virgo.spica`). Built with Flutter and powered by the MPV playback engine via MediaKit, it delivers smooth media rendering, responsive navigation, and complete data privacy without third-party tracking or mandatory cloud dependencies. Fully compliant with modern Android standards, including Android 16 (API 36/37) partial media selection and mandatory edge-to-edge layouts.
 
 ---
 
@@ -48,6 +49,7 @@ Modern mobile galleries often require persistent network connections, cloud sync
 - Configurable grid column layout ranging from 2 to 5 columns.
 - Flexible sorting options (Newest First, Oldest First) and media filtering (All, Photos Only, Videos Only).
 - Folder exclusion management to prevent unwanted directories from appearing in the main feed.
+- Support for Android 14+ / 16 partial photo selection (`READ_MEDIA_VISUAL_USER_SELECTED`).
 
 ### Hardware-Accelerated Video Playback
 - Powered by MediaKit with native MPV and FFmpeg integration.
@@ -65,11 +67,12 @@ Modern mobile galleries often require persistent network connections, cloud sync
 ### Over-The-Air (OTA) Updates
 - Integrated update service that queries GitHub Releases for newer application versions.
 - In-app APK downloading with download progress tracking.
-- Automated installation dispatch using Android FileProvider without requiring external app stores.
+- Automated installation dispatch using Android FileProvider (`com.phantek.virgo.spica.fileprovider`) without external app stores.
 - Automatic cleanup of temporary installer packages upon completion.
 
-### Modern Material 3 UI
+### Modern Material 3 & Edge-to-Edge
 - Clean Material Design 3 interface with dynamic color theming.
+- Native Android 16 edge-to-edge support with display cutout awareness (`shortEdges`).
 - Supports Light Mode, Dark Mode (OLED-friendly true black), and System Default synchronization.
 
 ---
@@ -78,14 +81,15 @@ Modern mobile galleries often require persistent network connections, cloud sync
 
 | Category | Technology | Purpose |
 |---|---|---|
-| Framework | Flutter 3.x (Dart 3.x) | Cross-platform UI toolkit targeting Android |
+| Application ID | `com.phantek.virgo.spica` | Unique package identifier for Android OS |
+| Framework | Flutter 3.47+ (Dart 3.x) | Cross-platform UI toolkit targeting Android |
 | State Management | Flutter Riverpod 2 (`flutter_riverpod`, `riverpod_annotation`) | Reactive, compile-safe dependency injection and state |
 | Video Engine | MediaKit (`media_kit`, `media_kit_video`, `media_kit_libs_android_video`) | Native MPV and FFmpeg playback pipeline |
 | Image Viewer | PhotoView (`photo_view`) | High-resolution image viewing with gesture support |
-| Media Management | `photo_manager`, `permission_handler` | Scoped storage access and runtime permissions |
+| Media Management | `photo_manager`, `permission_handler` | Scoped storage access, Android 14+ partial grants, and permissions |
 | Local Preferences | `shared_preferences` | Key-value persistence for user settings |
 | Networking | `http` | Lightweight HTTP client for GitHub Releases OTA checks |
-| Target Platform | Android 5.0+ (API 21 to 34+) | Comprehensive Android version compatibility |
+| Target Platform | Android 5.0+ to Android 16 (API 21 to 36/37) | Comprehensive compatibility across Android versions |
 
 ---
 
@@ -100,7 +104,7 @@ lib/
 |   |-- enums/                   # Filter, sort, and theme enumeration models
 |   |-- models/                  # Settings and preference data structures
 |   |-- providers/               # Global Riverpod state providers
-|   |-- services/                # MediaKit setup, permissions, and storage services
+|   |-- services/                # MediaKit setup, PhotoManager permissions, and trash services
 |   `-- utils/                   # Formatting, date helpers, and file utilities
 |-- features/
 |   |-- gallery/                 # Grid gallery screen, media cards, and filter bar
@@ -119,8 +123,8 @@ lib/
 
 Ensure the following tools are installed on your workstation:
 
-- Flutter SDK (version 3.24.0 or newer recommended)
-- Android SDK (API Level 34 platform tools and build tools)
+- Flutter SDK (version 3.47.0 or newer)
+- Android SDK (API Level 36/37 platform tools and build tools)
 - Java Development Kit (JDK 17)
 - Git
 
@@ -186,14 +190,15 @@ If `key.properties` is absent, the Gradle build will automatically fall back to 
 
 ## Android Permissions
 
-Phantek Gallery declares only the permissions necessary for local media discovery and self-hosted updates:
+Phantek Gallery declares only the permissions necessary for local media discovery and self-hosted updates, with version-conditional scoping:
 
 | Permission | Scope | Justification |
 |---|---|---|
 | `READ_MEDIA_IMAGES` | Android 13+ (API 33+) | Read access to photo media files |
 | `READ_MEDIA_VIDEO` | Android 13+ (API 33+) | Read access to video media files |
-| `READ_EXTERNAL_STORAGE` | Android 12 and below | Legacy read access to local media storage |
-| `WRITE_EXTERNAL_STORAGE` | Android 10 and below | Legacy write access for file deletion operations |
+| `READ_MEDIA_VISUAL_USER_SELECTED` | Android 14+ (API 34+) | Granular / partial access when user selects specific photos or videos |
+| `READ_EXTERNAL_STORAGE` | Android 12 and below (API ≤ 32) | Legacy read access to local media storage |
+| `WRITE_EXTERNAL_STORAGE` | Android 10 and below (API ≤ 29) | Legacy write access for file deletion operations |
 | `MANAGE_EXTERNAL_STORAGE` | Android 11+ (API 30+) | Optional permission for deep trash management across external storage |
 | `ACCESS_MEDIA_LOCATION` | Android 10+ (API 29+) | Reading media metadata and location coordinates from EXIF tags |
 | `INTERNET` | All versions | Required exclusively for checking and downloading updates from GitHub Releases |

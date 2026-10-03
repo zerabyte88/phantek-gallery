@@ -166,7 +166,7 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
 
 Future<void> _installApk(String apkPath) async {
   // Delegates to Android's ACTION_VIEW intent via MethodChannel.
-  // This requires FileProvider authority: com.phantek.gallery.fileprovider
+  // This requires FileProvider authority: com.phantek.virgo.spica.fileprovider
   // and android.permission.REQUEST_INSTALL_PACKAGES (already in manifest).
   const channel = MethodChannel('com.phantek.gallery/install');
   await channel.invokeMethod<void>('installApk', {'path': apkPath});

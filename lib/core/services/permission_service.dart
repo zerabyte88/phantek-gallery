@@ -1,25 +1,26 @@
 import 'package:permission_handler/permission_handler.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 /// Centralises runtime permission requests for media access.
 class PermissionService {
   PermissionService._();
   static final PermissionService instance = PermissionService._();
 
-  /// Request all standard media/storage permissions appropriate for the current
-  /// Android version.
+  /// Request media permissions suitable for the active Android version:
+  /// - Android 14, 15, 16+ (API 34+): full access or user-selected partial access
+  /// - Android 13 (API 33): granular photos & videos
+  /// - Android 12 and below (API <= 32): storage (READ/WRITE_EXTERNAL_STORAGE)
+  ///
+  /// Uses [PhotoManager.requestPermissionExtend], which delegates directly to
+  /// native Android platform code checking Build.VERSION.SDK_INT and handling
+  /// all OS versions correctly.
   Future<bool> requestMediaPermissions() async {
-    final results = await [
-      Permission.photos,
-      Permission.videos,
-      Permission.storage,
-    ].request();
+    if (await Permission.manageExternalStorage.isGranted) {
+      return true;
+    }
 
-    final photosGranted = results[Permission.photos]?.isGranted ?? false;
-    final videosGranted = results[Permission.videos]?.isGranted ?? false;
-    final storageGranted = results[Permission.storage]?.isGranted ?? false;
-    final manageGranted = await Permission.manageExternalStorage.isGranted;
-
-    return (photosGranted && videosGranted) || storageGranted || manageGranted;
+    final state = await PhotoManager.requestPermissionExtend();
+    return state.hasAccess;
   }
 
   /// Request "All Files Access" (MANAGE_EXTERNAL_STORAGE) on Android 11+ (API 30+).
@@ -38,13 +39,21 @@ class PermissionService {
 
   /// Check if basic media access is granted without prompting.
   Future<bool> hasMediaPermission() async {
-    final photos  = await Permission.photos.isGranted;
-    final videos  = await Permission.videos.isGranted;
-    final storage = await Permission.storage.isGranted;
-    final manage  = await Permission.manageExternalStorage.isGranted;
-    return (photos && videos) || storage || manage;
+    if (await Permission.manageExternalStorage.isGranted) {
+      return true;
+    }
+    // PhotoManager has hasPermissionToRead / requestPermissionExtend
+    final state = await PhotoManager.requestPermissionExtend(
+      requestOption: const PermissionRequestOption(
+        androidPermission: AndroidPermission(
+          type: RequestType.common,
+          mediaLocation: false,
+        ),
+      ),
+    );
+    return state.hasAccess;
   }
 
   /// Open app system settings so user can grant denied permissions.
-  Future<void> openSettings() => openAppSettings();
+  Future<void> openSettings() => PhotoManager.openSetting();
 }

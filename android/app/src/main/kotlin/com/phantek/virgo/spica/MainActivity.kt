@@ -1,4 +1,4 @@
-package com.phantek.phantek_gallery
+package com.phantek.virgo.spica
 
 import android.content.Intent
 import android.net.Uri

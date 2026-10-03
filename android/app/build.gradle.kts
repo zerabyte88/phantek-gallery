@@ -14,8 +14,8 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.phantek.gallery"
-    compileSdk = flutter.compileSdkVersion
+    namespace = "com.phantek.virgo.spica"
+    compileSdk = 37          // API 37 – required to build against Android 16 APIs
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -37,9 +37,9 @@ android {
     }
 
     defaultConfig {
-        applicationId   = "com.phantek.gallery"
+        applicationId   = "com.phantek.virgo.spica"
         minSdk          = 21          // Android 5.0 – covers all relevant media APIs
-        targetSdk       = flutter.targetSdkVersion
+        targetSdk       = 36          // Android 16
         versionCode     = flutter.versionCode
         versionName     = flutter.versionName
 

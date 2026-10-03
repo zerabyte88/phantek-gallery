@@ -19,7 +19,7 @@ dependencies:
 
   # ── Media scanning & permissions ─────────────────────────────────────────
   photo_manager: ^3.4.4
-  permission_handler: ^11.3.1
+  permission_handler: ^13.0.2
 
   # ── Video player (MPV engine) ─────────────────────────────────────────────
   media_kit: ^1.1.11
