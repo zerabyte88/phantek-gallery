@@ -169,9 +169,9 @@ flutter build apk --release
 The output file is located at `build/app/outputs/flutter-apk/app-release.apk`.
 
 ### Split ABI Build
-To produce smaller architecture-specific packages (arm64-v8a, armeabi-v7a, x86_64):
+To produce smaller architecture-specific packages for ARM devices (arm64-v8a, armeabi-v7a):
 ```bash
-flutter build apk --release --split-per-abi
+flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
 ```
 
 ### Keystore Configuration
