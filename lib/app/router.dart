@@ -34,8 +34,17 @@ Route<dynamic> generateRoute(RouteSettings s) {
       ));
 
     case AppRoutes.video:
-      final item = s.arguments as MediaItem;
-      return _slide(VideoPlayerScreen(item: item));
+      if (s.arguments is _ViewerArgs) {
+        final args = s.arguments as _ViewerArgs;
+        return _slide(VideoPlayerScreen(
+          items: args.items,
+          initialIndex: args.initialIndex,
+        ));
+      } else if (s.arguments is MediaItem) {
+        final item = s.arguments as MediaItem;
+        return _slide(VideoPlayerScreen(item: item));
+      }
+      return _slide(const GalleryScreen());
 
     case AppRoutes.trash:
       return _slide(const TrashScreen());
@@ -70,7 +79,11 @@ extension AppNav on NavigatorState {
       pushNamed(AppRoutes.image,
           arguments: _ViewerArgs(items: items, initialIndex: index));
 
-  Future<void> openVideo(MediaItem item) =>
+  Future<void> openVideo(List<MediaItem> items, int index) =>
+      pushNamed(AppRoutes.video,
+          arguments: _ViewerArgs(items: items, initialIndex: index));
+
+  Future<void> openSingleVideo(MediaItem item) =>
       pushNamed(AppRoutes.video, arguments: item);
 
   Future<void> openTrash() => pushNamed(AppRoutes.trash);

@@ -203,25 +203,33 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                MediaUtils.formatViewerDate(item.date),
+                                item.name,
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                 ),
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                MediaUtils.formatViewerTime(item.date),
+                                '${MediaUtils.formatViewerDate(item.date)}, ${MediaUtils.formatViewerTime(item.date)}',
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 12,
                                 ),
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline,
+                              color: Colors.white, size: 22),
+                          tooltip: 'Delete',
+                          onPressed: _deleteCurrentItem,
                         ),
                         IconButton(
                           icon: const Icon(Icons.info_outline,
@@ -245,7 +253,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                 opacity: _barsVisible ? 1 : 0,
                 duration: const Duration(milliseconds: 200),
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 8, 28),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.bottomCenter,
@@ -268,20 +276,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                       ),
                       const Spacer(),
                       if (item.resolution.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Text(
-                            item.resolution,
-                            style: const TextStyle(
-                                color: Colors.white70, fontSize: 12),
-                          ),
+                        Text(
+                          item.resolution,
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
                         ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            color: Colors.white),
-                        tooltip: 'Delete',
-                        onPressed: _deleteCurrentItem,
-                      ),
                     ],
                   ),
                 ),

@@ -4,15 +4,23 @@ import '../../../core/models/settings_model.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/thumbnail_service.dart';
+import '../../../core/utils/easter_egg_handler.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import '../../../features/update/data/update_provider.dart';
 import 'widgets/developer_about_card.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  final _easterEggHandler = EasterEggTapHandler();
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.watch(settingsNotifierProvider);
     final update = ref.watch(updateNotifierProvider);
 
@@ -29,7 +37,41 @@ class SettingsScreen extends ConsumerWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(
+        title: const Text('Settings'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: BouncyTap(
+                key: const ValueKey('settings_appbar_badge_easter_egg'),
+                scaleDown: 0.92,
+                onTap: () => _easterEggHandler.handleTap(context, ref),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00382B),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFF00E676).withValues(alpha: 0.6),
+                      width: 1,
+                    ),
+                  ),
+                  child: const Text(
+                    'v1.1.2',
+                    style: TextStyle(
+                      color: Color(0xFF00E676),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: ListView(
         children: [
           // ══ Appearance ══════════════════════════════════════
