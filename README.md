@@ -8,8 +8,8 @@
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-059669?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Platform" />
   <img src="https://img.shields.io/badge/FLUTTER-3.47+-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
   <img src="https://img.shields.io/badge/APPLICATION_ID-com.phantek.virgo.spica-6366F1?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Application ID" />
-  <img src="https://img.shields.io/badge/VERSION-v1.1.1-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" />
-  <img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" />
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.1.1-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" /></a>
 </p>
 
 Phantek Gallery is a high-performance, offline-first photo and video gallery application for Android (`com.phantek.virgo.spica`). Built with Flutter and powered by the MPV playback engine via MediaKit, it delivers smooth media rendering, responsive navigation, and complete data privacy without third-party tracking or mandatory cloud dependencies. Fully compliant with modern Android standards, including Android 16 (API 36/37) partial media selection and mandatory edge-to-edge layouts.
@@ -216,12 +216,14 @@ The repository includes an automated GitHub Actions workflow configured in `.git
 
 ## License
 
-Phantek Gallery is free and open-source software licensed under the [GNU General Public License v3.0 (GPLv3)](LICENSE).
+Phantek Gallery is free and open-source software licensed under the **[GNU General Public License v3.0 (GPLv3)](LICENSE)**.
 
-- Freedom to run the software for any purpose.
-- Freedom to study how the program works and adapt it to your needs.
-- Freedom to redistribute copies to help others.
-- Freedom to improve the program and release your improvements to the public under the same copyleft license terms.
+- **Freedom to run** the software for any purpose.
+- **Freedom to study** how the program works and adapt it to your needs.
+- **Freedom to redistribute** copies to help others.
+- **Freedom to improve** the program and release your improvements to the public under the same copyleft license terms.
+
+This copyleft licensing complies with the distribution requirements for bundled native media playback dependencies, including MediaKit (`media_kit_libs_android_video` / MPV player engine / FFmpeg).
 
 For the full legal terms and conditions, please consult the [LICENSE](LICENSE) file located in the root of this repository.
 
