@@ -11,6 +11,7 @@ class AppTheme {
         useMaterial3: true,
         colorSchemeSeed: _seed,
         brightness: Brightness.light,
+        splashFactory: InkSparkle.splashFactory,
         appBarTheme: const AppBarTheme(centerTitle: false, elevation: 0),
         cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero),
       );
@@ -19,6 +20,7 @@ class AppTheme {
         useMaterial3: true,
         colorSchemeSeed: _seed,
         brightness: Brightness.dark,
+        splashFactory: InkSparkle.splashFactory,
         scaffoldBackgroundColor: const Color(0xFF0E0E0E),
         appBarTheme: const AppBarTheme(
           centerTitle: false,
@@ -36,6 +38,7 @@ class AppTheme {
           surface: Colors.black,
         ),
         brightness: Brightness.dark,
+        splashFactory: InkSparkle.splashFactory,
         scaffoldBackgroundColor: Colors.black,
         canvasColor: Colors.black,
         appBarTheme: const AppBarTheme(
@@ -67,6 +70,7 @@ class AppTheme {
           primary: const Color(0xFFFF7597),
         ),
         brightness: Brightness.dark,
+        splashFactory: InkSparkle.splashFactory,
         scaffoldBackgroundColor: Colors.black,
         canvasColor: Colors.black,
         appBarTheme: const AppBarTheme(

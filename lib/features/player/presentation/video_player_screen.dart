@@ -11,6 +11,7 @@ import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/utils/media_utils.dart';
+import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
@@ -391,73 +392,90 @@ class _BottomBar extends StatelessWidget {
             },
           ),
           // Play controls
-          // Play controls
           SizedBox(
-            height: 60,
+            height: 72,
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Centered backward, play/pause, forward
+                // Fullscreen toggle moved to the left
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: BouncyTap(
+                    onTap: onToggleFullscreen,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Icon(
+                        isFullscreen
+                            ? Icons.fullscreen_exit
+                            : Icons.fullscreen,
+                        size: 28,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                // Centered backward, play/pause, forward (enlarged with bouncy tap)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Seek -10s
-                    IconButton(
-                      icon: const Icon(Icons.replay_10, color: Colors.white),
-                      onPressed: () async {
+                    BouncyTap(
+                      onTap: () async {
                         final pos = player.state.position;
                         await player.seek(pos - const Duration(seconds: 10));
                       },
+                      child: const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Icon(Icons.replay_10,
+                            size: 36, color: Colors.white),
+                      ),
                     ),
+                    const SizedBox(width: 6),
                     // Play/Pause
                     StreamBuilder<bool>(
                       stream: player.stream.playing,
                       builder: (_, snap) {
                         final playing = snap.data ?? false;
-                        return IconButton(
-                          iconSize: 52,
-                          icon: Icon(
-                            playing ? Icons.pause_circle : Icons.play_circle,
-                            color: Colors.white,
+                        return BouncyTap(
+                          onTap: player.playOrPause,
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              playing
+                                  ? Icons.pause_circle
+                                  : Icons.play_circle,
+                              size: 64,
+                              color: Colors.white,
+                            ),
                           ),
-                          onPressed: player.playOrPause,
                         );
                       },
                     ),
+                    const SizedBox(width: 6),
                     // Seek +10s
-                    IconButton(
-                      icon: const Icon(Icons.forward_10, color: Colors.white),
-                      onPressed: () async {
+                    BouncyTap(
+                      onTap: () async {
                         final pos = player.state.position;
                         await player.seek(pos + const Duration(seconds: 10));
                       },
+                      child: const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Icon(Icons.forward_10,
+                            size: 36, color: Colors.white),
+                      ),
                     ),
                   ],
                 ),
-                // Trailing actions: delete and fullscreen
+                // Delete button taking over the former fullscreen position on the right
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Delete / trash
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            color: Colors.white),
-                        tooltip: 'Delete',
-                        onPressed: onDelete,
-                      ),
-                      // Fullscreen toggle
-                      IconButton(
-                        icon: Icon(
-                          isFullscreen
-                              ? Icons.fullscreen_exit
-                              : Icons.fullscreen,
-                          color: Colors.white,
-                        ),
-                        onPressed: onToggleFullscreen,
-                      ),
-                    ],
+                  child: BouncyTap(
+                    onTap: onDelete,
+                    child: const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Icon(Icons.delete_outline,
+                          size: 28, color: Colors.white),
+                    ),
                   ),
                 ),
               ],

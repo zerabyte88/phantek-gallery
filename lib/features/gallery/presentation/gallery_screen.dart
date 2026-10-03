@@ -10,6 +10,8 @@ import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../app/router.dart';
+import '../../../core/widgets/animated_flame_title.dart';
+import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/album_grid_item.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
@@ -178,9 +180,13 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
+          centerTitle: true,
           title: _selecting && !isAlbums
               ? Text('${_selected.length} selected')
-              : const Text('Phantek Gallery'),
+              : const BouncyTap(
+                  scaleDown: 0.94,
+                  child: AnimatedFlameTitle(title: 'Phantek'),
+                ),
           actions: [
             if (_selecting && !isAlbums) ...[
               IconButton(
@@ -204,17 +210,23 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                 onPressed: _clearSelection,
               ),
             ] else ...[
-              IconButton(
-                icon: const Icon(Icons.delete_sweep_outlined),
-                tooltip: 'Trash',
-                onPressed: () =>
-                    Navigator.of(context).openTrash(),
+              BouncyTap(
+                scaleDown: 0.88,
+                child: IconButton(
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  tooltip: 'Trash',
+                  onPressed: () =>
+                      Navigator.of(context).openTrash(),
+                ),
               ),
-              IconButton(
-                icon: const Icon(Icons.settings_outlined),
-                tooltip: 'Settings',
-                onPressed: () =>
-                    Navigator.of(context).openSettings(),
+              BouncyTap(
+                scaleDown: 0.88,
+                child: IconButton(
+                  icon: const Icon(Icons.settings_outlined),
+                  tooltip: 'Settings',
+                  onPressed: () =>
+                      Navigator.of(context).openSettings(),
+                ),
               ),
             ],
           ],

@@ -8,31 +8,11 @@
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-059669?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Platform" />
   <img src="https://img.shields.io/badge/FLUTTER-3.47+-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
   <img src="https://img.shields.io/badge/APPLICATION_ID-com.phantek.virgo.spica-6366F1?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Application ID" />
-  <img src="https://img.shields.io/badge/VERSION-v1.1.0-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" />
+  <img src="https://img.shields.io/badge/VERSION-v1.1.1-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" />
   <img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" />
 </p>
 
 Phantek Gallery is a high-performance, offline-first photo and video gallery application for Android (`com.phantek.virgo.spica`). Built with Flutter and powered by the MPV playback engine via MediaKit, it delivers smooth media rendering, responsive navigation, and complete data privacy without third-party tracking or mandatory cloud dependencies. Fully compliant with modern Android standards, including Android 16 (API 36/37) partial media selection and mandatory edge-to-edge layouts.
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Architecture and Tech Stack](#architecture-and-tech-stack)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-- [Build and Release](#build-and-release)
-  - [Debug Build](#debug-build)
-  - [Release Build](#release-build)
-  - [Split ABI Build](#split-abi-build)
-  - [Keystore Configuration](#keystore-configuration)
-- [Android Permissions](#android-permissions)
-- [CI/CD Workflow](#cicd-workflow)
-- [License](#license)
 
 ---
 
@@ -44,17 +24,24 @@ Modern mobile galleries often require persistent network connections, cloud sync
 
 ## Key Features
 
+### Animated Flame Title & Modern Aesthetics
+- **Animated Flame Brand**: Sleek centered AppBar badge featuring a continuous looping fiery gradient border, outer flame glow, and dynamic color-pulsing fire icon (`🔥 Phantek`).
+- **Tactile Micro-Animations**: Smooth spring-scale tap animations (`BouncyTap`) across interactive chips, dialog options, and controls.
+- **Fluid Theme Transitions**: `AnimatedTheme` integration providing a 350ms smooth cross-fade transition when toggling themes.
+
 ### High-Performance Media Grid & Album Organization
-- **Smart Grouping**: View all media or browse by organized folder albums (DCIM, Camera, Downloads, Screenshots, etc.).
-- **Centered Category Navigation**: Enlarged, centered filter switcher (`All`, `Photos`, `Videos`, `Albums`).
-- **Compact Sort Menu**: 3-dots popup menu with quick sorting (Newest First, Oldest First, Name A → Z, Name Z → A).
-- **Independent Grid Layouts**: Customize grid columns for both the main gallery feed and albums grid (2 to 5 columns) with clean listbox dialogs.
+- **Smart Grouping**: View all media in a unified timeline or browse organized folders (DCIM, Camera, Downloads, Screenshots, etc.).
+- **Smooth Stadium Filter Bar**: Anti-aliased pill-shaped filter chips (`All`, `Photos`, `Videos`, `Albums`) with seamless, clipped ink feedback.
+- **In-Album Filtering & Sorting**: Full filter bar (`All`, `Photos`, `Videos`) and sorting options available inside individual album detail screens.
+- **Compact Sort Menu**: 3-dots popup menu supporting Newest First, Oldest First, Name A → Z, and Name Z → A.
+- **Visual Column Dialogs**: Modern dialogs featuring interactive mini-grid layout previews for configuring 2, 3, 4, or 5 grid columns independently for photos and albums.
 - **Folder Exclusions**: Blacklist unwanted system directories from being indexed.
 - **Android 14+ / 16 Compliance**: Seamless partial photo selection support (`READ_MEDIA_VISUAL_USER_SELECTED`).
 
 ### Hardware-Accelerated Video Playback
 - **MediaKit & MPV Engine**: Native MPV and FFmpeg integration for ultra-smooth playback of MKV, MP4, WebM, and high-bitrate video streams.
-- **Centered Controls**: Ergonomic centered overlay controls (Play/Pause, Seek Backward 10s, Seek Forward 10s).
+- **Enlarged Ergonomic Controls**: Prominent 64dp Play/Pause button, 36dp Rewind 10s, and 36dp Fast-Forward 10s buttons with spring tap physics.
+- **Intuitive Layout**: Fullscreen toggle repositioned to bottom-left below playback timestamps, and quick-delete button positioned on the far right.
 - **Hardware Acceleration**: Configurable GPU decoding and screen orientation controls.
 
 ### High-Fidelity Photo Viewer
@@ -69,16 +56,18 @@ Modern mobile galleries often require persistent network connections, cloud sync
 - **Automatic Media Store Sync**: Automatic cache clearing ensuring deleted files do not reappear.
 
 ### Comprehensive Theming & Easter Egg
+- **Modern Card-Based Theme Picker**: Interactive cards featuring badge icons, gradient previews, and descriptions for each visual mode.
 - **Material 3 Theming**: System Default, Light Mode, and Dark Mode.
 - **Pure AMOLED Mode**: True pitch-black (`#000000`) surfaces for maximum OLED battery savings.
 - **AMOLED Sakura Mode 🌸**: Secret theme featuring Japanese Sakura pink accents over deep pitch-black backgrounds.
 - **Easter Egg**: Tap the developer profile avatar 10 times in Settings to unlock the secret AMOLED Sakura theme!
 - **Developer Card**: Dedicated About & Maintainer card in Settings with GitHub repository shortcuts.
 
-### Over-The-Air (OTA) Updates
+### Over-The-Air (OTA) Updates & 64-Bit Architecture
 - Integrated update service that queries GitHub Releases for newer application versions.
-- In-app APK downloading with download progress tracking.
-- Automated installation dispatch using Android FileProvider (`com.phantek.virgo.spica.fileprovider`) without external app stores.
+- **Dedicated 64-Bit ARM Build**: Streamlined specifically for modern 64-bit ARM devices (`arm64-v8a`), maximizing runtime performance, decoding speed, and memory efficiency.
+- **Package Conflict Prevention**: Standardized release signing keys across all version updates, eliminating `INSTALL_FAILED_UPDATE_INCOMPATIBLE` errors.
+- In-app APK downloading with live progress tracking and automated installation dispatch via Android FileProvider (`com.phantek.virgo.spica.fileprovider`).
 - Automatic cleanup of temporary installer packages upon completion.
 
 ---
@@ -110,15 +99,16 @@ lib/
 |   |-- enums/                   # Filter, sort, and theme enumeration models
 |   |-- models/                  # MediaItem, Album, TrashItem, and SettingsModel data structures
 |   |-- providers/               # Global Riverpod state providers (media, trash, settings)
-|   |-- services/                # MediaKit setup, PhotoManager, permission, and trash services
-|   `-- utils/                   # Formatting, duration, date helpers, and file utilities
+|   |-- services/                # MediaKit setup, PhotoManager, permission, trash, and update services
+|   |-- utils/                   # Formatting, duration, date helpers, and file utilities
+|   `-- widgets/                 # Reusable UI components (AnimatedFlameTitle, BouncyTap)
 |-- features/
 |   |-- gallery/                 # Grid gallery, albums view, album detail screen, and filter bar
 |   |-- player/                  # Image viewer and MPV-based video player screens
-|   |-- settings/                # User preferences, column counts, exclusions, and Developer card
+|   |-- settings/                # User preferences, modern dialogs, exclusions, and Developer card
 |   |-- trash/                   # Recycle bin management and restoration UI
 |   `-- update/                  # GitHub Releases client, download service, and OTA dialog
-`-- main.dart                    # Application entry point, boot sequence, and initialization
+`-- main.dart                    # Application entry point, smooth theme transitions, and boot sequence
 ```
 
 ---
@@ -174,14 +164,14 @@ flutter build apk --release
 ```
 The output file is located at `build/app/outputs/flutter-apk/app-release.apk`.
 
-### Split ABI Build
-To produce smaller architecture-specific packages for ARM devices (arm64-v8a, armeabi-v7a):
+### 64-Bit ARM Release Build
+To produce a lightweight, optimized release package specifically for 64-bit ARM devices (`arm64-v8a`):
 ```bash
-flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+flutter build apk --release --split-per-abi --target-platform android-arm64
 ```
 
 ### Keystore Configuration
-For signed release distributions, create a `key.properties` file in the `android/` directory:
+For signed release distributions, configure GitHub Repository Secrets (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`) for automated CI/CD builds, or create a `key.properties` file in the `android/` directory for local builds:
 
 ```properties
 storePassword=your_keystore_password
@@ -190,7 +180,7 @@ keyAlias=your_key_alias
 storeFile=path/to/your_keystore.jks
 ```
 
-If `key.properties` is absent, the Gradle build will automatically fall back to the default debug signing configuration.
+If `key.properties` is absent, local Gradle builds will automatically fall back to the default debug signing configuration.
 
 ---
 
@@ -218,7 +208,8 @@ The repository includes an automated GitHub Actions workflow configured in `.git
 
 - Automated JDK 17 and Flutter stable setup.
 - Keystore decoding via repository secrets (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`).
-- Default split-per-ABI packaging producing strictly two ARM APKs (64-bit `arm64-v8a` and 32-bit `armeabi-v7a`), without building heavy universal or x86 APKs.
+- Dedicated 64-bit ARM packaging (`arm64-v8a`) producing `Phantek-Gallery-arm64-v8a.apk`, stripped of legacy 32-bit and heavy x86 binaries.
+- Standardized signing keys ensuring seamless, conflict-free OTA updates across releases.
 - Artifact upload retaining APK builds for 30 days.
 
 ---

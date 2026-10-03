@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    name: Build Split APK (ARM 64-bit & 32-bit)
+    name: Build APK (ARM 64-bit)
     runs-on: ubuntu-latest
 
     steps:
@@ -51,16 +51,15 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build Split APK (ARM Only)
-        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+      - name: Build APK (ARM 64-bit)
+        run: flutter build apk --release --split-per-abi --target-platform android-arm64
 
       - name: Organize APK Artifacts
         run: |
           cd build/app/outputs/flutter-apk/
-          # Pindahkan dan beri nama jelas untuk kedua arsitektur ARM
+          # Pindahkan dan beri nama jelas untuk arsitektur ARM 64-bit
           mv app-arm64-v8a-release.apk Phantek-Gallery-arm64-v8a.apk
-          mv app-armeabi-v7a-release.apk Phantek-Gallery-armeabi-v7a.apk
-          # Hapus file .apk lain (termasuk universal APK jika ter-generate) agar tepat 2 file tersisa
+          # Hapus file .apk sisa lainnya jika ada
           rm -f app-*.apk *x86*
           echo "Hasil build APK:"
           ls -la *.apk
@@ -68,7 +67,7 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: phantek-gallery-release-apks
+          name: phantek-gallery-arm64-v8a
           path: build/app/outputs/flutter-apk/*.apk
           retention-days: 30
           if-no-files-found: error
