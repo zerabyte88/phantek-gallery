@@ -1,3 +1,5 @@
+# Phantek Gallery
+
 <p align="center">
   <img src="assets/app_icon.jpg" width="115" height="115" alt="Phantek Gallery" />
 </p>
@@ -224,3 +226,14 @@ Phantek Gallery is free and open-source software licensed under the [GNU General
 - Freedom to improve the program and release your improvements to the public under the same copyleft license terms.
 
 For the full legal terms and conditions, please consult the [LICENSE](LICENSE) file located in the root of this repository.
+
+---
+
+<div align="center">
+  <br/>
+  <a href="https://github.com/zerabyte88">
+    <img src="https://github.com/zerabyte88.png" width="48" height="48" style="border-radius: 50%;" alt="zerabyte88" />
+  </a>
+  <br/>
+  <sub>Developed with ❤️ by <a href="https://github.com/zerabyte88">zerabyte88</a> (Creator & Maintainer)</sub>
+</div>
