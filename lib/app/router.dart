@@ -31,6 +31,7 @@ Route<dynamic> generateRoute(RouteSettings s) {
       return _slide(ImageViewerScreen(
         items: args.items,
         initialIndex: args.initialIndex,
+        isTrash: args.isTrash,
       ));
 
     case AppRoutes.video:
@@ -39,6 +40,7 @@ Route<dynamic> generateRoute(RouteSettings s) {
         return _slide(VideoPlayerScreen(
           items: args.items,
           initialIndex: args.initialIndex,
+          isTrash: args.isTrash,
         ));
       } else if (s.arguments is MediaItem) {
         final item = s.arguments as MediaItem;
@@ -68,20 +70,25 @@ PageRoute<T> _slide<T>(Widget page) => PageRouteBuilder<T>(
 
 /// Argument bundle for the image viewer.
 class _ViewerArgs {
-  const _ViewerArgs({required this.items, required this.initialIndex});
+  const _ViewerArgs({
+    required this.items,
+    required this.initialIndex,
+    this.isTrash = false,
+  });
   final List<MediaItem> items;
   final int initialIndex;
+  final bool isTrash;
 }
 
 /// Helper extension on [NavigatorState] so call sites are clean.
 extension AppNav on NavigatorState {
-  Future<void> openImage(List<MediaItem> items, int index) =>
+  Future<void> openImage(List<MediaItem> items, int index, {bool isTrash = false}) =>
       pushNamed(AppRoutes.image,
-          arguments: _ViewerArgs(items: items, initialIndex: index));
+          arguments: _ViewerArgs(items: items, initialIndex: index, isTrash: isTrash));
 
-  Future<void> openVideo(List<MediaItem> items, int index) =>
+  Future<void> openVideo(List<MediaItem> items, int index, {bool isTrash = false}) =>
       pushNamed(AppRoutes.video,
-          arguments: _ViewerArgs(items: items, initialIndex: index));
+          arguments: _ViewerArgs(items: items, initialIndex: index, isTrash: isTrash));
 
   Future<void> openSingleVideo(MediaItem item) =>
       pushNamed(AppRoutes.video, arguments: item);

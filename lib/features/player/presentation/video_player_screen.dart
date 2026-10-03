@@ -21,11 +21,13 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
     this.item,
     this.items,
     this.initialIndex = 0,
+    this.isTrash = false,
   }) : assert(item != null || (items != null && items.length > 0));
 
   final MediaItem? item;
   final List<MediaItem>? items;
   final int initialIndex;
+  final bool isTrash;
 
   @override
   ConsumerState<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
@@ -54,6 +56,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
     _pageController = PageController(initialPage: _current);
     _initPlayer();
+    _precacheAdjacentVideos(_current);
+  }
+
+  void _precacheAdjacentVideos(int index) {
+    if (index + 1 < _videos.length) {
+      ThumbnailService.instance.getThumbnail(_videos[index + 1].id);
+    }
+    if (index - 1 >= 0) {
+      ThumbnailService.instance.getThumbnail(_videos[index - 1].id);
+    }
   }
 
   void _initPlayer() {
@@ -78,19 +90,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     _player.open(
       Media(_videos[_current].path),
-      play: settings.autoPlayVideo,
+      play: false,
     );
   }
 
   void _onPageChanged(int index) {
     if (index == _current) return;
-    final wasPlaying = _player.state.playing;
-    final shouldPlay =
-        ref.read(settingsNotifierProvider).autoPlayVideo || wasPlaying;
     setState(() {
       _current = index;
     });
-    _player.open(Media(_videos[index].path), play: shouldPlay);
+    // Never auto-play on swipe — user decides whether to play
+    _player.open(Media(_videos[index].path), play: false);
+    _precacheAdjacentVideos(index);
   }
 
   @override
@@ -138,10 +149,76 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
   }
 
+  Future<void> _restoreItem() async {
+    final item = _videos[_current];
+    _player.pause();
+    await ref.read(trashProvider.notifier).restore(item.id);
+    ref.read(mediaListProvider.notifier).restoreItems([item.id]);
+    ref.read(mediaListProvider.notifier).refresh();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"${item.name}" restored')),
+      );
+      if (_videos.length <= 1) {
+        Navigator.of(context).pop();
+      } else {
+        setState(() {
+          _videos.removeAt(_current);
+          _current = _current.clamp(0, _videos.length - 1);
+        });
+        _pageController.jumpToPage(_current);
+        _player.open(Media(_videos[_current].path), play: false);
+      }
+    }
+  }
+
   Future<void> _deleteItem() async {
+    final item = _videos[_current];
+
+    if (widget.isTrash) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Delete Permanently?'),
+          content: Text(
+            '"${item.name}" will be permanently deleted. This action cannot be undone.',
+          ),
+          actionsOverflowButtonSpacing: 8,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+
+      _player.pause();
+      await ref.read(trashProvider.notifier).permanentDelete(item.id);
+
+      if (!mounted) return;
+      if (_videos.length <= 1) {
+        Navigator.of(context).pop();
+      } else {
+        setState(() {
+          _videos.removeAt(_current);
+          _current = _current.clamp(0, _videos.length - 1);
+        });
+        _pageController.jumpToPage(_current);
+        _player.open(Media(_videos[_current].path), play: false);
+      }
+      return;
+    }
+
     final settings = ref.read(settingsNotifierProvider);
     final isTrash = settings.enableTrash;
-    final item = _videos[_current];
 
     final ok = await showDialog<bool>(
       context: context,
@@ -221,7 +298,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         _current = _current.clamp(0, _videos.length - 1);
       });
       _pageController.jumpToPage(_current);
-      _player.open(Media(_videos[_current].path), play: settings.autoPlayVideo);
+      _player.open(Media(_videos[_current].path), play: false);
     }
   }
 
@@ -274,6 +351,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         item: item,
                         currentIndex: _current,
                         totalVideos: _videos.length,
+                        isTrash: widget.isTrash,
+                        onRestore: _restoreItem,
                         onBack: () {
                           if (_isFullscreen) {
                             _exitLandscape();
@@ -284,6 +363,37 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         onInfo: () =>
                             showMediaInfoSheet(context, item),
                         onDelete: _deleteItem,
+                      ),
+                      const Spacer(),
+                      // Center play button when paused
+                      Center(
+                        child: StreamBuilder<bool>(
+                          stream: _player.stream.playing,
+                          builder: (_, snap) {
+                            final playing = snap.data ?? false;
+                            if (playing) return const SizedBox.shrink();
+                            return BouncyTap(
+                              onTap: _player.play,
+                              child: Container(
+                                width: 72,
+                                height: 72,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.4),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 48,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
                       const Spacer(),
                       // Bottom controls
@@ -322,6 +432,7 @@ class _VideoThumbnailPage extends StatelessWidget {
             child: Image.memory(
               snapshot.data!,
               fit: BoxFit.contain,
+              gaplessPlayback: true,
             ),
           );
         }
@@ -343,6 +454,8 @@ class _TopBar extends StatelessWidget {
     required this.onBack,
     required this.onInfo,
     required this.onDelete,
+    this.isTrash = false,
+    this.onRestore,
   });
   final MediaItem item;
   final int currentIndex;
@@ -350,6 +463,8 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onInfo;
   final VoidCallback onDelete;
+  final bool isTrash;
+  final VoidCallback? onRestore;
 
   @override
   Widget build(BuildContext context) {
@@ -402,18 +517,34 @@ class _TopBar extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline,
-                color: Colors.white, size: 22),
-            tooltip: 'Delete',
-            onPressed: onDelete,
-          ),
-          IconButton(
-            icon: const Icon(Icons.info_outline,
-                color: Colors.white, size: 22),
-            tooltip: 'Details',
-            onPressed: onInfo,
-          ),
+          if (isTrash) ...[
+            if (onRestore != null)
+              IconButton(
+                icon: const Icon(Icons.restore,
+                    color: Colors.white, size: 22),
+                tooltip: 'Restore',
+                onPressed: onRestore,
+              ),
+            IconButton(
+              icon: const Icon(Icons.delete_forever,
+                  color: Colors.white, size: 22),
+              tooltip: 'Delete Permanently',
+              onPressed: onDelete,
+            ),
+          ] else ...[
+            IconButton(
+              icon: const Icon(Icons.delete_outline,
+                  color: Colors.white, size: 22),
+              tooltip: 'Delete',
+              onPressed: onDelete,
+            ),
+            IconButton(
+              icon: const Icon(Icons.info_outline,
+                  color: Colors.white, size: 22),
+              tooltip: 'Details',
+              onPressed: onInfo,
+            ),
+          ],
         ],
       ),
     );

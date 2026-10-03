@@ -47,8 +47,12 @@ List<Album> groupMediaIntoAlbums(List<MediaItem> items, {SortOption? sort}) {
   if (sort != null) {
     switch (sort) {
       case SortOption.newest:
-        albums.sort((a, b) => b.coverItem.date.compareTo(a.coverItem.date));
+        albums.sort((a, b) => b.coverItem.timeAdded.compareTo(a.coverItem.timeAdded));
       case SortOption.oldest:
+        albums.sort((a, b) => a.coverItem.timeAdded.compareTo(b.coverItem.timeAdded));
+      case SortOption.shootingTimeDesc:
+        albums.sort((a, b) => b.coverItem.date.compareTo(a.coverItem.date));
+      case SortOption.shootingTimeAsc:
         albums.sort((a, b) => a.coverItem.date.compareTo(b.coverItem.date));
       case SortOption.nameAZ:
         albums.sort(
@@ -56,9 +60,13 @@ List<Album> groupMediaIntoAlbums(List<MediaItem> items, {SortOption? sort}) {
       case SortOption.nameZA:
         albums.sort(
             (a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+      case SortOption.sizeDesc:
+        albums.sort((a, b) => b.itemCount.compareTo(a.itemCount));
+      case SortOption.sizeAsc:
+        albums.sort((a, b) => a.itemCount.compareTo(b.itemCount));
     }
   } else {
-    albums.sort((a, b) => b.coverItem.date.compareTo(a.coverItem.date));
+    albums.sort((a, b) => b.coverItem.timeAdded.compareTo(a.coverItem.timeAdded));
   }
 
   return albums;

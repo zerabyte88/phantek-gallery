@@ -66,7 +66,7 @@ class DeveloperAboutCard extends StatelessWidget {
                   ),
                 ),
                 child: const Text(
-                  'v1.1.2',
+                  'v1.2.0',
                   style: TextStyle(
                     color: Color(0xFF00E676),
                     fontWeight: FontWeight.bold,
@@ -87,9 +87,9 @@ class DeveloperAboutCard extends StatelessWidget {
           const SizedBox(height: 20),
 
           // ── Key-Value Information Rows ──────────────────────────
-          _buildInfoRow('App Version', 'v1.1.2'),
+          _buildInfoRow('App Version', 'v1.2.0'),
           const SizedBox(height: 10),
-          _buildInfoRow('Build', '11004 (Release APK)'),
+          _buildInfoRow('Build', '12005 (Release APK)'),
           const SizedBox(height: 10),
           _buildInfoRow('Architecture', 'ARM64-v8a (MediaKit)'),
           const SizedBox(height: 10),
@@ -168,7 +168,7 @@ class DeveloperAboutCard extends StatelessWidget {
 
           // ── Bottom Action Button: View Repository on GitHub ─────
           BouncyTap(
-            onTap: () => _openUrl(_githubRepoUrl),
+            scaleDown: 0.96,
             child: SizedBox(
               width: double.infinity,
               height: 44,

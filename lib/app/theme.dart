@@ -14,6 +14,10 @@ class AppTheme {
         splashFactory: InkSparkle.splashFactory,
         appBarTheme: const AppBarTheme(centerTitle: false, elevation: 0),
         cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
 
   static ThemeData get dark => ThemeData(
@@ -28,6 +32,15 @@ class AppTheme {
           backgroundColor: Color(0xFF0E0E0E),
         ),
         cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero),
+        snackBarTheme: SnackBarThemeData(
+          backgroundColor: const Color(0xFF222428),
+          contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+        ),
       );
 
   static ThemeData get amoled => ThemeData(
@@ -56,6 +69,15 @@ class AppTheme {
         ),
         bottomSheetTheme: const BottomSheetThemeData(
           backgroundColor: Colors.black,
+        ),
+        snackBarTheme: SnackBarThemeData(
+          backgroundColor: const Color(0xFF16181B),
+          contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+          ),
         ),
       );
 
@@ -88,6 +110,17 @@ class AppTheme {
         ),
         bottomSheetTheme: const BottomSheetThemeData(
           backgroundColor: Colors.black,
+        ),
+        snackBarTheme: SnackBarThemeData(
+          backgroundColor: const Color(0xFF1E1016),
+          contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: const Color(0xFFFF7597).withValues(alpha: 0.35),
+            ),
+          ),
         ),
       );
 }

@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'media_item.dart';
 
 /// Represents a media item that has been moved to the trash.
 class TrashItem extends Equatable {
@@ -49,6 +50,15 @@ class TrashItem extends Equatable {
       size: size ?? this.size,
     );
   }
+
+  MediaItem toMediaItem() => MediaItem(
+        id: id,
+        path: trashPath,
+        name: name,
+        date: deletedDate,
+        size: size ?? 0,
+        isVideo: isVideo,
+      );
 
   @override
   List<Object?> get props =>

@@ -63,14 +63,14 @@ final mediaListProvider =
 final filteredMediaProvider = Provider<AsyncValue<List<MediaItem>>>((ref) {
   final raw      = ref.watch(mediaListProvider);
   final settings = ref.watch(settingsNotifierProvider);
-  return raw.whenData((items) => _applyFiltersAndSort(
+  return raw.whenData((items) => applyFiltersAndSort(
         items,
         sort:   settings.defaultSort,
         filter: settings.defaultFilter,
       ));
 });
 
-List<MediaItem> _applyFiltersAndSort(
+List<MediaItem> applyFiltersAndSort(
   List<MediaItem> items, {
   required SortOption sort,
   required FilterOption filter,
@@ -82,11 +82,15 @@ List<MediaItem> _applyFiltersAndSort(
   };
 
   return switch (sort) {
-    SortOption.newest => [...result]..sort((a, b) => b.date.compareTo(a.date)),
-    SortOption.oldest => [...result]..sort((a, b) => a.date.compareTo(b.date)),
+    SortOption.newest => [...result]..sort((a, b) => b.timeAdded.compareTo(a.timeAdded)),
+    SortOption.oldest => [...result]..sort((a, b) => a.timeAdded.compareTo(b.timeAdded)),
+    SortOption.shootingTimeDesc => [...result]..sort((a, b) => b.date.compareTo(a.date)),
+    SortOption.shootingTimeAsc => [...result]..sort((a, b) => a.date.compareTo(b.date)),
     SortOption.nameAZ => [...result]
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
     SortOption.nameZA => [...result]
         ..sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase())),
+    SortOption.sizeDesc => [...result]..sort((a, b) => b.size.compareTo(a.size)),
+    SortOption.sizeAsc => [...result]..sort((a, b) => a.size.compareTo(b.size)),
   };
 }
