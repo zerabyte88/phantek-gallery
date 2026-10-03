@@ -10,13 +10,22 @@ import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
+import '../../../core/services/thumbnail_service.dart';
 import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
-  const VideoPlayerScreen({super.key, required this.item});
-  final MediaItem item;
+  const VideoPlayerScreen({
+    super.key,
+    this.item,
+    this.items,
+    this.initialIndex = 0,
+  }) : assert(item != null || (items != null && items.length > 0));
+
+  final MediaItem? item;
+  final List<MediaItem>? items;
+  final int initialIndex;
 
   @override
   ConsumerState<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
@@ -26,6 +35,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     with WidgetsBindingObserver {
   late final Player _player;
   late final VideoController _controller;
+  late final List<MediaItem> _videos;
+  late final PageController _pageController;
+  late int _current;
   bool _showControls = true;
   bool _isFullscreen = false;
 
@@ -33,13 +45,21 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.items != null && widget.items!.isNotEmpty) {
+      _videos = List<MediaItem>.from(widget.items!);
+      _current = widget.initialIndex.clamp(0, _videos.length - 1);
+    } else {
+      _videos = [widget.item!];
+      _current = 0;
+    }
+    _pageController = PageController(initialPage: _current);
     _initPlayer();
   }
 
   void _initPlayer() {
     final settings = ref.read(settingsNotifierProvider);
     _player = Player(
-      configuration: PlayerConfiguration(
+      configuration: const PlayerConfiguration(
         // Hardware acceleration controlled via settings.
         // media_kit uses platform HW accel by default on Android.
         // Disable by forcing software renderer when setting is off.
@@ -56,8 +76,21 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       ),
     );
 
-    _player.open(Media(widget.item.path));
-    if (settings.autoPlayVideo) _player.play();
+    _player.open(
+      Media(_videos[_current].path),
+      play: settings.autoPlayVideo,
+    );
+  }
+
+  void _onPageChanged(int index) {
+    if (index == _current) return;
+    final wasPlaying = _player.state.playing;
+    final shouldPlay =
+        ref.read(settingsNotifierProvider).autoPlayVideo || wasPlaying;
+    setState(() {
+      _current = index;
+    });
+    _player.open(Media(_videos[index].path), play: shouldPlay);
   }
 
   @override
@@ -74,6 +107,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _player.dispose(); // releases native MPV context
+    _pageController.dispose();
     _exitLandscape();
     super.dispose();
   }
@@ -107,6 +141,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   Future<void> _deleteItem() async {
     final settings = ref.read(settingsNotifierProvider);
     final isTrash = settings.enableTrash;
+    final item = _videos[_current];
 
     final ok = await showDialog<bool>(
       context: context,
@@ -114,8 +149,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         title: Text(isTrash ? 'Move to Trash?' : 'Delete Permanently?'),
         content: Text(
           isTrash
-              ? '"${widget.item.name}" will be moved to trash.'
-              : '"${widget.item.name}" will be permanently deleted. This action cannot be undone.',
+              ? '"${item.name}" will be moved to trash.'
+              : '"${item.name}" will be permanently deleted. This action cannot be undone.',
         ),
         actionsOverflowButtonSpacing: 8,
         actions: [
@@ -151,20 +186,20 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _player.pause();
 
     // 1. Immediately remove from global media list provider
-    ref.read(mediaListProvider.notifier).removeItems({widget.item.id});
+    ref.read(mediaListProvider.notifier).removeItems({item.id});
 
     try {
       if (settings.enableTrash) {
         await ref.read(trashProvider.notifier).moveToTrash(
-              id: widget.item.id,
-              path: widget.item.path,
+              id: item.id,
+              path: item.path,
               isVideo: true,
             );
       } else {
-        final f = File(widget.item.path);
+        final f = File(item.path);
         if (await f.exists()) await f.delete();
         try {
-          await PhotoManager.editor.deleteWithIds([widget.item.id]);
+          await PhotoManager.editor.deleteWithIds([item.id]);
         } catch (_) {}
       }
       ref.read(mediaListProvider.notifier).refresh();
@@ -176,27 +211,54 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       }
       return;
     }
-    if (mounted) Navigator.of(context).pop();
+
+    if (!mounted) return;
+    if (_videos.length <= 1) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() {
+        _videos.removeAt(_current);
+        _current = _current.clamp(0, _videos.length - 1);
+      });
+      _pageController.jumpToPage(_current);
+      _player.open(Media(_videos[_current].path), play: settings.autoPlayVideo);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final item = _videos[_current];
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
         top: !_isFullscreen,
         bottom: !_isFullscreen,
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () => setState(() => _showControls = !_showControls),
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // ── Video surface ──────────────────────────────────
-              Center(
-                child: Video(
-                  controller: _controller,
-                  fit: BoxFit.contain,
-                ),
+              // ── Video PageView ──────────────────────────────────
+              PageView.builder(
+                controller: _pageController,
+                itemCount: _videos.length,
+                onPageChanged: _onPageChanged,
+                physics: const BouncingScrollPhysics(),
+                itemBuilder: (context, index) {
+                  if (index == _current) {
+                    return Center(
+                      child: Video(
+                        key: ValueKey(_videos[index].id),
+                        controller: _controller,
+                        controls: NoVideoControls,
+                        fit: BoxFit.contain,
+                      ),
+                    );
+                  }
+                  return _VideoThumbnailPage(item: _videos[index]);
+                },
               ),
 
               // ── Controls overlay ───────────────────────────────
@@ -209,7 +271,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     children: [
                       // Top bar
                       _TopBar(
-                        item: widget.item,
+                        item: item,
+                        currentIndex: _current,
+                        totalVideos: _videos.length,
                         onBack: () {
                           if (_isFullscreen) {
                             _exitLandscape();
@@ -218,16 +282,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                           }
                         },
                         onInfo: () =>
-                            showMediaInfoSheet(context, widget.item),
+                            showMediaInfoSheet(context, item),
+                        onDelete: _deleteItem,
                       ),
                       const Spacer(),
                       // Bottom controls
                       _BottomBar(
                         player: _player,
-                        item: widget.item,
+                        item: item,
                         isFullscreen: _isFullscreen,
                         onToggleFullscreen: _toggleFullscreen,
-                        onDelete: _deleteItem,
                       ),
                     ],
                   ),
@@ -241,20 +305,58 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 }
 
+// ── Inactive video thumbnail placeholder ───────────────────────────────────
+
+class _VideoThumbnailPage extends StatelessWidget {
+  const _VideoThumbnailPage({required this.item});
+  final MediaItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: ThumbnailService.instance.getThumbnail(item.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            snapshot.data != null) {
+          return Center(
+            child: Image.memory(
+              snapshot.data!,
+              fit: BoxFit.contain,
+            ),
+          );
+        }
+        return const Center(
+          child: Icon(Icons.videocam_outlined, size: 64, color: Colors.white24),
+        );
+      },
+    );
+  }
+}
+
 // ── Top bar ───────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.item,
+    required this.currentIndex,
+    required this.totalVideos,
     required this.onBack,
     required this.onInfo,
+    required this.onDelete,
   });
   final MediaItem item;
+  final int currentIndex;
+  final int totalVideos;
   final VoidCallback onBack;
   final VoidCallback onInfo;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
+    final subtext = totalVideos > 1
+        ? '${currentIndex + 1} / $totalVideos • ${MediaUtils.formatViewerDate(item.date)}, ${MediaUtils.formatViewerTime(item.date)}'
+        : '${MediaUtils.formatViewerDate(item.date)}, ${MediaUtils.formatViewerTime(item.date)}';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: const BoxDecoration(
@@ -278,25 +380,33 @@ class _TopBar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  MediaUtils.formatViewerDate(item.date),
+                  item.name,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  MediaUtils.formatViewerTime(item.date),
+                  subtext,
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
                   ),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline,
+                color: Colors.white, size: 22),
+            tooltip: 'Delete',
+            onPressed: onDelete,
           ),
           IconButton(
             icon: const Icon(Icons.info_outline,
@@ -318,13 +428,11 @@ class _BottomBar extends StatelessWidget {
     required this.item,
     required this.isFullscreen,
     required this.onToggleFullscreen,
-    required this.onDelete,
   });
   final Player player;
   final MediaItem item;
   final bool isFullscreen;
   final VoidCallback onToggleFullscreen;
-  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -397,23 +505,6 @@ class _BottomBar extends StatelessWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Fullscreen toggle moved to the left
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: BouncyTap(
-                    onTap: onToggleFullscreen,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(
-                        isFullscreen
-                            ? Icons.fullscreen_exit
-                            : Icons.fullscreen,
-                        size: 28,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
                 // Centered backward, play/pause, forward (enlarged with bouncy tap)
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -466,15 +557,20 @@ class _BottomBar extends StatelessWidget {
                     ),
                   ],
                 ),
-                // Delete button taking over the former fullscreen position on the right
+                // Fullscreen toggle on the right
                 Align(
                   alignment: Alignment.centerRight,
                   child: BouncyTap(
-                    onTap: onDelete,
-                    child: const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Icon(Icons.delete_outline,
-                          size: 28, color: Colors.white),
+                    onTap: onToggleFullscreen,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Icon(
+                        isFullscreen
+                            ? Icons.fullscreen_exit
+                            : Icons.fullscreen,
+                        size: 28,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),

@@ -1,22 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../../core/models/settings_model.dart';
-import '../../../../core/providers/settings_provider.dart';
 import '../../../../core/widgets/bouncy_tap.dart';
 
 /// Developer & About card placed at the bottom of the Settings screen.
-/// Includes Easter Egg: tapping developer avatar 10 times unlocks AMOLED Sakura theme.
-class DeveloperAboutCard extends ConsumerStatefulWidget {
+class DeveloperAboutCard extends StatelessWidget {
   const DeveloperAboutCard({super.key});
-
-  @override
-  ConsumerState<DeveloperAboutCard> createState() => _DeveloperAboutCardState();
-}
-
-class _DeveloperAboutCardState extends ConsumerState<DeveloperAboutCard> {
-  int _tapCount = 0;
-  DateTime? _lastTap;
 
   static const _cyan = Color(0xFF00C7D7);
   static const _githubRepoUrl = 'https://github.com/zerabyte88/phantek-gallery';
@@ -28,86 +16,6 @@ class _DeveloperAboutCardState extends ConsumerState<DeveloperAboutCard> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e) {
       debugPrint('Could not open $url: $e');
-    }
-  }
-
-  void _onAvatarTap() {
-    final now = DateTime.now();
-    if (_lastTap == null || now.difference(_lastTap!) > const Duration(seconds: 2)) {
-      _tapCount = 1;
-    } else {
-      _tapCount++;
-    }
-    _lastTap = now;
-
-    final settings = ref.read(settingsNotifierProvider);
-    if (!settings.isSakuraUnlocked) {
-      if (_tapCount >= 10) {
-        _tapCount = 0;
-        ref.read(settingsNotifierProvider.notifier).update(
-              (s) => s.copyWith(
-                isSakuraUnlocked: true,
-                themeMode: AppThemeMode.amoledSakura,
-              ),
-            );
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(
-            SnackBar(
-              backgroundColor: const Color(0xFF1A0A12),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 4),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Color(0xFFFF7597), width: 1.5),
-              ),
-              content: const Row(
-                children: [
-                  Text('🌸', style: TextStyle(fontSize: 26)),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Easter Egg Unlocked!\nAMOLED Sakura Theme has been activated! 🌸',
-                      style: TextStyle(
-                        color: Color(0xFFFF85A1),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-      } else if (_tapCount >= 6) {
-        final remaining = 10 - _tapCount;
-        if (!mounted) return;
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(
-            SnackBar(
-              duration: const Duration(milliseconds: 600),
-              behavior: SnackBarBehavior.floating,
-              content: Text('$remaining taps remaining to unlock a secret...'),
-            ),
-          );
-      }
-    } else {
-      if (_tapCount >= 3) {
-        _tapCount = 0;
-        if (!mounted) return;
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(
-            const SnackBar(
-              behavior: SnackBarBehavior.floating,
-              duration: Duration(seconds: 2),
-              content: Text('🌸 Developer: zerabyte88 (Creator & Maintainer)'),
-            ),
-          );
-      }
     }
   }
 
@@ -158,7 +66,7 @@ class _DeveloperAboutCardState extends ConsumerState<DeveloperAboutCard> {
                   ),
                 ),
                 child: const Text(
-                  'v1.1.1',
+                  'v1.1.2',
                   style: TextStyle(
                     color: Color(0xFF00E676),
                     fontWeight: FontWeight.bold,
@@ -179,9 +87,9 @@ class _DeveloperAboutCardState extends ConsumerState<DeveloperAboutCard> {
           const SizedBox(height: 20),
 
           // ── Key-Value Information Rows ──────────────────────────
-          _buildInfoRow('App Version', 'v1.1.1'),
+          _buildInfoRow('App Version', 'v1.1.2'),
           const SizedBox(height: 10),
-          _buildInfoRow('Build', '11003 (Release APK)'),
+          _buildInfoRow('Build', '11004 (Release APK)'),
           const SizedBox(height: 10),
           _buildInfoRow('Architecture', 'ARM64-v8a (MediaKit)'),
           const SizedBox(height: 10),
@@ -191,10 +99,10 @@ class _DeveloperAboutCardState extends ConsumerState<DeveloperAboutCard> {
           // ── Developer Profile Row ───────────────────────────────
           Row(
             children: [
-              // Avatar with glowing cyan circular border + Easter Egg onTap
-              GestureDetector(
-                key: const ValueKey('developer_avatar_easter_egg'),
-                onTap: _onAvatarTap,
+              // Avatar with glowing cyan circular border
+              BouncyTap(
+                key: const ValueKey('developer_avatar'),
+                onTap: () => _openUrl(_githubProfileUrl),
                 child: Container(
                   width: 52,
                   height: 52,

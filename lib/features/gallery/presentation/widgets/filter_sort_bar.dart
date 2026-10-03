@@ -42,99 +42,110 @@ class FilterSortBar extends ConsumerWidget {
 
     return Container(
       height: 46,
-      padding: const EdgeInsets.only(left: 12, right: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
         children: [
+          // Left spacer matching the 40px popup menu button for perfect screen centering
+          const SizedBox(width: 40),
           Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: options.map((f) {
-                  final selected = activeFilter == f;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: BouncyTap(
-                      scaleDown: 0.94,
-                      child: Material(
-                        color: selected
-                            ? cs.primaryContainer
-                            : cs.surfaceContainerHighest.withValues(alpha: 0.35),
-                        shape: const StadiumBorder(),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          customBorder: const StadiumBorder(),
-                          onTap: () {
-                            if (onFilterChanged != null) {
-                              onFilterChanged!(f);
-                            } else {
-                              ref
-                                  .read(settingsNotifierProvider.notifier)
-                                  .update((s) => s.copyWith(defaultFilter: f));
-                            }
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 7,
-                            ),
-                            decoration: ShapeDecoration(
-                              shape: StadiumBorder(
-                                side: BorderSide(
-                                  color: selected
-                                      ? cs.primary.withValues(alpha: 0.3)
-                                      : cs.outline.withValues(alpha: 0.2),
-                                  width: 1,
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: options.map((f) {
+                    final selected = activeFilter == f;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: BouncyTap(
+                        scaleDown: 0.94,
+                        child: Material(
+                          color: selected
+                              ? cs.primaryContainer
+                              : cs.surfaceContainerHighest.withValues(alpha: 0.35),
+                          shape: const StadiumBorder(),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            customBorder: const StadiumBorder(),
+                            onTap: () {
+                              if (onFilterChanged != null) {
+                                onFilterChanged!(f);
+                              } else {
+                                ref
+                                    .read(settingsNotifierProvider.notifier)
+                                    .update((s) => s.copyWith(defaultFilter: f));
+                              }
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              constraints: const BoxConstraints(minWidth: 72),
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 7,
+                              ),
+                              decoration: ShapeDecoration(
+                                shape: StadiumBorder(
+                                  side: BorderSide(
+                                    color: selected
+                                        ? cs.primary.withValues(alpha: 0.3)
+                                        : cs.outline.withValues(alpha: 0.2),
+                                    width: 1,
+                                  ),
                                 ),
                               ),
-                            ),
-                            child: Text(
-                              f.label,
-                              style: TextStyle(
-                                color: selected
-                                    ? cs.onPrimaryContainer
-                                    : cs.onSurface,
-                                fontSize: 13,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
+                              child: Text(
+                                f.label,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: selected
+                                      ? cs.onPrimaryContainer
+                                      : cs.onSurface,
+                                  fontSize: 13,
+                                  fontWeight: selected
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
             ),
           ),
-          BouncyTap(
-            scaleDown: 0.88,
-            child: PopupMenuButton<SortOption>(
-              icon: Icon(Icons.more_vert, size: 22, color: cs.onSurfaceVariant),
-              tooltip: 'Sort options',
-              initialValue: activeSort,
-              onSelected: (s) {
-                if (onSortChanged != null) {
-                  onSortChanged!(s);
-                } else {
-                  ref
-                      .read(settingsNotifierProvider.notifier)
-                      .update((st) => st.copyWith(defaultSort: s));
-                }
-              },
-              itemBuilder: (context) => SortOption.values
-                  .map(
-                    (s) => CheckedPopupMenuItem<SortOption>(
-                      value: s,
-                      checked: activeSort == s,
-                      child: Text(s.label),
-                    ),
-                  )
-                  .toList(),
+          SizedBox(
+            width: 40,
+            child: BouncyTap(
+              scaleDown: 0.88,
+              child: PopupMenuButton<SortOption>(
+                padding: EdgeInsets.zero,
+                icon: Icon(Icons.more_vert, size: 22, color: cs.onSurfaceVariant),
+                tooltip: 'Sort options',
+                initialValue: activeSort,
+                onSelected: (s) {
+                  if (onSortChanged != null) {
+                    onSortChanged!(s);
+                  } else {
+                    ref
+                        .read(settingsNotifierProvider.notifier)
+                        .update((st) => st.copyWith(defaultSort: s));
+                  }
+                },
+                itemBuilder: (context) => SortOption.values
+                    .map(
+                      (s) => CheckedPopupMenuItem<SortOption>(
+                        value: s,
+                        checked: activeSort == s,
+                        child: Text(s.label),
+                      ),
+                    )
+                    .toList(),
+              ),
             ),
           ),
         ],

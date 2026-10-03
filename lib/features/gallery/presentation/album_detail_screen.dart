@@ -289,13 +289,23 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                                   return;
                                 }
                                 if (item.isVideo) {
-                                  Navigator.of(context).openVideo(item);
+                                  final videos = sortedItems
+                                      .where((e) => e.isVideo)
+                                      .toList();
+                                  final idx = videos.indexOf(item);
+                                  Navigator.of(context).openVideo(
+                                    videos,
+                                    idx >= 0 ? idx : 0,
+                                  );
                                 } else {
                                   final photos = sortedItems
                                       .where((e) => !e.isVideo)
                                       .toList();
                                   final idx = photos.indexOf(item);
-                                  Navigator.of(context).openImage(photos, idx);
+                                  Navigator.of(context).openImage(
+                                    photos,
+                                    idx >= 0 ? idx : 0,
+                                  );
                                 }
                               },
                               onLongPress: () {

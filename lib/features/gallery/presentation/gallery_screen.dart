@@ -10,6 +10,7 @@ import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../app/router.dart';
+import '../../../core/utils/easter_egg_handler.dart';
 import '../../../core/widgets/animated_flame_title.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/album_grid_item.dart';
@@ -26,6 +27,7 @@ class GalleryScreen extends ConsumerStatefulWidget {
 class _GalleryScreenState extends ConsumerState<GalleryScreen> {
   final Set<String> _selected = {};
   bool _selecting = false;
+  final _easterEggHandler = EasterEggTapHandler();
 
   @override
   void initState() {
@@ -183,9 +185,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
           centerTitle: true,
           title: _selecting && !isAlbums
               ? Text('${_selected.length} selected')
-              : const BouncyTap(
+              : BouncyTap(
+                  key: const ValueKey('appbar_badge_easter_egg'),
                   scaleDown: 0.94,
-                  child: AnimatedFlameTitle(title: 'Phantek'),
+                  onTap: () => _easterEggHandler.handleTap(context, ref),
+                  child: const AnimatedFlameTitle(title: 'Phantek'),
                 ),
           actions: [
             if (_selecting && !isAlbums) ...[
@@ -299,7 +303,14 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                               return;
                             }
                             if (item.isVideo) {
-                              Navigator.of(context).openVideo(item);
+                              final videos = items
+                                  .where((e) => e.isVideo)
+                                  .toList();
+                              final idx = videos.indexOf(item);
+                              Navigator.of(context).openVideo(
+                                videos,
+                                idx >= 0 ? idx : 0,
+                              );
                             } else {
                               // Pass only photo items for swipe navigation.
                               final photos = items
@@ -307,7 +318,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                                   .toList();
                               final idx = photos.indexOf(item);
                               Navigator.of(context)
-                                  .openImage(photos, idx);
+                                  .openImage(photos, idx >= 0 ? idx : 0);
                             }
                           },
                           onLongPress: () {

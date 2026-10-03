@@ -16,12 +16,16 @@ class PermissionService {
   /// native Android platform code checking Build.VERSION.SDK_INT and handling
   /// all OS versions correctly.
   Future<bool> requestMediaPermissions() async {
-    if (await Permission.manageExternalStorage.isGranted) {
-      return true;
-    }
+    try {
+      if (await Permission.manageExternalStorage.isGranted) {
+        return true;
+      }
 
-    final state = await PhotoManager.requestPermissionExtend();
-    return state.hasAccess;
+      final state = await PhotoManager.requestPermissionExtend();
+      return state.hasAccess;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Request "All Files Access" (MANAGE_EXTERNAL_STORAGE) on Android 11+ (API 30+).

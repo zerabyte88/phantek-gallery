@@ -316,7 +316,7 @@ void main() {
       expect(AppTheme.amoledSakura.scaffoldBackgroundColor, Colors.black);
     });
 
-    testWidgets('DeveloperAboutCard 10-tap Easter Egg unlocks AMOLED Sakura theme', (tester) async {
+    testWidgets('AppBar badge 10-tap Easter Egg unlocks AMOLED Sakura theme', (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
@@ -343,28 +343,35 @@ void main() {
       await tester.tap(find.byType(SimpleDialogOption).first);
       await tester.pumpAndSettle();
 
-      // Scroll down to developer card
-      final avatarFinder = find.byKey(const ValueKey('developer_avatar_easter_egg'));
+      // Verify developer avatar does NOT trigger easter egg
+      final avatarFinder = find.byKey(const ValueKey('developer_avatar'));
       await tester.scrollUntilVisible(avatarFinder, 200);
       await tester.pumpAndSettle();
-
-      expect(find.text('About Phantek'), findsOneWidget);
-      expect(find.text('Developer: zerabyte88'), findsOneWidget);
-
-      // Tap avatar 10 times
       for (var i = 0; i < 10; i++) {
         await tester.tap(avatarFinder);
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.pumpAndSettle();
+      expect(SettingsService.instance.settings.isSakuraUnlocked, isFalse);
+
+      // Scroll back up to AppBar
+      await tester.scrollUntilVisible(find.text('Theme'), -200);
+      await tester.pumpAndSettle();
+
+      // Find AppBar badge
+      final badgeFinder = find.byKey(const ValueKey('settings_appbar_badge_easter_egg'));
+      expect(badgeFinder, findsOneWidget);
+
+      // Tap AppBar badge 10 times
+      for (var i = 0; i < 10; i++) {
+        await tester.tap(badgeFinder);
         await tester.pump(const Duration(milliseconds: 100));
       }
       await tester.pumpAndSettle();
 
       // SnackBar shows Easter Egg Unlocked
       expect(find.textContaining('Easter Egg Unlocked!'), findsOneWidget);
-
-      // Scroll back up to Theme tile
-      await tester.scrollUntilVisible(find.text('Theme'), -200);
-      await tester.pumpAndSettle();
-      expect(find.text('AMOLED Sakura 🌸'), findsOneWidget);
+      expect(SettingsService.instance.settings.isSakuraUnlocked, isTrue);
 
       // Open Theme dialog again
       await tester.tap(find.text('Theme'));
