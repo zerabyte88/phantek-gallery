@@ -1,3 +1,5 @@
+# Phantek Gallery
+
 <p align="center">
   <img src="assets/app_icon.jpg" width="115" height="115" alt="Phantek Gallery" />
 </p>
@@ -7,10 +9,6 @@
   <img src="https://img.shields.io/badge/FLUTTER-3.47.0-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
   <img src="https://img.shields.io/badge/VERSION-v1.0.0-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" />
   <img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" />
-</p>
-
-<p align="center">
-Phantek Gallery
 </p>
 
 Phantek Gallery is a high-performance, offline-first photo and video gallery application for Android. Built with Flutter and powered by the MPV playback engine via MediaKit, it delivers smooth media rendering, responsive navigation, and complete data privacy without third-party tracking or mandatory cloud dependencies.
