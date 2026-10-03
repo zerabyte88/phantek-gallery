@@ -28,4 +28,16 @@ class MediaUtils {
 
   static String formatDate(DateTime dt) => _dateFormatter.format(dt);
   static String formatDateTime(DateTime dt) => _dateTimeFormatter.format(dt);
+
+  /// Formats date for media viewer top bar: "September 15" or "September 15, 2024".
+  static String formatViewerDate(DateTime dt) {
+    final now = DateTime.now();
+    if (dt.year == now.year) {
+      return DateFormat('MMMM d').format(dt);
+    }
+    return DateFormat('MMMM d, y').format(dt);
+  }
+
+  /// Formats time for media viewer top bar: "3:40 PM".
+  static String formatViewerTime(DateTime dt) => DateFormat('h:mm a').format(dt);
 }

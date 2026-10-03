@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 
@@ -35,6 +36,13 @@ class PermissionService {
   /// Check whether Manage External Storage is granted.
   Future<bool> hasManageStoragePermission() async {
     return Permission.manageExternalStorage.isGranted;
+  }
+
+  /// Ensures All Files Access is granted if on Android, requesting it if needed.
+  Future<bool> ensureManageStorage() async {
+    if (!Platform.isAndroid) return true;
+    if (await Permission.manageExternalStorage.isGranted) return true;
+    return requestManageStorage();
   }
 
   /// Check if basic media access is granted without prompting.

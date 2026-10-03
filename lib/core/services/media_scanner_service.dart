@@ -27,6 +27,10 @@ class MediaScannerService {
   }) async {
     // photo_manager handles permission prompting upstream (via PermissionService).
     // Here we only fetch – caller must ensure permission is granted.
+    try {
+      await PhotoManager.clearFileCache();
+    } catch (_) {}
+
     final albums = await PhotoManager.getAssetPathList(
       type: RequestType.common, // both image + video
       hasAll: true,
@@ -61,17 +65,25 @@ class MediaScannerService {
 
   /// Converts an [AssetEntity] to [MediaItem], returning null if:
   /// - the file is in an excluded folder, or
+  /// - the file is in trash, or
   /// - the file no longer exists on disk.
   Future<MediaItem?> _toMediaItem(
     AssetEntity entity,
     List<String> excludedFolders,
   ) async {
     final file = await entity.originFile;
-    if (file == null) return null;
+    if (file == null || !await file.exists()) return null;
 
     final path = file.path;
 
-    // Check exclusion list.
+    // Check trash folder and exclusion list.
+    if (path.contains('/.trash/') ||
+        path.contains(r'\.trash\') ||
+        path.endsWith('/.trash') ||
+        path.endsWith(r'\.trash')) {
+      return null;
+    }
+
     if (excludedFolders.any((excluded) => path.startsWith(excluded))) {
       return null;
     }
@@ -84,12 +96,17 @@ class MediaScannerService {
       if (!_kSupportedVideoMimes.contains(mime)) return null;
     }
 
+    int size = 0;
+    try {
+      size = await file.length();
+    } catch (_) {}
+
     return MediaItem(
       id: entity.id,
       path: path,
       name: entity.title ?? path.split('/').last,
       date: entity.createDateTime,
-      size: await file.length(),
+      size: size,
       isVideo: isVideo,
       duration: isVideo
           ? Duration(seconds: entity.duration)

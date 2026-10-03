@@ -8,6 +8,7 @@ import '../enums/filter_option.dart';
 class _K {
   static const themeMode          = 'themeMode';
   static const gridColumns        = 'gridColumns';
+  static const albumGridColumns   = 'albumGridColumns';
   static const showBadges         = 'showBadges';
   static const enableTrash        = 'enableTrash';
   static const hardwareAccel      = 'hardwareAcceleration';
@@ -16,6 +17,7 @@ class _K {
   static const autoCheckUpdate    = 'autoCheckUpdate';
   static const defaultSort        = 'defaultSort';
   static const defaultFilter      = 'defaultFilter';
+  static const isSakuraUnlocked   = 'isSakuraUnlocked';
 }
 
 /// Thin wrapper around SharedPreferences for typed settings access.
@@ -43,6 +45,7 @@ class SettingsService {
   SettingsModel get settings => SettingsModel(
         themeMode:           _readEnum(_K.themeMode, AppThemeMode.values, AppThemeMode.system),
         gridColumns:         _prefs.getInt(_K.gridColumns) ?? 3,
+        albumGridColumns:    _prefs.getInt(_K.albumGridColumns) ?? 3,
         showBadges:          _prefs.getBool(_K.showBadges) ?? true,
         enableTrash:         _prefs.getBool(_K.enableTrash) ?? true,
         hardwareAcceleration: _prefs.getBool(_K.hardwareAccel) ?? true,
@@ -51,6 +54,7 @@ class SettingsService {
         autoCheckUpdate:     _prefs.getBool(_K.autoCheckUpdate) ?? true,
         defaultSort:         _readEnum(_K.defaultSort, SortOption.values, SortOption.newest),
         defaultFilter:       _readEnum(_K.defaultFilter, FilterOption.values, FilterOption.all),
+        isSakuraUnlocked:    _prefs.getBool(_K.isSakuraUnlocked) ?? false,
       );
 
   // ── Write ─────────────────────────────────────────────────────────────────
@@ -59,6 +63,7 @@ class SettingsService {
     await Future.wait([
       _prefs.setString(_K.themeMode,       model.themeMode.name),
       _prefs.setInt   (_K.gridColumns,     model.gridColumns),
+      _prefs.setInt   (_K.albumGridColumns, model.albumGridColumns),
       _prefs.setBool  (_K.showBadges,      model.showBadges),
       _prefs.setBool  (_K.enableTrash,     model.enableTrash),
       _prefs.setBool  (_K.hardwareAccel,   model.hardwareAcceleration),
@@ -67,6 +72,7 @@ class SettingsService {
       _prefs.setBool  (_K.autoCheckUpdate, model.autoCheckUpdate),
       _prefs.setString(_K.defaultSort,     model.defaultSort.name),
       _prefs.setString(_K.defaultFilter,   model.defaultFilter.name),
+      _prefs.setBool  (_K.isSakuraUnlocked, model.isSakuraUnlocked),
     ]);
   }
 

@@ -13,6 +13,7 @@ class MediaItem extends Equatable {
     this.width,
     this.height,
     this.mimeType,
+    this.album,
   });
 
   /// MediaStore / asset ID (from photo_manager AssetEntity.id).
@@ -45,6 +46,21 @@ class MediaItem extends Equatable {
   /// MIME type, e.g. "video/mp4", "image/jpeg".
   final String? mimeType;
 
+  /// Optional explicit album / folder name.
+  final String? album;
+
+  /// Name of the album / folder containing this media item.
+  String get albumName {
+    if (album != null && album!.trim().isNotEmpty) return album!.trim();
+    final normalized = path.replaceAll('\\', '/');
+    final parts = normalized.split('/').where((p) => p.isNotEmpty).toList();
+    if (parts.length >= 2) {
+      final folder = parts[parts.length - 2];
+      if (folder.isNotEmpty) return folder;
+    }
+    return 'Other';
+  }
+
   String get resolution {
     if (width == null || height == null) return '';
     return '${width}x$height';
@@ -61,6 +77,7 @@ class MediaItem extends Equatable {
     int? width,
     int? height,
     String? mimeType,
+    String? album,
   }) {
     return MediaItem(
       id: id ?? this.id,
@@ -73,10 +90,11 @@ class MediaItem extends Equatable {
       width: width ?? this.width,
       height: height ?? this.height,
       mimeType: mimeType ?? this.mimeType,
+      album: album ?? this.album,
     );
   }
 
   @override
   List<Object?> get props =>
-      [id, path, name, date, size, isVideo, duration, width, height, mimeType];
+      [id, path, name, date, size, isVideo, duration, width, height, mimeType, album];
 }

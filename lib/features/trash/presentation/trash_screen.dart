@@ -39,17 +39,20 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       await ref.read(trashProvider.notifier).restore(item.id);
     }
     _clearSelection();
+    ref.read(mediaListProvider.notifier).restoreItems(toRestore.map((e) => e.id));
     ref.read(mediaListProvider.notifier).refresh();
   }
 
   Future<void> _deleteSelected(List<TrashItem> all) async {
     final count = _selected.length;
+    final itemText = count == 1 ? '1 item' : '$count items';
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete Permanently'),
+        title: const Text('Delete Permanently?'),
         content: Text(
-            'Delete $count item${count == 1 ? '' : 's'} permanently? This cannot be undone.'),
+            '$itemText will be permanently deleted. This action cannot be undone.'),
+        actionsOverflowButtonSpacing: 8,
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),

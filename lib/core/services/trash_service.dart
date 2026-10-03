@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:photo_manager/photo_manager.dart';
 import '../models/trash_item.dart';
 
 /// Relative path inside external storage where trashed items are kept.
@@ -47,7 +48,18 @@ class TrashService {
     final trashName = '${DateTime.now().millisecondsSinceEpoch}_$name';
     final trashPath = p.join(trashDir.path, trashName);
 
-    await src.rename(trashPath);
+    try {
+      await src.rename(trashPath);
+    } catch (_) {
+      // Fallback for cross-device / cross-filesystem moves (EXDEV)
+      await src.copy(trashPath);
+      await src.delete();
+    }
+
+    // Inform MediaStore/PhotoManager that original entry is gone
+    try {
+      await PhotoManager.editor.deleteWithIds([id]);
+    } catch (_) {}
 
     final item = TrashItem(
       id: id,
@@ -74,7 +86,13 @@ class TrashService {
     final item = _items[idx];
     final dest = File(item.originalPath);
     await dest.parent.create(recursive: true);
-    await File(item.trashPath).rename(item.originalPath);
+    final trashFile = File(item.trashPath);
+    try {
+      await trashFile.rename(item.originalPath);
+    } catch (_) {
+      await trashFile.copy(item.originalPath);
+      await trashFile.delete();
+    }
 
     _items.removeAt(idx);
     await _persist();
@@ -109,9 +127,23 @@ class TrashService {
 
   Future<Directory> _getTrashDir() async {
     // Store trash alongside the app's external files to avoid scoped-storage issues.
-    final external = await getExternalStorageDirectory();
-    final base = external?.path ?? (await getApplicationDocumentsDirectory()).path;
-    final dir = Directory(p.join(base, _kTrashFolder));
+    String? basePath;
+    try {
+      if (Platform.isAndroid) {
+        final external = await getExternalStorageDirectory();
+        basePath = external?.path;
+      }
+    } catch (_) {}
+
+    if (basePath == null) {
+      try {
+        basePath = (await getApplicationDocumentsDirectory()).path;
+      } catch (_) {
+        basePath = Directory.systemTemp.path;
+      }
+    }
+
+    final dir = Directory(p.join(basePath, _kTrashFolder));
     await dir.create(recursive: true);
     return dir;
   }

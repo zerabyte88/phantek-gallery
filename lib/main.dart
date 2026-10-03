@@ -76,12 +76,27 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsNotifierProvider);
 
+    final darkTheme = switch (settings.themeMode) {
+      AppThemeMode.amoled => AppTheme.amoled,
+      AppThemeMode.amoledSakura => AppTheme.amoledSakura,
+      _ => AppTheme.dark,
+    };
+
+    final flutterThemeMode = switch (settings.themeMode) {
+      AppThemeMode.light => ThemeMode.light,
+      AppThemeMode.system => ThemeMode.system,
+      AppThemeMode.dark ||
+      AppThemeMode.amoled ||
+      AppThemeMode.amoledSakura =>
+        ThemeMode.dark,
+    };
+
     return MaterialApp(
       title: 'Phantek Gallery',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: _toFlutterTheme(settings.themeMode),
+      darkTheme: darkTheme,
+      themeMode: flutterThemeMode,
       onGenerateRoute: generateRoute,
       initialRoute: AppRoutes.gallery,
       builder: (context, child) => UpdateListener(
@@ -91,10 +106,4 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
       ),
     );
   }
-
-  ThemeMode _toFlutterTheme(AppThemeMode m) => switch (m) {
-        AppThemeMode.light  => ThemeMode.light,
-        AppThemeMode.dark   => ThemeMode.dark,
-        AppThemeMode.system => ThemeMode.system,
-      };
 }

@@ -8,6 +8,9 @@ enum FilterOption {
 
   /// Show only videos.
   videosOnly,
+
+  /// Show media grouped by albums.
+  albums,
 }
 
 extension FilterOptionLabel on FilterOption {
@@ -15,5 +18,6 @@ extension FilterOptionLabel on FilterOption {
         FilterOption.all         => 'All',
         FilterOption.photosOnly  => 'Photos',
         FilterOption.videosOnly  => 'Videos',
+        FilterOption.albums      => 'Albums',
       };
 }

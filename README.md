@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-059669?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Platform" />
   <img src="https://img.shields.io/badge/FLUTTER-3.47+-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
   <img src="https://img.shields.io/badge/APPLICATION_ID-com.phantek.virgo.spica-6366F1?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Application ID" />
-  <img src="https://img.shields.io/badge/VERSION-v1.0.0-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" />
+  <img src="https://img.shields.io/badge/VERSION-v1.1.0-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" />
   <img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" />
 </p>
 
@@ -44,36 +44,42 @@ Modern mobile galleries often require persistent network connections, cloud sync
 
 ## Key Features
 
-### High-Performance Media Grid
-- Fast media indexing and thumbnail generation utilizing native Android MediaStore APIs.
-- Configurable grid column layout ranging from 2 to 5 columns.
-- Flexible sorting options (Newest First, Oldest First) and media filtering (All, Photos Only, Videos Only).
-- Folder exclusion management to prevent unwanted directories from appearing in the main feed.
-- Support for Android 14+ / 16 partial photo selection (`READ_MEDIA_VISUAL_USER_SELECTED`).
+### High-Performance Media Grid & Album Organization
+- **Smart Grouping**: View all media or browse by organized folder albums (DCIM, Camera, Downloads, Screenshots, etc.).
+- **Centered Category Navigation**: Enlarged, centered filter switcher (`All`, `Photos`, `Videos`, `Albums`).
+- **Compact Sort Menu**: 3-dots popup menu with quick sorting (Newest First, Oldest First, Name A → Z, Name Z → A).
+- **Independent Grid Layouts**: Customize grid columns for both the main gallery feed and albums grid (2 to 5 columns) with clean listbox dialogs.
+- **Folder Exclusions**: Blacklist unwanted system directories from being indexed.
+- **Android 14+ / 16 Compliance**: Seamless partial photo selection support (`READ_MEDIA_VISUAL_USER_SELECTED`).
 
 ### Hardware-Accelerated Video Playback
-- Powered by MediaKit with native MPV and FFmpeg integration.
-- Hardware GPU decoding support for high-bitrate video streams.
-- Configurable auto-play behavior and screen orientation control.
+- **MediaKit & MPV Engine**: Native MPV and FFmpeg integration for ultra-smooth playback of MKV, MP4, WebM, and high-bitrate video streams.
+- **Centered Controls**: Ergonomic centered overlay controls (Play/Pause, Seek Backward 10s, Seek Forward 10s).
+- **Hardware Acceleration**: Configurable GPU decoding and screen orientation controls.
 
 ### High-Fidelity Photo Viewer
-- Smooth zooming, panning, and double-tap gestures powered by PhotoView.
-- Responsive swipe transitions between adjacent media items.
+- **Gesture Support**: Smooth zooming, panning, and double-tap gestures powered by PhotoView.
+- **Modern Top Bar**: Clean header with quick navigation, filename display, timestamp, and quick-action menu (copy path, file details, share).
+- **Bottom Action Bar**: Dedicated bottom bar featuring direct move-to-trash/delete, share, and metadata inspection.
 
-### Recycle Bin (Trash System)
-- Soft deletion support allowing users to stage files for deletion in a protected local directory.
-- Easy restoration back to the original storage directory or permanent deletion on demand.
+### Instant Optimistic Deletion & Trash System
+- **Recycle Bin (`.trash`)**: Stage deleted files safely in a local trash folder with one-tap restoration.
+- **Zero-Latency UI Removal**: Deleted or trashed items vanish immediately (0ms delay) with optimistic in-memory state updates.
+- **Unclipped Dialogs**: Clean, responsive confirmation dialogs formatted to prevent broken text wraps and overflow across all screen sizes.
+- **Automatic Media Store Sync**: Automatic cache clearing ensuring deleted files do not reappear.
+
+### Comprehensive Theming & Easter Egg
+- **Material 3 Theming**: System Default, Light Mode, and Dark Mode.
+- **Pure AMOLED Mode**: True pitch-black (`#000000`) surfaces for maximum OLED battery savings.
+- **AMOLED Sakura Mode 🌸**: Secret theme featuring Japanese Sakura pink accents over deep pitch-black backgrounds.
+- **Easter Egg**: Tap the developer profile avatar 10 times in Settings to unlock the secret AMOLED Sakura theme!
+- **Developer Card**: Dedicated About & Maintainer card in Settings with GitHub repository shortcuts.
 
 ### Over-The-Air (OTA) Updates
 - Integrated update service that queries GitHub Releases for newer application versions.
 - In-app APK downloading with download progress tracking.
 - Automated installation dispatch using Android FileProvider (`com.phantek.virgo.spica.fileprovider`) without external app stores.
 - Automatic cleanup of temporary installer packages upon completion.
-
-### Modern Material 3 & Edge-to-Edge
-- Clean Material Design 3 interface with dynamic color theming.
-- Native Android 16 edge-to-edge support with display cutout awareness (`shortEdges`).
-- Supports Light Mode, Dark Mode (OLED-friendly true black), and System Default synchronization.
 
 ---
 
@@ -88,7 +94,7 @@ Modern mobile galleries often require persistent network connections, cloud sync
 | Image Viewer | PhotoView (`photo_view`) | High-resolution image viewing with gesture support |
 | Media Management | `photo_manager`, `permission_handler` | Scoped storage access, Android 14+ partial grants, and permissions |
 | Local Preferences | `shared_preferences` | Key-value persistence for user settings |
-| Networking | `http` | Lightweight HTTP client for GitHub Releases OTA checks |
+| Networking | `http`, `url_launcher` | GitHub Releases OTA checks and external repository links |
 | Target Platform | Android 5.0+ to Android 16 (API 21 to 36/37) | Comprehensive compatibility across Android versions |
 
 ---
@@ -98,18 +104,18 @@ Modern mobile galleries often require persistent network connections, cloud sync
 ```text
 lib/
 |-- app/
-|   |-- router.dart              # Application route definitions and navigation
-|   `-- theme.dart               # Material 3 light and dark theme configurations
+|   |-- router.dart              # Application route definitions and navigation extensions
+|   `-- theme.dart               # Material 3 Light, Dark, AMOLED, and AMOLED Sakura themes
 |-- core/
 |   |-- enums/                   # Filter, sort, and theme enumeration models
-|   |-- models/                  # Settings and preference data structures
-|   |-- providers/               # Global Riverpod state providers
-|   |-- services/                # MediaKit setup, PhotoManager permissions, and trash services
-|   `-- utils/                   # Formatting, date helpers, and file utilities
+|   |-- models/                  # MediaItem, Album, TrashItem, and SettingsModel data structures
+|   |-- providers/               # Global Riverpod state providers (media, trash, settings)
+|   |-- services/                # MediaKit setup, PhotoManager, permission, and trash services
+|   `-- utils/                   # Formatting, duration, date helpers, and file utilities
 |-- features/
-|   |-- gallery/                 # Grid gallery screen, media cards, and filter bar
+|   |-- gallery/                 # Grid gallery, albums view, album detail screen, and filter bar
 |   |-- player/                  # Image viewer and MPV-based video player screens
-|   |-- settings/                # User preferences, folder exclusions, and theming
+|   |-- settings/                # User preferences, column counts, exclusions, and Developer card
 |   |-- trash/                   # Recycle bin management and restoration UI
 |   `-- update/                  # GitHub Releases client, download service, and OTA dialog
 `-- main.dart                    # Application entry point, boot sequence, and initialization

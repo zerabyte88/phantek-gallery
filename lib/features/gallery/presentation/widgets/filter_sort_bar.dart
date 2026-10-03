@@ -4,7 +4,7 @@ import '../../../../core/enums/filter_option.dart';
 import '../../../../core/enums/sort_option.dart';
 import '../../../../core/providers/settings_provider.dart';
 
-/// Compact row showing filter chips + sort dropdown.
+/// Row showing centered enlarged filter chips + compact 3-dots sort popup menu.
 class FilterSortBar extends ConsumerWidget {
   const FilterSortBar({super.key});
 
@@ -14,58 +14,66 @@ class FilterSortBar extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
 
     return SizedBox(
-      height: 40,
+      height: 48,
       child: Row(
         children: [
+          // Left spacer matching the width of the 3-dots button to ensure true centering
+          const SizedBox(width: 48),
           Expanded(
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: FilterOption.values.map((f) {
-                final selected = settings.defaultFilter == f;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    label: Text(f.label),
-                    selected: selected,
-                    onSelected: (_) => ref
-                        .read(settingsNotifierProvider.notifier)
-                        .update((s) => s.copyWith(defaultFilter: f)),
-                    showCheckmark: false,
-                    selectedColor: cs.primaryContainer,
-                    labelStyle: TextStyle(
-                      color: selected ? cs.onPrimaryContainer : cs.onSurface,
-                      fontSize: 13,
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                );
-              }).toList(),
+            child: Center(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: FilterOption.values.map((f) {
+                    final selected = settings.defaultFilter == f;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: FilterChip(
+                        label: Text(f.label),
+                        selected: selected,
+                        onSelected: (_) => ref
+                            .read(settingsNotifierProvider.notifier)
+                            .update((s) => s.copyWith(defaultFilter: f)),
+                        showCheckmark: false,
+                        selectedColor: cs.primaryContainer,
+                        labelStyle: TextStyle(
+                          color: selected ? cs.onPrimaryContainer : cs.onSurface,
+                          fontSize: 14,
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<SortOption>(
-                value: settings.defaultSort,
-                icon: const Icon(Icons.sort, size: 18),
-                isDense: true,
-                borderRadius: BorderRadius.circular(12),
-                items: SortOption.values
-                    .map((s) => DropdownMenuItem(
-                          value: s,
-                          child: Text(s.label, style: const TextStyle(fontSize: 13)),
-                        ))
-                    .toList(),
-                onChanged: (s) {
-                  if (s == null) return;
-                  ref
-                      .read(settingsNotifierProvider.notifier)
-                      .update((st) => st.copyWith(defaultSort: s));
-                },
-              ),
+          SizedBox(
+            width: 48,
+            child: PopupMenuButton<SortOption>(
+              icon: const Icon(Icons.more_vert),
+              tooltip: 'Sort options',
+              initialValue: settings.defaultSort,
+              onSelected: (s) {
+                ref
+                    .read(settingsNotifierProvider.notifier)
+                    .update((st) => st.copyWith(defaultSort: s));
+              },
+              itemBuilder: (context) => SortOption.values
+                  .map(
+                    (s) => CheckedPopupMenuItem<SortOption>(
+                      value: s,
+                      checked: settings.defaultSort == s,
+                      child: Text(s.label),
+                    ),
+                  )
+                  .toList(),
             ),
           ),
         ],

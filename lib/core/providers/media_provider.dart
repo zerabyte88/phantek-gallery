@@ -12,21 +12,47 @@ final mediaScannerProvider = Provider<MediaScannerService>(
 
 /// Raw scanned media list state.
 class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
+  final Set<String> _deletedIds = {};
+
   @override
   Future<List<MediaItem>> build() async {
     final settings = ref.watch(settingsNotifierProvider);
     final scanner  = ref.read(mediaScannerProvider);
-    return scanner.scanAll(excludedFolders: settings.excludedFolders);
+    final items = await scanner.scanAll(excludedFolders: settings.excludedFolders);
+    if (_deletedIds.isEmpty) return items;
+    return items.where((e) => !_deletedIds.contains(e.id)).toList();
   }
 
+  /// Set of deleted/trashed IDs currently filtered out from scans.
+  Set<String> get deletedIds => Set.unmodifiable(_deletedIds);
+
+  /// Instantly removes items from state so the UI reflects deletions immediately.
+  void removeItems(Iterable<String> ids) {
+    _deletedIds.addAll(ids);
+    state = state.whenData(
+      (items) => items.where((e) => !_deletedIds.contains(e.id)).toList(),
+    );
+  }
+
+  /// Un-blacklists items when restored from trash.
+  void restoreItems(Iterable<String> ids) {
+    _deletedIds.removeAll(ids);
+  }
+
+  /// Refreshes from disk without blanking the UI with a full loading spinner.
   Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() async {
+    final updated = await AsyncValue.guard(() async {
       final settings = ref.read(settingsNotifierProvider);
-      return ref.read(mediaScannerProvider).scanAll(
+      final items = await ref.read(mediaScannerProvider).scanAll(
             excludedFolders: settings.excludedFolders,
           );
+      return _deletedIds.isEmpty
+          ? items
+          : items.where((e) => !_deletedIds.contains(e.id)).toList();
     });
+    if (updated.hasValue) {
+      state = updated;
+    }
   }
 }
 
@@ -50,7 +76,7 @@ List<MediaItem> _applyFiltersAndSort(
   required FilterOption filter,
 }) {
   var result = switch (filter) {
-    FilterOption.all        => items,
+    FilterOption.all || FilterOption.albums => items,
     FilterOption.photosOnly => items.where((e) => !e.isVideo).toList(),
     FilterOption.videosOnly => items.where((e) => e.isVideo).toList(),
   };

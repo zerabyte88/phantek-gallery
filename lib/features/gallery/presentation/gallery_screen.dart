@@ -1,12 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:photo_manager/photo_manager.dart' hide FilterOption;
+import '../../../core/enums/filter_option.dart';
+import '../../../core/models/album.dart';
 import '../../../core/models/media_item.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../app/router.dart';
+import 'widgets/album_grid_item.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
 
@@ -75,43 +79,84 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
     final confirm = await _confirmDelete(toDelete.length);
     if (!confirm || !mounted) return;
 
+    final hasPerm = await PermissionService.instance.ensureManageStorage();
+    if (!hasPerm) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Manage All Files permission is required to delete or move items to trash.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    final toDeleteIds = toDelete.map((e) => e.id).toSet();
+    // 1. Instantly remove from state so the gallery updates immediately
+    ref.read(mediaListProvider.notifier).removeItems(toDeleteIds);
+    _clearSelection();
+
+    var successCount = 0;
     for (final item in toDelete) {
-      if (settings.enableTrash) {
-        await ref
-            .read(trashProvider.notifier)
-            .moveToTrash(id: item.id, path: item.path, isVideo: item.isVideo);
-      } else {
-        // Direct permanent delete.
-        try {
+      try {
+        if (settings.enableTrash) {
+          await ref
+              .read(trashProvider.notifier)
+              .moveToTrash(id: item.id, path: item.path, isVideo: item.isVideo);
+        } else {
+          // Direct permanent delete.
           final f = File(item.path);
           if (await f.exists()) await f.delete();
-        } catch (_) {}
+          try {
+            await PhotoManager.editor.deleteWithIds([item.id]);
+          } catch (_) {}
+        }
+        successCount++;
+      } catch (e) {
+        debugPrint('Delete/trash error on ${item.path}: $e');
       }
     }
-    _clearSelection();
     if (mounted) {
       ref.read(mediaListProvider.notifier).refresh();
+      if (successCount < toDelete.length) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Processed $successCount of ${toDelete.length} items.'),
+          ),
+        );
+      }
     }
   }
 
   Future<bool> _confirmDelete(int count) async {
     final settings = ref.read(settingsNotifierProvider);
-    final label = settings.enableTrash ? 'Move to Trash' : 'Delete Permanently';
+    final isTrash = settings.enableTrash;
+    final itemText = count == 1 ? '1 item' : '$count items';
+
     final result = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('$label ($count item${count == 1 ? '' : 's'})'),
-        content: settings.enableTrash
-            ? const Text('Selected items will be moved to trash.')
-            : const Text(
-                'This action cannot be undone. Delete permanently?'),
+        title: Text(isTrash ? 'Move to Trash?' : 'Delete Permanently?'),
+        content: Text(
+          isTrash
+              ? '$itemText will be moved to trash.'
+              : '$itemText will be permanently deleted. This action cannot be undone.',
+        ),
+        actionsOverflowButtonSpacing: 8,
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(label)),
+            style: isTrash
+                ? null
+                : FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(isTrash ? 'Move to Trash' : 'Delete'),
+          ),
         ],
       ),
     );
@@ -124,19 +169,20 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
   Widget build(BuildContext context) {
     final mediaAsync = ref.watch(filteredMediaProvider);
     final settings   = ref.watch(settingsNotifierProvider);
+    final isAlbums   = settings.defaultFilter == FilterOption.albums;
 
     return PopScope(
-      canPop: !_selecting,
+      canPop: !_selecting || isAlbums,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _clearSelection();
       },
       child: Scaffold(
         appBar: AppBar(
-          title: _selecting
+          title: _selecting && !isAlbums
               ? Text('${_selected.length} selected')
               : const Text('Phantek Gallery'),
           actions: [
-            if (_selecting) ...[
+            if (_selecting && !isAlbums) ...[
               IconButton(
                 icon: const Icon(Icons.select_all),
                 tooltip: 'Select all',
@@ -185,6 +231,35 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                 data: (items) {
                   if (items.isEmpty) {
                     return _EmptyState(onRefresh: _bootstrap);
+                  }
+                  if (isAlbums) {
+                    final albums = groupMediaIntoAlbums(items, sort: settings.defaultSort);
+                    if (albums.isEmpty) {
+                      return _EmptyState(onRefresh: _bootstrap);
+                    }
+                    return RefreshIndicator(
+                      onRefresh: () =>
+                          ref.read(mediaListProvider.notifier).refresh(),
+                      child: GridView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: settings.albumGridColumns,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 14,
+                          childAspectRatio: 0.74,
+                        ),
+                        itemCount: albums.length,
+                        itemBuilder: (_, i) {
+                          final album = albums[i];
+                          return AlbumGridItem(
+                            key: ValueKey(album.name),
+                            album: album,
+                            onTap: () =>
+                                Navigator.of(context).openAlbum(album.name),
+                          );
+                        },
+                      ),
+                    );
                   }
                   return RefreshIndicator(
                     onRefresh: () =>

@@ -5,6 +5,7 @@ import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../../features/update/data/update_provider.dart';
+import 'widgets/developer_about_card.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -18,6 +19,14 @@ class SettingsScreen extends ConsumerWidget {
       ref.read(settingsNotifierProvider.notifier).update(fn);
     }
 
+    final availableThemeModes = [
+      AppThemeMode.system,
+      AppThemeMode.light,
+      AppThemeMode.dark,
+      AppThemeMode.amoled,
+      if (settings.isSakuraUnlocked) AppThemeMode.amoledSakura,
+    ];
+
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
@@ -27,17 +36,17 @@ class SettingsScreen extends ConsumerWidget {
 
           ListTile(
             title: const Text('Theme'),
-            subtitle: Text(settings.themeMode.name),
+            subtitle: Text(settings.themeMode.label),
             leading: const Icon(Icons.palette_outlined),
             onTap: () async {
               final chosen = await showDialog<AppThemeMode>(
                 context: context,
                 builder: (_) => SimpleDialog(
                   title: const Text('Select Theme'),
-                  children: AppThemeMode.values
+                  children: availableThemeModes
                       .map((m) => SimpleDialogOption(
                             onPressed: () => Navigator.pop(context, m),
-                            child: Text(m.name),
+                            child: Text(m.label),
                           ))
                       .toList(),
                 ),
@@ -52,18 +61,46 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Grid Columns'),
             subtitle: Text('${settings.gridColumns} columns'),
             leading: const Icon(Icons.grid_view_outlined),
-            trailing: SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 3, label: Text('3')),
-                ButtonSegment(value: 4, label: Text('4')),
-                ButtonSegment(value: 5, label: Text('5')),
-              ],
-              selected: {settings.gridColumns},
-              onSelectionChanged: (s) =>
-                  patch((st) => st.copyWith(gridColumns: s.first)),
-              style: SegmentedButton.styleFrom(
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            ),
+            onTap: () async {
+              final chosen = await showDialog<int>(
+                context: context,
+                builder: (_) => SimpleDialog(
+                  title: const Text('Select Grid Columns'),
+                  children: [2, 3, 4, 5]
+                      .map((c) => SimpleDialogOption(
+                            onPressed: () => Navigator.pop(context, c),
+                            child: Text('$c columns'),
+                          ))
+                      .toList(),
+                ),
+              );
+              if (chosen != null) {
+                patch((s) => s.copyWith(gridColumns: chosen));
+              }
+            },
+          ),
+
+          ListTile(
+            title: const Text('Albums Grid Columns'),
+            subtitle: Text('${settings.albumGridColumns} columns'),
+            leading: const Icon(Icons.photo_library_outlined),
+            onTap: () async {
+              final chosen = await showDialog<int>(
+                context: context,
+                builder: (_) => SimpleDialog(
+                  title: const Text('Select Albums Grid Columns'),
+                  children: [2, 3, 4, 5]
+                      .map((c) => SimpleDialogOption(
+                            onPressed: () => Navigator.pop(context, c),
+                            child: Text('$c columns'),
+                          ))
+                      .toList(),
+                ),
+              );
+              if (chosen != null) {
+                patch((s) => s.copyWith(albumGridColumns: chosen));
+              }
+            },
           ),
 
           SwitchListTile(
@@ -177,6 +214,9 @@ class SettingsScreen extends ConsumerWidget {
                 .read(updateNotifierProvider.notifier)
                 .checkForUpdate(silent: false),
           ),
+
+          // ══ Developer Card ══════════════════════════════════
+          const DeveloperAboutCard(),
         ],
       ),
     );

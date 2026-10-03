@@ -7,6 +7,7 @@ class SettingsModel extends Equatable {
   const SettingsModel({
     this.themeMode = AppThemeMode.system,
     this.gridColumns = 3,
+    this.albumGridColumns = 3,
     this.showBadges = true,
     this.enableTrash = true,
     this.hardwareAcceleration = true,
@@ -15,12 +16,16 @@ class SettingsModel extends Equatable {
     this.autoCheckUpdate = true,
     this.defaultSort = SortOption.newest,
     this.defaultFilter = FilterOption.all,
+    this.isSakuraUnlocked = false,
   });
 
   final AppThemeMode themeMode;
 
   /// Number of grid columns in the gallery view (2–5).
   final int gridColumns;
+
+  /// Number of grid columns in the albums view (2–5).
+  final int albumGridColumns;
 
   /// Show video/photo count badges on album thumbnails.
   final bool showBadges;
@@ -43,9 +48,13 @@ class SettingsModel extends Equatable {
   final SortOption defaultSort;
   final FilterOption defaultFilter;
 
+  /// Easter Egg: whether AMOLED Sakura theme has been unlocked.
+  final bool isSakuraUnlocked;
+
   SettingsModel copyWith({
     AppThemeMode? themeMode,
     int? gridColumns,
+    int? albumGridColumns,
     bool? showBadges,
     bool? enableTrash,
     bool? hardwareAcceleration,
@@ -54,10 +63,12 @@ class SettingsModel extends Equatable {
     bool? autoCheckUpdate,
     SortOption? defaultSort,
     FilterOption? defaultFilter,
+    bool? isSakuraUnlocked,
   }) {
     return SettingsModel(
       themeMode: themeMode ?? this.themeMode,
       gridColumns: gridColumns ?? this.gridColumns,
+      albumGridColumns: albumGridColumns ?? this.albumGridColumns,
       showBadges: showBadges ?? this.showBadges,
       enableTrash: enableTrash ?? this.enableTrash,
       hardwareAcceleration: hardwareAcceleration ?? this.hardwareAcceleration,
@@ -66,6 +77,7 @@ class SettingsModel extends Equatable {
       autoCheckUpdate: autoCheckUpdate ?? this.autoCheckUpdate,
       defaultSort: defaultSort ?? this.defaultSort,
       defaultFilter: defaultFilter ?? this.defaultFilter,
+      isSakuraUnlocked: isSakuraUnlocked ?? this.isSakuraUnlocked,
     );
   }
 
@@ -73,6 +85,7 @@ class SettingsModel extends Equatable {
   List<Object?> get props => [
         themeMode,
         gridColumns,
+        albumGridColumns,
         showBadges,
         enableTrash,
         hardwareAcceleration,
@@ -81,7 +94,24 @@ class SettingsModel extends Equatable {
         autoCheckUpdate,
         defaultSort,
         defaultFilter,
+        isSakuraUnlocked,
       ];
 }
 
-enum AppThemeMode { light, dark, system }
+enum AppThemeMode {
+  system,
+  light,
+  dark,
+  amoled,
+  amoledSakura,
+}
+
+extension AppThemeModeLabel on AppThemeMode {
+  String get label => switch (this) {
+        AppThemeMode.system       => 'System',
+        AppThemeMode.light        => 'Light',
+        AppThemeMode.dark         => 'Dark',
+        AppThemeMode.amoled       => 'AMOLED',
+        AppThemeMode.amoledSakura => 'AMOLED Sakura 🌸',
+      };
+}

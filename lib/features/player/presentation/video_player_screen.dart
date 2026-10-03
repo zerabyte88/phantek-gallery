@@ -4,10 +4,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:photo_manager/photo_manager.dart';
 import '../../../core/models/media_item.dart';
+import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../core/utils/media_utils.dart';
+import 'widgets/media_info_sheet.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
   const VideoPlayerScreen({super.key, required this.item});
@@ -101,34 +105,75 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   Future<void> _deleteItem() async {
     final settings = ref.read(settingsNotifierProvider);
-    final label = settings.enableTrash ? 'Move to Trash' : 'Delete';
+    final isTrash = settings.enableTrash;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(label),
-        content: Text('"${widget.item.name}" will be '
-            '${settings.enableTrash ? 'moved to trash' : 'permanently deleted'}.'),
+        title: Text(isTrash ? 'Move to Trash?' : 'Delete Permanently?'),
+        content: Text(
+          isTrash
+              ? '"${widget.item.name}" will be moved to trash.'
+              : '"${widget.item.name}" will be permanently deleted. This action cannot be undone.',
+        ),
+        actionsOverflowButtonSpacing: 8,
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(label)),
+            style: isTrash
+                ? null
+                : FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(isTrash ? 'Move to Trash' : 'Delete'),
+          ),
         ],
       ),
     );
     if (ok != true || !mounted) return;
+
+    final hasPerm = await PermissionService.instance.ensureManageStorage();
+    if (!hasPerm) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Manage All Files permission is required to delete or move items to trash.'),
+          ),
+        );
+      }
+      return;
+    }
+
     _player.pause();
-    if (settings.enableTrash) {
-      await ref.read(trashProvider.notifier).moveToTrash(
-            id: widget.item.id,
-            path: widget.item.path,
-            isVideo: true,
-          );
-    } else {
-      final f = File(widget.item.path);
-      if (await f.exists()) await f.delete();
+
+    // 1. Immediately remove from global media list provider
+    ref.read(mediaListProvider.notifier).removeItems({widget.item.id});
+
+    try {
+      if (settings.enableTrash) {
+        await ref.read(trashProvider.notifier).moveToTrash(
+              id: widget.item.id,
+              path: widget.item.path,
+              isVideo: true,
+            );
+      } else {
+        final f = File(widget.item.path);
+        if (await f.exists()) await f.delete();
+        try {
+          await PhotoManager.editor.deleteWithIds([widget.item.id]);
+        } catch (_) {}
+      }
+      ref.read(mediaListProvider.notifier).refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete video: $e')),
+        );
+      }
+      return;
     }
     if (mounted) Navigator.of(context).pop();
   }
@@ -164,7 +209,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       // Top bar
                       _TopBar(
                         item: widget.item,
-                        onDelete: _deleteItem,
                         onBack: () {
                           if (_isFullscreen) {
                             _exitLandscape();
@@ -172,6 +216,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                             Navigator.of(context).pop();
                           }
                         },
+                        onInfo: () =>
+                            showMediaInfoSheet(context, widget.item),
                       ),
                       const Spacer(),
                       // Bottom controls
@@ -180,6 +226,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         item: widget.item,
                         isFullscreen: _isFullscreen,
                         onToggleFullscreen: _toggleFullscreen,
+                        onDelete: _deleteItem,
                       ),
                     ],
                   ),
@@ -196,18 +243,19 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 // ── Top bar ───────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
-  const _TopBar(
-      {required this.item,
-      required this.onDelete,
-      required this.onBack});
+  const _TopBar({
+    required this.item,
+    required this.onBack,
+    required this.onInfo,
+  });
   final MediaItem item;
-  final VoidCallback onDelete;
   final VoidCallback onBack;
+  final VoidCallback onInfo;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -219,20 +267,41 @@ class _TopBar extends StatelessWidget {
         children: [
           IconButton(
             onPressed: onBack,
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            icon: const Icon(Icons.arrow_back_ios_new,
+                color: Colors.white, size: 20),
           ),
+          const SizedBox(width: 4),
           Expanded(
-            child: Text(
-              item.name,
-              style:
-                  const TextStyle(color: Colors.white, fontSize: 14),
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  MediaUtils.formatViewerDate(item.date),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  MediaUtils.formatViewerTime(item.date),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
           IconButton(
-            icon:
-                const Icon(Icons.delete_outline, color: Colors.white),
-            onPressed: onDelete,
+            icon: const Icon(Icons.info_outline,
+                color: Colors.white, size: 22),
+            tooltip: 'Details',
+            onPressed: onInfo,
           ),
         ],
       ),
@@ -248,11 +317,13 @@ class _BottomBar extends StatelessWidget {
     required this.item,
     required this.isFullscreen,
     required this.onToggleFullscreen,
+    required this.onDelete,
   });
   final Player player;
   final MediaItem item;
   final bool isFullscreen;
   final VoidCallback onToggleFullscreen;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -320,54 +391,77 @@ class _BottomBar extends StatelessWidget {
             },
           ),
           // Play controls
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Seek -10s
-              IconButton(
-                icon: const Icon(Icons.replay_10, color: Colors.white),
-                onPressed: () async {
-                  final pos = player.state.position;
-                  await player.seek(
-                      pos - const Duration(seconds: 10));
-                },
-              ),
-              // Play/Pause
-              StreamBuilder<bool>(
-                stream: player.stream.playing,
-                builder: (_, snap) {
-                  final playing = snap.data ?? false;
-                  return IconButton(
-                    iconSize: 52,
-                    icon: Icon(
-                      playing ? Icons.pause_circle : Icons.play_circle,
-                      color: Colors.white,
+          // Play controls
+          SizedBox(
+            height: 60,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Centered backward, play/pause, forward
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Seek -10s
+                    IconButton(
+                      icon: const Icon(Icons.replay_10, color: Colors.white),
+                      onPressed: () async {
+                        final pos = player.state.position;
+                        await player.seek(pos - const Duration(seconds: 10));
+                      },
                     ),
-                    onPressed: player.playOrPause,
-                  );
-                },
-              ),
-              // Seek +10s
-              IconButton(
-                icon: const Icon(Icons.forward_10, color: Colors.white),
-                onPressed: () async {
-                  final pos = player.state.position;
-                  await player
-                      .seek(pos + const Duration(seconds: 10));
-                },
-              ),
-              const Spacer(),
-              // Fullscreen toggle
-              IconButton(
-                icon: Icon(
-                  isFullscreen
-                      ? Icons.fullscreen_exit
-                      : Icons.fullscreen,
-                  color: Colors.white,
+                    // Play/Pause
+                    StreamBuilder<bool>(
+                      stream: player.stream.playing,
+                      builder: (_, snap) {
+                        final playing = snap.data ?? false;
+                        return IconButton(
+                          iconSize: 52,
+                          icon: Icon(
+                            playing ? Icons.pause_circle : Icons.play_circle,
+                            color: Colors.white,
+                          ),
+                          onPressed: player.playOrPause,
+                        );
+                      },
+                    ),
+                    // Seek +10s
+                    IconButton(
+                      icon: const Icon(Icons.forward_10, color: Colors.white),
+                      onPressed: () async {
+                        final pos = player.state.position;
+                        await player.seek(pos + const Duration(seconds: 10));
+                      },
+                    ),
+                  ],
                 ),
-                onPressed: onToggleFullscreen,
-              ),
-            ],
+                // Trailing actions: delete and fullscreen
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Delete / trash
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline,
+                            color: Colors.white),
+                        tooltip: 'Delete',
+                        onPressed: onDelete,
+                      ),
+                      // Fullscreen toggle
+                      IconButton(
+                        icon: Icon(
+                          isFullscreen
+                              ? Icons.fullscreen_exit
+                              : Icons.fullscreen,
+                          color: Colors.white,
+                        ),
+                        onPressed: onToggleFullscreen,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

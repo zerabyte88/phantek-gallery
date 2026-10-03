@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../features/gallery/presentation/gallery_screen.dart';
+import '../features/gallery/presentation/album_detail_screen.dart';
 import '../features/player/presentation/image_viewer_screen.dart';
 import '../features/player/presentation/video_player_screen.dart';
 import '../features/trash/presentation/trash_screen.dart';
@@ -13,12 +14,17 @@ class AppRoutes {
   static const video    = '/video';
   static const trash    = '/trash';
   static const settings = '/settings';
+  static const album    = '/album';
 }
 
 Route<dynamic> generateRoute(RouteSettings s) {
   switch (s.name) {
     case AppRoutes.gallery:
       return _slide(const GalleryScreen());
+
+    case AppRoutes.album:
+      final albumName = s.arguments as String;
+      return _slide(AlbumDetailScreen(albumName: albumName));
 
     case AppRoutes.image:
       final args = s.arguments as _ViewerArgs;
@@ -69,4 +75,6 @@ extension AppNav on NavigatorState {
 
   Future<void> openTrash() => pushNamed(AppRoutes.trash);
   Future<void> openSettings() => pushNamed(AppRoutes.settings);
+  Future<void> openAlbum(String albumName) =>
+      pushNamed(AppRoutes.album, arguments: albumName);
 }
