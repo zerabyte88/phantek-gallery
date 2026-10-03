@@ -37,24 +37,17 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "Menggunakan signing keystore dari GitHub Secrets..."
+            echo "Mengonfigurasi release keystore dari GitHub Secrets..."
             echo "$KEYSTORE_BASE64" | base64 --decode > android/app/phantek.jks
             cat <<EOF > android/key.properties
-          storePassword=$KEYSTORE_PASSWORD
-          keyPassword=$KEY_PASSWORD
-          keyAlias=$KEY_ALIAS
-          storeFile=phantek.jks
-          EOF
-          elif [ -f "android/app/phantek.jks" ]; then
-            echo "Menggunakan repository phantek.jks keystore..."
-            cat <<EOF > android/key.properties
-          storePassword=phantek123
-          keyPassword=phantek123
-          keyAlias=phantek
-          storeFile=phantek.jks
-          EOF
+storePassword=${KEYSTORE_PASSWORD:-phantek123}
+keyPassword=${KEY_PASSWORD:-phantek123}
+keyAlias=${KEY_ALIAS:-phantek}
+storeFile=phantek.jks
+EOF
           else
-            echo "Keystore tidak ditemukan!"
+            echo "::error::Secret KEYSTORE_BASE64 tidak ditemukan di GitHub Repository Secrets! Tambahkan secret ini agar APK release dapat ditandatangani."
+            exit 1
           fi
 
       - name: Install Dependencies
