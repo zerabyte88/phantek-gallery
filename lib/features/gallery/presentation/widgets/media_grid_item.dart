@@ -1,0 +1,134 @@
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/models/media_item.dart';
+import '../../../../core/services/thumbnail_service.dart';
+import '../../../../core/utils/media_utils.dart';
+
+/// Single cell in the gallery grid. Shows thumbnail + video badge if selected.
+class MediaGridItem extends ConsumerStatefulWidget {
+  const MediaGridItem({
+    super.key,
+    required this.item,
+    required this.isSelected,
+    required this.isSelecting,
+    required this.showBadges,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  final MediaItem item;
+  final bool isSelected;
+  final bool isSelecting;
+  final bool showBadges;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  @override
+  ConsumerState<MediaGridItem> createState() => _MediaGridItemState();
+}
+
+class _MediaGridItemState extends ConsumerState<MediaGridItem> {
+  late Future<Uint8List?> _thumbFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _thumbFuture =
+        ThumbnailService.instance.getThumbnail(widget.item.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // ── Thumbnail ───────────────────────────────────────
+          FutureBuilder<Uint8List?>(
+            future: _thumbFuture,
+            builder: (_, snap) {
+              if (snap.connectionState != ConnectionState.done ||
+                  snap.data == null) {
+                return ColoredBox(
+                  color: cs.surfaceContainerHighest,
+                  child: const Icon(Icons.image_not_supported_outlined,
+                      size: 28, color: Colors.white38),
+                );
+              }
+              return Image.memory(
+                snap.data!,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+              );
+            },
+          ),
+
+          // ── Video badge ─────────────────────────────────────
+          if (widget.item.isVideo && widget.showBadges)
+            Positioned(
+              bottom: 4,
+              right: 4,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  widget.item.duration != null
+                      ? MediaUtils.formatDuration(widget.item.duration!)
+                      : '▶',
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 10, height: 1.2),
+                ),
+              ),
+            ),
+
+          // ── Selection overlay ───────────────────────────────
+          if (widget.isSelecting)
+            Positioned.fill(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                decoration: BoxDecoration(
+                  color: widget.isSelected
+                      ? cs.primary.withValues(alpha: 0.35)
+                      : Colors.transparent,
+                  border: widget.isSelected
+                      ? Border.all(color: cs.primary, width: 3)
+                      : null,
+                ),
+              ),
+            ),
+
+          if (widget.isSelecting)
+            Positioned(
+              top: 4,
+              left: 4,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 120),
+                child: widget.isSelected
+                    ? CircleAvatar(
+                        key: const ValueKey('checked'),
+                        radius: 11,
+                        backgroundColor: cs.primary,
+                        child: const Icon(Icons.check,
+                            size: 14, color: Colors.white),
+                      )
+                    : CircleAvatar(
+                        key: const ValueKey('unchecked'),
+                        radius: 11,
+                        backgroundColor: Colors.black38,
+                      ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

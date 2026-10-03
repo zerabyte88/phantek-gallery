@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- OTA: downloaded APK stored in app-specific cache dir -->
+    <cache-path name="ota_apk" path="ota/" />
+    <!-- Allow sharing files from external cache too -->
+    <external-cache-path name="external_cache" path="." />
+</paths>

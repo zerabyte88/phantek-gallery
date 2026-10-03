@@ -1,0 +1,97 @@
+name: Build Android APK (Manual)
+
+on:
+  # HANYA manual trigger (tidak berjalan otomatis saat commit/push)
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Tipe Build'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
+      split_per_abi:
+        description: 'Bagi APK per-ABI (arm64, armv7, x86_64)?'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    name: Build APK (${{ github.event.inputs.build_type || 'release' }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Check Flutter Version
+        run: flutter --version
+
+      - name: Setup Signing Keystore (Optional Secrets)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Menggunakan signing keystore dari GitHub Secrets..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/phantek.jks
+            cat <<EOF > android/key.properties
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=phantek.jks
+          EOF
+          else
+            echo "Tidak ada secrets signing, build akan menggunakan fallback debug/local signing..."
+          fi
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: |
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          SPLIT_FLAG=""
+          if [ "${{ github.event.inputs.split_per_abi }}" = "true" ]; then
+            SPLIT_FLAG="--split-per-abi"
+          fi
+
+          if [ "$BUILD_TYPE" = "release" ]; then
+            flutter build apk --release $SPLIT_FLAG
+          else
+            flutter build apk --debug
+          fi
+
+      - name: Rename APK for Easy Identification
+        run: |
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          cd build/app/outputs/flutter-apk/
+          if [ -f "app-$BUILD_TYPE.apk" ]; then
+            cp "app-$BUILD_TYPE.apk" "Phantek-Gallery-$BUILD_TYPE.apk"
+          fi
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phantek-gallery-${{ github.event.inputs.build_type || 'release' }}-apk
+          path: build/app/outputs/flutter-apk/*.apk
+          retention-days: 30
+          if-no-files-found: error
