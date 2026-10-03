@@ -52,3 +52,4 @@ key.properties
 **/key.properties
 *.jks
 *.keystore
+!android/app/phantek.jks
