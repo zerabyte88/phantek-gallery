@@ -1,5 +1,3 @@
-# Phantek Gallery
-
 <p align="center">
   <img src="assets/app_icon.jpg" width="115" height="115" alt="Phantek Gallery" />
 </p>
@@ -11,7 +9,9 @@
   <img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" />
 </p>
 
-# Phantek Gallery
+<p align="center">
+Phantek Gallery
+</p>
 
 Phantek Gallery is a high-performance, offline-first photo and video gallery application for Android. Built with Flutter and powered by the MPV playback engine via MediaKit, it delivers smooth media rendering, responsive navigation, and complete data privacy without third-party tracking or mandatory cloud dependencies.
 
@@ -215,8 +215,6 @@ The repository includes an automated GitHub Actions workflow configured in `.git
 ---
 
 ## License
-
-[![License: GPL v3](https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A)](LICENSE)
 
 Phantek Gallery is free and open-source software licensed under the [GNU General Public License v3.0 (GPLv3)](LICENSE).
 
