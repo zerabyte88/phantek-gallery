@@ -31,7 +31,7 @@ class _BouncyTapState extends State<BouncyTap>
     _controller = AnimationController(
       vsync: this,
       duration: widget.duration,
-      reverseDuration: const Duration(milliseconds: 140),
+      reverseDuration: const Duration(milliseconds: 160),
     );
     _scaleAnimation = Tween<double>(begin: 1.0, end: widget.scaleDown).animate(
       CurvedAnimation(
@@ -53,7 +53,13 @@ class _BouncyTapState extends State<BouncyTap>
   }
 
   void _onPointerUp(PointerUpEvent _) {
-    _controller.reverse();
+    if (_controller.value < 0.7) {
+      _controller.forward().then((_) {
+        if (mounted) _controller.reverse();
+      });
+    } else {
+      _controller.reverse();
+    }
   }
 
   void _onPointerCancel(PointerCancelEvent _) {

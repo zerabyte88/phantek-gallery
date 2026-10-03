@@ -7,6 +7,7 @@ import 'core/models/settings_model.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/services/media_kit_setup.dart';
 import 'core/services/settings_service.dart';
+import 'core/services/trash_service.dart';
 import 'features/update/data/update_provider.dart';
 import 'features/update/data/update_service.dart';
 import 'features/update/presentation/update_dialog.dart';
@@ -30,6 +31,9 @@ Future<void> main() async {
   //  3. Clean up any leftover OTA APK from a previous update.
   //     SAFETY: only deletes files matching "Phantek_Gallery_v*.apk" pattern.
   await UpdateService.instance.cleanupAllApks();
+
+  //  4. Clean up any expired items in trash (> 30 days old).
+  TrashService().purgeExpired().catchError((_) {});
 
   runApp(const ProviderScope(child: PhantekGalleryApp()));
 }

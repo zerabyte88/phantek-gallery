@@ -18,6 +18,20 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _easterEggHandler = EasterEggTapHandler();
+  String _cacheSizeStr = 'Calculating...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCacheSize();
+  }
+
+  Future<void> _loadCacheSize() async {
+    final sizeStr = await ThumbnailService.instance.getFormattedCacheSize();
+    if (mounted) {
+      setState(() => _cacheSizeStr = sizeStr);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +73,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   child: const Text(
-                    'v1.1.2',
+                    'v1.2.0',
                     style: TextStyle(
                       color: Color(0xFF00E676),
                       fontWeight: FontWeight.bold,
@@ -77,164 +91,208 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // ══ Appearance ══════════════════════════════════════
           _SectionHeader('Appearance'),
 
-          ListTile(
-            title: const Text('Theme'),
-            subtitle: Text(settings.themeMode.label),
-            leading: const Icon(Icons.palette_outlined),
-            onTap: () async {
-              final chosen = await _showModernThemeDialog(
-                context,
-                settings.themeMode,
-                availableThemeModes,
-              );
-              if (chosen != null) {
-                patch((s) => s.copyWith(themeMode: chosen));
-              }
-            },
+          BouncyTap(
+            scaleDown: 0.98,
+            child: ListTile(
+              title: const Text('Theme'),
+              subtitle: Text(settings.themeMode.label),
+              leading: const Icon(Icons.palette_outlined),
+              onTap: () async {
+                final chosen = await _showModernThemeDialog(
+                  context,
+                  settings.themeMode,
+                  availableThemeModes,
+                );
+                if (chosen != null) {
+                  patch((s) => s.copyWith(themeMode: chosen));
+                }
+              },
+            ),
           ),
 
-          ListTile(
-            title: const Text('Grid Columns'),
-            subtitle: Text('${settings.gridColumns} columns'),
-            leading: const Icon(Icons.grid_view_outlined),
-            onTap: () async {
-              final chosen = await _showModernGridColumnsDialog(
-                context,
-                settings.gridColumns,
-                isAlbum: false,
-              );
-              if (chosen != null) {
-                patch((s) => s.copyWith(gridColumns: chosen));
-              }
-            },
+          BouncyTap(
+            scaleDown: 0.98,
+            child: ListTile(
+              title: const Text('Grid Columns'),
+              subtitle: Text('${settings.gridColumns} columns'),
+              leading: const Icon(Icons.grid_view_outlined),
+              onTap: () async {
+                final chosen = await _showModernGridColumnsDialog(
+                  context,
+                  settings.gridColumns,
+                  isAlbum: false,
+                );
+                if (chosen != null) {
+                  patch((s) => s.copyWith(gridColumns: chosen));
+                }
+              },
+            ),
           ),
 
-          ListTile(
-            title: const Text('Albums Grid Columns'),
-            subtitle: Text('${settings.albumGridColumns} columns'),
-            leading: const Icon(Icons.photo_library_outlined),
-            onTap: () async {
-              final chosen = await _showModernGridColumnsDialog(
-                context,
-                settings.albumGridColumns,
-                isAlbum: true,
-              );
-              if (chosen != null) {
-                patch((s) => s.copyWith(albumGridColumns: chosen));
-              }
-            },
+          BouncyTap(
+            scaleDown: 0.98,
+            child: ListTile(
+              title: const Text('Albums Grid Columns'),
+              subtitle: Text('${settings.albumGridColumns} columns'),
+              leading: const Icon(Icons.photo_library_outlined),
+              onTap: () async {
+                final chosen = await _showModernGridColumnsDialog(
+                  context,
+                  settings.albumGridColumns,
+                  isAlbum: true,
+                );
+                if (chosen != null) {
+                  patch((s) => s.copyWith(albumGridColumns: chosen));
+                }
+              },
+            ),
           ),
 
-          SwitchListTile(
-            title: const Text('Show Duration Badges'),
-            subtitle: const Text('Video duration overlay on thumbnails'),
-            secondary: const Icon(Icons.badge_outlined),
-            value: settings.showBadges,
-            onChanged: (v) => patch((s) => s.copyWith(showBadges: v)),
+          BouncyTap(
+            scaleDown: 0.99,
+            child: SwitchListTile(
+              title: const Text('Show Duration Badges'),
+              subtitle: const Text('Video duration overlay on thumbnails'),
+              secondary: const Icon(Icons.badge_outlined),
+              value: settings.showBadges,
+              onChanged: (v) => patch((s) => s.copyWith(showBadges: v)),
+            ),
           ),
 
           // ══ Thumbnail Cache ══════════════════════════════════
           _SectionHeader('Cache'),
 
-          ListTile(
-            title: const Text('Clear Thumbnail Cache'),
-            subtitle: const Text('Frees memory from cached thumbs'),
-            leading: const Icon(Icons.cleaning_services_outlined),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              ThumbnailService.instance.clearAll();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Thumbnail cache cleared')),
-              );
-            },
+          BouncyTap(
+            scaleDown: 0.98,
+            child: ListTile(
+              title: const Text('Clear Thumbnail Cache'),
+              subtitle: Text('Disk size: $_cacheSizeStr • Frees cached previews'),
+              leading: const Icon(Icons.cleaning_services_outlined),
+              trailing: const Icon(Icons.delete_outline),
+              onTap: () async {
+                await ThumbnailService.instance.clearAll();
+                await _loadCacheSize();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Thumbnail cache cleared', textAlign: TextAlign.center),
+                    ),
+                  );
+                }
+              },
+            ),
           ),
 
           // ══ Storage ═════════════════════════════════════════
           _SectionHeader('Storage'),
 
-          SwitchListTile(
-            title: const Text('Trash Bin'),
-            subtitle: const Text('Move to trash instead of deleting'),
-            secondary: const Icon(Icons.delete_outline),
-            value: settings.enableTrash,
-            onChanged: (v) => patch((s) => s.copyWith(enableTrash: v)),
+          BouncyTap(
+            scaleDown: 0.99,
+            child: SwitchListTile(
+              title: const Text('Trash Bin'),
+              subtitle: const Text('Move to trash instead of deleting'),
+              secondary: const Icon(Icons.delete_outline),
+              value: settings.enableTrash,
+              onChanged: (v) => patch((s) => s.copyWith(enableTrash: v)),
+            ),
           ),
 
-          ListTile(
-            title: const Text('Excluded Folders'),
-            subtitle: settings.excludedFolders.isEmpty
-                ? const Text('None')
-                : Text(settings.excludedFolders.join('\n'),
-                    style: const TextStyle(fontSize: 12)),
-            leading: const Icon(Icons.folder_off_outlined),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showExcludedFoldersDialog(context, ref, settings),
+          BouncyTap(
+            scaleDown: 0.98,
+            child: ListTile(
+              title: const Text('Excluded Folders'),
+              subtitle: settings.excludedFolders.isEmpty
+                  ? const Text('None')
+                  : Text(settings.excludedFolders.join('\n'),
+                      style: const TextStyle(fontSize: 12)),
+              leading: const Icon(Icons.folder_off_outlined),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _showExcludedFoldersDialog(context, ref, settings),
+            ),
           ),
 
-          ListTile(
-            title: const Text('All Files Access (Android 11+)'),
-            subtitle: const Text('Enables complete trash and deletion across storage'),
-            leading: const Icon(Icons.security_outlined),
-            trailing: const Icon(Icons.open_in_new),
-            onTap: () async {
-              final granted = await PermissionService.instance.requestManageStorage();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(granted
-                        ? 'All Files Access granted \u2705'
-                        : 'Manage All Files permission is not granted'),
-                  ),
-                );
-              }
-            },
+          BouncyTap(
+            scaleDown: 0.98,
+            child: ListTile(
+              title: const Text('All Files Access (Android 11+)'),
+              subtitle: const Text('Enables complete trash and deletion across storage'),
+              leading: const Icon(Icons.security_outlined),
+              trailing: const Icon(Icons.open_in_new),
+              onTap: () async {
+                final granted = await PermissionService.instance.requestManageStorage();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        granted
+                            ? 'All Files Access granted'
+                            : 'Manage All Files permission is not granted',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
           ),
 
           // ══ Playback ═════════════════════════════════════════
           _SectionHeader('Playback'),
 
-          SwitchListTile(
-            title: const Text('Hardware Acceleration'),
-            subtitle: const Text('Use GPU decoding for video'),
-            secondary: const Icon(Icons.memory_outlined),
-            value: settings.hardwareAcceleration,
-            onChanged: (v) =>
-                patch((s) => s.copyWith(hardwareAcceleration: v)),
+          BouncyTap(
+            scaleDown: 0.99,
+            child: SwitchListTile(
+              title: const Text('Hardware Acceleration'),
+              subtitle: const Text('Use GPU decoding for video'),
+              secondary: const Icon(Icons.memory_outlined),
+              value: settings.hardwareAcceleration,
+              onChanged: (v) =>
+                  patch((s) => s.copyWith(hardwareAcceleration: v)),
+            ),
           ),
 
-          SwitchListTile(
-            title: const Text('Auto-Play Video'),
-            subtitle: const Text('Start playback automatically'),
-            secondary: const Icon(Icons.play_circle_outline),
-            value: settings.autoPlayVideo,
-            onChanged: (v) => patch((s) => s.copyWith(autoPlayVideo: v)),
+          BouncyTap(
+            scaleDown: 0.99,
+            child: SwitchListTile(
+              title: const Text('Auto-Play Video'),
+              subtitle: const Text('Start playback automatically'),
+              secondary: const Icon(Icons.play_circle_outline),
+              value: settings.autoPlayVideo,
+              onChanged: (v) => patch((s) => s.copyWith(autoPlayVideo: v)),
+            ),
           ),
 
           // ══ Updates ══════════════════════════════════════════
           _SectionHeader('Updates'),
 
-          SwitchListTile(
-            title: const Text('Auto-check for Updates'),
-            subtitle: const Text('Check GitHub Releases on launch'),
-            secondary: const Icon(Icons.update),
-            value: settings.autoCheckUpdate,
-            onChanged: (v) =>
-                patch((s) => s.copyWith(autoCheckUpdate: v)),
+          BouncyTap(
+            scaleDown: 0.99,
+            child: SwitchListTile(
+              title: const Text('Auto-check for Updates'),
+              subtitle: const Text('Check GitHub Releases on launch'),
+              secondary: const Icon(Icons.update),
+              value: settings.autoCheckUpdate,
+              onChanged: (v) =>
+                  patch((s) => s.copyWith(autoCheckUpdate: v)),
+            ),
           ),
 
-          ListTile(
-            title: const Text('Check for Updates Now'),
-            leading: const Icon(Icons.system_update_alt_outlined),
-            trailing: update.isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.chevron_right),
-            enabled: !update.isLoading,
-            onTap: () => ref
-                .read(updateNotifierProvider.notifier)
-                .checkForUpdate(silent: false),
+          BouncyTap(
+            scaleDown: 0.98,
+            child: ListTile(
+              title: const Text('Check for Updates Now'),
+              leading: const Icon(Icons.system_update_alt_outlined),
+              trailing: update.isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.chevron_right),
+              enabled: !update.isLoading,
+              onTap: () => ref
+                  .read(updateNotifierProvider.notifier)
+                  .checkForUpdate(silent: false),
+            ),
           ),
 
           // ══ Developer Card ══════════════════════════════════
@@ -396,7 +454,10 @@ Future<AppThemeMode?> _showModernThemeDialog(
                 (m) => _ThemeOptionCard(
                   mode: m,
                   selected: currentTheme == m,
-                  onTap: () => Navigator.pop(ctx, m),
+                  onTap: () async {
+                    await Future.delayed(const Duration(milliseconds: 140));
+                    if (ctx.mounted) Navigator.pop(ctx, m);
+                  },
                 ),
               ),
             ],
@@ -469,96 +530,96 @@ class _ThemeOptionCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: SimpleDialogOption(
-          padding: EdgeInsets.zero,
-          onPressed: onTap,
-          child: BouncyTap(
-            scaleDown: 0.96,
+      child: BouncyTap(
+        scaleDown: 0.96,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: SimpleDialogOption(
+            padding: EdgeInsets.zero,
+            onPressed: onTap,
             child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: selected
-                ? cs.primary.withValues(alpha: 0.12)
-                : cs.surfaceContainerHighest.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected
-                  ? cs.primary
-                  : cs.outline.withValues(alpha: 0.15),
-              width: selected ? 2 : 1,
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: selected
+                    ? cs.primary.withValues(alpha: 0.12)
+                    : cs.surfaceContainerHighest.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: selected
+                      ? cs.primary
+                      : cs.outline.withValues(alpha: 0.15),
+                  width: selected ? 2 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      gradient: bgPreview,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selected
+                            ? cs.primary
+                            : Colors.white.withValues(alpha: 0.2),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Icon(icon, color: iconColor, size: 22),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          mode.label,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight:
+                                selected ? FontWeight.bold : FontWeight.w600,
+                            color: selected ? cs.primary : cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          description,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected ? cs.primary : Colors.transparent,
+                      border: Border.all(
+                        color: selected
+                            ? cs.primary
+                            : cs.outline.withValues(alpha: 0.4),
+                        width: 2,
+                      ),
+                    ),
+                    child: selected
+                        ? Icon(Icons.check, size: 14, color: cs.onPrimary)
+                        : null,
+                  ),
+                ],
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  gradient: bgPreview,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: selected
-                        ? cs.primary
-                        : Colors.white.withValues(alpha: 0.2),
-                    width: 1.5,
-                  ),
-                ),
-                child: Icon(icon, color: iconColor, size: 22),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      mode.label,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight:
-                            selected ? FontWeight.bold : FontWeight.w600,
-                        color: selected ? cs.primary : cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: selected ? cs.primary : Colors.transparent,
-                  border: Border.all(
-                    color: selected
-                        ? cs.primary
-                        : cs.outline.withValues(alpha: 0.4),
-                    width: 2,
-                  ),
-                ),
-                child: selected
-                    ? Icon(Icons.check, size: 14, color: cs.onPrimary)
-                    : null,
-              ),
-            ],
           ),
         ),
       ),
-    ),
-  ),
-);
+    );
   }
 }
 
@@ -631,7 +692,10 @@ Future<int?> _showModernGridColumnsDialog(
                   columns: c,
                   selected: currentCols == c,
                   isAlbum: isAlbum,
-                  onTap: () => Navigator.pop(ctx, c),
+                  onTap: () async {
+                    await Future.delayed(const Duration(milliseconds: 140));
+                    if (ctx.mounted) Navigator.pop(ctx, c);
+                  },
                 ),
               ),
             ],
@@ -670,6 +734,7 @@ class _ColumnOptionCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: BouncyTap(
+        scaleDown: 0.96,
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),

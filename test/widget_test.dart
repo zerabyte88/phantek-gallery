@@ -10,7 +10,9 @@ import 'package:phantek_gallery/core/models/media_item.dart';
 import 'package:phantek_gallery/core/models/settings_model.dart';
 import 'package:phantek_gallery/core/providers/media_provider.dart';
 import 'package:phantek_gallery/core/services/settings_service.dart';
+import 'package:phantek_gallery/core/services/thumbnail_service.dart';
 import 'package:phantek_gallery/core/services/trash_service.dart';
+import 'package:phantek_gallery/core/models/trash_item.dart';
 import 'package:phantek_gallery/core/utils/media_utils.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/album_grid_item.dart';
 import 'package:phantek_gallery/features/gallery/presentation/album_detail_screen.dart';
@@ -131,7 +133,7 @@ void main() {
       expect(settings.defaultFilter, FilterOption.all);
     });
 
-    testWidgets('FilterSortBar displays filter chips and 3-dots popup menu', (tester) async {
+    testWidgets('FilterSortBar displays filter chips and sort bar opens bottom sheet', (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
@@ -151,24 +153,34 @@ void main() {
       expect(find.text('Videos'), findsOneWidget);
       expect(find.text('Albums'), findsOneWidget);
 
-      // Verify 3-dots sort button exists
-      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+      // Verify sort bar row exists with arrow and label
+      expect(find.text('By time added: Newest to oldest'), findsOneWidget);
+      expect(find.byIcon(Icons.keyboard_arrow_down), findsOneWidget);
 
-      // Tap 3-dots button and verify sort options appear
-      await tester.tap(find.byIcon(Icons.more_vert));
+      // Tap sort bar to open bottom sheet
+      await tester.tap(find.text('By time added: Newest to oldest'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Newest First'), findsOneWidget);
-      expect(find.text('Oldest First'), findsOneWidget);
-      expect(find.text('Name A → Z'), findsOneWidget);
-      expect(find.text('Name Z → A'), findsOneWidget);
+      // Verify bottom sheet title and options appear
+      expect(find.text('Sort'), findsOneWidget);
+      expect(find.text('By shooting time'), findsOneWidget);
+      expect(find.text('By time added'), findsOneWidget);
+      expect(find.text('By name'), findsOneWidget);
+      expect(find.text('By size'), findsOneWidget);
+      expect(find.text('Restore defaults'), findsOneWidget);
 
-      // Tap one of the options
-      await tester.tap(find.text('Oldest First'), warnIfMissed: false);
+      // Tap "By name" and verify subtitle changes to "A to Z"
+      await tester.tap(find.text('By name'));
       await tester.pumpAndSettle();
 
-      // Menu closes
-      expect(find.text('Oldest First'), findsNothing);
+      expect(find.text('A to Z'), findsOneWidget);
+
+      // Tap Close button
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      // Bottom sheet closes and sort bar reflects new sort
+      expect(find.text('By name: A to Z'), findsOneWidget);
     });
 
     test('TrashService moveToTrash and restore lifecycle with temp file', () async {
@@ -198,6 +210,52 @@ void main() {
       } finally {
         await tempDir.delete(recursive: true);
       }
+    });
+
+    test('TrashService purgeExpired automatically removes expired items', () async {
+      final tempDir = await Directory.systemTemp.createTemp('trash_purge_test_');
+      try {
+        final testFile = File('${tempDir.path}/expired.jpg');
+        await testFile.writeAsString('expired photo content');
+
+        final service = TrashService();
+        final item = await service.moveToTrash(
+          id: 'expired_1',
+          sourcePath: testFile.path,
+          isVideo: false,
+        );
+
+        expect(await File(item.trashPath).exists(), isTrue);
+
+        // Purge items with threshold 0 days (immediately expired)
+        await service.purgeExpired(maxDays: 0);
+
+        final items = await service.getItems();
+        expect(items.any((e) => e.id == 'expired_1'), isFalse);
+        expect(await File(item.trashPath).exists(), isFalse);
+      } finally {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('TrashItem toMediaItem converts properties correctly', () {
+      final trashItem = TrashItem(
+        id: 'trash_photo_1',
+        originalPath: '/storage/emulated/0/DCIM/photo.jpg',
+        trashPath: '/storage/emulated/0/.trash/photo.jpg',
+        name: 'photo.jpg',
+        deletedDate: DateTime(2026, 1, 1),
+        isVideo: false,
+        size: 2048,
+      );
+
+      final media = trashItem.toMediaItem();
+      expect(media.id, 'trash_photo_1');
+      expect(media.path, '/storage/emulated/0/.trash/photo.jpg');
+      expect(media.name, 'photo.jpg');
+      expect(media.date, DateTime(2026, 1, 1));
+      expect(media.size, 2048);
+      expect(media.isVideo, isFalse);
     });
 
     testWidgets('AlbumGridItem displays album title and count', (tester) async {
@@ -428,6 +486,14 @@ void main() {
       ];
       final selectedUniversal = UpdateService.selectBestApkAsset(universalAssets, 'arm64-v8a');
       expect(selectedUniversal['name'], 'app-release.apk');
+    });
+
+    test('ThumbnailService clearAll wipes cache and formats size properly', () async {
+      await ThumbnailService.instance.clearAll();
+      final size = await ThumbnailService.instance.getCacheSizeBytes();
+      expect(size, 0);
+      final sizeStr = await ThumbnailService.instance.getFormattedCacheSize();
+      expect(sizeStr, '0 B');
     });
   });
 }

@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../models/trash_item.dart';
+import 'thumbnail_service.dart';
 
 /// Relative path inside external storage where trashed items are kept.
 const _kTrashFolder = '.trash/PhantekGallery';
@@ -28,7 +29,29 @@ class TrashService {
 
   Future<List<TrashItem>> getItems() async {
     await _ensureLoaded();
+    await purgeExpired();
     return List.unmodifiable(_items);
+  }
+
+  /// Automatically purges items that have been in trash for more than [maxDays] days.
+  Future<void> purgeExpired({int maxDays = 30}) async {
+    await _ensureLoaded();
+    final now = DateTime.now();
+    final expired = _items.where((item) {
+      return now.difference(item.deletedDate).inDays >= maxDays;
+    }).toList();
+
+    if (expired.isEmpty) return;
+
+    for (final item in expired) {
+      try {
+        final f = File(item.trashPath);
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
+      ThumbnailService.instance.invalidate(item.id);
+      _items.remove(item);
+    }
+    await _persist();
   }
 
   /// Moves [sourcePath] to trash. Throws if the file does not exist.

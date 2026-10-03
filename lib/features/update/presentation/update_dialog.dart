@@ -21,11 +21,16 @@ class UpdateListener extends ConsumerWidget {
       // Show snackbar for error / already up-to-date.
       if (next.hasError) {
         final msg = next.error == 'already_up_to_date'
-            ? 'Already up to date ✅'
+            ? 'Already up to date'
             : 'Update check failed: ${next.error}';
         ScaffoldMessenger.of(context)
           ..clearSnackBars()
-          ..showSnackBar(SnackBar(content: Text(msg)));
+          ..showSnackBar(SnackBar(
+            content: Text(
+              msg,
+              textAlign: TextAlign.center,
+            ),
+          ));
       }
     });
     return child;

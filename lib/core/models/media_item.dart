@@ -14,6 +14,7 @@ class MediaItem extends Equatable {
     this.height,
     this.mimeType,
     this.album,
+    this.dateAdded,
   });
 
   /// MediaStore / asset ID (from photo_manager AssetEntity.id).
@@ -25,8 +26,14 @@ class MediaItem extends Equatable {
   /// File name with extension.
   final String name;
 
-  /// Date taken / last modified.
+  /// Date taken / created.
   final DateTime date;
+
+  /// Date added / modified on device.
+  final DateTime? dateAdded;
+
+  /// Effective time added (falls back to date taken if dateAdded is null).
+  DateTime get timeAdded => dateAdded ?? date;
 
   /// File size in bytes.
   final int size;
@@ -78,6 +85,7 @@ class MediaItem extends Equatable {
     int? height,
     String? mimeType,
     String? album,
+    DateTime? dateAdded,
   }) {
     return MediaItem(
       id: id ?? this.id,
@@ -91,10 +99,11 @@ class MediaItem extends Equatable {
       height: height ?? this.height,
       mimeType: mimeType ?? this.mimeType,
       album: album ?? this.album,
+      dateAdded: dateAdded ?? this.dateAdded,
     );
   }
 
   @override
   List<Object?> get props =>
-      [id, path, name, date, size, isVideo, duration, width, height, mimeType, album];
+      [id, path, name, date, dateAdded, size, isVideo, duration, width, height, mimeType, album];
 }

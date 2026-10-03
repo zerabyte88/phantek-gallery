@@ -106,6 +106,7 @@ class MediaScannerService {
       path: path,
       name: entity.title ?? path.split('/').last,
       date: entity.createDateTime,
+      dateAdded: entity.modifiedDateTime,
       size: size,
       isVideo: isVideo,
       duration: isVideo

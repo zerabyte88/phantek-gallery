@@ -19,10 +19,12 @@ class ImageViewerScreen extends ConsumerStatefulWidget {
     super.key,
     required this.items,
     required this.initialIndex,
+    this.isTrash = false,
   });
 
   final List<MediaItem> items;
   final int initialIndex;
+  final bool isTrash;
 
   @override
   ConsumerState<ImageViewerScreen> createState() => _ImageViewerScreenState();
@@ -39,6 +41,17 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
     _current = widget.initialIndex;
     _page = PageController(initialPage: _current);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _precacheAdjacent(_current));
+  }
+
+  void _precacheAdjacent(int index) {
+    if (!mounted) return;
+    if (index + 1 < widget.items.length) {
+      precacheImage(FileImage(File(widget.items[index + 1].path)), context);
+    }
+    if (index - 1 >= 0) {
+      precacheImage(FileImage(File(widget.items[index - 1].path)), context);
+    }
   }
 
   @override
@@ -52,9 +65,71 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
 
   void _toggleBars() => setState(() => _barsVisible = !_barsVisible);
 
-  Future<void> _deleteCurrentItem() async {
-    final settings = ref.read(settingsNotifierProvider);
+  Future<void> _restoreCurrentItem() async {
     final item = _currentItem;
+    await ref.read(trashProvider.notifier).restore(item.id);
+    ref.read(mediaListProvider.notifier).restoreItems([item.id]);
+    ref.read(mediaListProvider.notifier).refresh();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"${item.name}" restored')),
+      );
+      if (widget.items.length <= 1) {
+        Navigator.of(context).pop();
+      } else {
+        widget.items.removeAt(_current);
+        setState(() {
+          _current = _current.clamp(0, widget.items.length - 1);
+        });
+        _page.jumpToPage(_current);
+      }
+    }
+  }
+
+  Future<void> _deleteCurrentItem() async {
+    final item = _currentItem;
+
+    if (widget.isTrash) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Delete Permanently?'),
+          content: Text(
+            '"${item.name}" will be permanently deleted. This action cannot be undone.',
+          ),
+          actionsOverflowButtonSpacing: 8,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+
+      await ref.read(trashProvider.notifier).permanentDelete(item.id);
+      if (mounted) {
+        if (widget.items.length <= 1) {
+          Navigator.of(context).pop();
+        } else {
+          widget.items.removeAt(_current);
+          setState(() {
+            _current = _current.clamp(0, widget.items.length - 1);
+          });
+          _page.jumpToPage(_current);
+        }
+      }
+      return;
+    }
+
+    final settings = ref.read(settingsNotifierProvider);
     final isTrash = settings.enableTrash;
 
     final ok = await showDialog<bool>(
@@ -150,8 +225,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
             PhotoViewGallery.builder(
               pageController: _page,
               itemCount: widget.items.length,
-              onPageChanged: (i) => setState(() => _current = i),
-              scrollPhysics: const BouncingScrollPhysics(),
+              onPageChanged: (i) {
+                setState(() => _current = i);
+                _precacheAdjacent(i);
+              },
+              scrollPhysics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
               backgroundDecoration:
                   const BoxDecoration(color: Colors.black),
               builder: (_, i) {
@@ -225,18 +305,33 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                             ],
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline,
-                              color: Colors.white, size: 22),
-                          tooltip: 'Delete',
-                          onPressed: _deleteCurrentItem,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.info_outline,
-                              color: Colors.white, size: 22),
-                          tooltip: 'Details',
-                          onPressed: () => showMediaInfoSheet(context, item),
-                        ),
+                        if (widget.isTrash) ...[
+                          IconButton(
+                            icon: const Icon(Icons.restore,
+                                color: Colors.white, size: 22),
+                            tooltip: 'Restore',
+                            onPressed: _restoreCurrentItem,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_forever,
+                                color: Colors.white, size: 22),
+                            tooltip: 'Delete Permanently',
+                            onPressed: _deleteCurrentItem,
+                          ),
+                        ] else ...[
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline,
+                                color: Colors.white, size: 22),
+                            tooltip: 'Delete',
+                            onPressed: _deleteCurrentItem,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.info_outline,
+                                color: Colors.white, size: 22),
+                            tooltip: 'Details',
+                            onPressed: () => showMediaInfoSheet(context, item),
+                          ),
+                        ],
                       ],
                     ),
                   ),

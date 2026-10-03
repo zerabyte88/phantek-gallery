@@ -167,12 +167,16 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     // 2. Sort by selected sort or settings.defaultSort
     final activeSort = _sort ?? settings.defaultSort;
     final sortedItems = switch (activeSort) {
-      SortOption.newest => [...filteredItems]..sort((a, b) => b.date.compareTo(a.date)),
-      SortOption.oldest => [...filteredItems]..sort((a, b) => a.date.compareTo(b.date)),
+      SortOption.newest => [...filteredItems]..sort((a, b) => b.timeAdded.compareTo(a.timeAdded)),
+      SortOption.oldest => [...filteredItems]..sort((a, b) => a.timeAdded.compareTo(b.timeAdded)),
+      SortOption.shootingTimeDesc => [...filteredItems]..sort((a, b) => b.date.compareTo(a.date)),
+      SortOption.shootingTimeAsc => [...filteredItems]..sort((a, b) => a.date.compareTo(b.date)),
       SortOption.nameAZ => [...filteredItems]
           ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
       SortOption.nameZA => [...filteredItems]
           ..sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase())),
+      SortOption.sizeDesc => [...filteredItems]..sort((a, b) => b.size.compareTo(a.size)),
+      SortOption.sizeAsc => [...filteredItems]..sort((a, b) => a.size.compareTo(b.size)),
     };
 
     return PopScope(
