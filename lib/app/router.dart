@@ -7,6 +7,9 @@ import '../features/trash/presentation/trash_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../core/models/media_item.dart';
 
+/// Global navigator key allowing overlays and dialogs to be shown from anywhere.
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 /// Named route constants.
 class AppRoutes {
   static const gallery  = '/';

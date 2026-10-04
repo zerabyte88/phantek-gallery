@@ -587,7 +587,7 @@ class _TrashThumbnail extends StatelessWidget {
     final file = File(item.trashPath);
 
     return FutureBuilder<Uint8List?>(
-      future: ThumbnailService.instance.getThumbnail(item.id),
+      future: ThumbnailService.instance.getThumbnail(item.id, filePath: item.trashPath),
       builder: (_, snap) {
         if (snap.data != null) {
           return Image.memory(

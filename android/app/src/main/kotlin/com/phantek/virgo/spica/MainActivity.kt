@@ -78,6 +78,111 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(2)
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.phantek.gallery/thumbnail"
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "getVideoThumbnail") {
+                val path = call.argument<String>("path")
+                val size = call.argument<Int>("size") ?: 256
+                if (path == null) {
+                    result.error("INVALID_PATH", "Path is null", null)
+                    return@setMethodCallHandler
+                }
+                executor.execute {
+                    try {
+                        val bytes = extractVideoThumbnail(path, size)
+                        runOnUiThread {
+                            result.success(bytes)
+                        }
+                    } catch (e: Throwable) {
+                        runOnUiThread {
+                            result.success(null)
+                        }
+                    }
+                }
+            } else {
+                result.notImplemented()
+            }
+        }
+    }
+
+    private fun extractVideoThumbnail(path: String, targetSize: Int): ByteArray? {
+        val file = File(path)
+        if (!file.exists() || !file.canRead()) return null
+
+        var bitmap: android.graphics.Bitmap? = null
+
+        // 1. Android Q+ (API 29+) ThumbnailUtils
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                bitmap = android.media.ThumbnailUtils.createVideoThumbnail(
+                    file,
+                    android.util.Size(targetSize, targetSize),
+                    null
+                )
+            } catch (_: Throwable) {}
+        }
+
+        // 2. MediaMetadataRetriever directly on file path (robust for MKV, MOV, WebM, MP4)
+        if (bitmap == null) {
+            val retriever = android.media.MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(path)
+                bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    retriever.getScaledFrameAtTime(
+                        1000000L,
+                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                        targetSize,
+                        targetSize
+                    ) ?: retriever.getScaledFrameAtTime(
+                        0L,
+                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                        targetSize,
+                        targetSize
+                    ) ?: retriever.frameAtTime
+                } else {
+                    retriever.getFrameAtTime(
+                        1000000L,
+                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                    ) ?: retriever.frameAtTime
+                }
+            } catch (_: Throwable) {
+            } finally {
+                try {
+                    retriever.release()
+                } catch (_: Throwable) {}
+            }
+        }
+
+        // 3. Legacy ThumbnailUtils (API < 29)
+        if (bitmap == null) {
+            try {
+                bitmap = android.media.ThumbnailUtils.createVideoThumbnail(
+                    path,
+                    android.provider.MediaStore.Images.Thumbnails.MINI_KIND
+                )
+            } catch (_: Throwable) {}
+        }
+
+        if (bitmap == null) return null
+
+        // Scale if larger than targetSize
+        val scaled = if (bitmap.width > targetSize || bitmap.height > targetSize) {
+            val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
+            val w = if (ratio >= 1f) targetSize else (targetSize * ratio).toInt().coerceAtLeast(1)
+            val h = if (ratio >= 1f) (targetSize / ratio).toInt().coerceAtLeast(1) else targetSize
+            android.graphics.Bitmap.createScaledBitmap(bitmap, w, h, true)
+        } else {
+            bitmap
+        }
+
+        val bos = java.io.ByteArrayOutputStream()
+        scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, bos)
+        return bos.toByteArray()
     }
 
     private fun installApk(apkPath: String) {

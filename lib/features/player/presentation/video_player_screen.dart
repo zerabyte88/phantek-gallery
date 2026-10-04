@@ -37,11 +37,12 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   late final Player _player;
   late final VideoController _controller;
   late final List<MediaItem> _videos;
   late final PageController _pageController;
+  late final TransformationController _transformationController;
   late int _current;
   bool _showControls = true;
   bool _isFullscreen = false;
@@ -55,6 +56,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   int _seekSeconds = 0;
   bool _seekIsForward = true;
   Timer? _seekOverlayTimer;
+  bool _isSwiping = false;
+  int? _pendingIndex;
+  bool _isVideoZoomed = false;
+  bool _isPinching = false;
+  bool _isMultiTouch = false;
+  final Set<int> _activePointers = {};
+  AnimationController? _zoomAnimController;
 
   @override
   void initState() {
@@ -68,16 +76,54 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _current = 0;
     }
     _pageController = PageController(initialPage: _current);
+    _transformationController = TransformationController();
     _initPlayer();
     _precacheAdjacentVideos(_current);
   }
 
+  void _resetVideoZoom() {
+    if (!_isVideoZoomed && _transformationController.value.isIdentity()) return;
+    _zoomAnimController?.stop();
+    _zoomAnimController?.dispose();
+
+    _zoomAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    final animation = Matrix4Tween(
+      begin: _transformationController.value,
+      end: Matrix4.identity(),
+    ).animate(CurvedAnimation(
+      parent: _zoomAnimController!,
+      curve: Curves.easeOutCubic,
+    ));
+
+    animation.addListener(() {
+      _transformationController.value = animation.value;
+    });
+
+    _zoomAnimController!.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (mounted) {
+          setState(() {
+            _isVideoZoomed = false;
+          });
+        }
+      }
+    });
+
+    _zoomAnimController!.forward();
+  }
+
   void _precacheAdjacentVideos(int index) {
-    if (index + 1 < _videos.length) {
-      ThumbnailService.instance.getThumbnail(_videos[index + 1].id);
-    }
-    if (index - 1 >= 0) {
-      ThumbnailService.instance.getThumbnail(_videos[index - 1].id);
+    for (final offset in const [-2, -1, 1, 2]) {
+      final target = index + offset;
+      if (target >= 0 && target < _videos.length) {
+        ThumbnailService.instance.getThumbnail(
+          _videos[target].id,
+          filePath: _videos[target].path,
+        );
+      }
     }
   }
 
@@ -98,8 +144,30 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         // enableHardwareAcceleration defaults to true on Android.
         // We propagate the user preference.
         enableHardwareAcceleration: settings.hardwareAcceleration,
+        hwdec: settings.hardwareAcceleration ? 'auto-safe' : 'no',
       ),
     );
+
+    // Apply robust codec configuration:
+    // H.264 and HEVC (H.265) utilize Android MediaCodec hardware decoding.
+    // VP9 and other software-reliable codecs fall back to FFmpeg's robust decoder on Android,
+    // eliminating MediaCodec OMX/C2 buffer-copy crashes and black screens on VP9.
+    if (_player.platform is NativePlayer && settings.hardwareAcceleration) {
+      final native = _player.platform as NativePlayer;
+      native.setProperty('hwdec-codecs', 'h264,hevc,mpeg4,mpeg2video,vp8,av1');
+    }
+
+    _player.stream.error.listen((err) {
+      debugPrint('[VideoPlayer] Playback error: $err');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Playback warning: $err'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    });
 
     _player.open(
       Media(_videos[_current].path),
@@ -107,11 +175,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     );
   }
 
-  void _onPageChanged(int index) {
+  void _changeToVideo(int index) {
     if (index == _current) return;
+    if (_isVideoZoomed || !_transformationController.value.isIdentity()) {
+      _zoomAnimController?.stop();
+      _zoomAnimController?.dispose();
+      _zoomAnimController = null;
+      _transformationController.value = Matrix4.identity();
+      _isVideoZoomed = false;
+    }
     setState(() {
       _current = index;
     });
+
+    final settings = ref.read(settingsNotifierProvider);
+    if (_player.platform is NativePlayer && settings.hardwareAcceleration) {
+      final native = _player.platform as NativePlayer;
+      native.setProperty('hwdec-codecs', 'h264,hevc,mpeg4,mpeg2video,vp8,av1');
+    }
+
     // Never auto-play on swipe — user decides whether to play
     _player.open(Media(_videos[index].path), play: false);
     if (_isLooping) {
@@ -133,6 +215,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _precacheAdjacentVideos(index);
   }
 
+  void _onPageChanged(int index) {
+    if (_isSwiping) {
+      // User is actively sliding/swiping between pages.
+      // We keep the transition at 60/120fps by deferring the heavy native player
+      // switch until the scroll animation has settled.
+      _pendingIndex = index;
+      _precacheAdjacentVideos(index);
+    } else {
+      _changeToVideo(index);
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Auto-pause on background to prevent memory / battery drain.
@@ -147,6 +241,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _seekOverlayTimer?.cancel();
+    _zoomAnimController?.dispose();
+    _transformationController.dispose();
     _player.dispose(); // releases native MPV context
     _pageController.dispose();
     _exitFullscreen();
@@ -162,6 +258,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   void _enterFullscreen() {
+    if (_isVideoZoomed || !_transformationController.value.isIdentity()) {
+      _zoomAnimController?.stop();
+      _transformationController.value = Matrix4.identity();
+      _isVideoZoomed = false;
+    }
     if (_isCurrentVideoPortrait()) {
       SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
@@ -177,6 +278,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   void _exitFullscreen() {
+    if (_isVideoZoomed || !_transformationController.value.isIdentity()) {
+      _zoomAnimController?.stop();
+      _transformationController.value = Matrix4.identity();
+      _isVideoZoomed = false;
+    }
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -459,6 +565,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       setState(() {
         _videos.removeAt(_current);
         _current = _current.clamp(0, _videos.length - 1);
+        _transformationController.value = Matrix4.identity();
+        _isVideoZoomed = false;
       });
       _pageController.jumpToPage(_current);
       _player.open(Media(_videos[_current].path), play: false);
@@ -484,40 +592,71 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           bottom: !_isFullscreen,
           child: Listener(
             onPointerDown: (e) {
+              _activePointers.add(e.pointer);
+              if (_activePointers.length > 1) {
+                _isMultiTouch = true;
+                _isPinching = true;
+                if (_isDragging || _dragOffsetY > 0) {
+                  setState(() {
+                    _isDragging = false;
+                    _dragOffsetY = 0.0;
+                    _startDragY = null;
+                    _startDragX = null;
+                  });
+                }
+                return;
+              }
               _startDragY = e.position.dy;
               _startDragX = e.position.dx;
             },
             onPointerMove: (e) {
-              if (_isFullscreen || _startDragY == null || _startDragX == null) return;
+              if (_isFullscreen ||
+                  _isVideoZoomed ||
+                  _isPinching ||
+                  _isMultiTouch ||
+                  _activePointers.length > 1 ||
+                  _startDragY == null ||
+                  _startDragX == null) {
+                return;
+              }
               final dy = e.position.dy - _startDragY!;
               final dx = (e.position.dx - _startDragX!).abs();
-              if (dy > 8 && dy > dx * 1.3) {
+              if (dy > 12 && dy > dx * 1.5) {
                 setState(() {
                   _isDragging = true;
-                  _dragOffsetY = (dy - 8).clamp(0.0, 400.0);
+                  _dragOffsetY = (dy - 12).clamp(0.0, 400.0);
                 });
               }
             },
             onPointerUp: (e) {
-              _startDragY = null;
-              _startDragX = null;
-              if (_dragOffsetY > 90) {
-                _player.pause();
-                Navigator.of(context).pop();
-              } else if (_dragOffsetY > 0) {
-                setState(() {
-                  _isDragging = false;
-                  _dragOffsetY = 0.0;
-                });
+              _activePointers.remove(e.pointer);
+              if (_activePointers.isEmpty) {
+                final wasMultiTouch = _isMultiTouch;
+                _isMultiTouch = false;
+                _isPinching = false;
+                _startDragY = null;
+                _startDragX = null;
+                if (_dragOffsetY > 90 && !wasMultiTouch && !_isVideoZoomed) {
+                  _player.pause();
+                  Navigator.of(context).pop();
+                } else if (_dragOffsetY > 0 || _isDragging) {
+                  setState(() {
+                    _isDragging = false;
+                    _dragOffsetY = 0.0;
+                  });
+                }
               }
             },
             onPointerCancel: (e) {
-              _startDragY = null;
-              _startDragX = null;
-              if (_dragOffsetY > 0) {
+              _activePointers.remove(e.pointer);
+              if (_activePointers.isEmpty) {
                 setState(() {
+                  _isMultiTouch = false;
+                  _isPinching = false;
                   _isDragging = false;
                   _dragOffsetY = 0.0;
+                  _startDragY = null;
+                  _startDragX = null;
                 });
               }
             },
@@ -540,24 +679,93 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     duration: _isDragging ? Duration.zero : const Duration(milliseconds: 200),
                     curve: Curves.easeOutCubic,
                     transform: Matrix4.translationValues(0, _dragOffsetY, 0),
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemCount: _videos.length,
-                      onPageChanged: _onPageChanged,
-                      physics: const BouncingScrollPhysics(),
-                      itemBuilder: (context, index) {
-                        if (index == _current) {
-                          return Center(
-                            child: Video(
-                              key: const ValueKey('active_video_surface'),
-                              controller: _controller,
-                              controls: NoVideoControls,
-                              fit: BoxFit.contain,
-                            ),
-                          );
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification is ScrollStartNotification) {
+                          if (notification.dragDetails != null) {
+                            _isSwiping = true;
+                            // Immediately pause playback on swipe to free hardware decoder
+                            // and GPU pipeline for silky-smooth 60/120fps motion.
+                            if (_player.state.playing) {
+                              _player.pause();
+                            }
+                          }
+                        } else if (notification is ScrollEndNotification) {
+                          final settledPage = _pageController.page?.round();
+                          final target = _pendingIndex ?? settledPage;
+                          _isSwiping = false;
+                          _pendingIndex = null;
+                          if (target != null &&
+                              target != _current &&
+                              target >= 0 &&
+                              target < _videos.length) {
+                            _changeToVideo(target);
+                          }
                         }
-                        return _VideoThumbnailPage(item: _videos[index]);
+                        return false;
                       },
+                      child: PageView.builder(
+                        controller: _pageController,
+                        itemCount: _videos.length,
+                        onPageChanged: _onPageChanged,
+                        physics: _isVideoZoomed
+                            ? const NeverScrollableScrollPhysics()
+                            : const BouncingScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          if (index == _current) {
+                            return Center(
+                              child: ClipRect(
+                                child: InteractiveViewer(
+                                  transformationController: _transformationController,
+                                  minScale: 1.0,
+                                  maxScale: 5.0,
+                                  panEnabled: _isVideoZoomed,
+                                  scaleEnabled: true,
+                                  clipBehavior: Clip.hardEdge,
+                                  onInteractionStart: (details) {
+                                    if (details.pointerCount > 1) {
+                                      setState(() => _isPinching = true);
+                                    }
+                                  },
+                                  onInteractionUpdate: (details) {
+                                    final scale = _transformationController.value.getMaxScaleOnAxis();
+                                    final isZoomed = scale > 1.05;
+                                    if (isZoomed != _isVideoZoomed) {
+                                      setState(() {
+                                        _isVideoZoomed = isZoomed;
+                                      });
+                                    }
+                                  },
+                                  onInteractionEnd: (details) {
+                                    final scale = _transformationController.value.getMaxScaleOnAxis();
+                                    final isZoomed = scale > 1.05;
+                                    setState(() {
+                                      _isVideoZoomed = isZoomed;
+                                      _isPinching = false;
+                                    });
+                                  },
+                                  child: Center(
+                                    child: Stack(
+                                      fit: StackFit.passthrough,
+                                      alignment: Alignment.center,
+                                      children: [
+                                        _VideoThumbnailPage(item: _videos[index]),
+                                        Video(
+                                          key: const ValueKey('active_video_surface'),
+                                          controller: _controller,
+                                          controls: NoVideoControls,
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          return _VideoThumbnailPage(item: _videos[index]);
+                        },
+                      ),
                     ),
                   ),
 
@@ -609,12 +817,69 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       ),
                     ),
 
+                  // ── Video zoom indicator and reset pill ──────────────────
+                  if (_isVideoZoomed)
+                    Positioned(
+                      top: _showControls ? 80 : (MediaQuery.of(context).padding.top + 16),
+                      right: 16,
+                      child: SafeArea(
+                        top: !_showControls,
+                        child: BouncyTap(
+                          onTap: _resetVideoZoom,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.75),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.35),
+                                width: 1,
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black45,
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.zoom_out_map_rounded,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 6),
+                                ValueListenableBuilder<Matrix4>(
+                                  valueListenable: _transformationController,
+                                  builder: (context, matrix, _) {
+                                    final scale = matrix.getMaxScaleOnAxis();
+                                    return Text(
+                                      '${scale.toStringAsFixed(1)}x • Reset',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
                   // ── Controls overlay ───────────────────────────────
                   AnimatedOpacity(
-                    opacity: (_showControls && _dragOffsetY < 20) ? 1.0 : 0.0,
+                    opacity: (_showControls && _dragOffsetY < 20 && !_isPinching) ? 1.0 : 0.0,
                     duration: const Duration(milliseconds: 200),
                     child: IgnorePointer(
-                      ignoring: !_showControls || _dragOffsetY >= 20,
+                      ignoring: !_showControls || _dragOffsetY >= 20 || _isPinching,
                       child: Column(
                         children: [
                           // Top bar
@@ -703,11 +968,21 @@ class _VideoThumbnailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cached = ThumbnailService.instance.getMemoryThumbnail(item.id);
+    if (cached != null) {
+      return Center(
+        child: Image.memory(
+          cached,
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+        ),
+      );
+    }
+
     return FutureBuilder<Uint8List?>(
-      future: ThumbnailService.instance.getThumbnail(item.id),
+      future: ThumbnailService.instance.getThumbnail(item.id, filePath: item.path),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done &&
-            snapshot.data != null) {
+        if (snapshot.data != null) {
           return Center(
             child: Image.memory(
               snapshot.data!,

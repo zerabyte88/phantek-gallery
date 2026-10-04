@@ -54,13 +54,15 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final bgColor = isDark
-        ? (theme.scaffoldBackgroundColor == Colors.black
-            ? const Color(0xFF161616)
-            : const Color(0xFF222222))
-        : theme.colorScheme.surface;
-    const accentColor = Color(0xFFF2C94C); // Gold / yellow accent from screenshot
+    final bgColor = theme.dialogTheme.backgroundColor ??
+        (isDark
+            ? (theme.scaffoldBackgroundColor == Colors.black
+                ? const Color(0xFF161616)
+                : const Color(0xFF222222))
+            : cs.surface);
+    final accentColor = cs.primary;
 
     return Container(
       decoration: BoxDecoration(
@@ -244,6 +246,9 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
               padding: const EdgeInsets.only(top: 8, bottom: 20),
               child: Center(
                 child: TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: accentColor,
+                  ),
                   onPressed: () {
                     setState(() {
                       _directions = {
@@ -255,7 +260,7 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                     });
                     _update(SortCriterion.timeAdded, SortDirection.descending);
                   },
-                  child: const Text(
+                  child: Text(
                     'Restore defaults',
                     style: TextStyle(
                       color: accentColor,

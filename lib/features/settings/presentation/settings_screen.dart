@@ -73,7 +73,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   child: const Text(
-                    'v1.2.0',
+                    'v1.3.1',
                     style: TextStyle(
                       color: Color(0xFF00E676),
                       fontWeight: FontWeight.bold,
@@ -166,7 +166,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             scaleDown: 0.98,
             child: ListTile(
               title: const Text('Clear Thumbnail Cache'),
-              subtitle: Text('Disk size: $_cacheSizeStr • Frees cached previews'),
+              subtitle: Text('Disk size: $_cacheSizeStr'),
               leading: const Icon(Icons.cleaning_services_outlined),
               trailing: const Icon(Icons.delete_outline),
               onTap: () async {

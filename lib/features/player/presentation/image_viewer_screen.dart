@@ -41,6 +41,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
   double? _startDragY;
   double? _startDragX;
   bool _isZoomed = false;
+  bool _isPinching = false;
+  bool _isMultiTouch = false;
+  final Set<int> _activePointers = {};
 
   @override
   void initState() {
@@ -70,7 +73,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
 
   MediaItem get _currentItem => widget.items[_current];
 
-  void _toggleBars() => setState(() => _barsVisible = !_barsVisible);
+  void _toggleBars() {
+    if (!_isZoomed && !_isPinching) {
+      setState(() => _barsVisible = !_barsVisible);
+    }
+  }
 
   Future<void> _restoreCurrentItem() async {
     final item = _currentItem;
@@ -223,48 +230,92 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
   Widget build(BuildContext context) {
     final item = _currentItem;
     final bgOpacity = (1.0 - (_dragOffsetY / 250)).clamp(0.0, 1.0);
+    final showBars = _barsVisible && _dragOffsetY < 20 && !_isZoomed && !_isPinching;
 
     return Scaffold(
       backgroundColor: Colors.black.withValues(alpha: bgOpacity),
       body: Listener(
         onPointerDown: (e) {
+          _activePointers.add(e.pointer);
+          if (_activePointers.length > 1) {
+            // Multi-touch / pinch detected.
+            // Immediately abort any drag-to-dismiss and hide bars.
+            _isMultiTouch = true;
+            _isPinching = true;
+            if (_isDragging || _dragOffsetY > 0) {
+              setState(() {
+                _isDragging = false;
+                _dragOffsetY = 0.0;
+                _startDragY = null;
+                _startDragX = null;
+              });
+            } else {
+              setState(() {});
+            }
+            return;
+          }
+
+          // Single pointer down
           _startDragY = e.position.dy;
           _startDragX = e.position.dx;
         },
         onPointerMove: (e) {
-          if (_startDragY == null || _startDragX == null || _isZoomed) return;
+          // While zoomed in, pinching, or multi-touching, NEVER pull-to-dismiss
+          if (_startDragY == null ||
+              _startDragX == null ||
+              _isZoomed ||
+              _isPinching ||
+              _isMultiTouch ||
+              _activePointers.length > 1) {
+            return;
+          }
+
           final dy = e.position.dy - _startDragY!;
           final dx = (e.position.dx - _startDragX!).abs();
-          if (dy > 8 && dy > dx * 1.3) {
+          // Require pure vertical downward pull: dy > 12 and strongly vertical (dy > dx * 1.5)
+          if (dy > 12 && dy > dx * 1.5) {
             setState(() {
               _isDragging = true;
-              _dragOffsetY = (dy - 8).clamp(0.0, 400.0);
+              _dragOffsetY = (dy - 12).clamp(0.0, 400.0);
             });
           }
         },
         onPointerUp: (e) {
-          _startDragY = null;
-          _startDragX = null;
-          if (_dragOffsetY > 90) {
-            Navigator.of(context).pop();
-          } else if (_dragOffsetY > 0) {
-            setState(() {
-              _isDragging = false;
-              _dragOffsetY = 0.0;
-            });
+          _activePointers.remove(e.pointer);
+          if (_activePointers.isEmpty) {
+            final wasMultiTouch = _isMultiTouch;
+            _isMultiTouch = false;
+            _isPinching = false;
+            _startDragY = null;
+            _startDragX = null;
+
+            if (_dragOffsetY > 90 && !wasMultiTouch && !_isZoomed) {
+              Navigator.of(context).pop();
+            } else if (_dragOffsetY > 0 || _isDragging) {
+              setState(() {
+                _isDragging = false;
+                _dragOffsetY = 0.0;
+              });
+            } else {
+              setState(() {});
+            }
           }
         },
         onPointerCancel: (e) {
-          _startDragY = null;
-          _startDragX = null;
-          if (_dragOffsetY > 0) {
+          _activePointers.remove(e.pointer);
+          if (_activePointers.isEmpty) {
             setState(() {
+              _isMultiTouch = false;
+              _isPinching = false;
               _isDragging = false;
               _dragOffsetY = 0.0;
+              _startDragY = null;
+              _startDragX = null;
             });
           }
         },
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () {
             if (_dragOffsetY < 10) _toggleBars();
           },
@@ -279,18 +330,32 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                   pageController: _page,
                   itemCount: widget.items.length,
                   onPageChanged: (i) {
-                    setState(() => _current = i);
+                    setState(() {
+                      _current = i;
+                      _isZoomed = false;
+                      _isPinching = false;
+                    });
                     _precacheAdjacent(i);
                   },
                   scaleStateChangedCallback: (state) {
                     final zoomed = state != PhotoViewScaleState.initial;
                     if (_isZoomed != zoomed) {
-                      setState(() => _isZoomed = zoomed);
+                      setState(() {
+                        _isZoomed = zoomed;
+                        if (zoomed) {
+                          _isDragging = false;
+                          _dragOffsetY = 0.0;
+                          _startDragY = null;
+                          _startDragX = null;
+                        }
+                      });
                     }
                   },
-                  scrollPhysics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics(),
-                  ),
+                  scrollPhysics: _isZoomed
+                      ? const NeverScrollableScrollPhysics()
+                      : const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
                   backgroundDecoration:
                       const BoxDecoration(color: Colors.transparent),
                   builder: (_, i) {
@@ -298,8 +363,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                     final file = File(it.path);
                     return PhotoViewGalleryPageOptions(
                       imageProvider: FileImage(file),
-                      minScale: PhotoViewComputedScale.contained,
-                      maxScale: PhotoViewComputedScale.covered * 4,
+                      minScale: PhotoViewComputedScale.contained * 0.8,
+                      maxScale: PhotoViewComputedScale.covered * 4.5,
+                      initialScale: PhotoViewComputedScale.contained,
+                      scaleStateCycle: (actual) =>
+                          actual == PhotoViewScaleState.initial
+                              ? PhotoViewScaleState.covering
+                              : PhotoViewScaleState.initial,
+                      filterQuality: FilterQuality.medium,
+                      basePosition: Alignment.center,
                       errorBuilder: (_, __, ___) => const Center(
                         child: Icon(Icons.broken_image,
                             size: 80, color: Colors.white38),
@@ -314,9 +386,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                 top: 0,
                 left: 0,
                 right: 0,
-                child: AnimatedOpacity(
-                  opacity: (_barsVisible && _dragOffsetY < 20) ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 200),
+                child: IgnorePointer(
+                  ignoring: !showBars,
+                  child: AnimatedOpacity(
+                    opacity: showBars ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
                   child: SafeArea(
                     bottom: false,
                     child: Container(
@@ -489,45 +564,50 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                   ),
                 ),
               ),
+            ),
 
               // ── Bottom info bar ─────────────────────────────────
               Positioned(
                 bottom: 0,
                 left: 0,
                 right: 0,
-                child: AnimatedOpacity(
-                  opacity: (_barsVisible && _dragOffsetY < 20) ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [Colors.black87, Colors.transparent],
+                child: IgnorePointer(
+                  ignoring: !showBars,
+                  child: AnimatedOpacity(
+                    opacity: showBars ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Colors.black87, Colors.transparent],
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          '${_current + 1} / ${widget.items.length}',
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 12),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          MediaUtils.formatDateTime(item.date),
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 12),
-                        ),
-                        const Spacer(),
-                        if (item.resolution.isNotEmpty)
+                      child: Row(
+                        children: [
                           Text(
-                            item.resolution,
+                            '${_current + 1} / ${widget.items.length}',
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 12),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            MediaUtils.formatDateTime(item.date),
                             style: const TextStyle(
                                 color: Colors.white70, fontSize: 12),
                           ),
-                      ],
+                          const Spacer(),
+                          if (item.resolution.isNotEmpty)
+                            Text(
+                              item.resolution,
+                              style: const TextStyle(
+                                  color: Colors.white70, fontSize: 12),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

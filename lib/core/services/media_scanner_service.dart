@@ -1,15 +1,45 @@
-import 'dart:async';
+import 'package:path/path.dart' as p;
 import 'package:photo_manager/photo_manager.dart';
 import '../models/media_item.dart';
 
-/// Supported video MIME types / extensions (H.265, VP9, etc.).
+/// Supported video file extensions (MKV, MOV, WebM, MP4, H.265/HEVC, VP9, etc.).
+const _kSupportedVideoExtensions = {
+  '.mp4',
+  '.mkv',
+  '.mov',
+  '.webm',
+  '.3gp',
+  '.3gpp',
+  '.avi',
+  '.m4v',
+  '.flv',
+  '.ts',
+  '.wmv',
+  '.asf',
+  '.vob',
+  '.ogv',
+};
+
+/// Supported video MIME types.
 const _kSupportedVideoMimes = {
   'video/mp4',
-  'video/x-matroska',  // MKV
-  'video/quicktime',   // MOV
+  'video/x-matroska',
+  'video/mkv',
+  'video/matroska',
+  'application/x-matroska',
+  'video/quicktime',
+  'video/mov',
   'video/webm',
+  'audio/webm',
   'video/3gpp',
+  'video/3gpp2',
   'video/avi',
+  'video/x-msvideo',
+  'video/x-flv',
+  'video/x-m4v',
+  'video/mp2t',
+  'video/x-ms-wmv',
+  'video/ogg',
 };
 
 /// Scans the device's local media store for photos and videos.
@@ -17,6 +47,38 @@ const _kSupportedVideoMimes = {
 /// Uses [photo_manager] so it respects MediaStore indexing on Android and
 /// never touches the network.
 class MediaScannerService {
+  /// Checks if a file path or extension belongs to a supported video format.
+  static bool isSupportedVideo(String pathOrExt) {
+    final ext = p.extension(pathOrExt).isNotEmpty
+        ? p.extension(pathOrExt).toLowerCase()
+        : (pathOrExt.startsWith('.') ? pathOrExt.toLowerCase() : '.$pathOrExt'.toLowerCase());
+    return _kSupportedVideoExtensions.contains(ext);
+  }
+
+  /// Checks if a MIME type is a supported video MIME type.
+  static bool isSupportedVideoMime(String mime) {
+    return _kSupportedVideoMimes.contains(mime.toLowerCase());
+  }
+
+  /// Infers a standardized video MIME type based on file extension.
+  static String? inferMimeType(String pathOrExt, {bool isVideo = false}) {
+    final ext = p.extension(pathOrExt).isNotEmpty
+        ? p.extension(pathOrExt).toLowerCase()
+        : (pathOrExt.startsWith('.') ? pathOrExt.toLowerCase() : '.$pathOrExt'.toLowerCase());
+    return switch (ext) {
+      '.mkv' => 'video/x-matroska',
+      '.webm' => 'video/webm',
+      '.mov' => 'video/quicktime',
+      '.mp4' => 'video/mp4',
+      '.3gp' || '.3gpp' => 'video/3gpp',
+      '.avi' => 'video/avi',
+      '.flv' => 'video/x-flv',
+      '.ts' => 'video/mp2t',
+      '.wmv' => 'video/x-ms-wmv',
+      _ => isVideo ? 'video/${ext.replaceFirst('.', '')}' : null,
+    };
+  }
+
   /// Fetch all [MediaItem]s from the local store.
   ///
   /// [excludedFolders] – absolute paths that should be skipped.
@@ -94,18 +156,27 @@ class MediaScannerService {
       return null;
     }
 
-    final isVideo = entity.type == AssetType.video;
+    final ext = p.extension(path).toLowerCase();
+    final isVideo =
+        entity.type == AssetType.video || _kSupportedVideoExtensions.contains(ext);
 
-    // For video, filter unsupported MIME types.
+    // For video, filter unsupported video formats.
     if (isVideo) {
-      final mime = entity.mimeType ?? '';
-      if (!_kSupportedVideoMimes.contains(mime)) return null;
+      final mime = entity.mimeType?.toLowerCase() ?? '';
+      final hasSupportedMime = mime.isNotEmpty && _kSupportedVideoMimes.contains(mime);
+      final hasSupportedExt = _kSupportedVideoExtensions.contains(ext);
+      if (!hasSupportedMime && !hasSupportedExt) return null;
     }
 
     int size = 0;
     try {
       size = await file.length();
     } catch (_) {}
+
+    String? mimeType = entity.mimeType;
+    if (mimeType == null || mimeType.isEmpty) {
+      mimeType = inferMimeType(path, isVideo: isVideo);
+    }
 
     return MediaItem(
       id: entity.id,
@@ -115,12 +186,10 @@ class MediaScannerService {
       dateAdded: entity.modifiedDateTime,
       size: size,
       isVideo: isVideo,
-      duration: isVideo
-          ? Duration(seconds: entity.duration)
-          : null,
+      duration: isVideo ? Duration(seconds: entity.duration) : null,
       width: entity.width,
       height: entity.height,
-      mimeType: entity.mimeType,
+      mimeType: mimeType,
     );
   }
 }

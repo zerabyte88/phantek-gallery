@@ -108,6 +108,7 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
     };
 
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       title: 'Phantek Gallery',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
