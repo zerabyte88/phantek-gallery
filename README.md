@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-059669?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Platform" />
   <img src="https://img.shields.io/badge/FLUTTER-3.47+-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
   <img src="https://img.shields.io/badge/APPLICATION_ID-com.phantek.virgo.spica-6366F1?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.3-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.4-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" /></a>
 </p>
 
@@ -22,11 +22,12 @@ Modern mobile galleries often require persistent network connections, cloud sync
 
 ---
 
-## What's New in v1.3.3
+## What's New in v1.3.4
 
-- 🚀 **Seamless VP9 & WebM Video Playback**: Switched MPV decoding pipeline to `auto-copy`, enabling automatic and graceful fallback from hardware decoding to bundled software decoders (`libvpx`, `libde265`) whenever hardware decoders are unavailable.
-- 🔇 **Suppressed Non-Fatal Codec Warning Popups**: Filtered benign hardware-to-software fallback warnings (such as HEVC `could not open codec`) from surfacing as disruptive error SnackBars while preserving background diagnostic logging.
-- ⚡ **Optimized Thumbnail Engine & Fast-Path Memory Cache**: Offloaded persistent disk cache I/O from the synchronous queue hot path into background workers, added synchronous memory cache fast-paths in grid cells to bypass Future allocation during fast scrolling, and introduced an MPV-based frame extractor fallback for VP9/WebM/HEVC videos.
+- ⚡ **Instant Cold-Start Thumbnail Disk Cache**: Pre-initializes the thumbnail disk cache directory synchronously at app startup, rendering cached image and video thumbnails on frame 1 without delay or blank loading placeholders.
+- 🎬 **Universal Video Thumbnail Engine (1080p, 2K, 4K & Non-MP4/H.264)**: Upgraded native Android extraction via `ContentResolver.loadThumbnail` with proportional aspect-ratio downsampling, multi-timestamp keyframe extraction, and headless MPV/FFmpeg decoding for high-resolution formats and non-standard codecs (HEVC/H.265, VP9, AV1, WebM, MKV, AVI, MOV).
+- 📐 **True Aspect Ratio Preservation**: Fixed stretching and distortion issues across all video thumbnails by strictly computing proportional dimensions that preserve native video aspect ratios.
+- 🧹 **Robust Cache Concurrency & Memory Hygiene**: Atomic `.tmp` writes prevent corrupted cache files on sudden process terminations, and automatic in-memory cache eviction handles OS low-memory pressure events gracefully.
 
 ---
 

@@ -29,15 +29,17 @@ Future<void> main() async {
   //  2. Persisted settings (synchronous after first init).
   await SettingsService.init();
 
-  //  3. Clean up any leftover OTA APK from a previous update.
+  //  3. Pre-warm thumbnail persistent disk cache directory.
+  await ThumbnailService.init();
+
+  //  4. Clean up any leftover OTA APK from a previous update.
   //     SAFETY: only deletes files matching "Phantek_Gallery_v*.apk" pattern.
   await UpdateService.instance.cleanupAllApks();
 
-  //  4. Clean up any expired items in trash (> 30 days old).
+  //  5. Clean up any expired items in trash (> 30 days old).
   TrashService().purgeExpired().catchError((_) {});
 
-  //  5. Balanced imageCache: 256 MB and 100 entries for instant high-res swiping.
-  //     RAM is trimmed immediately on AppLifecycleState.paused / hidden.
+  //  6. Balanced imageCache: 256 MB and 100 entries for instant high-res swiping.
   PaintingBinding.instance.imageCache.maximumSizeBytes = 256 * 1024 * 1024;
   PaintingBinding.instance.imageCache.maximumSize = 100;
 
@@ -72,12 +74,15 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       UpdateService.instance.cleanupAllApks();
-    } else if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden) {
-      // Trim RAM cache when app is minimized to save battery and prevent OS kill
-      ThumbnailService.instance.trimMemory();
-      PaintingBinding.instance.imageCache.clear();
     }
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    // Only purge decoded images and memory cache when OS reports actual RAM pressure
+    ThumbnailService.instance.trimMemory();
+    PaintingBinding.instance.imageCache.clear();
+    super.didHaveMemoryPressure();
   }
 
   @override

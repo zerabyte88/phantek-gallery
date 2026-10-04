@@ -753,6 +753,12 @@ void main() {
       expect(service.getMemoryThumbnail('non_existent_key'), isNull);
     });
 
+    test('ThumbnailService init and getCachedFile handles cache lookup properly', () async {
+      await ThumbnailService.init();
+      final service = ThumbnailService.instance;
+      expect(service.getCachedFile('non_existent_disk_key'), isNull);
+    });
+
     test('Matrix4 scale extraction and video zoom detection', () {
       final matrix = Matrix4.identity();
       expect(matrix.getMaxScaleOnAxis(), 1.0);

@@ -73,7 +73,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   child: const Text(
-                    'v1.3.3',
+                    'v1.3.4',
                     style: TextStyle(
                       color: Color(0xFF00E676),
                       fontWeight: FontWeight.bold,

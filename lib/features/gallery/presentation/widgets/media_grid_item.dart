@@ -30,36 +30,104 @@ class MediaGridItem extends ConsumerStatefulWidget {
 }
 
 class _MediaGridItemState extends ConsumerState<MediaGridItem> {
-  late Future<Uint8List?> _thumbFuture;
+  Future<Uint8List?>? _thumbFuture;
 
   @override
   void initState() {
     super.initState();
-    final cached =
-        ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
-    _thumbFuture = cached != null
-        ? Future.value(cached)
-        : ThumbnailService.instance.getThumbnail(
-            widget.item.id,
-            filePath: widget.item.path,
-            isVideo: widget.item.isVideo,
-          );
+    _initThumbnail();
   }
 
   @override
   void didUpdateWidget(covariant MediaGridItem oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.id != widget.item.id) {
-      final cached =
-          ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
-      _thumbFuture = cached != null
-          ? Future.value(cached)
-          : ThumbnailService.instance.getThumbnail(
-              widget.item.id,
-              filePath: widget.item.path,
-              isVideo: widget.item.isVideo,
-            );
+      _initThumbnail();
     }
+  }
+
+  void _initThumbnail() {
+    // If already in memory or on persistent disk cache, skip queuing
+    if (ThumbnailService.instance.getMemoryThumbnail(widget.item.id) != null ||
+        ThumbnailService.instance.getCachedFile(widget.item.id) != null) {
+      _thumbFuture = null;
+      return;
+    }
+    _thumbFuture = ThumbnailService.instance.getThumbnail(
+      widget.item.id,
+      filePath: widget.item.path,
+      isVideo: widget.item.isVideo,
+    );
+  }
+
+  Widget _buildPlaceholder(ColorScheme cs) {
+    return ColoredBox(
+      color: cs.surfaceContainerHighest,
+      child: Icon(
+        widget.item.isVideo
+            ? Icons.videocam_outlined
+            : Icons.image_not_supported_outlined,
+        size: 28,
+        color: Colors.white38,
+      ),
+    );
+  }
+
+  Widget _buildThumbnail(ColorScheme cs) {
+    // 1. Fast in-memory lookup (0ms)
+    final mem = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
+    if (mem != null) {
+      return Image.memory(
+        mem,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      );
+    }
+
+    // 2. Persistent disk cache hit (Instant on cold start — skips FutureBuilder delay!)
+    final diskFile = ThumbnailService.instance.getCachedFile(widget.item.id);
+    if (diskFile != null) {
+      return Image.file(
+        diskFile,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
+      );
+    }
+
+    // 3. Fallback: uncached, fetch asynchronously
+    _thumbFuture ??= ThumbnailService.instance.getThumbnail(
+      widget.item.id,
+      filePath: widget.item.path,
+      isVideo: widget.item.isVideo,
+    );
+
+    return FutureBuilder<Uint8List?>(
+      future: _thumbFuture,
+      builder: (_, snap) {
+        if (snap.data != null) {
+          return Image.memory(
+            snap.data!,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+          );
+        }
+        if (snap.connectionState == ConnectionState.done &&
+            !widget.item.isVideo) {
+          final file = File(widget.item.path);
+          if (file.existsSync()) {
+            return Image.file(
+              file,
+              cacheWidth: 360,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
+            );
+          }
+        }
+        return _buildPlaceholder(cs);
+      },
+    );
   }
 
   @override
@@ -73,40 +141,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
         fit: StackFit.expand,
         children: [
           // ── Thumbnail ───────────────────────────────────────
-          FutureBuilder<Uint8List?>(
-            future: _thumbFuture,
-            builder: (_, snap) {
-              if (snap.data != null) {
-                return Image.memory(
-                  snap.data!,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                );
-              }
-              if (snap.connectionState == ConnectionState.done &&
-                  !widget.item.isVideo) {
-                final file = File(widget.item.path);
-                if (file.existsSync()) {
-                  return Image.file(
-                    file,
-                    cacheWidth: 360,
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                    errorBuilder: (_, __, ___) => ColoredBox(
-                      color: cs.surfaceContainerHighest,
-                      child: const Icon(Icons.image_not_supported_outlined,
-                          size: 28, color: Colors.white38),
-                    ),
-                  );
-                }
-              }
-              return ColoredBox(
-                color: cs.surfaceContainerHighest,
-                child: const Icon(Icons.image_not_supported_outlined,
-                    size: 28, color: Colors.white38),
-              );
-            },
-          ),
+          _buildThumbnail(cs),
 
           // ── Video badge ─────────────────────────────────────
           if (widget.item.isVideo && widget.showBadges)
