@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -11,7 +12,8 @@ import 'media_scanner_service.dart';
 
 /// Queued thumbnail fetch request for uncached items.
 class _ThumbnailRequest {
-  _ThumbnailRequest(this.id, this.completer, {this.filePath, this.isVideo = false});
+  _ThumbnailRequest(this.id, this.completer,
+      {this.filePath, this.isVideo = false});
   final String id;
   final String? filePath;
   final bool isVideo;
@@ -62,8 +64,52 @@ class ThumbnailService {
       );
       return bytes;
     } catch (e) {
-      debugPrint('[ThumbnailService] Native video thumbnail extraction failed for $filePath: $e');
+      debugPrint(
+          '[ThumbnailService] Native video thumbnail extraction failed for $filePath: $e');
       return null;
+    }
+  }
+
+  /// Extracts a single video frame via media_kit's MPV engine.
+  /// Handles codecs (VP9, HEVC, AV1) that Android's native MediaMetadataRetriever cannot decode.
+  Future<Uint8List?> _extractFrameViaMpv(String filePath) async {
+    final player = Player();
+    try {
+      if (player.platform is NativePlayer) {
+        final native = player.platform as NativePlayer;
+        await native.setProperty('vo', 'null'); // no video output
+        await native.setProperty('ao', 'null'); // no audio output
+        await native.setProperty('pause', 'yes');
+        await native.setProperty('video-timing-offset', '0');
+      }
+
+      await player.open(Media(filePath), play: false);
+      // Seek to 1 second for a representative frame
+      await player.seek(const Duration(seconds: 1));
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (player.platform is NativePlayer) {
+        final native = player.platform as NativePlayer;
+        final dir = await _getCacheDirectory();
+        final tmpPath = p.join(dir.path, 'mpv_frame_${filePath.hashCode.abs()}.jpg');
+        await native.setProperty('screenshot-format', 'jpg');
+        await native.setProperty('screenshot-jpeg-quality', '80');
+        await native.command(['screenshot-to-file', tmpPath, 'video']);
+
+        await Future.delayed(const Duration(milliseconds: 200));
+        final tmpFile = File(tmpPath);
+        if (await tmpFile.exists()) {
+          final bytes = await tmpFile.readAsBytes();
+          await tmpFile.delete();
+          if (bytes.isNotEmpty) return bytes;
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[ThumbnailService] MPV frame extraction failed: $e');
+      return null;
+    } finally {
+      await player.dispose();
     }
   }
 
@@ -112,20 +158,6 @@ class ThumbnailService {
     final inFlight = _inFlight[assetId];
     if (inFlight != null) return inFlight.future;
 
-    // 3. Persistent disk cache lookup (fast local read, skips MediaStore queue)
-    try {
-      final diskFile = await _fileForAsset(assetId);
-      if (await diskFile.exists()) {
-        final bytes = await diskFile.readAsBytes();
-        if (bytes.isNotEmpty) {
-          _putInMemory(assetId, bytes);
-          return bytes;
-        }
-      }
-    } catch (e) {
-      debugPrint('[ThumbnailService] Error reading disk cache for $assetId: $e');
-    }
-
     final completer = Completer<Uint8List?>();
     _inFlight[assetId] = completer;
     _queue.add(_ThumbnailRequest(
@@ -161,6 +193,22 @@ class ThumbnailService {
   }
 
   Future<void> _processRequest(_ThumbnailRequest req) async {
+    // Check persistent disk cache first (moved from getThumbnail hot path)
+    try {
+      final diskFile = await _fileForAsset(req.id);
+      if (await diskFile.exists()) {
+        final diskBytes = await diskFile.readAsBytes();
+        if (diskBytes.isNotEmpty) {
+          _putInMemory(req.id, diskBytes);
+          _inFlight.remove(req.id);
+          req.completer.complete(diskBytes);
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('[ThumbnailService] Error reading disk cache for ${req.id}: $e');
+    }
+
     Uint8List? bytes;
 
     final isVideo = req.isVideo ||
@@ -184,7 +232,8 @@ class ThumbnailService {
 
         // 2. If native extractor returned null, try photo_manager thumbnailDataWithSize
         if (bytes == null || bytes.isEmpty) {
-          final entity = _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
+          final entity =
+              _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
           if (entity != null) {
             try {
               bytes = await entity
@@ -195,6 +244,14 @@ class ThumbnailService {
                   .timeout(const Duration(seconds: 3), onTimeout: () => null);
             } catch (_) {}
           }
+        }
+
+        // 3. Last resort: use media_kit (MPV/FFmpeg) to extract a single frame.
+        //    This handles VP9, WebM, HEVC that Android's MediaMetadataRetriever can't decode.
+        if ((bytes == null || bytes.isEmpty) && req.filePath != null) {
+          try {
+            bytes = await _extractFrameViaMpv(req.filePath!);
+          } catch (_) {}
         }
       } else {
         // Photo / image:
@@ -225,8 +282,8 @@ class ThumbnailService {
                   // BoxFit.cover in the grid cell handles square cropping in the UI
                 );
                 final frame = await codec.getNextFrame();
-                final byteData =
-                    await frame.image.toByteData(format: ui.ImageByteFormat.png);
+                final byteData = await frame.image
+                    .toByteData(format: ui.ImageByteFormat.png);
                 if (byteData != null) {
                   bytes = byteData.buffer.asUint8List();
                 }
@@ -236,7 +293,8 @@ class ThumbnailService {
         }
       }
     } catch (e) {
-      debugPrint('[ThumbnailService] Error processing thumbnail for ${req.id}: $e');
+      debugPrint(
+          '[ThumbnailService] Error processing thumbnail for ${req.id}: $e');
       bytes = null;
     }
 

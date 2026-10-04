@@ -35,22 +35,30 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
   @override
   void initState() {
     super.initState();
-    _thumbFuture = ThumbnailService.instance.getThumbnail(
-      widget.item.id,
-      filePath: widget.item.path,
-      isVideo: widget.item.isVideo,
-    );
+    final cached =
+        ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
+    _thumbFuture = cached != null
+        ? Future.value(cached)
+        : ThumbnailService.instance.getThumbnail(
+            widget.item.id,
+            filePath: widget.item.path,
+            isVideo: widget.item.isVideo,
+          );
   }
 
   @override
   void didUpdateWidget(covariant MediaGridItem oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.id != widget.item.id) {
-      _thumbFuture = ThumbnailService.instance.getThumbnail(
-        widget.item.id,
-        filePath: widget.item.path,
-        isVideo: widget.item.isVideo,
-      );
+      final cached =
+          ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
+      _thumbFuture = cached != null
+          ? Future.value(cached)
+          : ThumbnailService.instance.getThumbnail(
+              widget.item.id,
+              filePath: widget.item.path,
+              isVideo: widget.item.isVideo,
+            );
     }
   }
 
@@ -75,7 +83,8 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
                   gaplessPlayback: true,
                 );
               }
-              if (snap.connectionState == ConnectionState.done && !widget.item.isVideo) {
+              if (snap.connectionState == ConnectionState.done &&
+                  !widget.item.isVideo) {
                 final file = File(widget.item.path);
                 if (file.existsSync()) {
                   return Image.file(
@@ -105,8 +114,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
               bottom: 4,
               right: 4,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.black54,
                   borderRadius: BorderRadius.circular(4),

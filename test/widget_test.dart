@@ -796,20 +796,32 @@ void main() {
       expect(MediaScannerService.inferMimeType('video.unknown', isVideo: true), 'video/unknown');
     });
 
-    test('Codec configuration verifies mediacodec-copy with SW fallback and hardware acceleration for VP9, HEVC, and H264', () {
-      const hwdec = 'mediacodec-copy';
-      const hwdecCodecs = 'all';
+    test('Codec configuration verifies auto-copy with SW fallback and hardware acceleration for VP9, HEVC, and H264', () {
+      const hwdec = 'auto-copy';
       const bufferSize = 8388608; // 8 MB – within MPV Android hard-cap of 10 MB
 
-      // 'mediacodec-copy' decodes via HW MediaCodec but copies frame to CPU RAM,
-      // enabling seamless SW fallback for codecs where HW decoder is unavailable (VP9, etc.)
-      expect(hwdec, 'mediacodec-copy');
-
-      // 'all' ensures VP9, HEVC, and H.264 hardware decoders are utilized when available
-      expect(hwdecCodecs, 'all');
+      // 'auto-copy' tries available HW decoders, then falls back to SW (libvpx, libde265, etc.)
+      // automatically without failing on codecs without MediaCodec HW support (VP9, some HEVC).
+      expect(hwdec, 'auto-copy');
 
       // Buffer must not exceed MPV Android limit of 10 MB (10485760)
       expect(bufferSize, lessThanOrEqualTo(10485760));
+    });
+
+    test('Non-fatal codec warnings are identified and suppressed from UI notifications', () {
+      bool isNonFatalWarning(String err) {
+        final errLower = err.toLowerCase();
+        return errLower.contains('could not open codec') ||
+            errLower.contains('decoder init failed') ||
+            errLower.contains('hwdec') ||
+            errLower.contains('using software decoding');
+      }
+
+      expect(isNonFatalWarning('Could not open codec hevc'), isTrue);
+      expect(isNonFatalWarning('hwdec failed, falling back to sw'), isTrue);
+      expect(isNonFatalWarning('Decoder init failed for vp9'), isTrue);
+      expect(isNonFatalWarning('Using software decoding'), isTrue);
+      expect(isNonFatalWarning('File not found / corrupt media'), isFalse);
     });
 
     testWidgets('SortBottomSheet adapts accentColor and Restore defaults to active theme', (tester) async {
