@@ -2,14 +2,16 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 /// Queued thumbnail fetch request for uncached items.
 class _ThumbnailRequest {
-  _ThumbnailRequest(this.id, this.completer);
+  _ThumbnailRequest(this.id, this.completer, {this.filePath});
   final String id;
+  final String? filePath;
   final Completer<Uint8List?> completer;
 }
 
@@ -24,11 +26,29 @@ class ThumbnailService {
 
   static const int _thumbnailSize = 256; // px — quality vs. memory trade-off
   static const int _maxMemoryEntries = 500;
+  static const MethodChannel _nativeChannel =
+      MethodChannel('com.phantek.gallery/thumbnail');
 
   final Map<String, Uint8List> _memoryCache = {};
   final Queue<_ThumbnailRequest> _queue = Queue();
   bool _processing = false;
   Directory? _cacheDir;
+
+  /// Fast synchronous lookup in the in-memory cache (0ms).
+  Uint8List? getMemoryThumbnail(String assetId) => _memoryCache[assetId];
+
+  Future<Uint8List?> _extractNativeVideoThumbnail(String filePath) async {
+    try {
+      final bytes = await _nativeChannel.invokeMethod<Uint8List>(
+        'getVideoThumbnail',
+        {'path': filePath, 'size': _thumbnailSize},
+      );
+      return bytes;
+    } catch (e) {
+      debugPrint('[ThumbnailService] Native video thumbnail extraction failed for $filePath: $e');
+      return null;
+    }
+  }
 
   Future<Directory> _getCacheDirectory() async {
     if (_cacheDir != null) return _cacheDir!;
@@ -61,8 +81,8 @@ class ThumbnailService {
   }
 
   /// Returns cached thumbnail bytes from memory or disk, or fetches
-  /// from PhotoManager and persists to disk.
-  Future<Uint8List?> getThumbnail(String assetId) async {
+  /// from PhotoManager / native video frame extractor and persists to disk.
+  Future<Uint8List?> getThumbnail(String assetId, {String? filePath}) async {
     // 1. Fast in-memory lookup (0ms)
     final cached = _memoryCache[assetId];
     if (cached != null) return cached;
@@ -88,7 +108,7 @@ class ThumbnailService {
     if (inFlight != null) return inFlight.completer.future;
 
     final completer = Completer<Uint8List?>();
-    _queue.add(_ThumbnailRequest(assetId, completer));
+    _queue.add(_ThumbnailRequest(assetId, completer, filePath: filePath));
     _processQueue();
     return completer.future;
   }
@@ -112,12 +132,30 @@ class ThumbnailService {
             const ThumbnailSize.square(_thumbnailSize),
             quality: 80,
           );
+          if (bytes == null || bytes.isEmpty) {
+            // photo_manager returned null (common on Android for .mkv, .mov, .webm).
+            // Fallback to native MediaMetadataRetriever / ThumbnailUtils using origin file path!
+            final file = await entity.originFile ?? await entity.file;
+            if (file != null && await file.exists()) {
+              bytes = await _extractNativeVideoThumbnail(file.path);
+            }
+          }
         }
       } catch (_) {
         bytes = null;
       }
 
-      if (bytes != null) {
+      // If still null, try the explicitly provided filePath
+      if ((bytes == null || bytes.isEmpty) && req.filePath != null) {
+        try {
+          final file = File(req.filePath!);
+          if (await file.exists()) {
+            bytes = await _extractNativeVideoThumbnail(req.filePath!);
+          }
+        } catch (_) {}
+      }
+
+      if (bytes != null && bytes.isNotEmpty) {
         _putInMemory(req.id, bytes);
         // Persist to disk asynchronously
         _saveToDisk(req.id, bytes);

@@ -25,16 +25,20 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
   @override
   void initState() {
     super.initState();
-    _thumbFuture =
-        ThumbnailService.instance.getThumbnail(widget.album.coverItem.id);
+    _thumbFuture = ThumbnailService.instance.getThumbnail(
+      widget.album.coverItem.id,
+      filePath: widget.album.coverItem.path,
+    );
   }
 
   @override
   void didUpdateWidget(covariant AlbumGridItem oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.album.coverItem.id != widget.album.coverItem.id) {
-      _thumbFuture =
-          ThumbnailService.instance.getThumbnail(widget.album.coverItem.id);
+      _thumbFuture = ThumbnailService.instance.getThumbnail(
+        widget.album.coverItem.id,
+        filePath: widget.album.coverItem.path,
+      );
     }
   }
 

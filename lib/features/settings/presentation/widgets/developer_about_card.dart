@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../../core/widgets/bouncy_tap.dart';
 
 /// Developer & About card placed at the bottom of the Settings screen.
 class DeveloperAboutCard extends StatelessWidget {
   const DeveloperAboutCard({super.key});
 
   static const _cyan = Color(0xFF00C7D7);
-  static const _githubRepoUrl = 'https://github.com/zerabyte88/phantek-gallery';
   static const _githubProfileUrl = 'https://github.com/zerabyte88';
 
   Future<void> _openUrl(String url) async {
@@ -66,7 +64,7 @@ class DeveloperAboutCard extends StatelessWidget {
                   ),
                 ),
                 child: const Text(
-                  'v1.2.0',
+                  'v1.3.1',
                   style: TextStyle(
                     color: Color(0xFF00E676),
                     fontWeight: FontWeight.bold,
@@ -87,9 +85,9 @@ class DeveloperAboutCard extends StatelessWidget {
           const SizedBox(height: 20),
 
           // ── Key-Value Information Rows ──────────────────────────
-          _buildInfoRow('App Version', 'v1.2.0'),
+          _buildInfoRow('App Version', 'v1.3.1'),
           const SizedBox(height: 10),
-          _buildInfoRow('Build', '12005 (Release APK)'),
+          _buildInfoRow('Build', '13101 (Release APK)'),
           const SizedBox(height: 10),
           _buildInfoRow('Architecture', 'ARM64-v8a (MediaKit)'),
           const SizedBox(height: 10),
@@ -99,32 +97,29 @@ class DeveloperAboutCard extends StatelessWidget {
           // ── Developer Profile Row ───────────────────────────────
           Row(
             children: [
-              // Avatar with glowing cyan circular border
-              BouncyTap(
+              // Avatar with glowing cyan circular border (static, no animation/click)
+              Container(
                 key: const ValueKey('developer_avatar'),
-                onTap: () => _openUrl(_githubProfileUrl),
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: _cyan, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _cyan.withValues(alpha: 0.4),
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  child: ClipOval(
-                    child: Image.network(
-                      'https://github.com/zerabyte88.png',
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _cyan, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _cyan.withValues(alpha: 0.4),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: Image.network(
+                    'https://github.com/zerabyte88.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Image.asset(
+                      'assets/developer_avatar.png',
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Image.asset(
-                        'assets/developer_avatar.png',
-                        fit: BoxFit.cover,
-                      ),
                     ),
                   ),
                 ),
@@ -163,48 +158,6 @@ class DeveloperAboutCard extends StatelessWidget {
                 onPressed: () => _openUrl(_githubProfileUrl),
               ),
             ],
-          ),
-          const SizedBox(height: 18),
-
-          // ── Bottom Action Button: View Repository on GitHub ─────
-          BouncyTap(
-            scaleDown: 0.96,
-            child: SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: OutlinedButton(
-                onPressed: () => _openUrl(_githubRepoUrl),
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: const Color(0xFF16191D),
-                  side: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    width: 1,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.open_in_new,
-                      color: _cyan,
-                      size: 16,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'View Repository on GitHub',
-                      style: TextStyle(
-                        color: _cyan,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ),
         ],
       ),

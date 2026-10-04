@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-059669?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Platform" />
   <img src="https://img.shields.io/badge/FLUTTER-3.47+-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
   <img src="https://img.shields.io/badge/APPLICATION_ID-com.phantek.virgo.spica-6366F1?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.0-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.1-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" /></a>
 </p>
 
@@ -19,6 +19,18 @@ Phantek Gallery is a high-performance, offline-first photo and video gallery app
 ## Overview
 
 Modern mobile galleries often require persistent network connections, cloud synchronization, and background analytics. Phantek Gallery takes an offline-first approach: your photos and videos stay strictly on your local device storage. Network access is restricted entirely to user-directed over-the-air (OTA) update checks against official GitHub Releases.
+
+---
+
+## What's New in v1.3.1
+
+- 🎬 **Silky-Smooth Video Swipe Transitions**: Eliminates stutter and black flickers when swiping between videos by deferring heavy player initialization until page scroll settles, keeping instant thumbnail placeholders visible beneath playback surfaces.
+- 🔍 **Interactive Video Pinch-To-Zoom & Pan**: Full 1.0x–5.0x zoom and pan across all video playback states (before starting, while playing at 60 FPS, and during pause). Includes animated floating scale indicator with one-tap reset and full gesture isolation against swiping.
+- 🖼️ **Polished Photo Viewer Gestures**: Auto-hides top and bottom toolbars during pinch-to-zoom and restores them smoothly upon return. Multi-touch pointer tracking eliminates accidental pull-to-dismiss exits while zooming.
+- 📦 **Expanded Format & Codec Support**: Universal support for `.mkv`, `.mov`, `.webm`, `.mp4`, `.avi`, and `.3gp`. Intelligent decoder routing utilizes hardware acceleration for H.264 & HEVC (H.265) and routes VP9 to robust FFmpeg software decoding to prevent Android OMX crashes.
+- ⚡ **Multi-Tier Native Thumbnail Engine**: Direct file-path frame extraction via native Android Stagefright and `ThumbnailUtils`, ensuring instant video thumbnails for MKV, MOV, and WebM files even when unindexed by MediaStore.
+- 🎨 **Dynamic Filter & Sort Theming**: Sort bottom sheet indicators and "Restore defaults" action dynamically adapt to active theme accents (vibrant Sakura Pink `#FF7597` on AMOLED Sakura, primary accents on AMOLED/Dark/Light).
+- 🧹 **UI Streamlining**: Removed redundant cache labels and cleaned up the developer information card in Settings.
 
 ---
 
@@ -42,16 +54,20 @@ Modern mobile galleries often require persistent network connections, cloud sync
 
 ### Hardware-Accelerated Video Playback & Advanced Controls
 - **MediaKit & MPV Engine**: Native MPV and FFmpeg integration for ultra-smooth playback of MKV, MP4, WebM, and high-bitrate video streams up to 4K 60FPS.
+- **Universal Container & Codec Support**: Native playback and scanning for MKV, MOV, WebM, MP4, AVI, and 3GP containers. Intelligent decoder routing: hardware-accelerated MediaCodec for H.264 and HEVC (H.265), with robust FFmpeg software decoding for VP9 to prevent Android OMX buffer-copy crashes.
+- **Native Multi-Tier Video Thumbnail Engine**: Native background thumbnail extraction leveraging Android Q+ `ThumbnailUtils` and direct `MediaMetadataRetriever` file-path parsing, ensuring instant thumbnail rendering for non-MP4 formats (MKV, MOV, WebM) even when Android MediaStore has unindexed or incomplete MIME data.
 - **Lag-Free Slider Scrubbing**: Coalesced seek execution updates timestamps smoothly in real-time without flooding decoder pipelines, eliminating audio pops and stutter.
-- **Seamless Video Swiping**: Re-uses the active hardware `SurfaceTexture` across video transitions to eliminate black flickers when swiping.
+- **Silky-Smooth Video Swipe Transitions**: Auto-pauses active playback on swipe to free up 100% GPU and decoder bandwidth, defers heavy player initialization until the page settles, and keeps synchronous thumbnail layers beneath the video surface to completely eliminate black flickers and dropped frames.
 - **Aspect-Ratio-Aware Smart Fullscreen**: Portrait/vertical videos (Reels, TikTok, Shorts) expand into immersive full portrait without shrinking, while widescreen videos automatically rotate to landscape.
 - **Playback Speed Selector**: Native speed controls (`0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `2.0x`) powered by `_player.setRate(speed)`.
 - **Repeat / Loop Mode**: One-tap toggle in the bottom controls and options menu for continuous looping of short clips.
+- **Interactive Video Zoom In/Out**: Full pinch-to-zoom and pan support up to 5x magnification across all playback states — before playing (preview poster), during live 60 FPS playback, and while paused. Features an animated floating scale pill with instant one-tap zoom reset and gesture conflict isolation against page swiping or pull-to-dismiss.
 - **YouTube-Style Double-Tap Seek**: Split-screen double-tap seek (-10s / +10s) with animated feedback pill.
 - **Ergonomic Controls**: Prominent 64dp Play/Pause button, 36dp Rewind 10s, and 36dp Fast-Forward 10s buttons with spring tap physics.
 
 ### High-Fidelity Photo Viewer & Media Tools
-- **Gesture Support**: Smooth zooming, panning, and double-tap gestures powered by PhotoView.
+- **Refined Pinch-To-Zoom & Auto-Hiding Controls**: Seamless zoom in/out transitions with elastic bounds; top and bottom bars automatically fade out when zooming/pinching and reappear upon returning to normal scale.
+- **Multi-Touch Gesture Isolation**: Dedicated multi-touch pointer tracking prevents accidental pull-down dismissals while pinching or panning zoomed images.
 - **Native "Set as Wallpaper"**: Direct integration with Android system wallpaper chooser via `ACTION_ATTACH_DATA`.
 - **Rename Media**: Local file renaming dialog updating storage, Android MediaStore, and global UI state in real-time.
 - **Modern Top Bar**: Clean header with quick navigation, filename display, timestamp, and quick-action menu (rename, copy path, file details, share).
@@ -69,12 +85,13 @@ Modern mobile galleries often require persistent network connections, cloud sync
 - **Pure AMOLED Mode**: True pitch-black (`#000000`) surfaces for maximum OLED battery savings.
 - **AMOLED Sakura Mode 🌸**: Secret theme featuring Japanese Sakura pink accents over deep pitch-black backgrounds.
 - **Easter Egg**: Tap the developer profile avatar 10 times in Settings to unlock the secret AMOLED Sakura theme!
-- **Developer Card**: Dedicated About & Maintainer card in Settings with GitHub repository shortcuts.
+- **Developer Card**: Dedicated About & Maintainer card in Settings with build and architecture information.
 
 ### Over-The-Air (OTA) Updates & 64-Bit Architecture
 - Integrated update service that queries GitHub Releases for newer application versions.
 - **Dedicated 64-Bit ARM Build**: Streamlined specifically for modern 64-bit ARM devices (`arm64-v8a`), maximizing runtime performance, decoding speed, and memory efficiency.
 - **Package Conflict Prevention**: Standardized release signing keys across all version updates, eliminating `INSTALL_FAILED_UPDATE_INCOMPATIBLE` errors.
+- **Reliable OTA Dialog Delivery**: Top-level `rootNavigatorKey` integration guarantees update confirmation modals and download progress sheets reliably mount from any screen context.
 - In-app APK downloading with live progress tracking and automated installation dispatch via Android FileProvider (`com.phantek.virgo.spica.fileprovider`).
 - Automatic cleanup of temporary installer packages upon completion.
 

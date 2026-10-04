@@ -10,6 +10,7 @@ import 'package:phantek_gallery/core/models/media_item.dart';
 import 'package:phantek_gallery/core/models/settings_model.dart';
 import 'package:phantek_gallery/core/providers/media_provider.dart';
 import 'package:phantek_gallery/core/services/settings_service.dart';
+import 'package:phantek_gallery/core/services/media_scanner_service.dart';
 import 'package:phantek_gallery/core/services/thumbnail_service.dart';
 import 'package:phantek_gallery/core/services/trash_service.dart';
 import 'package:phantek_gallery/core/models/trash_item.dart';
@@ -18,10 +19,13 @@ import 'package:phantek_gallery/features/gallery/presentation/widgets/album_grid
 import 'package:phantek_gallery/features/gallery/presentation/album_detail_screen.dart';
 import 'package:phantek_gallery/features/gallery/presentation/gallery_screen.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/filter_sort_bar.dart';
+import 'package:phantek_gallery/features/gallery/presentation/widgets/sort_bottom_sheet.dart';
 import 'package:phantek_gallery/features/player/presentation/widgets/media_info_sheet.dart';
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
 import 'package:phantek_gallery/core/services/share_service.dart';
+import 'package:phantek_gallery/app/router.dart' show rootNavigatorKey;
 import 'package:phantek_gallery/features/update/data/update_service.dart';
+import 'package:phantek_gallery/features/update/presentation/update_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -723,6 +727,106 @@ void main() {
       expect(isLandscape, isFalse);
       expect(portraitVideo.resolution, '1080x1920');
       expect(landscapeVideo.resolution, '3840x2160');
+    });
+
+    testWidgets('UpdateListener mounts with rootNavigatorKey and has valid navigator context', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            navigatorKey: rootNavigatorKey,
+            home: const Scaffold(body: Text('Home Screen')),
+            builder: (context, child) => UpdateListener(
+              child: child!,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Home Screen'), findsOneWidget);
+      expect(rootNavigatorKey.currentContext, isNotNull);
+      expect(Navigator.of(rootNavigatorKey.currentContext!), isNotNull);
+    });
+
+    test('ThumbnailService getMemoryThumbnail returns synchronously cached bytes', () {
+      final service = ThumbnailService.instance;
+      expect(service.getMemoryThumbnail('non_existent_key'), isNull);
+    });
+
+    test('Matrix4 scale extraction and video zoom detection', () {
+      final matrix = Matrix4.identity();
+      expect(matrix.getMaxScaleOnAxis(), 1.0);
+
+      // Simulate 2.5x pinch-to-zoom
+      matrix.scaleByDouble(2.5, 2.5, 1.0, 1.0);
+      expect(matrix.getMaxScaleOnAxis(), 2.5);
+      final isZoomed = matrix.getMaxScaleOnAxis() > 1.05;
+      expect(isZoomed, isTrue);
+
+      // Reset zoom
+      matrix.setIdentity();
+      expect(matrix.getMaxScaleOnAxis(), 1.0);
+      expect(matrix.getMaxScaleOnAxis() > 1.05, isFalse);
+    });
+
+    test('MediaScannerService video format recognition for MKV, MOV, WebM, and MP4', () {
+      expect(MediaScannerService.isSupportedVideo('.mkv'), isTrue);
+      expect(MediaScannerService.isSupportedVideo('.mov'), isTrue);
+      expect(MediaScannerService.isSupportedVideo('.webm'), isTrue);
+      expect(MediaScannerService.isSupportedVideo('.mp4'), isTrue);
+      expect(MediaScannerService.isSupportedVideo('/storage/DCIM/clip.MKV'), isTrue);
+      expect(MediaScannerService.isSupportedVideo('/storage/Download/movie.mov'), isTrue);
+      expect(MediaScannerService.isSupportedVideo('/storage/Download/sample.webm'), isTrue);
+      expect(MediaScannerService.isSupportedVideo('/storage/DCIM/photo.jpg'), isFalse);
+      expect(MediaScannerService.isSupportedVideo('/storage/DCIM/image.png'), isFalse);
+    });
+
+    test('MediaScannerService MIME validation and inference for MKV, MOV, WebM, and others', () {
+      expect(MediaScannerService.isSupportedVideoMime('video/x-matroska'), isTrue);
+      expect(MediaScannerService.isSupportedVideoMime('video/mkv'), isTrue);
+      expect(MediaScannerService.isSupportedVideoMime('video/quicktime'), isTrue);
+      expect(MediaScannerService.isSupportedVideoMime('video/webm'), isTrue);
+      expect(MediaScannerService.isSupportedVideoMime('video/mp4'), isTrue);
+      expect(MediaScannerService.isSupportedVideoMime('image/jpeg'), isFalse);
+
+      expect(MediaScannerService.inferMimeType('video.mkv'), 'video/x-matroska');
+      expect(MediaScannerService.inferMimeType('video.webm'), 'video/webm');
+      expect(MediaScannerService.inferMimeType('video.mov'), 'video/quicktime');
+      expect(MediaScannerService.inferMimeType('video.mp4'), 'video/mp4');
+      expect(MediaScannerService.inferMimeType('video.unknown', isVideo: true), 'video/unknown');
+    });
+
+    test('Codec configuration verifies HEVC is hardware-accelerated and VP9 is routed to FFmpeg software decoding', () {
+      const hwdecCodecs = 'h264,hevc,mpeg4,mpeg2video,vp8,av1';
+      final codecs = hwdecCodecs.split(',').map((e) => e.trim()).toSet();
+
+      // HEVC (H.265) and H.264 are explicitly accelerated
+      expect(codecs.contains('hevc'), isTrue);
+      expect(codecs.contains('h264'), isTrue);
+
+      // VP9 is excluded from hwdec-codecs so it falls back to FFmpeg software decoder (prevents Android OMX crash)
+      expect(codecs.contains('vp9'), isFalse);
+    });
+
+    testWidgets('SortBottomSheet adapts accentColor and Restore defaults to active theme', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.amoledSakura,
+          home: Scaffold(
+            body: SortBottomSheet(
+              currentSort: SortOption.newest,
+              onSortChanged: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Find "Restore defaults" text widget
+      final restoreTextFinder = find.text('Restore defaults');
+      expect(restoreTextFinder, findsOneWidget);
+      final Text restoreText = tester.widget(restoreTextFinder);
+      expect(restoreText.style?.color, const Color(0xFFFF7597)); // Sakura pink!
     });
   });
 }

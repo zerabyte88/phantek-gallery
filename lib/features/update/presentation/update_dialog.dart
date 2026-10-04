@@ -2,8 +2,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/router.dart' show rootNavigatorKey;
 import '../data/update_provider.dart';
 import '../data/update_service.dart';
+
+bool _isUpdateDialogShowing = false;
 
 /// Listens to [updateNotifierProvider] and shows the update dialog /
 /// progress sheet automatically when a new version is found.
@@ -23,7 +26,10 @@ class UpdateListener extends ConsumerWidget {
         final msg = next.error == 'already_up_to_date'
             ? 'Already up to date'
             : 'Update check failed: ${next.error}';
-        ScaffoldMessenger.of(context)
+        final targetContext = rootNavigatorKey.currentContext ?? context;
+        final messenger = ScaffoldMessenger.maybeOf(targetContext) ??
+            ScaffoldMessenger.of(context);
+        messenger
           ..clearSnackBars()
           ..showSnackBar(SnackBar(
             content: Text(
@@ -42,11 +48,20 @@ Future<void> _showUpdateDialog(
   WidgetRef ref,
   UpdateInfo info,
 ) async {
-  await showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => _UpdateDialog(info: info, ref: ref),
-  );
+  if (_isUpdateDialogShowing) return;
+  final targetContext = rootNavigatorKey.currentContext ?? context;
+  _isUpdateDialogShowing = true;
+  try {
+    await showDialog<void>(
+      context: targetContext,
+      barrierDismissible: false,
+      builder: (_) => _UpdateDialog(info: info, ref: ref),
+    );
+  } catch (e) {
+    debugPrint('[UpdateListener] Failed to show update dialog: $e');
+  } finally {
+    _isUpdateDialogShowing = false;
+  }
 }
 
 class _UpdateDialog extends ConsumerStatefulWidget {

@@ -34,8 +34,21 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
   @override
   void initState() {
     super.initState();
-    _thumbFuture =
-        ThumbnailService.instance.getThumbnail(widget.item.id);
+    _thumbFuture = ThumbnailService.instance.getThumbnail(
+      widget.item.id,
+      filePath: widget.item.path,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant MediaGridItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.id != widget.item.id) {
+      _thumbFuture = ThumbnailService.instance.getThumbnail(
+        widget.item.id,
+        filePath: widget.item.path,
+      );
+    }
   }
 
   @override
