@@ -31,11 +31,13 @@ Route<dynamic> generateRoute(RouteSettings s) {
 
     case AppRoutes.image:
       final args = s.arguments as _ViewerArgs;
-      return _slide(ImageViewerScreen(
-        items: args.items,
-        initialIndex: args.initialIndex,
-        isTrash: args.isTrash,
-      ));
+      return _slide(
+          ImageViewerScreen(
+            items: args.items,
+            initialIndex: args.initialIndex,
+            isTrash: args.isTrash,
+          ),
+          duration: const Duration(milliseconds: 300));
 
     case AppRoutes.video:
       if (s.arguments is _ViewerArgs) {
@@ -62,13 +64,16 @@ Route<dynamic> generateRoute(RouteSettings s) {
   }
 }
 
-PageRoute<T> _slide<T>(Widget page) => PageRouteBuilder<T>(
+PageRoute<T> _slide<T>(Widget page,
+        {Duration duration = const Duration(milliseconds: 180)}) =>
+    PageRouteBuilder<T>(
       pageBuilder: (_, __, ___) => page,
       transitionsBuilder: (_, anim, __, child) => FadeTransition(
         opacity: anim,
         child: child,
       ),
-      transitionDuration: const Duration(milliseconds: 180),
+      transitionDuration: duration,
+      reverseTransitionDuration: duration,
     );
 
 /// Argument bundle for the image viewer.

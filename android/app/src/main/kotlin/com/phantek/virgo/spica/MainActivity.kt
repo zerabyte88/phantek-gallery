@@ -79,7 +79,7 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        val executor = java.util.concurrent.Executors.newFixedThreadPool(4)
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(2) // HW decoder instances are scarce; 4 parallel 1080p+/HEVC retrievers fail
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -192,9 +192,9 @@ class MainActivity : FlutterActivity() {
                 }
 
                 val timePoints = longArrayOf(-1L, 1000000L, 0L, 500000L)
+                // OPTION_CLOSEST decodes many frames up to the target: very slow at 1080p+. Sync frames only.
                 val syncOptions = intArrayOf(
-                    android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                    android.media.MediaMetadataRetriever.OPTION_CLOSEST
+                    android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
                 )
 
                 // 3a. Hardware-scaled frame decoding with exact aspect ratio (avoids stretching and large 4K/2K allocations)
@@ -238,6 +238,13 @@ class MainActivity : FlutterActivity() {
                         }
                         if (bitmap != null) break
                     }
+                }
+
+                // 3d. Last resort: exact frame 0
+                if (bitmap == null) {
+                    try {
+                        bitmap = retriever.getFrameAtTime(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST)
+                    } catch (_: Throwable) {}
                 }
 
                 // Handle camera/recorded video rotation (90, 180, 270)

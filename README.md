@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-059669?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Platform" />
   <img src="https://img.shields.io/badge/FLUTTER-3.47+-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
   <img src="https://img.shields.io/badge/APPLICATION_ID-com.phantek.virgo.spica-6366F1?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.4-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.5-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" /></a>
 </p>
 
@@ -22,12 +22,12 @@ Modern mobile galleries often require persistent network connections, cloud sync
 
 ---
 
-## What's New in v1.3.4
+## What's New in v1.3.5
 
-- ⚡ **Instant Cold-Start Thumbnail Disk Cache**: Pre-initializes the thumbnail disk cache directory synchronously at app startup, rendering cached image and video thumbnails on frame 1 without delay or blank loading placeholders.
-- 🎬 **Universal Video Thumbnail Engine (1080p, 2K, 4K & Non-MP4/H.264)**: Upgraded native Android extraction via `ContentResolver.loadThumbnail` with proportional aspect-ratio downsampling, multi-timestamp keyframe extraction, and headless MPV/FFmpeg decoding for high-resolution formats and non-standard codecs (HEVC/H.265, VP9, AV1, WebM, MKV, AVI, MOV).
-- 📐 **True Aspect Ratio Preservation**: Fixed stretching and distortion issues across all video thumbnails by strictly computing proportional dimensions that preserve native video aspect ratios.
-- 🧹 **Robust Cache Concurrency & Memory Hygiene**: Atomic `.tmp` writes prevent corrupted cache files on sudden process terminations, and automatic in-memory cache eviction handles OS low-memory pressure events gracefully.
+- 🪂 **Dynamic Drag-Down to Dismiss with Hero Fly-Back**: Pulling down on an image smoothly scales and tracks the finger with spring physics (`SpringSimulation`). Upon release, a dynamic Hero shared-element transition seamlessly animates the image back to its exact grid tile—even after horizontally swiping across adjacent photos.
+- ⚡ **Proactive MPV Texture Unmounting for 60/120 FPS Video Swiping**: `VideoPlayerScreen` now proactively detaches the heavy hardware MPV `Video()` texture on the very first touch gesture, displaying a dimension-matched thumbnail placeholder until the page settles and the player finishes loading.
+- 🎯 **Fine-Grained UI Rebuild Isolation**: Refactored drag-to-dismiss offsets and control overlays to use `ValueNotifier` and `RepaintBoundary`, eliminating root-level `setState` rebuilds across the heavy `PageView` and `InteractiveViewer` hierarchies.
+- 🎬 **High-Resolution (1080p, 2K, 4K) Video Thumbnail Decoding**: Tuned native extraction thread pools and switched to keyframe synchronization (`OPTION_CLOSEST_SYNC`) to prevent Android MediaCodec hardware decoder starvation on high-resolution/HEVC videos, paired with LIFO queue scheduling for instantaneous visible thumbnail loading.
 
 ---
 
@@ -52,9 +52,9 @@ Modern mobile galleries often require persistent network connections, cloud sync
 ### Hardware-Accelerated Video Playback & Advanced Controls
 - **MediaKit & MPV Engine**: Native MPV and FFmpeg integration for ultra-smooth playback of MKV, MP4, WebM, and high-bitrate video streams up to 4K 60FPS.
 - **Universal Container & Codec Support**: Native playback and scanning for MKV, MOV, WebM, MP4, AVI, and 3GP containers. Automatic hardware-to-software fallback decoding (`hwdec: auto-copy`) across all codecs (VP9, HEVC/H.265, AVC/H.264), ensuring seamless stutter-free playback across all device profiles.
-- **Concurrent Multi-Worker Thumbnail Engine**: High-throughput 4-worker concurrent background extraction engine with in-flight deduplication, direct native frame extraction via `ThumbnailUtils` and `MediaMetadataRetriever` (no full-file copies), and instant downsampling fallbacks for seamless photo and video grid rendering.
+- **Optimized Multi-Worker Thumbnail Engine**: High-throughput extraction engine with keyframe-synchronized decoding (`OPTION_CLOSEST_SYNC`), LIFO priority scheduling, in-flight deduplication, direct native frame extraction via `ThumbnailUtils` and `MediaMetadataRetriever`, and headless MPV fallbacks for exotic codecs (1080p+, 4K, VP9, AV1, HEVC 10-bit).
 - **Lag-Free Slider Scrubbing**: Coalesced seek execution updates timestamps smoothly in real-time without flooding decoder pipelines, eliminating audio pops and stutter.
-- **Silky-Smooth Video Swipe Transitions**: Auto-pauses active playback on swipe to free up 100% GPU and decoder bandwidth, defers heavy player initialization until the page settles, and keeps synchronous thumbnail layers beneath the video surface to completely eliminate black flickers and dropped frames.
+- **Proactive Texture Detachment & Butter-Smooth Swiping**: Proactively unmounts the native MPV `Video()` texture on the first horizontal gesture to free 100% GPU/decoder resources, defers `_player.open()` post-frame, and renders dimension-matched placeholder thumbnails underneath to guarantee 60/120 FPS swiping with zero black flashes.
 - **Aspect-Ratio-Aware Smart Fullscreen**: Portrait/vertical videos (Reels, TikTok, Shorts) expand into immersive full portrait without shrinking, while widescreen videos automatically rotate to landscape.
 - **Playback Speed Selector**: Native speed controls (`0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `2.0x`) powered by `_player.setRate(speed)`.
 - **Repeat / Loop Mode**: One-tap toggle in the bottom controls and options menu for continuous looping of short clips.
@@ -63,6 +63,7 @@ Modern mobile galleries often require persistent network connections, cloud sync
 - **Ergonomic Controls**: Prominent 64dp Play/Pause button, 36dp Rewind 10s, and 36dp Fast-Forward 10s buttons with spring tap physics.
 
 ### High-Fidelity Photo Viewer & Media Tools
+- **Spring-Damped Drag-to-Dismiss with Hero Return**: Pull down on any photo with natural spring damping (`SpringSimulation`) and proportional scaling. On release, the photo seamlessly flies back into its exact grid tile via dynamic Hero shared element transitions.
 - **Refined Pinch-To-Zoom & Auto-Hiding Controls**: Seamless zoom in/out transitions with elastic bounds; top and bottom bars automatically fade out when zooming/pinching and reappear upon returning to normal scale.
 - **Multi-Touch Gesture Isolation**: Dedicated multi-touch pointer tracking prevents accidental pull-down dismissals while pinching or panning zoomed images.
 - **Native "Set as Wallpaper"**: Direct integration with Android system wallpaper chooser via `ACTION_ATTACH_DATA`.
