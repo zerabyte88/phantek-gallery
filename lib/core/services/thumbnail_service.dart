@@ -112,9 +112,9 @@ class ThumbnailService {
 
         await player.open(Media(filePath), play: true);
 
-        // Wait up to 1.5 seconds for the single frame to be written
+        // Wait up to 4 seconds (1080p+/HEVC hw decoder init is slow)
         File? generated;
-        for (int i = 0; i < 15; i++) {
+        for (int i = 0; i < 40; i++) {
           await Future.delayed(const Duration(milliseconds: 100));
           if (!await outDir.exists()) break;
           final files = outDir.listSync();
@@ -259,7 +259,8 @@ class ThumbnailService {
 
   Future<void> _runWorker() async {
     while (_queue.isNotEmpty) {
-      final req = _queue.removeFirst();
+      // LIFO: newest request = tile currently on screen; stale scrolled-past tiles wait.
+      final req = _queue.removeLast();
       if (req.completer.isCompleted) {
         _inFlight.remove(req.id);
         continue;
@@ -315,7 +316,7 @@ class ThumbnailService {
         if (targetPath != null && targetPath.isNotEmpty) {
           try {
             bytes = await _extractNativeVideoThumbnail(targetPath)
-                .timeout(const Duration(seconds: 6), onTimeout: () => null);
+                .timeout(const Duration(seconds: 12), onTimeout: () => null);
           } catch (_) {}
         }
 
@@ -342,7 +343,7 @@ class ThumbnailService {
             targetPath.isNotEmpty) {
           try {
             bytes = await _extractFrameViaMpv(targetPath)
-                .timeout(const Duration(seconds: 5), onTimeout: () => null);
+                .timeout(const Duration(seconds: 8), onTimeout: () => null);
           } catch (_) {}
         }
       } else {

@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -32,12 +34,19 @@ class ImageViewerScreen extends ConsumerStatefulWidget {
   ConsumerState<ImageViewerScreen> createState() => _ImageViewerScreenState();
 }
 
-class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
+class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
+    with SingleTickerProviderStateMixin {
   late final PageController _page;
   late int _current;
   bool _barsVisible = true;
-  double _dragOffsetY = 0.0;
-  bool _isDragging = false;
+  // Drag-to-dismiss translation lives in a notifier: pointer-move repaints only
+  // the Transform, never the gallery/bars hierarchy.
+  final ValueNotifier<Offset> _drag = ValueNotifier(Offset.zero);
+  double get _dragOffsetY => _drag.value.dy;
+  bool _dragHidesBars = false;
+  late final AnimationController _settle; // 1 -> 0 spring, scales _settleFrom
+  Offset _settleFrom = Offset.zero;
+  VelocityTracker _vt = VelocityTracker.withKind(PointerDeviceKind.touch);
   double? _startDragY;
   double? _startDragX;
   bool _isZoomed = false;
@@ -50,6 +59,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
     super.initState();
     _current = widget.initialIndex;
     _page = PageController(initialPage: _current);
+    _settle = AnimationController.unbounded(vsync: this)
+      ..addListener(() {
+        _setDrag(_settleFrom * _settle.value);
+        if (!_settle.isAnimating && _activePointers.isEmpty) {
+          _setDrag(Offset.zero);
+        }
+      });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WidgetsBinding.instance.addPostFrameCallback((_) => _precacheAdjacent(_current));
   }
@@ -67,11 +83,33 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
   @override
   void dispose() {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _settle.dispose();
+    _drag.dispose();
     _page.dispose();
     super.dispose();
   }
 
   MediaItem get _currentItem => widget.items[_current];
+
+  void _setDrag(Offset o) {
+    _drag.value = o;
+    final hide = o.dy >= 20;
+    if (hide != _dragHidesBars) setState(() => _dragHidesBars = hide);
+  }
+
+  /// Spring the dragged image back to center, carrying the release velocity.
+  void _springBack(double vy) {
+    _settleFrom = _drag.value;
+    final v = _settleFrom.dy.abs() > 1 ? vy / _settleFrom.dy : 0.0;
+    _settle.value = 1.0;
+    _settle.animateWith(SpringSimulation(
+      SpringDescription.withDampingRatio(
+          mass: 1, stiffness: 400, ratio: 0.85),
+      1.0,
+      0.0,
+      v.clamp(-10.0, 10.0),
+    ));
+  }
 
   void _toggleBars() {
     if (!_isZoomed && !_isPinching) {
@@ -229,35 +267,27 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
   @override
   Widget build(BuildContext context) {
     final item = _currentItem;
-    final bgOpacity = (1.0 - (_dragOffsetY / 250)).clamp(0.0, 1.0);
-    final showBars = _barsVisible && _dragOffsetY < 20 && !_isZoomed && !_isPinching;
+    final showBars = _barsVisible && !_dragHidesBars && !_isZoomed && !_isPinching;
 
     return Scaffold(
-      backgroundColor: Colors.black.withValues(alpha: bgOpacity),
+      backgroundColor: Colors.transparent,
       body: Listener(
         onPointerDown: (e) {
           _activePointers.add(e.pointer);
+          _settle.stop(); // grab a returning image mid-flight
           if (_activePointers.length > 1) {
-            // Multi-touch / pinch detected.
-            // Immediately abort any drag-to-dismiss and hide bars.
+            // Multi-touch / pinch: abort any drag-to-dismiss.
             _isMultiTouch = true;
             _isPinching = true;
-            if (_isDragging || _dragOffsetY > 0) {
-              setState(() {
-                _isDragging = false;
-                _dragOffsetY = 0.0;
-                _startDragY = null;
-                _startDragX = null;
-              });
-            } else {
-              setState(() {});
-            }
+            _startDragY = null;
+            _startDragX = null;
+            if (_drag.value != Offset.zero) _setDrag(Offset.zero);
+            setState(() {});
             return;
           }
-
-          // Single pointer down
           _startDragY = e.position.dy;
           _startDragX = e.position.dx;
+          _vt = VelocityTracker.withKind(e.kind);
         },
         onPointerMove: (e) {
           // While zoomed in, pinching, or multi-touching, NEVER pull-to-dismiss
@@ -269,18 +299,16 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
               _activePointers.length > 1) {
             return;
           }
-
+          _vt.addPosition(e.timeStamp, e.position);
           final dy = e.position.dy - _startDragY!;
-          final dx = (e.position.dx - _startDragX!).abs();
-          // Require pure vertical downward pull: dy > 12 and strongly vertical (dy > dx * 1.5)
-          if (dy > 12 && dy > dx * 1.5) {
-            setState(() {
-              _isDragging = true;
-              _dragOffsetY = (dy - 12).clamp(0.0, 400.0);
-            });
+          final dx = e.position.dx - _startDragX!;
+          // Start only on a pure downward pull; once started, track the finger freely.
+          if (_drag.value != Offset.zero || (dy > 12 && dy > dx.abs() * 1.5)) {
+            _setDrag(Offset(dx, (dy - 12).clamp(0.0, 600.0)));
           }
         },
         onPointerUp: (e) {
+          _vt.addPosition(e.timeStamp, e.position);
           _activePointers.remove(e.pointer);
           if (_activePointers.isEmpty) {
             final wasMultiTouch = _isMultiTouch;
@@ -288,14 +316,17 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
             _isPinching = false;
             _startDragY = null;
             _startDragX = null;
-
-            if (_dragOffsetY > 90 && !wasMultiTouch && !_isZoomed) {
+            final d = _drag.value;
+            final vy = _vt.getVelocity().pixelsPerSecond.dy;
+            if (!wasMultiTouch &&
+                !_isZoomed &&
+                d.dy > 0 &&
+                (d.dy > 90 || (vy > 900 && d.dy > 20))) {
+              // Hero flies from the image's current (dragged/scaled) rect to the
+              // grid tile whose Hero tag == the current item's id.
               Navigator.of(context).pop();
-            } else if (_dragOffsetY > 0 || _isDragging) {
-              setState(() {
-                _isDragging = false;
-                _dragOffsetY = 0.0;
-              });
+            } else if (d != Offset.zero) {
+              _springBack(vy);
             } else {
               setState(() {});
             }
@@ -304,14 +335,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
         onPointerCancel: (e) {
           _activePointers.remove(e.pointer);
           if (_activePointers.isEmpty) {
-            setState(() {
-              _isMultiTouch = false;
-              _isPinching = false;
-              _isDragging = false;
-              _dragOffsetY = 0.0;
-              _startDragY = null;
-              _startDragX = null;
-            });
+            _isMultiTouch = false;
+            _isPinching = false;
+            _startDragY = null;
+            _startDragX = null;
+            if (_drag.value != Offset.zero) _springBack(0);
+            setState(() {});
           }
         },
         child: GestureDetector(
@@ -321,11 +350,28 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
           },
           child: Stack(
             children: [
-              // ── Gallery with animated drag offset ────────────────
-              AnimatedContainer(
-                duration: _isDragging ? Duration.zero : const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                transform: Matrix4.translationValues(0, _dragOffsetY, 0),
+              // ── Background scrim: opacity follows drag distance ──
+              Positioned.fill(
+                child: ValueListenableBuilder<Offset>(
+                  valueListenable: _drag,
+                  builder: (_, d, __) => ColoredBox(
+                    color: Colors.black.withValues(
+                        alpha: (1.0 - d.dy / 300).clamp(0.0, 1.0)),
+                  ),
+                ),
+              ),
+              // ── Gallery: translate + proportional scale-down ─────
+              ValueListenableBuilder<Offset>(
+                valueListenable: _drag,
+                builder: (_, d, child) {
+                  final s = (1.0 - d.dy / 900).clamp(0.6, 1.0);
+                  return Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.translationValues(d.dx, d.dy, 0)
+                      ..scaleByDouble(s, s, 1.0, 1.0),
+                    child: child,
+                  );
+                },
                 child: PhotoViewGallery.builder(
                   pageController: _page,
                   itemCount: widget.items.length,
@@ -343,8 +389,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                       setState(() {
                         _isZoomed = zoomed;
                         if (zoomed) {
-                          _isDragging = false;
-                          _dragOffsetY = 0.0;
+                          _drag.value = Offset.zero;
+                          _dragHidesBars = false;
                           _startDragY = null;
                           _startDragX = null;
                         }
@@ -363,6 +409,16 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
                     final file = File(it.path);
                     return PhotoViewGalleryPageOptions(
                       imageProvider: FileImage(file),
+                      // Only the current page carries the tag, so the fly-back always
+                      // targets the grid tile of the photo currently shown.
+                      heroAttributes: i == _current
+                          ? PhotoViewHeroAttributes(
+                              tag: it.id,
+                              transitionOnUserGestures: true,
+                              flightShuttleBuilder: (_, __, ___, ____, _____) =>
+                                  Image(image: FileImage(file), fit: BoxFit.cover),
+                            )
+                          : null,
                       minScale: PhotoViewComputedScale.contained * 0.8,
                       maxScale: PhotoViewComputedScale.covered * 4.5,
                       initialScale: PhotoViewComputedScale.contained,

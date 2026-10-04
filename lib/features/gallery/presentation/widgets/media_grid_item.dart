@@ -141,7 +141,11 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
         fit: StackFit.expand,
         children: [
           // ── Thumbnail ───────────────────────────────────────
-          _buildThumbnail(cs),
+          // Hero tag == item id: the viewer's current page (same tag) flies
+          // back to this tile on pop, whichever photo it was swiped to.
+          widget.item.isVideo
+              ? _buildThumbnail(cs)
+              : Hero(tag: widget.item.id, child: _buildThumbnail(cs)),
 
           // ── Video badge ─────────────────────────────────────
           if (widget.item.isVideo && widget.showBadges)
