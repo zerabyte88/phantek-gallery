@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-059669?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Platform" />
   <img src="https://img.shields.io/badge/FLUTTER-3.47+-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
   <img src="https://img.shields.io/badge/APPLICATION_ID-com.phantek.virgo.spica-6366F1?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.2.0-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.0-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" /></a>
 </p>
 
@@ -29,8 +29,10 @@ Modern mobile galleries often require persistent network connections, cloud sync
 - **Tactile Micro-Animations**: Smooth spring-scale tap animations (`BouncyTap`) across interactive chips, dialog options, and controls.
 - **Fluid Theme Transitions**: `AnimatedTheme` integration providing a 350ms smooth cross-fade transition when toggling themes.
 
-### High-Performance Media Grid & Album Organization
+### High-Performance Media Grid, Search & Organization
 - **Smart Grouping**: View all media in a unified timeline or browse organized folders (DCIM, Camera, Downloads, Screenshots, etc.).
+- **Quick Search**: Real-time search bar integrated in AppBar with instant filtering across media titles and album collections.
+- **Horizontal Category Swipe Navigation**: Smooth horizontal swipe navigation between All, Photos, Videos, and Albums tabs with `KeepAlive` optimization to prevent frame drops.
 - **Smooth Stadium Filter Bar**: Anti-aliased pill-shaped filter chips (`All`, `Photos`, `Videos`, `Albums`) with seamless, clipped ink feedback.
 - **In-Album Filtering & Sorting**: Full filter bar (`All`, `Photos`, `Videos`) and sorting options available inside individual album detail screens.
 - **Compact Sort Menu**: 3-dots popup menu supporting Newest First, Oldest First, Name A → Z, and Name Z → A.
@@ -38,15 +40,21 @@ Modern mobile galleries often require persistent network connections, cloud sync
 - **Folder Exclusions**: Blacklist unwanted system directories from being indexed.
 - **Android 14+ / 16 Compliance**: Seamless partial photo selection support (`READ_MEDIA_VISUAL_USER_SELECTED`).
 
-### Hardware-Accelerated Video Playback
-- **MediaKit & MPV Engine**: Native MPV and FFmpeg integration for ultra-smooth playback of MKV, MP4, WebM, and high-bitrate video streams.
-- **Enlarged Ergonomic Controls**: Prominent 64dp Play/Pause button, 36dp Rewind 10s, and 36dp Fast-Forward 10s buttons with spring tap physics.
-- **Intuitive Layout**: Fullscreen toggle repositioned to bottom-left below playback timestamps, and quick-delete button positioned on the far right.
-- **Hardware Acceleration**: Configurable GPU decoding and screen orientation controls.
+### Hardware-Accelerated Video Playback & Advanced Controls
+- **MediaKit & MPV Engine**: Native MPV and FFmpeg integration for ultra-smooth playback of MKV, MP4, WebM, and high-bitrate video streams up to 4K 60FPS.
+- **Lag-Free Slider Scrubbing**: Coalesced seek execution updates timestamps smoothly in real-time without flooding decoder pipelines, eliminating audio pops and stutter.
+- **Seamless Video Swiping**: Re-uses the active hardware `SurfaceTexture` across video transitions to eliminate black flickers when swiping.
+- **Aspect-Ratio-Aware Smart Fullscreen**: Portrait/vertical videos (Reels, TikTok, Shorts) expand into immersive full portrait without shrinking, while widescreen videos automatically rotate to landscape.
+- **Playback Speed Selector**: Native speed controls (`0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `2.0x`) powered by `_player.setRate(speed)`.
+- **Repeat / Loop Mode**: One-tap toggle in the bottom controls and options menu for continuous looping of short clips.
+- **YouTube-Style Double-Tap Seek**: Split-screen double-tap seek (-10s / +10s) with animated feedback pill.
+- **Ergonomic Controls**: Prominent 64dp Play/Pause button, 36dp Rewind 10s, and 36dp Fast-Forward 10s buttons with spring tap physics.
 
-### High-Fidelity Photo Viewer
+### High-Fidelity Photo Viewer & Media Tools
 - **Gesture Support**: Smooth zooming, panning, and double-tap gestures powered by PhotoView.
-- **Modern Top Bar**: Clean header with quick navigation, filename display, timestamp, and quick-action menu (copy path, file details, share).
+- **Native "Set as Wallpaper"**: Direct integration with Android system wallpaper chooser via `ACTION_ATTACH_DATA`.
+- **Rename Media**: Local file renaming dialog updating storage, Android MediaStore, and global UI state in real-time.
+- **Modern Top Bar**: Clean header with quick navigation, filename display, timestamp, and quick-action menu (rename, copy path, file details, share).
 - **Bottom Action Bar**: Dedicated bottom bar featuring direct move-to-trash/delete, share, and metadata inspection.
 
 ### Instant Optimistic Deletion & Trash System
@@ -70,6 +78,11 @@ Modern mobile galleries often require persistent network connections, cloud sync
 - In-app APK downloading with live progress tracking and automated installation dispatch via Android FileProvider (`com.phantek.virgo.spica.fileprovider`).
 - Automatic cleanup of temporary installer packages upon completion.
 
+### Memory & Performance Architecture
+- **Persistent Disk Thumbnail Caching**: Two-layer cache (memory + local disk storage) ensures instantaneous grid loading on subsequent launches without redundant CPU decoding.
+- **Optimized Global ImageCache**: Configured with a 256MB / 100-item cache boundary, paired with background lifecycle memory trimming (`trimMemory()`) when minimized to prevent Android Low Memory Killer (LMK) eviction.
+- **Dependency Pruning**: Removed 40 redundant sub-dependencies from the build chain to keep the application binary lean and fast.
+
 ---
 
 ## Architecture and Tech Stack
@@ -78,7 +91,7 @@ Modern mobile galleries often require persistent network connections, cloud sync
 |---|---|---|
 | Application ID | `com.phantek.virgo.spica` | Unique package identifier for Android OS |
 | Framework | Flutter 3.47+ (Dart 3.x) | Cross-platform UI toolkit targeting Android |
-| State Management | Flutter Riverpod 2 (`flutter_riverpod`, `riverpod_annotation`) | Reactive, compile-safe dependency injection and state |
+| State Management | Flutter Riverpod 2 (`flutter_riverpod`) | Reactive, compile-safe dependency injection and state |
 | Video Engine | MediaKit (`media_kit`, `media_kit_video`, `media_kit_libs_android_video`) | Native MPV and FFmpeg playback pipeline |
 | Image Viewer | PhotoView (`photo_view`) | High-resolution image viewing with gesture support |
 | Media Management | `photo_manager`, `permission_handler` | Scoped storage access, Android 14+ partial grants, and permissions |
@@ -99,12 +112,12 @@ lib/
 |   |-- enums/                   # Filter, sort, and theme enumeration models
 |   |-- models/                  # MediaItem, Album, TrashItem, and SettingsModel data structures
 |   |-- providers/               # Global Riverpod state providers (media, trash, settings)
-|   |-- services/                # MediaKit setup, PhotoManager, permission, trash, and update services
+|   |-- services/                # MediaKit setup, PhotoManager, permission, trash, share, and update services
 |   |-- utils/                   # Formatting, duration, date helpers, and file utilities
 |   `-- widgets/                 # Reusable UI components (AnimatedFlameTitle, BouncyTap)
 |-- features/
 |   |-- gallery/                 # Grid gallery, albums view, album detail screen, and filter bar
-|   |-- player/                  # Image viewer and MPV-based video player screens
+|   |-- player/                  # Image viewer, MPV-based video player, and rename dialog
 |   |-- settings/                # User preferences, modern dialogs, exclusions, and Developer card
 |   |-- trash/                   # Recycle bin management and restoration UI
 |   `-- update/                  # GitHub Releases client, download service, and OTA dialog
