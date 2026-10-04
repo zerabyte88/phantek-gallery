@@ -74,6 +74,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
         mem,
         fit: BoxFit.cover,
         gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
       );
     }
 
@@ -85,6 +86,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
         diskFile,
         fit: BoxFit.cover,
         gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
       );
     }
@@ -104,6 +106,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
             snap.data!,
             fit: BoxFit.cover,
             gaplessPlayback: true,
+            filterQuality: FilterQuality.medium,
           );
         }
         if (snap.connectionState == ConnectionState.done &&
@@ -112,9 +115,10 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
           if (file.existsSync()) {
             return Image.file(
               file,
-              cacheWidth: 360,
+              cacheWidth: 384,
               fit: BoxFit.cover,
               gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
               errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
             );
           }

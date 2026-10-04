@@ -87,7 +87,7 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             if (call.method == "getVideoThumbnail") {
                 val path = call.argument<String>("path")
-                val size = call.argument<Int>("size") ?: 256
+                val size = call.argument<Int>("size") ?: 384
                 if (path == null) {
                     result.error("INVALID_PATH", "Path is null", null)
                     return@setMethodCallHandler
@@ -188,63 +188,60 @@ class MainActivity : FlutterActivity() {
                     val h = ((origH * scale).toInt() / 2) * 2
                     Pair(w.coerceAtLeast(2), h.coerceAtLeast(2))
                 } else {
-                    Pair(0, 0)
+                    Pair(targetSize, targetSize)
                 }
 
-                val timePoints = longArrayOf(-1L, 1000000L, 0L, 500000L)
-                // OPTION_CLOSEST decodes many frames up to the target: very slow at 1080p+. Sync frames only.
-                val syncOptions = intArrayOf(
-                    android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-                )
+                // Enforce OPTION_CLOSEST_SYNC (sync/keyframes only) to prevent decoder hangs on H.265/HEVC
+                val opt = android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                // Try time 0 first (first keyframe), then 1s, 0.5s, -1s
+                val timePoints = longArrayOf(0L, 1000000L, 500000L, -1L)
 
-                // 3a. Hardware-scaled frame decoding with exact aspect ratio (avoids stretching and large 4K/2K allocations)
-                if (dstW > 0 && dstH > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                // 3a. Hardware/native scaled frame decoding with pre-downsampled bounds (Android O_MR1+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                     for (t in timePoints) {
-                        for (opt in syncOptions) {
-                            try {
-                                bitmap = retriever.getScaledFrameAtTime(t, opt, dstW, dstH)
-                                if (bitmap != null) break
-                            } catch (_: Throwable) {}
-                        }
-                        if (bitmap != null) break
+                        try {
+                            bitmap = retriever.getScaledFrameAtTime(t, opt, dstW, dstH)
+                            if (bitmap != null) break
+                        } catch (_: Throwable) {}
                     }
                 }
 
-                // 3b. Fallback: RGB_565 (50% less RAM) for Android P+
+                // 3b. Scaled frame with RGB_565 (50% less RAM) for Android R+ (API 30+)
+                if (bitmap == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    try {
+                        val params = android.media.MediaMetadataRetriever.BitmapParams()
+                        params.preferredConfig = android.graphics.Bitmap.Config.RGB_565
+                        for (t in timePoints) {
+                            try {
+                                bitmap = retriever.getScaledFrameAtTime(t, opt, dstW, dstH, params)
+                                if (bitmap != null) break
+                            } catch (_: Throwable) {}
+                        }
+                    } catch (_: Throwable) {}
+                }
+
+                // 3c. Fallback: RGB_565 unscaled (Android P+) - sync frame only
                 if (bitmap == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     try {
                         val params = android.media.MediaMetadataRetriever.BitmapParams()
                         params.preferredConfig = android.graphics.Bitmap.Config.RGB_565
                         for (t in timePoints) {
-                            for (opt in syncOptions) {
-                                try {
-                                    bitmap = retriever.getFrameAtTime(t, opt, params)
-                                    if (bitmap != null) break
-                                } catch (_: Throwable) {}
-                            }
-                            if (bitmap != null) break
-                        }
-                    } catch (_: Throwable) {}
-                }
-
-                // 3c. Fallback: standard getFrameAtTime (natural aspect ratio)
-                if (bitmap == null) {
-                    for (t in timePoints) {
-                        for (opt in syncOptions) {
                             try {
-                                bitmap = retriever.getFrameAtTime(t, opt)
+                                bitmap = retriever.getFrameAtTime(t, opt, params)
                                 if (bitmap != null) break
                             } catch (_: Throwable) {}
                         }
-                        if (bitmap != null) break
-                    }
+                    } catch (_: Throwable) {}
                 }
 
-                // 3d. Last resort: exact frame 0
+                // 3d. Fallback: standard getFrameAtTime with sync option
                 if (bitmap == null) {
-                    try {
-                        bitmap = retriever.getFrameAtTime(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST)
-                    } catch (_: Throwable) {}
+                    for (t in timePoints) {
+                        try {
+                            bitmap = retriever.getFrameAtTime(t, opt)
+                            if (bitmap != null) break
+                        } catch (_: Throwable) {}
+                    }
                 }
 
                 // Handle camera/recorded video rotation (90, 180, 270)
@@ -294,7 +291,7 @@ class MainActivity : FlutterActivity() {
         }
 
         val bos = java.io.ByteArrayOutputStream()
-        scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, bos)
+        scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, bos)
         scaled.recycle()
         val resultBytes = bos.toByteArray()
         return if (resultBytes.isNotEmpty()) resultBytes else null

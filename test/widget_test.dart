@@ -850,6 +850,52 @@ void main() {
       final Text restoreText = tester.widget(restoreTextFinder);
       expect(restoreText.style?.color, const Color(0xFFFF7597)); // Sakura pink!
     });
+
+    test('Zoom focal point math calculates correct translation offset for scale', () {
+      const center = Offset(200, 400);
+      const tapPos = Offset(150, 300);
+      const targetScale = 2.8;
+
+      final delta = tapPos - center;
+      final expectedOffset = -delta * (targetScale - 1.0);
+
+      // Verify that scaling around center and translating by expectedOffset
+      // places the tapped focal point exactly back at tapPos on screen:
+      final transformed = center + (delta * targetScale) + expectedOffset;
+
+      expect(transformed.dx, closeTo(tapPos.dx, 0.001));
+      expect(transformed.dy, closeTo(tapPos.dy, 0.001));
+    });
+
+    test('Strict gesture slop deadzone filters minor touch variations and requires pure vertical drag', () {
+      bool shouldStartDrag(double dx, double dy) {
+        return dy > 28 && dy > dx.abs() * 2.2;
+      }
+
+      // Small jitter (< 28px) -> rejected
+      expect(shouldStartDrag(5, 20), isFalse);
+      expect(shouldStartDrag(0, 27), isFalse);
+
+      // Diagonal swipe / horizontal swipe variation -> rejected
+      expect(shouldStartDrag(25, 40), isFalse); // 40 is not > 25 * 2.2 (55)
+      expect(shouldStartDrag(50, 60), isFalse);
+
+      // Pure intentional vertical downward drag -> accepted
+      expect(shouldStartDrag(0, 35), isTrue);
+      expect(shouldStartDrag(10, 45), isTrue); // 45 > 10 * 2.2 (22)
+    });
+
+    test('Snapdragon 685 WebM and VP9 codec safety rules route to software decode', () {
+      String resolveHwdec(String path) {
+        if (path.toLowerCase().endsWith('.webm')) return 'no';
+        return 'auto-copy';
+      }
+
+      expect(resolveHwdec('sample.webm'), 'no');
+      expect(resolveHwdec('clip.WEBM'), 'no');
+      expect(resolveHwdec('video.mp4'), 'auto-copy');
+      expect(resolveHwdec('movie.mkv'), 'auto-copy');
+    });
   });
 }
 

@@ -33,7 +33,8 @@ class ThumbnailService {
   ThumbnailService._();
   static final ThumbnailService instance = ThumbnailService._();
 
-  static const int _thumbnailSize = 256; // px — quality vs. memory trade-off
+  static const int _thumbnailSize = 384; // px — physical pixels for crisp high-DPI rendering
+  static const int _thumbnailQuality = 85; // 85% quality
   static const int _maxMemoryEntries = 500;
   static const int _maxConcurrent = 4;
   static const MethodChannel _nativeChannel =
@@ -84,17 +85,17 @@ class ThumbnailService {
     }
   }
 
-  /// Extracts a single video frame via media_kit's MPV engine.
-  /// Handles exotic codecs and containers (VP9, HEVC 10-bit, AV1, MKV, WebM, AVI, FLV, TS)
-  /// that Android's native MediaMetadataRetriever cannot decode.
+  /// Extracts a single video frame via media_kit's MPV engine using software decoding.
+  /// Handles exotic codecs and containers (VP9, HEVC 10-bit, AV1, MKV, WebM, AVI, FLV, TS).
+  /// Note: hwdec MUST be 'no' to prevent Snapdragon 685 MediaCodec driver hangs.
   Future<Uint8List?> _extractFrameViaMpv(String filePath) async {
     final player = Player();
     try {
       if (player.platform is NativePlayer) {
         final native = player.platform as NativePlayer;
         final dir = await _getCacheDirectory();
-        final outDir =
-            Directory(p.join(dir.path, 'mpv_tmp_${filePath.hashCode.abs()}'));
+        final outDir = Directory(p.join(dir.path,
+            'mpv_tmp_${filePath.hashCode.abs()}_${DateTime.now().microsecondsSinceEpoch}'));
         if (!await outDir.exists()) {
           await outDir.create(recursive: true);
         }
@@ -103,18 +104,18 @@ class ThumbnailService {
         await native.setProperty('ao', 'null');
         await native.setProperty('vo', 'image');
         await native.setProperty('vo-image-format', 'jpg');
-        await native.setProperty('vo-image-jpeg-quality', '80');
+        await native.setProperty('vo-image-jpeg-quality', '$_thumbnailQuality');
         await native.setProperty('vo-image-outdir', outDir.path);
         await native.setProperty('frames', '1');
         await native.setProperty('vf',
-            'scale=256:256:force_original_aspect_ratio=decrease:force_divisible_by=2');
-        await native.setProperty('hwdec', 'auto-copy');
+            'scale=$_thumbnailSize:$_thumbnailSize:force_original_aspect_ratio=decrease:force_divisible_by=2');
+        await native.setProperty('hwdec', 'no'); // Software decode: never hangs on Snapdragon 685
 
         await player.open(Media(filePath), play: true);
 
-        // Wait up to 4 seconds (1080p+/HEVC hw decoder init is slow)
+        // Wait up to 3 seconds for frame generation (software decode takes ~50-200ms)
         File? generated;
-        for (int i = 0; i < 40; i++) {
+        for (int i = 0; i < 30; i++) {
           await Future.delayed(const Duration(milliseconds: 100));
           if (!await outDir.exists()) break;
           final files = outDir.listSync();
@@ -212,7 +213,13 @@ class ThumbnailService {
     if (diskFile != null) {
       final completer = Completer<Uint8List?>();
       _inFlight[assetId] = completer;
-      _readDiskCacheFile(diskFile, assetId, completer);
+      _readDiskCacheFile(
+        diskFile,
+        assetId,
+        completer,
+        filePath: filePath,
+        isVideo: isVideo,
+      );
       return completer.future;
     }
 
@@ -231,8 +238,10 @@ class ThumbnailService {
   void _readDiskCacheFile(
     File file,
     String assetId,
-    Completer<Uint8List?> completer,
-  ) async {
+    Completer<Uint8List?> completer, {
+    String? filePath,
+    bool isVideo = false,
+  }) async {
     try {
       final bytes = await file.readAsBytes();
       if (bytes.isNotEmpty) {
@@ -245,7 +254,12 @@ class ThumbnailService {
     _inFlight.remove(assetId);
     final fallbackCompleter = Completer<Uint8List?>();
     _inFlight[assetId] = fallbackCompleter;
-    _queue.add(_ThumbnailRequest(assetId, fallbackCompleter));
+    _queue.add(_ThumbnailRequest(
+      assetId,
+      fallbackCompleter,
+      filePath: filePath,
+      isVideo: isVideo,
+    ));
     _processQueue();
     completer.complete(await fallbackCompleter.future);
   }
@@ -258,23 +272,36 @@ class ThumbnailService {
   }
 
   Future<void> _runWorker() async {
-    while (_queue.isNotEmpty) {
-      // LIFO: newest request = tile currently on screen; stale scrolled-past tiles wait.
-      final req = _queue.removeLast();
-      if (req.completer.isCompleted) {
-        _inFlight.remove(req.id);
-        continue;
+    try {
+      while (_queue.isNotEmpty) {
+        // FIFO: ensures all visible tiles at the top of the grid are processed in order.
+        // Prevents cold-start starvation where earlier visible items waited behind endless LIFO requests.
+        final req = _queue.removeFirst();
+        if (req.completer.isCompleted) {
+          _inFlight.remove(req.id);
+          continue;
+        }
+        try {
+          await _processRequest(req);
+        } catch (e) {
+          debugPrint('[ThumbnailService] Error processing request ${req.id}: $e');
+          if (!req.completer.isCompleted) {
+            req.completer.complete(null);
+          }
+          _inFlight.remove(req.id);
+        }
       }
-      await _processRequest(req);
-    }
-    _activeWorkers--;
-    if (_queue.isNotEmpty && _activeWorkers < _maxConcurrent) {
-      _processQueue();
+    } finally {
+      // Guaranteed worker slot release — prevents worker queue deadlock under high load
+      _activeWorkers--;
+      if (_queue.isNotEmpty && _activeWorkers < _maxConcurrent) {
+        _processQueue();
+      }
     }
   }
 
   Future<void> _processRequest(_ThumbnailRequest req) async {
-    // Check persistent disk cache first (moved from getThumbnail hot path)
+    // Check persistent disk cache first
     try {
       final diskFile = await _fileForAsset(req.id);
       if (await diskFile.exists()) {
@@ -316,7 +343,7 @@ class ThumbnailService {
         if (targetPath != null && targetPath.isNotEmpty) {
           try {
             bytes = await _extractNativeVideoThumbnail(targetPath)
-                .timeout(const Duration(seconds: 12), onTimeout: () => null);
+                .timeout(const Duration(seconds: 10), onTimeout: () => null);
           } catch (_) {}
         }
 
@@ -329,21 +356,21 @@ class ThumbnailService {
               bytes = await entity
                   .thumbnailDataWithSize(
                     const ThumbnailSize.square(_thumbnailSize),
-                    quality: 80,
+                    quality: _thumbnailQuality,
                   )
-                  .timeout(const Duration(seconds: 3), onTimeout: () => null);
+                  .timeout(const Duration(seconds: 5), onTimeout: () => null);
             } catch (_) {}
           }
         }
 
-        // 3. Last resort: use media_kit (MPV/FFmpeg) to extract a single frame.
+        // 3. Last resort: use media_kit (MPV/FFmpeg) headless software decode to extract a single frame.
         //    Handles exotic formats/codecs (MKV, WebM, AVI, FLV, TS, VP9, AV1, HEVC 10-bit)
         if ((bytes == null || bytes.isEmpty) &&
             targetPath != null &&
             targetPath.isNotEmpty) {
           try {
             bytes = await _extractFrameViaMpv(targetPath)
-                .timeout(const Duration(seconds: 8), onTimeout: () => null);
+                .timeout(const Duration(seconds: 6), onTimeout: () => null);
           } catch (_) {}
         }
       } else {
@@ -355,13 +382,13 @@ class ThumbnailService {
             bytes = await entity
                 .thumbnailDataWithSize(
                   const ThumbnailSize.square(_thumbnailSize),
-                  quality: 80,
+                  quality: _thumbnailQuality,
                 )
-                .timeout(const Duration(seconds: 3), onTimeout: () => null);
+                .timeout(const Duration(seconds: 8), onTimeout: () => null);
           } catch (_) {}
         }
 
-        // 2. Fallback: decode directly from local image file if photo_manager returned null
+        // 2. Fallback: decode directly from local image file if photo_manager returned null or timed out
         if ((bytes == null || bytes.isEmpty) && req.filePath != null) {
           try {
             final file = File(req.filePath!);
@@ -371,8 +398,6 @@ class ThumbnailService {
                 final codec = await ui.instantiateImageCodec(
                   raw,
                   targetWidth: _thumbnailSize,
-                  // targetHeight intentionally omitted — preserves aspect ratio
-                  // BoxFit.cover in the grid cell handles square cropping in the UI
                 );
                 final frame = await codec.getNextFrame();
                 final byteData = await frame.image
@@ -404,12 +429,21 @@ class ThumbnailService {
       final dir = await _getCacheDirectory();
       final targetPath = p.join(dir.path, _cacheFileName(assetId));
       final targetFile = File(targetPath);
-      final tmpFile = File('$targetPath.tmp');
+      final tmpFile =
+          File('$targetPath.${DateTime.now().microsecondsSinceEpoch}.tmp');
       await tmpFile.writeAsBytes(bytes, flush: true);
-      if (await targetFile.exists()) {
-        await targetFile.delete();
+      try {
+        if (await targetFile.exists()) {
+          await targetFile.delete();
+        }
+        await tmpFile.rename(targetPath);
+      } catch (_) {
+        // Fallback if atomic rename encounters filesystem locking
+        await targetFile.writeAsBytes(bytes, flush: true);
+        try {
+          if (await tmpFile.exists()) await tmpFile.delete();
+        } catch (_) {}
       }
-      await tmpFile.rename(targetPath);
     } catch (e) {
       debugPrint('[ThumbnailService] Failed to persist thumbnail $assetId: $e');
     }
