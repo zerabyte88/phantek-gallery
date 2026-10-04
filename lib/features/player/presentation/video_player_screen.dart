@@ -70,6 +70,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   final Set<int> _activePointers = {};
   AnimationController? _zoomAnimController;
 
+  bool get _isCurrentlyVideoZoomed {
+    if (_isVideoZoomed) return true;
+    final scale = _transformationController.value.getMaxScaleOnAxis();
+    if (scale > 1.05) return true;
+    final translation = _transformationController.value.getTranslation();
+    if (translation.x.abs() > 8.0 || translation.y.abs() > 8.0) return true;
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -132,7 +141,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (isZoomed) {
       endMatrix = Matrix4.identity();
     } else {
-      const double targetScale = 2.5;
+      const double targetScale = 1.8;
       endMatrix = Matrix4.identity()
         ..translateByDouble(tapPos.dx, tapPos.dy, 0.0, 1.0)
         ..scaleByDouble(targetScale, targetScale, 1.0, 1.0)
@@ -705,15 +714,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           child: Listener(
             onPointerDown: (e) {
               _activePointers.add(e.pointer);
-              if (_activePointers.length >= 2) {
-                // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch / pinch
+              if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
+                // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
                 _isMultiTouch = true;
                 _isPinching = true;
                 _isDragging = false;
                 _startDragY = null;
                 _startDragX = null;
                 _dragOffsetY = 0.0;
-                setState(() {});
                 return;
               }
               _startDragY = e.position.dy;
@@ -723,7 +731,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
               // Detach the MPV texture on the first horizontal movement, before
               // the PageView's own drag slop triggers ScrollStartNotification.
               if (!_swipeNotifier.value &&
-                  !_isVideoZoomed &&
+                  !_isCurrentlyVideoZoomed &&
                   !_isMultiTouch &&
                   !_isPinching &&
                   _activePointers.length == 1 &&
@@ -737,12 +745,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
               // Keep pull-to-dismiss and page swiping completely locked whenever
               // the video is zoomed above 1.0x, pinching, or multi-touching.
               if (_isFullscreen ||
-                  _isVideoZoomed ||
+                  _isCurrentlyVideoZoomed ||
                   _isPinching ||
                   _isMultiTouch ||
                   _activePointers.length >= 2 ||
                   _startDragY == null ||
                   _startDragX == null) {
+                if (_dragOffsetY > 0) _dragOffsetY = 0.0;
                 return;
               }
 
@@ -764,7 +773,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 _startDragX = null;
                 // No page scroll in progress: this was a tap / non-swipe gesture.
                 if (!_isSwiping) _swipeNotifier.value = false;
-                if (_dragOffsetY > 90 && !wasMultiTouch && !_isVideoZoomed) {
+                if (_dragOffsetY > 90 && !wasMultiTouch && !_isCurrentlyVideoZoomed) {
                   _player.pause();
                   Navigator.of(context).pop();
                 } else if (_dragOffsetY > 0 || _isDragging) {
@@ -825,6 +834,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               _player.pause();
                             }
                           }
+                        } else if (notification is ScrollUpdateNotification) {
+                          if (notification.dragDetails != null && !_isSwiping) {
+                            _isSwiping = true;
+                            _swipeNotifier.value = true;
+                            if (_player.state.playing) {
+                              _player.pause();
+                            }
+                          }
                         } else if (notification is ScrollEndNotification) {
                           final settledPage = _pageController.page?.round();
                           final target = _pendingIndex ?? settledPage;
@@ -847,7 +864,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         controller: _pageController,
                         itemCount: _videos.length,
                         onPageChanged: _onPageChanged,
-                        physics: (_isVideoZoomed ||
+                        physics: (_isCurrentlyVideoZoomed ||
                                 _isPinching ||
                                 _isMultiTouch ||
                                 _activePointers.length >= 2)
@@ -862,36 +879,36 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                       _transformationController,
                                   minScale: 1.0,
                                   maxScale: 5.0,
-                                  panEnabled: _isVideoZoomed,
+                                  panEnabled: true,
                                   scaleEnabled: true,
                                   clipBehavior: Clip.hardEdge,
+                                  interactionEndFrictionCoefficient: 0.0001,
                                   onInteractionStart: (details) {
                                     if (details.pointerCount >= 2) {
-                                      if (!_isPinching) {
-                                        setState(() => _isPinching = true);
-                                      }
+                                      _isPinching = true;
                                     }
                                   },
                                   onInteractionUpdate: (details) {
                                     final scale = _transformationController
                                         .value
                                         .getMaxScaleOnAxis();
-                                    final isZoomed = scale > 1.01;
+                                    final isZoomed = scale > 1.05;
                                     if (isZoomed != _isVideoZoomed) {
-                                      setState(() {
-                                        _isVideoZoomed = isZoomed;
-                                      });
+                                      _isVideoZoomed = isZoomed;
                                     }
                                   },
                                   onInteractionEnd: (details) {
+                                    _isPinching = false;
                                     final scale = _transformationController
                                         .value
                                         .getMaxScaleOnAxis();
-                                    final isZoomed = scale > 1.01;
-                                    setState(() {
-                                      _isVideoZoomed = isZoomed;
-                                      _isPinching = false;
-                                    });
+                                    if (scale <= 1.08) {
+                                      // Cleanly reset to exact 1.0x (identity) if released near contained scale
+                                      _resetVideoZoom();
+                                    } else {
+                                      _isVideoZoomed = true;
+                                      if (mounted) setState(() {});
+                                    }
                                   },
                                   child: Center(
                                     child: Stack(
@@ -1078,36 +1095,49 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                             onRename: _renameCurrentItem,
                           ),
                           const Spacer(),
-                          // Center play button when paused
+                          // Center play button when paused (fades out while swiping/loading next video, fades in when settled)
                           Center(
-                            child: StreamBuilder<bool>(
-                              stream: _player.stream.playing,
-                              builder: (_, snap) {
-                                final playing = snap.data ?? false;
-                                if (playing) return const SizedBox.shrink();
-                                return BouncyTap(
-                                  onTap: _player.play,
-                                  child: Container(
-                                    width: 72,
-                                    height: 72,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.55),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color:
-                                            Colors.white.withValues(alpha: 0.4),
-                                        width: 1.5,
+                            child: ValueListenableBuilder<bool>(
+                              valueListenable: _swipeNotifier,
+                              builder: (context, swiping, child) =>
+                                  AnimatedOpacity(
+                                opacity: swiping ? 0.0 : 1.0,
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeInOut,
+                                child: IgnorePointer(
+                                  ignoring: swiping,
+                                  child: child,
+                                ),
+                              ),
+                              child: StreamBuilder<bool>(
+                                stream: _player.stream.playing,
+                                builder: (_, snap) {
+                                  final playing = snap.data ?? false;
+                                  if (playing) return const SizedBox.shrink();
+                                  return BouncyTap(
+                                    onTap: _player.play,
+                                    child: Container(
+                                      width: 72,
+                                      height: 72,
+                                      decoration: BoxDecoration(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.55),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white
+                                              .withValues(alpha: 0.4),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.play_arrow_rounded,
+                                        size: 48,
+                                        color: Colors.white,
                                       ),
                                     ),
-                                    child: const Icon(
-                                      Icons.play_arrow_rounded,
-                                      size: 48,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
                             ),
                           ),
                           const Spacer(),
@@ -1151,6 +1181,7 @@ class _VideoThumbnailPage extends StatelessWidget {
           width: double.infinity,
           height: double.infinity,
           gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
         ),
       );
     }
@@ -1164,6 +1195,7 @@ class _VideoThumbnailPage extends StatelessWidget {
           width: double.infinity,
           height: double.infinity,
           gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
         ),
       );
     }
@@ -1180,6 +1212,7 @@ class _VideoThumbnailPage extends StatelessWidget {
               width: double.infinity,
               height: double.infinity,
               gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
             ),
           );
         }

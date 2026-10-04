@@ -61,15 +61,34 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   Offset? _lastTapPos;
   Timer? _singleTapTimer;
 
+  bool get _isCurrentlyZoomed {
+    if (_isZoomed) return true;
+    final controller = _photoControllers[_current];
+    if (controller != null) {
+      final s = controller.scale;
+      if (s != null && s > 1.05) return true;
+      if (controller.position.distance > 8.0) return true;
+    }
+    return false;
+  }
+
   PhotoViewController _getPhotoController(int index) {
     return _photoControllers.putIfAbsent(index, () {
       final c = PhotoViewController();
       c.outputStateStream.listen((value) {
-        final zoomed = (value.scale ?? 1.0) > 1.01;
-        if (index == _current && _isZoomed != zoomed && mounted) {
-          setState(() {
-            _isZoomed = zoomed;
-          });
+        final scale = value.scale ?? 1.0;
+        final zoomed = scale > 1.05 || value.position.distance > 8.0;
+        if (index == _current && _isZoomed != zoomed) {
+          _isZoomed = zoomed;
+          if (zoomed) {
+            _drag.value = Offset.zero;
+            _dragHidesBars = false;
+            _startDragY = null;
+            _startDragX = null;
+          }
+          if (!_isPinching && _activePointers.length < 2 && mounted) {
+            setState(() {});
+          }
         }
       });
       return c;
@@ -89,7 +108,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       endScale = 1.0;
       endPos = Offset.zero;
     } else {
-      endScale = 2.8;
+      endScale = 1.8;
       final size = MediaQuery.of(context).size;
       final center = Offset(size.width / 2, size.height / 2);
       final delta = tapPos - center;
@@ -360,14 +379,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         onPointerDown: (e) {
           _activePointers.add(e.pointer);
           _settle.stop(); // grab a returning image mid-flight
-          if (_activePointers.length >= 2) {
-            // Multi-touch / pinch: abort any drag-to-dismiss immediately.
+          if (_activePointers.length >= 2 || _isCurrentlyZoomed) {
+            // Multi-touch, pinch, or zoomed: abort any drag-to-dismiss immediately.
             _isMultiTouch = true;
             _isPinching = true;
             _startDragY = null;
             _startDragX = null;
             if (_drag.value != Offset.zero) _setDrag(Offset.zero);
-            setState(() {});
             return;
           }
           _startDragY = e.position.dy;
@@ -378,10 +396,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           // While zoomed in, pinching, or multi-touching, NEVER pull-to-dismiss
           if (_startDragY == null ||
               _startDragX == null ||
-              _isZoomed ||
+              _isCurrentlyZoomed ||
               _isPinching ||
               _isMultiTouch ||
               _activePointers.length >= 2) {
+            if (_drag.value != Offset.zero) _setDrag(Offset.zero);
             return;
           }
           _vt.addPosition(e.timeStamp, e.position);
@@ -406,8 +425,23 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             final d = _drag.value;
             final vy = _vt.getVelocity().pixelsPerSecond.dy;
 
+            // Snap photo back to clean 1.0x if released near contained scale
+            final controller = _photoControllers[_current];
+            if (controller != null) {
+              final curScale = controller.scale ?? 1.0;
+              if (curScale <= 1.05 && (curScale != 1.0 || controller.position != Offset.zero)) {
+                controller.value = PhotoViewControllerValue(
+                  position: Offset.zero,
+                  scale: 1.0,
+                  rotation: 0.0,
+                  rotationFocusPoint: Offset.zero,
+                );
+                _isZoomed = false;
+              }
+            }
+
             if (!wasMultiTouch &&
-                !_isZoomed &&
+                !_isCurrentlyZoomed &&
                 d.dy > 0 &&
                 (d.dy > 90 || (vy > 900 && d.dy > 20))) {
               // Hero flies from the image's current (dragged/scaled) rect to the
@@ -510,7 +544,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                     });
                   }
                 },
-                scrollPhysics: (_isZoomed ||
+                scrollPhysics: (_isCurrentlyZoomed ||
                         _isPinching ||
                         _isMultiTouch ||
                         _activePointers.length >= 2)
@@ -539,6 +573,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                     minScale: PhotoViewComputedScale.contained,
                     maxScale: PhotoViewComputedScale.covered * 4.5,
                     initialScale: PhotoViewComputedScale.contained,
+                    tightMode: true,
                     scaleStateCycle: (actual) => actual,
                     filterQuality: FilterQuality.medium,
                     basePosition: Alignment.center,

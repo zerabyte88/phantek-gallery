@@ -1,6 +1,0 @@
-# Copy this file to android/key.properties and fill in your values.
-# android/key.properties is in .gitignore – never commit real credentials.
-storePassword=<your-keystore-password>
-keyPassword=<your-key-password>
-keyAlias=<your-key-alias>
-storeFile=<path-to-your-keystore.jks>
