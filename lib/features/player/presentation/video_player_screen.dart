@@ -140,27 +140,33 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _player,
       configuration: VideoControllerConfiguration(
         enableHardwareAcceleration: settings.hardwareAcceleration,
-        // 'mediacodec-copy' decodes via HW but copies frame to CPU memory,
-        // allowing seamless software fallback when HW codec unavailable (VP9, etc.)
-        hwdec: settings.hardwareAcceleration ? 'mediacodec-copy' : 'no',
+        // 'auto-copy' tries all available HW decoders, then falls back to
+        // software (FFmpeg libvpx / libde265 / etc.) automatically.
+        // 'mediacodec-copy' only tries Android MediaCodec and fails for
+        // codecs without HW support (VP9, some HEVC profiles).
+        hwdec: settings.hardwareAcceleration ? 'auto-copy' : 'no',
       ),
     );
 
-    // Enable HW acceleration for all codecs — MPV will fallback to SW per-codec
     // demuxer-lavf-buffersize: MPV Android hard-cap is 10 MB (10485760)
     if (_player.platform is NativePlayer) {
       final native = _player.platform as NativePlayer;
-      if (settings.hardwareAcceleration) {
-        native.setProperty('hwdec-codecs', 'all');
-      }
-      native.setProperty('demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
-      native.setProperty('demuxer-max-bytes', '33554432');       // 32 MB read-ahead
+      native.setProperty(
+          'demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
+      native.setProperty('demuxer-max-bytes', '33554432'); // 32 MB read-ahead
       native.setProperty('demuxer-readahead-secs', '10');
     }
 
     _player.stream.error.listen((err) {
       debugPrint('[VideoPlayer] Playback error: $err');
-      if (mounted) {
+      // Filter non-fatal MPV warnings that occur during normal HW→SW codec fallback.
+      // These are informational — the video still plays via software decode.
+      final errLower = err.toString().toLowerCase();
+      final isNonFatal = errLower.contains('could not open codec') ||
+          errLower.contains('decoder init failed') ||
+          errLower.contains('hwdec') ||
+          errLower.contains('using software decoding');
+      if (mounted && !isNonFatal) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Playback warning: $err'),
@@ -189,11 +195,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _current = index;
     });
 
-    final settings = ref.read(settingsNotifierProvider);
-    if (_player.platform is NativePlayer && settings.hardwareAcceleration) {
-      final native = _player.platform as NativePlayer;
-      native.setProperty('hwdec-codecs', 'all');
-    }
 
     // Never auto-play on swipe — user decides whether to play
     _player.open(Media(_videos[index].path), play: false);
@@ -677,7 +678,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 children: [
                   // ── Video PageView with drag translation ───────────────
                   AnimatedContainer(
-                    duration: _isDragging ? Duration.zero : const Duration(milliseconds: 200),
+                    duration: _isDragging
+                        ? Duration.zero
+                        : const Duration(milliseconds: 200),
                     curve: Curves.easeOutCubic,
                     transform: Matrix4.translationValues(0, _dragOffsetY, 0),
                     child: NotificationListener<ScrollNotification>(
@@ -717,7 +720,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                             return Center(
                               child: ClipRect(
                                 child: InteractiveViewer(
-                                  transformationController: _transformationController,
+                                  transformationController:
+                                      _transformationController,
                                   minScale: 1.0,
                                   maxScale: 5.0,
                                   panEnabled: _isVideoZoomed,
@@ -729,7 +733,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     }
                                   },
                                   onInteractionUpdate: (details) {
-                                    final scale = _transformationController.value.getMaxScaleOnAxis();
+                                    final scale = _transformationController
+                                        .value
+                                        .getMaxScaleOnAxis();
                                     final isZoomed = scale > 1.05;
                                     if (isZoomed != _isVideoZoomed) {
                                       setState(() {
@@ -738,7 +744,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     }
                                   },
                                   onInteractionEnd: (details) {
-                                    final scale = _transformationController.value.getMaxScaleOnAxis();
+                                    final scale = _transformationController
+                                        .value
+                                        .getMaxScaleOnAxis();
                                     final isZoomed = scale > 1.05;
                                     setState(() {
                                       _isVideoZoomed = isZoomed;
@@ -750,9 +758,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                       fit: StackFit.passthrough,
                                       alignment: Alignment.center,
                                       children: [
-                                        _VideoThumbnailPage(item: _videos[index]),
+                                        _VideoThumbnailPage(
+                                            item: _videos[index]),
                                         Video(
-                                          key: const ValueKey('active_video_surface'),
+                                          key: const ValueKey(
+                                              'active_video_surface'),
                                           controller: _controller,
                                           controls: NoVideoControls,
                                           fit: BoxFit.contain,
@@ -821,14 +831,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   // ── Video zoom indicator and reset pill ──────────────────
                   if (_isVideoZoomed)
                     Positioned(
-                      top: _showControls ? 80 : (MediaQuery.of(context).padding.top + 16),
+                      top: _showControls
+                          ? 80
+                          : (MediaQuery.of(context).padding.top + 16),
                       right: 16,
                       child: SafeArea(
                         top: !_showControls,
                         child: BouncyTap(
                           onTap: _resetVideoZoom,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.75),
                               borderRadius: BorderRadius.circular(20),
@@ -877,10 +890,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
                   // ── Controls overlay ───────────────────────────────
                   AnimatedOpacity(
-                    opacity: (_showControls && _dragOffsetY < 20 && !_isPinching) ? 1.0 : 0.0,
+                    opacity:
+                        (_showControls && _dragOffsetY < 20 && !_isPinching)
+                            ? 1.0
+                            : 0.0,
                     duration: const Duration(milliseconds: 200),
                     child: IgnorePointer(
-                      ignoring: !_showControls || _dragOffsetY >= 20 || _isPinching,
+                      ignoring:
+                          !_showControls || _dragOffsetY >= 20 || _isPinching,
                       child: Column(
                         children: [
                           // Top bar
@@ -901,8 +918,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                 Navigator.of(context).pop();
                               }
                             },
-                            onInfo: () =>
-                                showMediaInfoSheet(context, item),
+                            onInfo: () => showMediaInfoSheet(context, item),
                             onDelete: _deleteItem,
                             onRename: _renameCurrentItem,
                           ),
@@ -920,10 +936,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     width: 72,
                                     height: 72,
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.55),
+                                      color:
+                                          Colors.black.withValues(alpha: 0.55),
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: Colors.white.withValues(alpha: 0.4),
+                                        color:
+                                            Colors.white.withValues(alpha: 0.4),
                                         width: 1.5,
                                       ),
                                     ),
@@ -981,7 +999,8 @@ class _VideoThumbnailPage extends StatelessWidget {
     }
 
     return FutureBuilder<Uint8List?>(
-      future: ThumbnailService.instance.getThumbnail(item.id, filePath: item.path),
+      future:
+          ThumbnailService.instance.getThumbnail(item.id, filePath: item.path),
       builder: (context, snapshot) {
         if (snapshot.data != null) {
           return Center(
@@ -1086,8 +1105,7 @@ class _TopBar extends StatelessWidget {
           if (isTrash) ...[
             if (onRestore != null)
               IconButton(
-                icon: const Icon(Icons.restore,
-                    color: Colors.white, size: 22),
+                icon: const Icon(Icons.restore, color: Colors.white, size: 22),
                 tooltip: 'Restore',
                 onPressed: onRestore,
               ),
@@ -1122,9 +1140,8 @@ class _TopBar extends StatelessWidget {
                     } else {
                       currentFavs.add(item.id);
                     }
-                    ref
-                        .read(settingsNotifierProvider.notifier)
-                        .update((s) => s.copyWith(favoriteIds: currentFavs.toList()));
+                    ref.read(settingsNotifierProvider.notifier).update(
+                        (s) => s.copyWith(favoriteIds: currentFavs.toList()));
                   },
                 );
               },
@@ -1143,14 +1160,13 @@ class _TopBar extends StatelessWidget {
               onPressed: onDelete,
             ),
             IconButton(
-              icon: const Icon(Icons.info_outline,
-                  color: Colors.white, size: 22),
+              icon:
+                  const Icon(Icons.info_outline, color: Colors.white, size: 22),
               tooltip: 'Details',
               onPressed: onInfo,
             ),
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert,
-                  color: Colors.white, size: 22),
+              icon: const Icon(Icons.more_vert, color: Colors.white, size: 22),
               tooltip: 'More options',
               color: const Color(0xFF222222),
               shape: RoundedRectangleBorder(
@@ -1169,13 +1185,12 @@ class _TopBar extends StatelessWidget {
                   value: 'speed',
                   child: Row(
                     children: [
-                      const Icon(Icons.speed,
-                          size: 20, color: Colors.white),
+                      const Icon(Icons.speed, size: 20, color: Colors.white),
                       const SizedBox(width: 12),
                       Text(
                         'Speed (${playbackSpeed == 1.0 ? 'Normal' : '${playbackSpeed}x'})',
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 14),
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 14),
                       ),
                     ],
                   ),
@@ -1213,8 +1228,8 @@ class _TopBar extends StatelessWidget {
                             size: 20, color: Colors.white),
                         SizedBox(width: 12),
                         Text('Rename',
-                            style: TextStyle(
-                                color: Colors.white, fontSize: 14)),
+                            style:
+                                TextStyle(color: Colors.white, fontSize: 14)),
                       ],
                     ),
                   ),
@@ -1320,19 +1335,16 @@ class _BottomBarState extends State<_BottomBar> {
                         thumbColor: Colors.white,
                       ),
                       Padding(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Row(
-                          mainAxisAlignment:
-                              MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(MediaUtils.formatDuration(displayPos),
                                 style: const TextStyle(
                                     color: Colors.white, fontSize: 12)),
                             Text(MediaUtils.formatDuration(dur),
                                 style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12)),
+                                    color: Colors.white70, fontSize: 12)),
                           ],
                         ),
                       ),
@@ -1356,13 +1368,9 @@ class _BottomBarState extends State<_BottomBar> {
                     child: Padding(
                       padding: const EdgeInsets.all(12),
                       child: Icon(
-                        widget.isLooping
-                            ? Icons.repeat_one
-                            : Icons.repeat,
+                        widget.isLooping ? Icons.repeat_one : Icons.repeat,
                         size: 26,
-                        color: widget.isLooping
-                            ? cs.primary
-                            : Colors.white70,
+                        color: widget.isLooping ? cs.primary : Colors.white70,
                       ),
                     ),
                   ),
@@ -1395,9 +1403,7 @@ class _BottomBarState extends State<_BottomBar> {
                           child: Padding(
                             padding: const EdgeInsets.all(4),
                             child: Icon(
-                              playing
-                                  ? Icons.pause_circle
-                                  : Icons.play_circle,
+                              playing ? Icons.pause_circle : Icons.play_circle,
                               size: 64,
                               color: Colors.white,
                             ),
