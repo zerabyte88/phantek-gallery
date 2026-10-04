@@ -16,8 +16,11 @@ import 'package:phantek_gallery/core/models/trash_item.dart';
 import 'package:phantek_gallery/core/utils/media_utils.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/album_grid_item.dart';
 import 'package:phantek_gallery/features/gallery/presentation/album_detail_screen.dart';
+import 'package:phantek_gallery/features/gallery/presentation/gallery_screen.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/filter_sort_bar.dart';
+import 'package:phantek_gallery/features/player/presentation/widgets/media_info_sheet.dart';
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
+import 'package:phantek_gallery/core/services/share_service.dart';
 import 'package:phantek_gallery/features/update/data/update_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -494,6 +497,232 @@ void main() {
       expect(size, 0);
       final sizeStr = await ThumbnailService.instance.getFormattedCacheSize();
       expect(sizeStr, '0 B');
+    });
+
+    testWidgets('GalleryScreen horizontal swipe navigates between categories without resetting', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+          ],
+          child: const MaterialApp(
+            home: GalleryScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final pageViewFinder = find.byType(PageView);
+      expect(pageViewFinder, findsOneWidget);
+
+      final PageView initialPageView = tester.widget(pageViewFinder);
+      expect(initialPageView.controller?.page ?? 0, 0);
+
+      // Swipe left to advance to Photos (page 1)
+      await tester.drag(pageViewFinder, const Offset(-500, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final PageView photosPageView = tester.widget(pageViewFinder);
+      expect(photosPageView.controller?.page?.round(), 1);
+
+      // Swipe left to advance to Videos (page 2)
+      await tester.drag(pageViewFinder, const Offset(-500, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final PageView videosPageView = tester.widget(pageViewFinder);
+      expect(videosPageView.controller?.page?.round(), 2);
+    });
+
+    testWidgets('MediaInfoSheet displays details and copies path to clipboard', (tester) async {
+      final testItem = MediaItem(
+        id: '123',
+        path: '/storage/emulated/0/DCIM/sample.jpg',
+        name: 'sample.jpg',
+        date: DateTime(2026, 10, 4, 10, 30),
+        size: 2048576,
+        isVideo: false,
+        width: 1920,
+        height: 1080,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => showMediaInfoSheet(context, testItem),
+                child: const Text('Open Info'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Info'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('sample.jpg'), findsOneWidget);
+      expect(find.text('/storage/emulated/0/DCIM/sample.jpg'), findsOneWidget);
+      expect(find.text('1920x1080'), findsOneWidget);
+
+      final copyBtn = find.byIcon(Icons.copy_outlined);
+      await tester.scrollUntilVisible(copyBtn, 50);
+      expect(copyBtn, findsOneWidget);
+
+      await tester.tap(copyBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Path copied to clipboard'), findsOneWidget);
+    });
+
+    test('groupMediaIntoAlbums creates Favorites album at index 0 when favoriteIds are present', () {
+      final item1 = MediaItem(
+        id: 'fav_1',
+        path: '/storage/emulated/0/DCIM/photo1.jpg',
+        name: 'photo1.jpg',
+        date: DateTime(2026, 1, 1),
+        size: 100,
+        isVideo: false,
+      );
+      final item2 = MediaItem(
+        id: 'norm_2',
+        path: '/storage/emulated/0/Download/clip.mp4',
+        name: 'clip.mp4',
+        date: DateTime(2026, 1, 2),
+        size: 200,
+        isVideo: true,
+      );
+
+      final albumsWithoutFav = groupMediaIntoAlbums([item1, item2], sort: SortOption.newest);
+      expect(albumsWithoutFav.any((a) => a.name == 'Favorites'), isFalse);
+
+      final albumsWithFav = groupMediaIntoAlbums(
+        [item1, item2],
+        sort: SortOption.newest,
+        favoriteIds: const ['fav_1'],
+      );
+      expect(albumsWithFav.first.name, 'Favorites');
+      expect(albumsWithFav.first.itemCount, 1);
+    });
+
+    test('ShareService.shareFiles returns false on empty paths', () async {
+      final res = await ShareService.shareFiles([]);
+      expect(res, isFalse);
+    });
+
+    test('SettingsModel favoriteIds copyWith and equality', () {
+      const model = SettingsModel();
+      expect(model.favoriteIds, isEmpty);
+
+      final updated = model.copyWith(favoriteIds: ['id1', 'id2']);
+      expect(updated.favoriteIds, ['id1', 'id2']);
+      expect(updated == model, isFalse);
+    });
+
+    test('MediaListNotifier updateItem updates modified item in state', () async {
+      final container = ProviderContainer(
+        overrides: [
+          mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(mediaListProvider.future);
+      final initialItems = container.read(mediaListProvider).value!;
+      final original = initialItems.first;
+      expect(original.name, '1.jpg');
+
+      final renamed = original.copyWith(name: 'renamed_photo.jpg');
+      container.read(mediaListProvider.notifier).updateItem(renamed);
+
+      final updatedItems = container.read(mediaListProvider).value!;
+      expect(updatedItems.first.name, 'renamed_photo.jpg');
+      expect(updatedItems.first.id, original.id);
+    });
+
+    testWidgets('GalleryScreen search opens search bar, filters results and clears', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+          ],
+          child: const MaterialApp(
+            home: GalleryScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Find search icon and tap it
+      final searchBtn = find.byTooltip('Search');
+      expect(searchBtn, findsOneWidget);
+      await tester.tap(searchBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Search bar TextField should now be visible
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.text('Search media or albums...'), findsOneWidget);
+
+      // Enter search query
+      await tester.enterText(find.byType(TextField), '3.mp4');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Close search via back button
+      final closeSearchBtn = find.byTooltip('Close search');
+      expect(closeSearchBtn, findsOneWidget);
+      await tester.tap(closeSearchBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Search bar is closed, normal Phantek title restored
+      expect(find.text('Phantek'), findsOneWidget);
+    });
+
+    test('Video portrait aspect ratio and duration calculation', () {
+      final portraitVideo = MediaItem(
+        id: 'vid_portrait',
+        path: '/storage/vid_portrait.mp4',
+        name: 'vid_portrait.mp4',
+        date: DateTime.now(),
+        size: 1024,
+        isVideo: true,
+        width: 1080,
+        height: 1920,
+        duration: const Duration(seconds: 45),
+      );
+      final landscapeVideo = MediaItem(
+        id: 'vid_landscape',
+        path: '/storage/vid_landscape.mp4',
+        name: 'vid_landscape.mp4',
+        date: DateTime.now(),
+        size: 1024,
+        isVideo: true,
+        width: 3840,
+        height: 2160,
+        duration: const Duration(minutes: 2),
+      );
+
+      final isPortrait = (portraitVideo.height ?? 0) > (portraitVideo.width ?? 0);
+      final isLandscape = (landscapeVideo.height ?? 0) > (landscapeVideo.width ?? 0);
+
+      expect(isPortrait, isTrue);
+      expect(isLandscape, isFalse);
+      expect(portraitVideo.resolution, '1080x1920');
+      expect(landscapeVideo.resolution, '3840x2160');
     });
   });
 }

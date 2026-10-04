@@ -7,6 +7,7 @@ import 'core/models/settings_model.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/services/media_kit_setup.dart';
 import 'core/services/settings_service.dart';
+import 'core/services/thumbnail_service.dart';
 import 'core/services/trash_service.dart';
 import 'features/update/data/update_provider.dart';
 import 'features/update/data/update_service.dart';
@@ -34,6 +35,11 @@ Future<void> main() async {
 
   //  4. Clean up any expired items in trash (> 30 days old).
   TrashService().purgeExpired().catchError((_) {});
+
+  //  5. Balanced imageCache: 256 MB and 100 entries for instant high-res swiping.
+  //     RAM is trimmed immediately on AppLifecycleState.paused / hidden.
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 256 * 1024 * 1024;
+  PaintingBinding.instance.imageCache.maximumSize = 100;
 
   runApp(const ProviderScope(child: PhantekGalleryApp()));
 }
@@ -64,9 +70,13 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Clean up leftover APK whenever user returns to app after an install.
     if (state == AppLifecycleState.resumed) {
       UpdateService.instance.cleanupAllApks();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      // Trim RAM cache when app is minimized to save battery and prevent OS kill
+      ThumbnailService.instance.trimMemory();
+      PaintingBinding.instance.imageCache.clear();
     }
   }
 
@@ -78,15 +88,17 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
 
   @override
   Widget build(BuildContext context) {
-    final settings = ref.watch(settingsNotifierProvider);
+    final themeMode = ref.watch(
+      settingsNotifierProvider.select((s) => s.themeMode),
+    );
 
-    final darkTheme = switch (settings.themeMode) {
+    final darkTheme = switch (themeMode) {
       AppThemeMode.amoled => AppTheme.amoled,
       AppThemeMode.amoledSakura => AppTheme.amoledSakura,
       _ => AppTheme.dark,
     };
 
-    final flutterThemeMode = switch (settings.themeMode) {
+    final flutterThemeMode = switch (themeMode) {
       AppThemeMode.light => ThemeMode.light,
       AppThemeMode.system => ThemeMode.system,
       AppThemeMode.dark ||

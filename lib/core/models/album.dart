@@ -27,8 +27,12 @@ class Album extends Equatable {
 }
 
 /// Groups a list of [MediaItem]s into [Album]s based on their folder names,
-/// applying optional sorting.
-List<Album> groupMediaIntoAlbums(List<MediaItem> items, {SortOption? sort}) {
+/// applying optional sorting and including a Favorites album if favorites exist.
+List<Album> groupMediaIntoAlbums(
+  List<MediaItem> items, {
+  SortOption? sort,
+  List<String> favoriteIds = const [],
+}) {
   final Map<String, List<MediaItem>> grouped = {};
   for (final item in items) {
     grouped.putIfAbsent(item.albumName, () => []).add(item);
@@ -67,6 +71,21 @@ List<Album> groupMediaIntoAlbums(List<MediaItem> items, {SortOption? sort}) {
     }
   } else {
     albums.sort((a, b) => b.coverItem.timeAdded.compareTo(a.coverItem.timeAdded));
+  }
+
+  if (favoriteIds.isNotEmpty) {
+    final favItems = items.where((e) => favoriteIds.contains(e.id)).toList();
+    if (favItems.isNotEmpty) {
+      final sortedFavs = [...favItems]..sort((a, b) => b.date.compareTo(a.date));
+      albums.insert(
+        0,
+        Album(
+          name: 'Favorites',
+          items: favItems,
+          coverItem: sortedFavs.first,
+        ),
+      );
+    }
   }
 
   return albums;

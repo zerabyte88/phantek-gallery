@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/models/media_item.dart';
 import '../../../../core/utils/media_utils.dart';
 
@@ -7,9 +8,10 @@ void showMediaInfoSheet(BuildContext context, MediaItem item) {
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
     builder: (context) {
       return SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -50,6 +52,28 @@ void showMediaInfoSheet(BuildContext context, MediaItem item) {
                 icon: Icons.folder_outlined,
                 label: 'Path',
                 value: item.path,
+                trailing: IconButton(
+                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  tooltip: 'Copy path',
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: item.path));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Path copied to clipboard'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: item.path));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Path copied to clipboard'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -64,15 +88,19 @@ class _InfoRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.trailing,
+    this.onTap,
   });
 
   final IconData icon;
   final String label;
   final String value;
+  final Widget? trailing;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final content = Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,8 +125,18 @@ class _InfoRow extends StatelessWidget {
               ],
             ),
           ),
+          if (trailing != null) trailing!,
         ],
       ),
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: content,
+      );
+    }
+    return content;
   }
 }

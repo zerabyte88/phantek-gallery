@@ -10,8 +10,10 @@ import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
+import '../../../core/services/share_service.dart';
 import '../../../core/utils/media_utils.dart';
 import 'widgets/media_info_sheet.dart';
+import 'widgets/rename_dialog.dart';
 
 /// Full-screen swipeable image viewer with delete support.
 class ImageViewerScreen extends ConsumerStatefulWidget {
@@ -34,6 +36,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
   late final PageController _page;
   late int _current;
   bool _barsVisible = true;
+  double _dragOffsetY = 0.0;
+  bool _isDragging = false;
+  double? _startDragY;
+  double? _startDragX;
+  bool _isZoomed = false;
 
   @override
   void initState() {
@@ -215,173 +222,318 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen> {
   @override
   Widget build(BuildContext context) {
     final item = _currentItem;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: GestureDetector(
-        onTap: _toggleBars,
-        child: Stack(
-          children: [
-            // ── Gallery ────────────────────────────────────────
-            PhotoViewGallery.builder(
-              pageController: _page,
-              itemCount: widget.items.length,
-              onPageChanged: (i) {
-                setState(() => _current = i);
-                _precacheAdjacent(i);
-              },
-              scrollPhysics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
-              backgroundDecoration:
-                  const BoxDecoration(color: Colors.black),
-              builder: (_, i) {
-                final it = widget.items[i];
-                final file = File(it.path);
-                return PhotoViewGalleryPageOptions(
-                  imageProvider: FileImage(file),
-                  minScale: PhotoViewComputedScale.contained,
-                  maxScale: PhotoViewComputedScale.covered * 4,
-                  errorBuilder: (_, __, ___) => const Center(
-                    child: Icon(Icons.broken_image,
-                        size: 80, color: Colors.white38),
-                  ),
-                );
-              },
-            ),
+    final bgOpacity = (1.0 - (_dragOffsetY / 250)).clamp(0.0, 1.0);
 
-            // ── Top bar ────────────────────────────────────────
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: AnimatedOpacity(
-                opacity: _barsVisible ? 1 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: SafeArea(
-                  bottom: false,
+    return Scaffold(
+      backgroundColor: Colors.black.withValues(alpha: bgOpacity),
+      body: Listener(
+        onPointerDown: (e) {
+          _startDragY = e.position.dy;
+          _startDragX = e.position.dx;
+        },
+        onPointerMove: (e) {
+          if (_startDragY == null || _startDragX == null || _isZoomed) return;
+          final dy = e.position.dy - _startDragY!;
+          final dx = (e.position.dx - _startDragX!).abs();
+          if (dy > 8 && dy > dx * 1.3) {
+            setState(() {
+              _isDragging = true;
+              _dragOffsetY = (dy - 8).clamp(0.0, 400.0);
+            });
+          }
+        },
+        onPointerUp: (e) {
+          _startDragY = null;
+          _startDragX = null;
+          if (_dragOffsetY > 90) {
+            Navigator.of(context).pop();
+          } else if (_dragOffsetY > 0) {
+            setState(() {
+              _isDragging = false;
+              _dragOffsetY = 0.0;
+            });
+          }
+        },
+        onPointerCancel: (e) {
+          _startDragY = null;
+          _startDragX = null;
+          if (_dragOffsetY > 0) {
+            setState(() {
+              _isDragging = false;
+              _dragOffsetY = 0.0;
+            });
+          }
+        },
+        child: GestureDetector(
+          onTap: () {
+            if (_dragOffsetY < 10) _toggleBars();
+          },
+          child: Stack(
+            children: [
+              // ── Gallery with animated drag offset ────────────────
+              AnimatedContainer(
+                duration: _isDragging ? Duration.zero : const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                transform: Matrix4.translationValues(0, _dragOffsetY, 0),
+                child: PhotoViewGallery.builder(
+                  pageController: _page,
+                  itemCount: widget.items.length,
+                  onPageChanged: (i) {
+                    setState(() => _current = i);
+                    _precacheAdjacent(i);
+                  },
+                  scaleStateChangedCallback: (state) {
+                    final zoomed = state != PhotoViewScaleState.initial;
+                    if (_isZoomed != zoomed) {
+                      setState(() => _isZoomed = zoomed);
+                    }
+                  },
+                  scrollPhysics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                  backgroundDecoration:
+                      const BoxDecoration(color: Colors.transparent),
+                  builder: (_, i) {
+                    final it = widget.items[i];
+                    final file = File(it.path);
+                    return PhotoViewGalleryPageOptions(
+                      imageProvider: FileImage(file),
+                      minScale: PhotoViewComputedScale.contained,
+                      maxScale: PhotoViewComputedScale.covered * 4,
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Icon(Icons.broken_image,
+                            size: 80, color: Colors.white38),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              // ── Top bar ────────────────────────────────────────
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: AnimatedOpacity(
+                  opacity: (_barsVisible && _dragOffsetY < 20) ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: SafeArea(
+                    bottom: false,
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.black87, Colors.transparent],
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back_ios_new,
+                                color: Colors.white, size: 20),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  item.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${MediaUtils.formatViewerDate(item.date)}, ${MediaUtils.formatViewerTime(item.date)}',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (widget.isTrash) ...[
+                            IconButton(
+                              icon: const Icon(Icons.restore,
+                                  color: Colors.white, size: 22),
+                              tooltip: 'Restore',
+                              onPressed: _restoreCurrentItem,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_forever,
+                                  color: Colors.white, size: 22),
+                              tooltip: 'Delete Permanently',
+                              onPressed: _deleteCurrentItem,
+                            ),
+                          ] else ...[
+                            Consumer(
+                              builder: (context, ref, _) {
+                                final isFav = ref.watch(
+                                  settingsNotifierProvider.select(
+                                    (s) => s.favoriteIds.contains(item.id),
+                                  ),
+                                );
+                                return IconButton(
+                                  icon: Icon(
+                                    isFav ? Icons.favorite : Icons.favorite_border,
+                                    color: isFav ? Colors.redAccent : Colors.white,
+                                    size: 22,
+                                  ),
+                                  tooltip: isFav
+                                      ? 'Remove from favorites'
+                                      : 'Add to favorites',
+                                  onPressed: () {
+                                    HapticFeedback.lightImpact();
+                                    final currentFavs = Set<String>.from(
+                                      ref.read(settingsNotifierProvider).favoriteIds,
+                                    );
+                                    if (currentFavs.contains(item.id)) {
+                                      currentFavs.remove(item.id);
+                                    } else {
+                                      currentFavs.add(item.id);
+                                    }
+                                    ref
+                                        .read(settingsNotifierProvider.notifier)
+                                        .update(
+                                          (s) => s.copyWith(favoriteIds: currentFavs.toList()),
+                                        );
+                                  },
+                                );
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.share_outlined,
+                                  color: Colors.white, size: 22),
+                              tooltip: 'Share',
+                              onPressed: () =>
+                                  ShareService.shareSingle(item.path, isVideo: false),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline,
+                                  color: Colors.white, size: 22),
+                              tooltip: 'Delete',
+                              onPressed: _deleteCurrentItem,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.info_outline,
+                                  color: Colors.white, size: 22),
+                              tooltip: 'Details',
+                              onPressed: () => showMediaInfoSheet(context, item),
+                            ),
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert,
+                                  color: Colors.white, size: 22),
+                              tooltip: 'More options',
+                              color: const Color(0xFF222222),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              onSelected: (value) async {
+                                if (value == 'wallpaper') {
+                                  ShareService.setAsWallpaper(item.path);
+                                } else if (value == 'rename') {
+                                  final updated =
+                                      await showRenameMediaDialog(context, item, ref);
+                                  if (updated != null && mounted) {
+                                    setState(() {
+                                      widget.items[_current] = updated;
+                                    });
+                                  }
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'wallpaper',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.wallpaper_outlined,
+                                          size: 20, color: Colors.white),
+                                      SizedBox(width: 12),
+                                      Text('Set as wallpaper',
+                                          style: TextStyle(
+                                              color: Colors.white, fontSize: 14)),
+                                    ],
+                                  ),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'rename',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit_outlined,
+                                          size: 20, color: Colors.white),
+                                      SizedBox(width: 12),
+                                      Text('Rename',
+                                          style: TextStyle(
+                                              color: Colors.white, fontSize: 14)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── Bottom info bar ─────────────────────────────────
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: AnimatedOpacity(
+                  opacity: (_barsVisible && _dragOffsetY < 20) ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
                         colors: [Colors.black87, Colors.transparent],
                       ),
                     ),
                     child: Row(
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back_ios_new,
-                              color: Colors.white, size: 20),
-                          onPressed: () => Navigator.of(context).pop(),
+                        Text(
+                          '${_current + 1} / ${widget.items.length}',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 12),
                         ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                item.name,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${MediaUtils.formatViewerDate(item.date)}, ${MediaUtils.formatViewerTime(item.date)}',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
+                        const SizedBox(width: 12),
+                        Text(
+                          MediaUtils.formatDateTime(item.date),
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
                         ),
-                        if (widget.isTrash) ...[
-                          IconButton(
-                            icon: const Icon(Icons.restore,
-                                color: Colors.white, size: 22),
-                            tooltip: 'Restore',
-                            onPressed: _restoreCurrentItem,
+                        const Spacer(),
+                        if (item.resolution.isNotEmpty)
+                          Text(
+                            item.resolution,
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 12),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_forever,
-                                color: Colors.white, size: 22),
-                            tooltip: 'Delete Permanently',
-                            onPressed: _deleteCurrentItem,
-                          ),
-                        ] else ...[
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline,
-                                color: Colors.white, size: 22),
-                            tooltip: 'Delete',
-                            onPressed: _deleteCurrentItem,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.info_outline,
-                                color: Colors.white, size: 22),
-                            tooltip: 'Details',
-                            onPressed: () => showMediaInfoSheet(context, item),
-                          ),
-                        ],
                       ],
                     ),
                   ),
                 ),
               ),
-            ),
-
-            // ── Bottom info bar ─────────────────────────────────
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: AnimatedOpacity(
-                opacity: _barsVisible ? 1 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [Colors.black87, Colors.transparent],
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        '${_current + 1} / ${widget.items.length}',
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 12),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        MediaUtils.formatDateTime(item.date),
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12),
-                      ),
-                      const Spacer(),
-                      if (item.resolution.isNotEmpty)
-                        Text(
-                          item.resolution,
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 12),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

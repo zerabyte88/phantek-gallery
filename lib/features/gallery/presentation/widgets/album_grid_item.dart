@@ -76,6 +76,23 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
                       );
                     },
                   ),
+                  if (widget.album.name == 'Favorites')
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.favorite,
+                          size: 14,
+                          color: Colors.redAccent,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
