@@ -140,20 +140,21 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _player,
       configuration: VideoControllerConfiguration(
         enableHardwareAcceleration: settings.hardwareAcceleration,
-        hwdec: settings.hardwareAcceleration ? 'mediacodec' : 'no',
+        // 'mediacodec-copy' decodes via HW but copies frame to CPU memory,
+        // allowing seamless software fallback when HW codec unavailable (VP9, etc.)
+        hwdec: settings.hardwareAcceleration ? 'mediacodec-copy' : 'no',
       ),
     );
 
-    // Apply hardware acceleration for all codecs (VP9, HEVC, H.264, MPEG4, AV1)
-    // and optimize demuxer for high-bitrate 2K/WebM containers on mobile hardware
+    // Enable HW acceleration for all codecs — MPV will fallback to SW per-codec
+    // demuxer-lavf-buffersize: MPV Android hard-cap is 10 MB (10485760)
     if (_player.platform is NativePlayer) {
       final native = _player.platform as NativePlayer;
       if (settings.hardwareAcceleration) {
         native.setProperty('hwdec-codecs', 'all');
       }
-      native.setProperty('demuxer-lavf-buffersize', '33554432');
-      native.setProperty('demuxer-lavf-probesize', '33554432');
-      native.setProperty('demuxer-max-bytes', '67108864');
+      native.setProperty('demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
+      native.setProperty('demuxer-max-bytes', '33554432');       // 32 MB read-ahead
       native.setProperty('demuxer-readahead-secs', '10');
     }
 

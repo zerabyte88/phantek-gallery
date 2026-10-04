@@ -221,7 +221,8 @@ class ThumbnailService {
                 final codec = await ui.instantiateImageCodec(
                   raw,
                   targetWidth: _thumbnailSize,
-                  targetHeight: _thumbnailSize,
+                  // targetHeight intentionally omitted — preserves aspect ratio
+                  // BoxFit.cover in the grid cell handles square cropping in the UI
                 );
                 final frame = await codec.getNextFrame();
                 final byteData =

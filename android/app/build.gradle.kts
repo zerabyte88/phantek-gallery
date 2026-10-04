@@ -47,7 +47,7 @@ android {
 
     defaultConfig {
         applicationId   = "com.phantek.virgo.spica"
-        minSdk          = 21          // Android 5.0 – covers all relevant media APIs
+        minSdk = flutter.minSdkVersion          // Android 5.0 – covers all relevant media APIs
         targetSdk       = 36          // Android 16
         versionCode     = flutter.versionCode
         versionName     = flutter.versionName

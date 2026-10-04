@@ -106,4 +106,38 @@ class MediaItem extends Equatable {
   @override
   List<Object?> get props =>
       [id, path, name, date, dateAdded, size, isVideo, duration, width, height, mimeType, album];
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'path': path,
+        'name': name,
+        'date': date.toIso8601String(),
+        'dateAdded': dateAdded?.toIso8601String(),
+        'size': size,
+        'isVideo': isVideo,
+        'durationMs': duration?.inMilliseconds,
+        'width': width,
+        'height': height,
+        'mimeType': mimeType,
+        'album': album,
+      };
+
+  factory MediaItem.fromJson(Map<String, dynamic> j) => MediaItem(
+        id: j['id'] as String,
+        path: j['path'] as String,
+        name: j['name'] as String,
+        date: DateTime.parse(j['date'] as String),
+        dateAdded: j['dateAdded'] != null
+            ? DateTime.parse(j['dateAdded'] as String)
+            : null,
+        size: (j['size'] as num).toInt(),
+        isVideo: j['isVideo'] as bool,
+        duration: j['durationMs'] != null
+            ? Duration(milliseconds: (j['durationMs'] as num).toInt())
+            : null,
+        width: j['width'] as int?,
+        height: j['height'] as int?,
+        mimeType: j['mimeType'] as String?,
+        album: j['album'] as String?,
+      );
 }
