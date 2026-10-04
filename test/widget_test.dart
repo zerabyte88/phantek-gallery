@@ -404,7 +404,7 @@ void main() {
       expect(find.text('AMOLED Sakura 🌸'), findsNothing);
 
       // Close dialog by tapping first option (System)
-      await tester.tap(find.byType(SimpleDialogOption).first);
+      await tester.tap(find.text('System').last);
       await tester.pumpAndSettle();
 
       // Verify developer avatar does NOT trigger easter egg

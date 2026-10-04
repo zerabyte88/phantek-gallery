@@ -57,9 +57,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   double? _startDragY;
   double? _startDragX;
   TapDownDetails? _doubleTapDetails;
-  int _seekSeconds = 0;
-  bool _seekIsForward = true;
-  Timer? _seekOverlayTimer;
   bool _isSwiping = false;
   // Drives only the Video() subtree so drag start/end doesn't rebuild the screen.
   final ValueNotifier<bool> _swipeNotifier = ValueNotifier(false);
@@ -249,10 +246,19 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       }
     }
 
+    _swipeNotifier.value = true;
     _player.open(
       Media(currentPath),
       play: false,
-    );
+    ).then((_) async {
+      try {
+        await _controller.waitUntilFirstFrameRendered
+            .timeout(const Duration(seconds: 1), onTimeout: () => null);
+      } catch (_) {}
+      if (mounted && !_isSwiping && _activePointers.isEmpty) {
+        _swipeNotifier.value = false;
+      }
+    });
   }
 
   void _changeToVideo(int index) {
@@ -292,8 +298,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         await _player.open(Media(path), play: false);
         if (_isLooping) _player.setPlaylistMode(PlaylistMode.loop);
         if (_playbackSpeed != 1.0) _player.setRate(_playbackSpeed);
+        // Wait until MPV has decoded and rendered the first frame before revealing the Video surface
+        await _controller.waitUntilFirstFrameRendered
+            .timeout(const Duration(seconds: 1), onTimeout: () => null);
       } catch (_) {}
-      if (mounted && !_isSwiping && _activePointers.isEmpty) {
+      if (mounted && _current == index && !_isSwiping && _activePointers.isEmpty) {
         _swipeNotifier.value = false;
       }
     });
@@ -335,7 +344,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _seekOverlayTimer?.cancel();
     _zoomAnimController?.dispose();
     _swipeNotifier.dispose();
     _dragNotifier.dispose();
@@ -398,57 +406,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   void _handleDoubleTap() {
     if (_doubleTapDetails == null) return;
-    final width = MediaQuery.of(context).size.width;
     final pos = _doubleTapDetails!.localPosition;
-    final x = pos.dx;
 
-    // If currently zoomed, double-tap smoothly zooms back to 1.0x (contained)
-    if (_isVideoZoomed || _transformationController.value.getMaxScaleOnAxis() > 1.01) {
-      HapticFeedback.lightImpact();
-      _zoomToPosition(pos);
-      return;
-    }
-
-    // Disambiguate double-tap gestures:
-    // Outer edges (left/right 28%) -> Seek -10s / +10s
-    // Center zone (middle 44%) -> Double-tap to zoom-to-position (2.5x)
-    final leftEdge = width * 0.28;
-    final rightEdge = width * 0.72;
-
-    if (x > leftEdge && x < rightEdge) {
-      HapticFeedback.lightImpact();
-      _zoomToPosition(pos);
-      return;
-    }
-
-    final isForward = x >= rightEdge;
     HapticFeedback.lightImpact();
-
-    final step = isForward ? 10 : -10;
-    if (_seekOverlayTimer?.isActive == true && _seekIsForward == isForward) {
-      _seekSeconds += 10;
-    } else {
-      _seekSeconds = 10;
-      _seekIsForward = isForward;
-    }
-
-    final playPos = _player.state.position;
-    final dur = _player.state.duration;
-    final target = playPos + Duration(seconds: step);
-    final maxMs = dur.inMilliseconds > 0 ? dur.inMilliseconds : 86400000;
-    final clampedMs = target.inMilliseconds.clamp(0, maxMs);
-    _player.seek(Duration(milliseconds: clampedMs));
-
-    _seekOverlayTimer?.cancel();
-    setState(() {});
-
-    _seekOverlayTimer = Timer(const Duration(milliseconds: 650), () {
-      if (mounted) {
-        setState(() {
-          _seekSeconds = 0;
-        });
-      }
-    });
+    _zoomToPosition(pos);
   }
 
   void _showPlaybackSpeedSheet() {
@@ -880,7 +841,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                   transformationController:
                                       _transformationController,
                                   minScale: 1.0,
-                                  maxScale: 4.0,
+                                  maxScale: 6.0,
                                   panEnabled: true,
                                   scaleEnabled: true,
                                   clipBehavior: Clip.hardEdge,
@@ -953,53 +914,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     ),
                   
 
-                  // ── Double-tap seek feedback overlay ────────────────
-                  if (_seekSeconds > 0)
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: Align(
-                          alignment: _seekIsForward
-                              ? const Alignment(0.65, 0.0)
-                              : const Alignment(-0.65, 0.0),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.7),
-                              borderRadius: BorderRadius.circular(32),
-                              border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.35),
-                                  width: 1.5),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (!_seekIsForward) ...[
-                                  const Icon(Icons.fast_rewind_rounded,
-                                      color: Colors.white, size: 28),
-                                  const SizedBox(width: 8),
-                                ],
-                                Text(
-                                  '${_seekIsForward ? '+' : '-'}${_seekSeconds}s',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                                if (_seekIsForward) ...[
-                                  const SizedBox(width: 8),
-                                  const Icon(Icons.fast_forward_rounded,
-                                      color: Colors.white, size: 28),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+
 
                   // ── Video zoom indicator and reset pill ──────────────────
                   if (_isVideoZoomed)
@@ -1205,8 +1120,8 @@ class _VideoThumbnailPage extends StatelessWidget {
     }
 
     return FutureBuilder<Uint8List?>(
-      future:
-          ThumbnailService.instance.getThumbnail(item.id, filePath: item.path),
+      future: ThumbnailService.instance
+          .getThumbnail(item.id, filePath: item.path, isVideo: true),
       builder: (context, snapshot) {
         if (snapshot.data != null) {
           return Center(
