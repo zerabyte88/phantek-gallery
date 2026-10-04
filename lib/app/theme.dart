@@ -7,11 +7,17 @@ class AppTheme {
   // Brand seed colour—deep indigo-purple that works for a media gallery.
   static const Color _seed = Color(0xFF6B48FF);
 
+  static const _switchTheme = SwitchThemeData(
+    overlayColor: WidgetStatePropertyAll(Colors.transparent),
+    splashRadius: 0,
+  );
+
   static ThemeData get light => ThemeData(
         useMaterial3: true,
         colorSchemeSeed: _seed,
         brightness: Brightness.light,
         splashFactory: InkSparkle.splashFactory,
+        switchTheme: _switchTheme,
         appBarTheme: const AppBarTheme(centerTitle: false, elevation: 0),
         cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero),
         snackBarTheme: SnackBarThemeData(
@@ -25,6 +31,7 @@ class AppTheme {
         colorSchemeSeed: _seed,
         brightness: Brightness.dark,
         splashFactory: InkSparkle.splashFactory,
+        switchTheme: _switchTheme,
         scaffoldBackgroundColor: const Color(0xFF0E0E0E),
         appBarTheme: const AppBarTheme(
           centerTitle: false,
@@ -52,6 +59,7 @@ class AppTheme {
         ),
         brightness: Brightness.dark,
         splashFactory: InkSparkle.splashFactory,
+        switchTheme: _switchTheme,
         scaffoldBackgroundColor: Colors.black,
         canvasColor: Colors.black,
         appBarTheme: const AppBarTheme(
@@ -93,6 +101,7 @@ class AppTheme {
         ),
         brightness: Brightness.dark,
         splashFactory: InkSparkle.splashFactory,
+        switchTheme: _switchTheme,
         scaffoldBackgroundColor: Colors.black,
         canvasColor: Colors.black,
         appBarTheme: const AppBarTheme(

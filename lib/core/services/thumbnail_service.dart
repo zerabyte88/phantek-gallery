@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -88,78 +89,27 @@ class ThumbnailService {
 
   /// Extracts a single video frame via media_kit's MPV engine using software decoding.
   /// Handles exotic codecs and containers (VP9, HEVC 10-bit, AV1, MKV, WebM, AVI, FLV, TS).
-  /// Note: hwdec MUST be 'no' to prevent Snapdragon 685 MediaCodec driver hangs.
   Future<Uint8List?> _extractFrameViaMpv(String filePath) async {
-    final player = Player();
+    final player = Player(
+      configuration: const PlayerConfiguration(
+        logLevel: MPVLogLevel.error,
+      ),
+    );
     try {
-      if (player.platform is NativePlayer) {
-        final native = player.platform as NativePlayer;
-        final dir = await _getCacheDirectory();
-        final outDir = Directory(p.join(dir.path,
-            'mpv_tmp_${filePath.hashCode.abs()}_${DateTime.now().microsecondsSinceEpoch}'));
-        if (!await outDir.exists()) {
-          await outDir.create(recursive: true);
-        }
+      final controller = VideoController(
+        player,
+        configuration: const VideoControllerConfiguration(
+          enableHardwareAcceleration: false,
+          hwdec: 'no', // Software decode (FFmpeg): decode all exotic codecs without crashing
+        ),
+      );
 
-        // Configure headless image extraction via MPV's image video-out driver
-        await native.setProperty('ao', 'null');
-        await native.setProperty('vo', 'image');
-        await native.setProperty('vo-image-format', 'jpg');
-        await native.setProperty('vo-image-jpeg-quality', '$_thumbnailQuality');
-        await native.setProperty('vo-image-outdir', outDir.path);
-        await native.setProperty('frames', '1');
-        await native.setProperty('demuxer-lavf-probesize', '2097152');
-        await native.setProperty('demuxer-lavf-buffersize', '4194304');
-        await native.setProperty('hr-seek', 'no');
-        await native.setProperty('fast', 'yes');
-        await native.setProperty('sws-scaler', 'fast-bilinear');
-        await native.setProperty('vf',
-            'scale=$_thumbnailSize:$_thumbnailSize:force_original_aspect_ratio=decrease:force_divisible_by=2');
-        await native.setProperty('hwdec', 'no'); // Software decode: never hangs on Snapdragon 685
+      await player.open(Media(filePath), play: false);
+      await controller.waitUntilFirstFrameRendered
+          .timeout(const Duration(milliseconds: 1500), onTimeout: () => null);
 
-        await player.open(Media(filePath), play: true);
-
-        // Wait up to 5 seconds for frame generation (fast software decode on 4K takes ~80-300ms)
-        File? generated;
-        for (int i = 0; i < 50; i++) {
-          await Future.delayed(const Duration(milliseconds: 100));
-          if (!await outDir.exists()) break;
-          final files = outDir.listSync();
-          for (final f in files) {
-            if (f is File &&
-                (f.path.endsWith('.jpg') || f.path.endsWith('.jpeg'))) {
-              generated = f;
-              break;
-            }
-          }
-          if (generated != null) break;
-        }
-
-        if (generated != null && await generated.exists()) {
-          final bytes = await generated.readAsBytes();
-          try {
-            await outDir.delete(recursive: true);
-          } catch (_) {}
-          if (bytes.isNotEmpty) return bytes;
-        }
-
-        // Fallback: try player.screenshot
-        try {
-          final screenshotBytes =
-              await player.screenshot(format: 'image/jpeg');
-          if (screenshotBytes != null && screenshotBytes.isNotEmpty) {
-            try {
-              await outDir.delete(recursive: true);
-            } catch (_) {}
-            return screenshotBytes;
-          }
-        } catch (_) {}
-
-        try {
-          await outDir.delete(recursive: true);
-        } catch (_) {}
-      }
-      return null;
+      final bytes = await player.screenshot(format: 'image/jpeg');
+      return (bytes != null && bytes.isNotEmpty) ? bytes : null;
     } catch (e) {
       debugPrint('[ThumbnailService] MPV frame extraction failed: $e');
       return null;

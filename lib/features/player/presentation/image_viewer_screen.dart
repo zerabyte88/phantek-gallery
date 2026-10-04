@@ -36,7 +36,7 @@ class ImageViewerScreen extends ConsumerStatefulWidget {
 }
 
 class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final PageController _page;
   late int _current;
   bool _barsVisible = true;
@@ -54,6 +54,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   bool _isMultiTouch = false;
   final Set<int> _activePointers = {};
   final Map<int, PhotoViewController> _photoControllers = {};
+  AnimationController? _photoZoomAnim;
+  TapDownDetails? _doubleTapDetails;
 
   PhotoViewController _getPhotoController(int index) {
     return _photoControllers.putIfAbsent(index, () => PhotoViewController());
@@ -91,6 +93,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       c.dispose();
     }
     _photoControllers.clear();
+    _photoZoomAnim?.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _settle.dispose();
     _drag.dispose();
@@ -124,6 +127,65 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     if (!_isZoomed && !_isPinching) {
       setState(() => _barsVisible = !_barsVisible);
     }
+  }
+
+  void _handlePhotoDoubleTap() {
+    if (_doubleTapDetails == null) return;
+    final tapPos = _doubleTapDetails!.localPosition;
+    final controller = _getPhotoController(_current);
+    final currentScale = controller.scale ?? 1.0;
+    final isZoomed = _isZoomed || currentScale > 1.05;
+
+    _photoZoomAnim?.stop();
+    _photoZoomAnim?.dispose();
+
+    final size = MediaQuery.of(context).size;
+    final center = Offset(size.width / 2, size.height / 2);
+    final delta = tapPos - center;
+
+    const targetScale = 2.5;
+    final startScale = currentScale;
+    final startPosition = controller.position;
+
+    final endScale = isZoomed ? 1.0 : targetScale;
+    final endPosition = isZoomed ? Offset.zero : -delta * (targetScale - 1.0);
+
+    _photoZoomAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+
+    final curve = CurvedAnimation(
+      parent: _photoZoomAnim!,
+      curve: Curves.easeOutCubic,
+    );
+
+    _photoZoomAnim!.addListener(() {
+      final t = curve.value;
+      final s = startScale + (endScale - startScale) * t;
+      final p = Offset(
+        startPosition.dx + (endPosition.dx - startPosition.dx) * t,
+        startPosition.dy + (endPosition.dy - startPosition.dy) * t,
+      );
+
+      controller.value = PhotoViewControllerValue(
+        position: p,
+        scale: (isZoomed && t >= 0.99) ? null : s,
+        rotation: 0,
+        rotationFocusPoint: null,
+      );
+    });
+
+    _photoZoomAnim!.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() {
+          _isZoomed = !isZoomed;
+        });
+      }
+    });
+
+    HapticFeedback.lightImpact();
+    _photoZoomAnim!.forward();
   }
 
   Future<void> _restoreCurrentItem() async {
@@ -376,7 +438,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   child: child,
                 );
               },
-              child: PhotoViewGallery.builder(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onDoubleTapDown: (d) => _doubleTapDetails = d,
+                onDoubleTap: _handlePhotoDoubleTap,
+                child: PhotoViewGallery.builder(
                 pageController: _page,
                 itemCount: widget.items.length,
                 onPageChanged: (i) {
@@ -416,6 +482,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   final file = File(it.path);
                   return PhotoViewGalleryPageOptions(
                     controller: _getPhotoController(i),
+                    scaleStateCycle: (actual) => actual,
                     imageProvider: FileImage(file),
                     // Only the current page carries the tag, so the fly-back always
                     // targets the grid tile of the photo currently shown.
@@ -428,7 +495,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           )
                         : null,
                     minScale: PhotoViewComputedScale.contained,
-                    maxScale: PhotoViewComputedScale.covered * 4.0,
+                    maxScale: PhotoViewComputedScale.covered * 6.0,
                     initialScale: PhotoViewComputedScale.contained,
                     filterQuality: FilterQuality.medium,
                     basePosition: Alignment.center,
@@ -440,6 +507,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   );
                 },
               ),
+            ),
             ),
 
             // ── Top bar ────────────────────────────────────────

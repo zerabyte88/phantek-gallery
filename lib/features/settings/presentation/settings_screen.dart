@@ -73,7 +73,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   child: const Text(
-                    'v1.3.8',
+                    'v1.3.9',
                     style: TextStyle(
                       color: Color(0xFF00E676),
                       fontWeight: FontWeight.bold,
@@ -86,8 +86,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ],
       ),
-      body: ListView(
-        children: [
+      body: Theme(
+        data: Theme.of(context).copyWith(
+          splashFactory: NoSplash.splashFactory,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          hoverColor: Colors.transparent,
+        ),
+        child: ListView(
+          children: [
           // ══ Appearance ══════════════════════════════════════
           _SectionHeader('Appearance'),
 
@@ -299,8 +306,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const DeveloperAboutCard(),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -532,12 +540,8 @@ class _ThemeOptionCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: BouncyTap(
         scaleDown: 0.96,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: SimpleDialogOption(
-            padding: EdgeInsets.zero,
-            onPressed: onTap,
-            child: AnimatedContainer(
+        onTap: onTap,
+        child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
@@ -614,8 +618,6 @@ class _ThemeOptionCard extends StatelessWidget {
                         : null,
                   ),
                 ],
-              ),
-            ),
           ),
         ),
       ),
