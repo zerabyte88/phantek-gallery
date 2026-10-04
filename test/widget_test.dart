@@ -796,15 +796,20 @@ void main() {
       expect(MediaScannerService.inferMimeType('video.unknown', isVideo: true), 'video/unknown');
     });
 
-    test('Codec configuration verifies zero-copy mediacodec and hardware acceleration for VP9, HEVC, and H264 on Snapdragon 685', () {
-      const hwdec = 'mediacodec';
+    test('Codec configuration verifies mediacodec-copy with SW fallback and hardware acceleration for VP9, HEVC, and H264', () {
+      const hwdec = 'mediacodec-copy';
       const hwdecCodecs = 'all';
+      const bufferSize = 8388608; // 8 MB – within MPV Android hard-cap of 10 MB
 
-      // Zero-copy mediacodec rendering directly to Surface texture eliminates 2K lag on Snapdragon 685
-      expect(hwdec, 'mediacodec');
+      // 'mediacodec-copy' decodes via HW MediaCodec but copies frame to CPU RAM,
+      // enabling seamless SW fallback for codecs where HW decoder is unavailable (VP9, etc.)
+      expect(hwdec, 'mediacodec-copy');
 
-      // 'all' ensures VP9, HEVC, and H.264 hardware decoders (c2.qti.vp9.decoder) are utilized
+      // 'all' ensures VP9, HEVC, and H.264 hardware decoders are utilized when available
       expect(hwdecCodecs, 'all');
+
+      // Buffer must not exceed MPV Android limit of 10 MB (10485760)
+      expect(bufferSize, lessThanOrEqualTo(10485760));
     });
 
     testWidgets('SortBottomSheet adapts accentColor and Restore defaults to active theme', (tester) async {

@@ -90,10 +90,6 @@ class MediaScannerService {
   }) async {
     // photo_manager handles permission prompting upstream (via PermissionService).
     // Here we only fetch – caller must ensure permission is granted.
-    try {
-      await PhotoManager.clearFileCache();
-    } catch (_) {}
-
     final albums = await PhotoManager.getAssetPathList(
       type: RequestType.common, // both image + video
       hasAll: true,

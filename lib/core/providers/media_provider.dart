@@ -3,6 +3,7 @@ import '../models/media_item.dart';
 import '../enums/sort_option.dart';
 import '../enums/filter_option.dart';
 import '../services/media_scanner_service.dart';
+import '../services/media_cache_service.dart';
 import 'settings_provider.dart';
 
 /// Singleton scanner – no analytics, no network, 100% local.
@@ -13,16 +14,54 @@ final mediaScannerProvider = Provider<MediaScannerService>(
 /// Raw scanned media list state.
 class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
   final Set<String> _deletedIds = {};
+  bool _backgroundRefreshing = false;
 
   @override
   Future<List<MediaItem>> build() async {
     final excludedFolders = ref.watch(
       settingsNotifierProvider.select((s) => s.excludedFolders),
     );
-    final scanner  = ref.read(mediaScannerProvider);
+
+    // 1. Load from disk cache instantly (no spinner on re-open)
+    final cached = await MediaCacheService.instance.load();
+    if (cached != null && cached.isNotEmpty) {
+      // Filter stale items from excluded folders and recently deleted IDs
+      final visible = cached
+          .where((e) => !excludedFolders.any((f) => e.path.startsWith(f)))
+          .where((e) => !_deletedIds.contains(e.id))
+          .toList();
+
+      // Kick off background refresh so new/deleted files are picked up
+      Future.microtask(() => _backgroundRefresh(excludedFolders));
+      return visible;
+    }
+
+    // 2. First launch: full scan (no cache yet)
+    return _scan(excludedFolders);
+  }
+
+  Future<List<MediaItem>> _scan(List<String> excludedFolders) async {
+    final scanner = ref.read(mediaScannerProvider);
     final items = await scanner.scanAll(excludedFolders: excludedFolders);
+    // Persist unfiltered list for next startup
+    MediaCacheService.instance.save(items);
     if (_deletedIds.isEmpty) return items;
     return items.where((e) => !_deletedIds.contains(e.id)).toList();
+  }
+
+  Future<void> _backgroundRefresh(List<String> excludedFolders) async {
+    if (_backgroundRefreshing) return;
+    _backgroundRefreshing = true;
+    try {
+      final fresh = await _scan(excludedFolders);
+      // Only update if we're still showing data (not re-loading)
+      if (state.hasValue) {
+        state = AsyncData(fresh);
+      }
+    } catch (_) {
+    } finally {
+      _backgroundRefreshing = false;
+    }
   }
 
   /// Set of deleted/trashed IDs currently filtered out from scans.
@@ -50,15 +89,10 @@ class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
 
   /// Refreshes from disk without blanking the UI with a full loading spinner.
   Future<void> refresh() async {
-    final updated = await AsyncValue.guard(() async {
-      final settings = ref.read(settingsNotifierProvider);
-      final items = await ref.read(mediaScannerProvider).scanAll(
-            excludedFolders: settings.excludedFolders,
-          );
-      return _deletedIds.isEmpty
-          ? items
-          : items.where((e) => !_deletedIds.contains(e.id)).toList();
-    });
+    final settings = ref.read(settingsNotifierProvider);
+    final updated = await AsyncValue.guard(
+      () => _scan(settings.excludedFolders),
+    );
     if (updated.hasValue) {
       state = updated;
     }
