@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 import 'package:photo_manager/photo_manager.dart';
 import '../models/media_item.dart';
+import 'permission_service.dart';
 import 'thumbnail_service.dart';
 
 /// Supported video file extensions (MKV, MOV, WebM, MP4, H.265/HEVC, VP9, etc.).
@@ -88,8 +89,14 @@ class MediaScannerService {
     List<String> excludedFolders = const [],
     void Function(int loaded, int total)? onProgress,
   }) async {
-    // photo_manager handles permission prompting upstream (via PermissionService).
-    // Here we only fetch – caller must ensure permission is granted.
+    // Ensure permission is granted before querying MediaStore
+    final hasPermission = await PermissionService.instance.hasMediaPermission();
+    if (!hasPermission) {
+      final granted =
+          await PermissionService.instance.requestMediaPermissions();
+      if (!granted) return [];
+    }
+
     final albums = await PhotoManager.getAssetPathList(
       type: RequestType.common, // both image + video
       hasAll: true,

@@ -33,8 +33,8 @@ class ThumbnailService {
   ThumbnailService._();
   static final ThumbnailService instance = ThumbnailService._();
 
-  static const int _thumbnailSize = 512; // px — high-DPI physical pixels for crystal-clear rendering
-  static const int _thumbnailQuality = 92; // 92% quality (no pixelation / artifacts)
+  static const int _thumbnailSize = 256; // px — high-DPI physical pixels for fast & crystal-clear rendering
+  static const int _thumbnailQuality = 85; // 85% quality (fast encode, zero pixelation / artifacts)
   static const int _maxMemoryEntries = 500;
   static const int _maxConcurrent = 4;
   static const MethodChannel _nativeChannel =
@@ -47,6 +47,7 @@ class ThumbnailService {
   int _activeWorkers = 0;
   Directory? _cacheDir;
   String? _cacheDirPath;
+  Future<Directory>? _cacheDirFuture;
 
   /// Pre-initializes the persistent cache directory at application launch.
   static Future<void> init() async {
@@ -167,7 +168,12 @@ class ThumbnailService {
     }
   }
 
-  Future<Directory> _getCacheDirectory() async {
+  Future<Directory> _getCacheDirectory() {
+    if (_cacheDir != null) return Future.value(_cacheDir!);
+    return _cacheDirFuture ??= _initCacheDirectory();
+  }
+
+  Future<Directory> _initCacheDirectory() async {
     if (_cacheDir != null && await _cacheDir!.exists()) return _cacheDir!;
     String? basePath;
 
@@ -436,7 +442,7 @@ class ThumbnailService {
                   const ThumbnailSize.square(_thumbnailSize),
                   quality: _thumbnailQuality,
                 )
-                .timeout(const Duration(seconds: 8), onTimeout: () => null);
+                .timeout(const Duration(seconds: 4), onTimeout: () => null);
           } catch (_) {}
         }
 
