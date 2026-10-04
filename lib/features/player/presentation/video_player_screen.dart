@@ -121,6 +121,52 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _zoomAnimController!.forward();
   }
 
+  void _zoomToPosition(Offset tapPos) {
+    _zoomAnimController?.stop();
+    _zoomAnimController?.dispose();
+
+    final currentScale = _transformationController.value.getMaxScaleOnAxis();
+    final bool isZoomed = currentScale > 1.01;
+
+    final Matrix4 endMatrix;
+    if (isZoomed) {
+      endMatrix = Matrix4.identity();
+    } else {
+      const double targetScale = 2.5;
+      endMatrix = Matrix4.identity()
+        ..translateByDouble(tapPos.dx, tapPos.dy, 0.0, 1.0)
+        ..scaleByDouble(targetScale, targetScale, 1.0, 1.0)
+        ..translateByDouble(-tapPos.dx, -tapPos.dy, 0.0, 1.0);
+    }
+
+    _zoomAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+
+    final animation = Matrix4Tween(
+      begin: _transformationController.value,
+      end: endMatrix,
+    ).animate(CurvedAnimation(
+      parent: _zoomAnimController!,
+      curve: Curves.easeOutCubic,
+    ));
+
+    animation.addListener(() {
+      _transformationController.value = animation.value;
+    });
+
+    _zoomAnimController!.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() {
+          _isVideoZoomed = !isZoomed;
+        });
+      }
+    });
+
+    _zoomAnimController!.forward();
+  }
+
   void _precacheAdjacentVideos(int index) {
     for (final offset in const [0, -1, 1]) {
       final target = index + offset;
@@ -146,27 +192,26 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _player,
       configuration: VideoControllerConfiguration(
         enableHardwareAcceleration: settings.hardwareAcceleration,
-        // 'auto-copy' tries all available HW decoders, then falls back to
-        // software (FFmpeg libvpx / libde265 / etc.) automatically.
-        // 'mediacodec-copy' only tries Android MediaCodec and fails for
-        // codecs without HW support (VP9, some HEVC profiles).
         hwdec: settings.hardwareAcceleration ? 'auto-copy' : 'no',
       ),
     );
 
-    // demuxer-lavf-buffersize: MPV Android hard-cap is 10 MB (10485760)
+    // MPV properties:
+    // 1. Restrict hardware decoding to stable decoders on Snapdragon 685; exclude VP9, VP8, AV1
+    //    Snapdragon 685 MediaCodec hangs when negotiating VP9 profiles without falling back to SW.
+    // 2. Allow Opus/Vorbis audio demuxing and decoding within WebM containers.
     if (_player.platform is NativePlayer) {
       final native = _player.platform as NativePlayer;
-      native.setProperty(
-          'demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
+      native.setProperty('hwdec-codecs', 'h264,hevc,mpeg4,vc1');
+      native.setProperty('demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
       native.setProperty('demuxer-max-bytes', '33554432'); // 32 MB read-ahead
       native.setProperty('demuxer-readahead-secs', '10');
+      native.setProperty('demuxer-lavf-probesize', '2097152');
     }
 
     _player.stream.error.listen((err) {
       debugPrint('[VideoPlayer] Playback error: $err');
       // Filter non-fatal MPV warnings that occur during normal HW→SW codec fallback.
-      // These are informational — the video still plays via software decode.
       final errLower = err.toString().toLowerCase();
       final isNonFatal = errLower.contains('could not open codec') ||
           errLower.contains('decoder init failed') ||
@@ -182,8 +227,20 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       }
     });
 
+    final currentPath = _videos[_current].path;
+    final isWebM = currentPath.toLowerCase().endsWith('.webm');
+    if (_player.platform is NativePlayer) {
+      final native = _player.platform as NativePlayer;
+      if (isWebM) {
+        native.setProperty('hwdec', 'no');
+      } else {
+        native.setProperty(
+            'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
+      }
+    }
+
     _player.open(
-      Media(_videos[_current].path),
+      Media(currentPath),
       play: false,
     );
   }
@@ -201,7 +258,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _current = index;
     });
 
-
     // Keep the texture unmounted until the new media is loaded so the old
     // video's last frame never flashes on the new page.
     _swipeNotifier.value = true;
@@ -211,7 +267,19 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       if (!mounted || _current != index) return;
       // Never auto-play on swipe — user decides whether to play
       try {
-        await _player.open(Media(_videos[index].path), play: false);
+        final settings = ref.read(settingsNotifierProvider);
+        final path = _videos[index].path;
+        final isWebM = path.toLowerCase().endsWith('.webm');
+        if (_player.platform is NativePlayer) {
+          final native = _player.platform as NativePlayer;
+          if (isWebM) {
+            native.setProperty('hwdec', 'no');
+          } else {
+            native.setProperty(
+                'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
+          }
+        }
+        await _player.open(Media(path), play: false);
         if (_isLooping) _player.setPlaylistMode(PlaylistMode.loop);
         if (_playbackSpeed != 1.0) _player.setRate(_playbackSpeed);
       } catch (_) {}
@@ -321,9 +389,29 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void _handleDoubleTap() {
     if (_doubleTapDetails == null) return;
     final width = MediaQuery.of(context).size.width;
-    final x = _doubleTapDetails!.localPosition.dx;
-    final isForward = x >= width * 0.5;
+    final pos = _doubleTapDetails!.localPosition;
+    final x = pos.dx;
 
+    // If currently zoomed, double-tap smoothly zooms back to 1.0x (contained)
+    if (_isVideoZoomed || _transformationController.value.getMaxScaleOnAxis() > 1.01) {
+      HapticFeedback.lightImpact();
+      _zoomToPosition(pos);
+      return;
+    }
+
+    // Disambiguate double-tap gestures:
+    // Outer edges (left/right 28%) -> Seek -10s / +10s
+    // Center zone (middle 44%) -> Double-tap to zoom-to-position (2.5x)
+    final leftEdge = width * 0.28;
+    final rightEdge = width * 0.72;
+
+    if (x > leftEdge && x < rightEdge) {
+      HapticFeedback.lightImpact();
+      _zoomToPosition(pos);
+      return;
+    }
+
+    final isForward = x >= rightEdge;
     HapticFeedback.lightImpact();
 
     final step = isForward ? 10 : -10;
@@ -334,9 +422,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _seekIsForward = isForward;
     }
 
-    final pos = _player.state.position;
+    final playPos = _player.state.position;
     final dur = _player.state.duration;
-    final target = pos + Duration(seconds: step);
+    final target = playPos + Duration(seconds: step);
     final maxMs = dur.inMilliseconds > 0 ? dur.inMilliseconds : 86400000;
     final clampedMs = target.inMilliseconds.clamp(0, maxMs);
     _player.seek(Duration(milliseconds: clampedMs));
@@ -617,15 +705,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           child: Listener(
             onPointerDown: (e) {
               _activePointers.add(e.pointer);
-              if (_activePointers.length > 1) {
+              if (_activePointers.length >= 2) {
+                // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch / pinch
                 _isMultiTouch = true;
                 _isPinching = true;
-                if (_isDragging || _dragOffsetY > 0) {
-                  _isDragging = false;
-                  _startDragY = null;
-                  _startDragX = null;
-                  _dragOffsetY = 0.0;
-                }
+                _isDragging = false;
+                _startDragY = null;
+                _startDragX = null;
+                _dragOffsetY = 0.0;
+                setState(() {});
                 return;
               }
               _startDragY = e.position.dy;
@@ -637,27 +725,33 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
               if (!_swipeNotifier.value &&
                   !_isVideoZoomed &&
                   !_isMultiTouch &&
+                  !_isPinching &&
                   _activePointers.length == 1 &&
                   _startDragX != null &&
                   _startDragY != null) {
                 final adx = (e.position.dx - _startDragX!).abs();
                 final ady = (e.position.dy - _startDragY!).abs();
-                if (adx > 8 && adx > ady) _swipeNotifier.value = true;
+                if (adx > 12 && adx > ady * 1.5) _swipeNotifier.value = true;
               }
+
+              // Keep pull-to-dismiss and page swiping completely locked whenever
+              // the video is zoomed above 1.0x, pinching, or multi-touching.
               if (_isFullscreen ||
                   _isVideoZoomed ||
                   _isPinching ||
                   _isMultiTouch ||
-                  _activePointers.length > 1 ||
+                  _activePointers.length >= 2 ||
                   _startDragY == null ||
                   _startDragX == null) {
                 return;
               }
+
               final dy = e.position.dy - _startDragY!;
               final dx = (e.position.dx - _startDragX!).abs();
-              if (dy > 12 && dy > dx * 1.5) {
+              // Strict gesture slop: at least 28px downward and dominant vertical trajectory (> 2.2 * dx)
+              if (_dragOffsetY > 0 || (dy > 28 && dy > dx * 2.2)) {
                 _isDragging = true;
-                _dragOffsetY = (dy - 12).clamp(0.0, 400.0);
+                _dragOffsetY = (dy - 28).clamp(0.0, 400.0);
               }
             },
             onPointerUp: (e) {
@@ -753,7 +847,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         controller: _pageController,
                         itemCount: _videos.length,
                         onPageChanged: _onPageChanged,
-                        physics: _isVideoZoomed
+                        physics: (_isVideoZoomed ||
+                                _isPinching ||
+                                _isMultiTouch ||
+                                _activePointers.length >= 2)
                             ? const NeverScrollableScrollPhysics()
                             : const BouncingScrollPhysics(),
                         itemBuilder: (context, index) {
@@ -769,15 +866,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                   scaleEnabled: true,
                                   clipBehavior: Clip.hardEdge,
                                   onInteractionStart: (details) {
-                                    if (details.pointerCount > 1) {
-                                      setState(() => _isPinching = true);
+                                    if (details.pointerCount >= 2) {
+                                      if (!_isPinching) {
+                                        setState(() => _isPinching = true);
+                                      }
                                     }
                                   },
                                   onInteractionUpdate: (details) {
                                     final scale = _transformationController
                                         .value
                                         .getMaxScaleOnAxis();
-                                    final isZoomed = scale > 1.05;
+                                    final isZoomed = scale > 1.01;
                                     if (isZoomed != _isVideoZoomed) {
                                       setState(() {
                                         _isVideoZoomed = isZoomed;
@@ -788,7 +887,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     final scale = _transformationController
                                         .value
                                         .getMaxScaleOnAxis();
-                                    final isZoomed = scale > 1.05;
+                                    final isZoomed = scale > 1.01;
                                     setState(() {
                                       _isVideoZoomed = isZoomed;
                                       _isPinching = false;

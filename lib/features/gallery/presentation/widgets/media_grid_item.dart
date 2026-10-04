@@ -81,6 +81,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
         mem,
         fit: BoxFit.cover,
         gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
       );
     }
 
@@ -91,6 +92,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
         diskFile,
         fit: BoxFit.cover,
         gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
       );
     }
@@ -110,6 +112,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
             snap.data!,
             fit: BoxFit.cover,
             gaplessPlayback: true,
+            filterQuality: FilterQuality.medium,
           );
         }
         if (snap.connectionState == ConnectionState.done &&
@@ -118,9 +121,10 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
           if (file.existsSync()) {
             return Image.file(
               file,
-              cacheWidth: 360,
+              cacheWidth: 384,
               fit: BoxFit.cover,
               gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
               errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
             );
           }
