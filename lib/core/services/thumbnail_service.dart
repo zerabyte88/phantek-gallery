@@ -33,8 +33,8 @@ class ThumbnailService {
   ThumbnailService._();
   static final ThumbnailService instance = ThumbnailService._();
 
-  static const int _thumbnailSize = 384; // px — physical pixels for crisp high-DPI rendering
-  static const int _thumbnailQuality = 85; // 85% quality
+  static const int _thumbnailSize = 512; // px — high-DPI physical pixels for crystal-clear rendering
+  static const int _thumbnailQuality = 92; // 92% quality (no pixelation / artifacts)
   static const int _maxMemoryEntries = 500;
   static const int _maxConcurrent = 4;
   static const MethodChannel _nativeChannel =
@@ -107,15 +107,20 @@ class ThumbnailService {
         await native.setProperty('vo-image-jpeg-quality', '$_thumbnailQuality');
         await native.setProperty('vo-image-outdir', outDir.path);
         await native.setProperty('frames', '1');
+        await native.setProperty('demuxer-lavf-probesize', '2097152');
+        await native.setProperty('demuxer-lavf-buffersize', '4194304');
+        await native.setProperty('hr-seek', 'no');
+        await native.setProperty('fast', 'yes');
+        await native.setProperty('sws-scaler', 'fast-bilinear');
         await native.setProperty('vf',
             'scale=$_thumbnailSize:$_thumbnailSize:force_original_aspect_ratio=decrease:force_divisible_by=2');
         await native.setProperty('hwdec', 'no'); // Software decode: never hangs on Snapdragon 685
 
         await player.open(Media(filePath), play: true);
 
-        // Wait up to 3 seconds for frame generation (software decode takes ~50-200ms)
+        // Wait up to 5 seconds for frame generation (fast software decode on 4K takes ~80-300ms)
         File? generated;
-        for (int i = 0; i < 30; i++) {
+        for (int i = 0; i < 50; i++) {
           await Future.delayed(const Duration(milliseconds: 100));
           if (!await outDir.exists()) break;
           final files = outDir.listSync();
@@ -163,24 +168,71 @@ class ThumbnailService {
   }
 
   Future<Directory> _getCacheDirectory() async {
-    if (_cacheDir != null) return _cacheDir!;
+    if (_cacheDir != null && await _cacheDir!.exists()) return _cacheDir!;
     String? basePath;
+
+    // 1. Prioritize external cache in /storage/emulated/0/Android/data/com.phantek.virgo.spica/cache
     try {
-      basePath = (await getApplicationSupportDirectory()).path;
-    } catch (_) {
+      final extDirs = await getExternalCacheDirectories();
+      if (extDirs != null && extDirs.isNotEmpty) {
+        final extPath = extDirs.first.path;
+        final testDir = Directory(p.join(extPath, 'thumbnails'));
+        if (!await testDir.exists()) {
+          await testDir.create(recursive: true);
+        }
+        basePath = extPath;
+      }
+    } catch (_) {}
+
+    // 2. Application cache in /data/user/0/com.phantek.virgo.spica/cache
+    if (basePath == null) {
       try {
-        basePath = (await getTemporaryDirectory()).path;
+        final appCache = await getApplicationCacheDirectory();
+        basePath = appCache.path;
       } catch (_) {
-        basePath = Directory.systemTemp.path;
+        try {
+          basePath = (await getApplicationSupportDirectory()).path;
+        } catch (_) {
+          try {
+            basePath = (await getTemporaryDirectory()).path;
+          } catch (_) {
+            basePath = Directory.systemTemp.path;
+          }
+        }
       }
     }
+
     final dir = Directory(p.join(basePath, 'thumbnails'));
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
     _cacheDir = dir;
     _cacheDirPath = dir.path;
+
+    // Smoothly migrate legacy files from supportDir if different
+    _migrateLegacyThumbnails(dir);
+
     return dir;
+  }
+
+  void _migrateLegacyThumbnails(Directory targetDir) async {
+    try {
+      final supportDir = await getApplicationSupportDirectory();
+      final legacyDir = Directory(p.join(supportDir.path, 'thumbnails'));
+      if (legacyDir.path != targetDir.path && await legacyDir.exists()) {
+        final legacyFiles = legacyDir.listSync();
+        for (final f in legacyFiles) {
+          if (f is File) {
+            final targetPath = p.join(targetDir.path, p.basename(f.path));
+            if (!File(targetPath).existsSync()) {
+              await f.copy(targetPath);
+            }
+            await f.delete();
+          }
+        }
+        await legacyDir.delete(recursive: true);
+      }
+    } catch (_) {}
   }
 
   String _cacheFileName(String assetId) {
@@ -343,7 +395,7 @@ class ThumbnailService {
         if (targetPath != null && targetPath.isNotEmpty) {
           try {
             bytes = await _extractNativeVideoThumbnail(targetPath)
-                .timeout(const Duration(seconds: 10), onTimeout: () => null);
+                .timeout(const Duration(seconds: 4), onTimeout: () => null);
           } catch (_) {}
         }
 
@@ -358,13 +410,13 @@ class ThumbnailService {
                     const ThumbnailSize.square(_thumbnailSize),
                     quality: _thumbnailQuality,
                   )
-                  .timeout(const Duration(seconds: 5), onTimeout: () => null);
+                  .timeout(const Duration(seconds: 3), onTimeout: () => null);
             } catch (_) {}
           }
         }
 
         // 3. Last resort: use media_kit (MPV/FFmpeg) headless software decode to extract a single frame.
-        //    Handles exotic formats/codecs (MKV, WebM, AVI, FLV, TS, VP9, AV1, HEVC 10-bit)
+        //    Handles exotic formats/codecs (MKV, WebM, AVI, FLV, TS, VP9, AV1, HEVC 10-bit, 4K/2160p)
         if ((bytes == null || bytes.isEmpty) &&
             targetPath != null &&
             targetPath.isNotEmpty) {

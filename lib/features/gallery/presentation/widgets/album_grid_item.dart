@@ -115,7 +115,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
           if (file.existsSync()) {
             return Image.file(
               file,
-              cacheWidth: 384,
+              cacheWidth: 512,
               fit: BoxFit.cover,
               gaplessPlayback: true,
               filterQuality: FilterQuality.medium,

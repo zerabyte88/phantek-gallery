@@ -594,6 +594,7 @@ class _TrashThumbnail extends StatelessWidget {
             snap.data!,
             fit: BoxFit.cover,
             gaplessPlayback: true,
+            filterQuality: FilterQuality.medium,
           );
         }
         if (item.isVideo) {
@@ -610,9 +611,10 @@ class _TrashThumbnail extends StatelessWidget {
         }
         return Image.file(
           file,
-          cacheWidth: 360,
+          cacheWidth: 512,
           fit: BoxFit.cover,
           gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
           errorBuilder: (_, __, ___) => Container(
             color: cs.surfaceContainerHighest,
             child: Center(

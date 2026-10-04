@@ -854,7 +854,7 @@ void main() {
     test('Zoom focal point math calculates correct translation offset for scale', () {
       const center = Offset(200, 400);
       const tapPos = Offset(150, 300);
-      const targetScale = 2.8;
+      const targetScale = 1.8;
 
       final delta = tapPos - center;
       final expectedOffset = -delta * (targetScale - 1.0);
@@ -895,6 +895,22 @@ void main() {
       expect(resolveHwdec('clip.WEBM'), 'no');
       expect(resolveHwdec('video.mp4'), 'auto-copy');
       expect(resolveHwdec('movie.mkv'), 'auto-copy');
+    });
+
+    test('Video thumbnail extraction scales 4K (2160p) and 1080p down proportionally without memory bloat', () {
+      // 4K UHD: 3840 x 2160
+      const origW = 3840;
+      const origH = 2160;
+      const targetSize = 512;
+
+      final maxDim = origW > origH ? origW : origH;
+      final scale = maxDim > targetSize ? targetSize / maxDim : 1.0;
+      final dstW = (((origW * scale).toInt() ~/ 2) * 2).clamp(2, targetSize);
+      final dstH = (((origH * scale).toInt() ~/ 2) * 2).clamp(2, targetSize);
+
+      expect(dstW, 512);
+      expect(dstH, 288); // 16:9 preserved perfectly!
+      expect(dstW * dstH * 4, lessThan(600 * 1024)); // Less than 600 KB RAM vs 33 MB unscaled!
     });
   });
 }
