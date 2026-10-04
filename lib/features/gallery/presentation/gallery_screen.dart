@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart' hide FilterOption;
 import '../../../core/enums/filter_option.dart';
@@ -10,6 +12,7 @@ import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
+import '../../../core/services/share_service.dart';
 import '../../../app/router.dart';
 import '../../../core/utils/easter_egg_handler.dart';
 import '../../../core/widgets/animated_flame_title.dart';
@@ -25,7 +28,8 @@ class GalleryScreen extends ConsumerStatefulWidget {
   ConsumerState<GalleryScreen> createState() => _GalleryScreenState();
 }
 
-class _GalleryScreenState extends ConsumerState<GalleryScreen> {
+class _GalleryScreenState extends ConsumerState<GalleryScreen>
+    with WidgetsBindingObserver {
   static const _tabs = [
     FilterOption.all,
     FilterOption.photosOnly,
@@ -37,22 +41,84 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
   late int _currentPage;
   final Set<String> _selected = {};
   bool _selecting = false;
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
   final _easterEggHandler = EasterEggTapHandler();
+  StreamSubscription<bool>? _mediaChangeSub;
+  DateTime _lastAutoRefresh = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final settings = ref.read(settingsNotifierProvider);
     final tabIdx = _tabs.indexOf(settings.defaultFilter);
     _currentPage = tabIdx >= 0 ? tabIdx : 0;
     _pageController = PageController(initialPage: _currentPage);
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+    _initMediaChangeObserver();
+  }
+
+  void _initMediaChangeObserver() {
+    try {
+      PhotoManager.startChangeNotify();
+      _mediaChangeSub = PhotoManager.notifyStream.listen((_) {
+        _triggerAutoRefresh();
+      });
+    } catch (_) {}
+  }
+
+  void _triggerAutoRefresh() {
+    final now = DateTime.now();
+    if (now.difference(_lastAutoRefresh).inMilliseconds < 1000) return;
+    _lastAutoRefresh = now;
+    if (mounted) {
+      ref.read(mediaListProvider.notifier).refresh();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _triggerAutoRefresh();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _mediaChangeSub?.cancel();
+    try {
+      PhotoManager.stopChangeNotify();
+    } catch (_) {}
+    _searchController.dispose();
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _clearSearch() {
+    setState(() {
+      _isSearching = false;
+      _searchController.clear();
+      _searchQuery = '';
+    });
+  }
+
+  List<MediaItem> _filterBySearch(List<MediaItem> items) {
+    if (_searchQuery.isEmpty) return items;
+    final q = _searchQuery.toLowerCase();
+    return items.where((e) {
+      return e.name.toLowerCase().contains(q) ||
+          e.path.toLowerCase().contains(q) ||
+          e.albumName.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  List<Album> _filterAlbumsBySearch(List<Album> albums) {
+    if (_searchQuery.isEmpty) return albums;
+    final q = _searchQuery.toLowerCase();
+    return albums.where((a) => a.name.toLowerCase().contains(q)).toList();
   }
 
   // ── Permission + initial scan ──────────────────────────────────────────
@@ -85,9 +151,6 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
           curve: Curves.easeOutCubic,
         );
       }
-      ref
-          .read(settingsNotifierProvider.notifier)
-          .update((s) => s.copyWith(defaultFilter: f));
     }
   }
 
@@ -100,10 +163,6 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
           _selecting = false;
         }
       });
-      final f = _tabs[index];
-      ref
-          .read(settingsNotifierProvider.notifier)
-          .update((s) => s.copyWith(defaultFilter: f));
     }
   }
 
@@ -235,23 +294,60 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
     final isAlbums   = _tabs[_currentPage] == FilterOption.albums;
 
     return PopScope(
-      canPop: !_selecting || isAlbums,
+      canPop: (!_selecting || isAlbums) && !_isSearching,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _clearSelection();
+        if (!didPop) {
+          if (_isSearching) {
+            _clearSearch();
+          } else if (_selecting) {
+            _clearSelection();
+          }
+        }
       },
       child: Scaffold(
         appBar: AppBar(
-          centerTitle: true,
-          title: _selecting && !isAlbums
-              ? Text('${_selected.length} selected')
-              : BouncyTap(
-                  key: const ValueKey('appbar_badge_easter_egg'),
-                  scaleDown: 0.94,
-                  onTap: () => _easterEggHandler.handleTap(context, ref),
-                  child: const AnimatedFlameTitle(title: 'Phantek'),
-                ),
+          leading: _isSearching
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Close search',
+                  onPressed: _clearSearch,
+                )
+              : null,
+          centerTitle: !_isSearching,
+          title: _isSearching
+              ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  style: const TextStyle(fontSize: 16),
+                  decoration: InputDecoration(
+                    hintText: 'Search media or albums...',
+                    border: InputBorder.none,
+                    hintStyle: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  onChanged: (q) => setState(() => _searchQuery = q.trim()),
+                )
+              : (_selecting && !isAlbums
+                  ? Text('${_selected.length} selected')
+                  : BouncyTap(
+                      key: const ValueKey('appbar_badge_easter_egg'),
+                      scaleDown: 0.94,
+                      onTap: () => _easterEggHandler.handleTap(context, ref),
+                      child: const AnimatedFlameTitle(title: 'Phantek'),
+                    )),
           actions: [
-            if (_selecting && !isAlbums) ...[
+            if (_isSearching) ...[
+              if (_searchController.text.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.clear),
+                  tooltip: 'Clear search',
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                ),
+            ] else if (_selecting && !isAlbums) ...[
               IconButton(
                 icon: const Icon(Icons.select_all),
                 tooltip: 'Select all',
@@ -271,6 +367,38 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                 },
               ),
               IconButton(
+                icon: const Icon(Icons.share_outlined),
+                tooltip: 'Share selected',
+                onPressed: () {
+                  final all = mediaAsync.value ?? [];
+                  final paths = all
+                      .where((e) => _selected.contains(e.id))
+                      .map((e) => e.path)
+                      .toList();
+                  if (paths.isNotEmpty) {
+                    ShareService.shareFiles(paths);
+                  }
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.favorite_border),
+                tooltip: 'Toggle favorite',
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  final currentFavs = Set<String>.from(settings.favoriteIds);
+                  final allSelectedFav = _selected.every(currentFavs.contains);
+                  if (allSelectedFav) {
+                    currentFavs.removeAll(_selected);
+                  } else {
+                    currentFavs.addAll(_selected);
+                  }
+                  ref.read(settingsNotifierProvider.notifier).update(
+                        (s) => s.copyWith(favoriteIds: currentFavs.toList()),
+                      );
+                  _clearSelection();
+                },
+              ),
+              IconButton(
                 icon: const Icon(Icons.delete_outline),
                 tooltip: 'Delete selected',
                 onPressed: () =>
@@ -281,6 +409,18 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                 onPressed: _clearSelection,
               ),
             ] else ...[
+              BouncyTap(
+                scaleDown: 0.88,
+                child: IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Search',
+                  onPressed: () {
+                    setState(() {
+                      _isSearching = true;
+                    });
+                  },
+                ),
+              ),
               BouncyTap(
                 scaleDown: 0.88,
                 child: IconButton(
@@ -310,14 +450,26 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: mediaAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
-                error: (e, _) => _ErrorState(error: e, onRetry: _bootstrap),
-                data: (allItems) {
+              child: Builder(
+                builder: (context) {
+                  final allItems = mediaAsync.valueOrNull;
+                  if (allItems == null) {
+                    if (mediaAsync.isLoading) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (mediaAsync.hasError) {
+                      return _ErrorState(
+                        error: mediaAsync.error!,
+                        onRetry: _bootstrap,
+                      );
+                    }
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
                   if (allItems.isEmpty) {
                     return _EmptyState(onRefresh: _bootstrap);
                   }
+
                   return PageView(
                     controller: _pageController,
                     physics: _selecting
@@ -327,10 +479,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                     children: [
                       _KeepAlivePage(
                         child: _buildMediaGrid(
-                          items: applyFiltersAndSort(
-                            allItems,
-                            sort: settings.defaultSort,
-                            filter: FilterOption.all,
+                          items: _filterBySearch(
+                            applyFiltersAndSort(
+                              allItems,
+                              sort: settings.defaultSort,
+                              filter: FilterOption.all,
+                            ),
                           ),
                           tab: FilterOption.all,
                           settings: settings,
@@ -339,10 +493,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                       ),
                       _KeepAlivePage(
                         child: _buildMediaGrid(
-                          items: applyFiltersAndSort(
-                            allItems,
-                            sort: settings.defaultSort,
-                            filter: FilterOption.photosOnly,
+                          items: _filterBySearch(
+                            applyFiltersAndSort(
+                              allItems,
+                              sort: settings.defaultSort,
+                              filter: FilterOption.photosOnly,
+                            ),
                           ),
                           tab: FilterOption.photosOnly,
                           settings: settings,
@@ -351,10 +507,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                       ),
                       _KeepAlivePage(
                         child: _buildMediaGrid(
-                          items: applyFiltersAndSort(
-                            allItems,
-                            sort: settings.defaultSort,
-                            filter: FilterOption.videosOnly,
+                          items: _filterBySearch(
+                            applyFiltersAndSort(
+                              allItems,
+                              sort: settings.defaultSort,
+                              filter: FilterOption.videosOnly,
+                            ),
                           ),
                           tab: FilterOption.videosOnly,
                           settings: settings,
@@ -363,9 +521,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                       ),
                       _KeepAlivePage(
                         child: _buildAlbumsGrid(
-                          albums: groupMediaIntoAlbums(
-                            allItems,
-                            sort: settings.defaultSort,
+                          albums: _filterAlbumsBySearch(
+                            groupMediaIntoAlbums(
+                              allItems,
+                              sort: settings.defaultSort,
+                              favoriteIds: settings.favoriteIds,
+                            ),
                           ),
                           settings: settings,
                           storageKey: 'gallery_tab_albums',
@@ -401,17 +562,21 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      tab == FilterOption.videosOnly
-                          ? Icons.videocam_outlined
-                          : Icons.photo_library_outlined,
+                      _searchQuery.isNotEmpty
+                          ? Icons.search_off_outlined
+                          : (tab == FilterOption.videosOnly
+                              ? Icons.videocam_outlined
+                              : Icons.photo_library_outlined),
                       size: 64,
                       color: Colors.white24,
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      tab == FilterOption.videosOnly
-                          ? 'No videos found'
-                          : 'No photos found',
+                      _searchQuery.isNotEmpty
+                          ? 'No media matching "$_searchQuery"'
+                          : (tab == FilterOption.videosOnly
+                              ? 'No videos found'
+                              : 'No photos found'),
                       style: const TextStyle(fontSize: 16, color: Colors.grey),
                     ),
                   ],
@@ -423,59 +588,61 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () =>
-          ref.read(mediaListProvider.notifier).refresh(),
-      child: GridView.builder(
-        key: PageStorageKey(storageKey),
-        padding: const EdgeInsets.all(2),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: settings.gridColumns,
-          crossAxisSpacing: 2,
-          mainAxisSpacing: 2,
+    return _PinchZoomGridListener(
+      child: RefreshIndicator(
+        onRefresh: () =>
+            ref.read(mediaListProvider.notifier).refresh(),
+        child: GridView.builder(
+          key: PageStorageKey(storageKey),
+          padding: const EdgeInsets.all(2),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: settings.gridColumns,
+            crossAxisSpacing: 2,
+            mainAxisSpacing: 2,
+          ),
+          itemCount: items.length,
+          itemBuilder: (_, i) {
+            final item = items[i];
+            return MediaGridItem(
+              key: ValueKey(item.id),
+              item: item,
+              isSelected: _selected.contains(item.id),
+              isSelecting: _selecting,
+              showBadges: settings.showBadges,
+              onTap: () {
+                if (_selecting) {
+                  _toggleSelect(item.id);
+                  return;
+                }
+                if (item.isVideo) {
+                  final videos = items
+                      .where((e) => e.isVideo)
+                      .toList();
+                  final idx = videos.indexOf(item);
+                  Navigator.of(context).openVideo(
+                    videos,
+                    idx >= 0 ? idx : 0,
+                  );
+                } else {
+                  // Pass only photo items for swipe navigation.
+                  final photos = items
+                      .where((e) => !e.isVideo)
+                      .toList();
+                  final idx = photos.indexOf(item);
+                  Navigator.of(context)
+                      .openImage(photos, idx >= 0 ? idx : 0);
+                }
+              },
+              onLongPress: () {
+                if (!_selecting) {
+                  _startSelect(item.id);
+                } else {
+                  _toggleSelect(item.id);
+                }
+              },
+            );
+          },
         ),
-        itemCount: items.length,
-        itemBuilder: (_, i) {
-          final item = items[i];
-          return MediaGridItem(
-            key: ValueKey(item.id),
-            item: item,
-            isSelected: _selected.contains(item.id),
-            isSelecting: _selecting,
-            showBadges: settings.showBadges,
-            onTap: () {
-              if (_selecting) {
-                _toggleSelect(item.id);
-                return;
-              }
-              if (item.isVideo) {
-                final videos = items
-                    .where((e) => e.isVideo)
-                    .toList();
-                final idx = videos.indexOf(item);
-                Navigator.of(context).openVideo(
-                  videos,
-                  idx >= 0 ? idx : 0,
-                );
-              } else {
-                // Pass only photo items for swipe navigation.
-                final photos = items
-                    .where((e) => !e.isVideo)
-                    .toList();
-                final idx = photos.indexOf(item);
-                Navigator.of(context)
-                    .openImage(photos, idx >= 0 ? idx : 0);
-              }
-            },
-            onLongPress: () {
-              if (!_selecting) {
-                _startSelect(item.id);
-              } else {
-                _toggleSelect(item.id);
-              }
-            },
-          );
-        },
       ),
     );
   }
@@ -493,15 +660,24 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: const Center(
+              child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.folder_open_outlined,
-                        size: 64, color: Colors.white24),
-                    SizedBox(height: 12),
-                    Text('No albums found',
-                        style: TextStyle(fontSize: 16, color: Colors.grey)),
+                    Icon(
+                      _searchQuery.isNotEmpty
+                          ? Icons.search_off_outlined
+                          : Icons.folder_open_outlined,
+                      size: 64,
+                      color: Colors.white24,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _searchQuery.isNotEmpty
+                          ? 'No albums matching "$_searchQuery"'
+                          : 'No albums found',
+                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
                   ],
                 ),
               ),
@@ -621,3 +797,67 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
     return widget.child;
   }
 }
+
+/// Detects 2-finger pinch gestures to dynamically change grid columns (2 to 5)
+/// without blocking single-finger vertical scroll or horizontal page swipe.
+class _PinchZoomGridListener extends ConsumerStatefulWidget {
+  const _PinchZoomGridListener({required this.child});
+  final Widget child;
+
+  @override
+  ConsumerState<_PinchZoomGridListener> createState() =>
+      _PinchZoomGridListenerState();
+}
+
+class _PinchZoomGridListenerState
+    extends ConsumerState<_PinchZoomGridListener> {
+  final Map<int, Offset> _pointers = {};
+  double? _baseDistance;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (e) {
+        _pointers[e.pointer] = e.position;
+        if (_pointers.length == 2) {
+          final pts = _pointers.values.toList();
+          _baseDistance = (pts[0] - pts[1]).distance;
+        }
+      },
+      onPointerMove: (e) {
+        _pointers[e.pointer] = e.position;
+        if (_pointers.length == 2 &&
+            _baseDistance != null &&
+            _baseDistance! > 20) {
+          final pts = _pointers.values.toList();
+          final currentDist = (pts[0] - pts[1]).distance;
+          final ratio = currentDist / _baseDistance!;
+          final cols = ref.read(settingsNotifierProvider).gridColumns;
+          if (ratio > 1.35 && cols > 2) {
+            HapticFeedback.selectionClick();
+            ref
+                .read(settingsNotifierProvider.notifier)
+                .update((s) => s.copyWith(gridColumns: cols - 1));
+            _baseDistance = currentDist;
+          } else if (ratio < 0.72 && cols < 5) {
+            HapticFeedback.selectionClick();
+            ref
+                .read(settingsNotifierProvider.notifier)
+                .update((s) => s.copyWith(gridColumns: cols + 1));
+            _baseDistance = currentDist;
+          }
+        }
+      },
+      onPointerUp: (e) {
+        _pointers.remove(e.pointer);
+        if (_pointers.length < 2) _baseDistance = null;
+      },
+      onPointerCancel: (e) {
+        _pointers.remove(e.pointer);
+        if (_pointers.length < 2) _baseDistance = null;
+      },
+      child: widget.child,
+    );
+  }
+}
+

@@ -154,6 +154,11 @@ class ThumbnailService {
     } catch (_) {}
   }
 
+  /// Trims in-memory cache to free up RAM when the application is minimized or backgrounded.
+  void trimMemory() {
+    _memoryCache.clear();
+  }
+
   /// Wipes both in-memory cache and persistent disk cache.
   Future<void> clearAll() async {
     _memoryCache.clear();

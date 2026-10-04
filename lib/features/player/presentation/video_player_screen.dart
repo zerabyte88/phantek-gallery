@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,10 +11,12 @@ import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
+import '../../../core/services/share_service.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
+import 'widgets/rename_dialog.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
   const VideoPlayerScreen({
@@ -42,6 +45,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   late int _current;
   bool _showControls = true;
   bool _isFullscreen = false;
+  bool _isLooping = false;
+  double _playbackSpeed = 1.0;
+  double _dragOffsetY = 0.0;
+  bool _isDragging = false;
+  double? _startDragY;
+  double? _startDragX;
+  TapDownDetails? _doubleTapDetails;
+  int _seekSeconds = 0;
+  bool _seekIsForward = true;
+  Timer? _seekOverlayTimer;
 
   @override
   void initState() {
@@ -101,6 +114,22 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     });
     // Never auto-play on swipe — user decides whether to play
     _player.open(Media(_videos[index].path), play: false);
+    if (_isLooping) {
+      _player.setPlaylistMode(PlaylistMode.loop);
+    }
+    if (_playbackSpeed != 1.0) {
+      _player.setRate(_playbackSpeed);
+    }
+    if (_isFullscreen) {
+      if (_isCurrentVideoPortrait()) {
+        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+      } else {
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+      }
+    }
     _precacheAdjacentVideos(index);
   }
 
@@ -117,22 +146,37 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _seekOverlayTimer?.cancel();
     _player.dispose(); // releases native MPV context
     _pageController.dispose();
-    _exitLandscape();
+    _exitFullscreen();
     super.dispose();
   }
 
-  void _enterLandscape() {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+  bool _isCurrentVideoPortrait() {
+    final item = _videos[_current];
+    if (item.width != null && item.height != null) {
+      return item.height! > item.width!;
+    }
+    return false;
+  }
+
+  void _enterFullscreen() {
+    if (_isCurrentVideoPortrait()) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+    } else {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     setState(() => _isFullscreen = true);
   }
 
-  void _exitLandscape() {
+  void _exitFullscreen() {
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -143,9 +187,128 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   void _toggleFullscreen() {
     if (_isFullscreen) {
-      _exitLandscape();
+      _exitFullscreen();
     } else {
-      _enterLandscape();
+      _enterFullscreen();
+    }
+  }
+
+  void _handleDoubleTap() {
+    if (_doubleTapDetails == null) return;
+    final width = MediaQuery.of(context).size.width;
+    final x = _doubleTapDetails!.localPosition.dx;
+    final isForward = x >= width * 0.5;
+
+    HapticFeedback.lightImpact();
+
+    final step = isForward ? 10 : -10;
+    if (_seekOverlayTimer?.isActive == true && _seekIsForward == isForward) {
+      _seekSeconds += 10;
+    } else {
+      _seekSeconds = 10;
+      _seekIsForward = isForward;
+    }
+
+    final pos = _player.state.position;
+    final dur = _player.state.duration;
+    final target = pos + Duration(seconds: step);
+    final maxMs = dur.inMilliseconds > 0 ? dur.inMilliseconds : 86400000;
+    final clampedMs = target.inMilliseconds.clamp(0, maxMs);
+    _player.seek(Duration(milliseconds: clampedMs));
+
+    _seekOverlayTimer?.cancel();
+    setState(() {});
+
+    _seekOverlayTimer = Timer(const Duration(milliseconds: 650), () {
+      if (mounted) {
+        setState(() {
+          _seekSeconds = 0;
+        });
+      }
+    });
+  }
+
+  void _showPlaybackSpeedSheet() {
+    final speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final cs = Theme.of(context).colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Playback Speed',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ...speeds.map((speed) {
+                  final isSelected = _playbackSpeed == speed;
+                  return ListTile(
+                    dense: true,
+                    title: Text(
+                      speed == 1.0 ? '1.0x (Normal)' : '${speed}x',
+                      style: TextStyle(
+                        color: isSelected ? cs.primary : Colors.white,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    trailing: isSelected
+                        ? Icon(Icons.check, color: cs.primary)
+                        : null,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      setState(() {
+                        _playbackSpeed = speed;
+                      });
+                      _player.setRate(speed);
+                      HapticFeedback.lightImpact();
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _toggleLoop() {
+    final next = !_isLooping;
+    setState(() {
+      _isLooping = next;
+    });
+    _player.setPlaylistMode(next ? PlaylistMode.loop : PlaylistMode.none);
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 1),
+        content: Text(next ? 'Loop enabled' : 'Loop disabled'),
+      ),
+    );
+  }
+
+  Future<void> _renameCurrentItem() async {
+    final item = _videos[_current];
+    final updated = await showRenameMediaDialog(context, item, ref);
+    if (updated != null && mounted) {
+      setState(() {
+        _videos[_current] = updated;
+      });
     }
   }
 
@@ -305,109 +468,226 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   @override
   Widget build(BuildContext context) {
     final item = _videos[_current];
+    final bgOpacity = (1.0 - (_dragOffsetY / 250)).clamp(0.0, 1.0);
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        top: !_isFullscreen,
-        bottom: !_isFullscreen,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => setState(() => _showControls = !_showControls),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // ── Video PageView ──────────────────────────────────
-              PageView.builder(
-                controller: _pageController,
-                itemCount: _videos.length,
-                onPageChanged: _onPageChanged,
-                physics: const BouncingScrollPhysics(),
-                itemBuilder: (context, index) {
-                  if (index == _current) {
-                    return Center(
-                      child: Video(
-                        key: ValueKey(_videos[index].id),
-                        controller: _controller,
-                        controls: NoVideoControls,
-                        fit: BoxFit.contain,
-                      ),
-                    );
-                  }
-                  return _VideoThumbnailPage(item: _videos[index]);
-                },
-              ),
+    return PopScope(
+      canPop: !_isFullscreen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _isFullscreen) {
+          _exitFullscreen();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black.withValues(alpha: bgOpacity),
+        body: SafeArea(
+          top: !_isFullscreen,
+          bottom: !_isFullscreen,
+          child: Listener(
+            onPointerDown: (e) {
+              _startDragY = e.position.dy;
+              _startDragX = e.position.dx;
+            },
+            onPointerMove: (e) {
+              if (_isFullscreen || _startDragY == null || _startDragX == null) return;
+              final dy = e.position.dy - _startDragY!;
+              final dx = (e.position.dx - _startDragX!).abs();
+              if (dy > 8 && dy > dx * 1.3) {
+                setState(() {
+                  _isDragging = true;
+                  _dragOffsetY = (dy - 8).clamp(0.0, 400.0);
+                });
+              }
+            },
+            onPointerUp: (e) {
+              _startDragY = null;
+              _startDragX = null;
+              if (_dragOffsetY > 90) {
+                _player.pause();
+                Navigator.of(context).pop();
+              } else if (_dragOffsetY > 0) {
+                setState(() {
+                  _isDragging = false;
+                  _dragOffsetY = 0.0;
+                });
+              }
+            },
+            onPointerCancel: (e) {
+              _startDragY = null;
+              _startDragX = null;
+              if (_dragOffsetY > 0) {
+                setState(() {
+                  _isDragging = false;
+                  _dragOffsetY = 0.0;
+                });
+              }
+            },
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                if (_dragOffsetY < 10) {
+                  setState(() => _showControls = !_showControls);
+                }
+              },
+              onDoubleTapDown: (details) {
+                _doubleTapDetails = details;
+              },
+              onDoubleTap: _handleDoubleTap,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // ── Video PageView with drag translation ───────────────
+                  AnimatedContainer(
+                    duration: _isDragging ? Duration.zero : const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    transform: Matrix4.translationValues(0, _dragOffsetY, 0),
+                    child: PageView.builder(
+                      controller: _pageController,
+                      itemCount: _videos.length,
+                      onPageChanged: _onPageChanged,
+                      physics: const BouncingScrollPhysics(),
+                      itemBuilder: (context, index) {
+                        if (index == _current) {
+                          return Center(
+                            child: Video(
+                              key: const ValueKey('active_video_surface'),
+                              controller: _controller,
+                              controls: NoVideoControls,
+                              fit: BoxFit.contain,
+                            ),
+                          );
+                        }
+                        return _VideoThumbnailPage(item: _videos[index]);
+                      },
+                    ),
+                  ),
 
-              // ── Controls overlay ───────────────────────────────
-              AnimatedOpacity(
-                opacity: _showControls ? 1 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: IgnorePointer(
-                  ignoring: !_showControls,
-                  child: Column(
-                    children: [
-                      // Top bar
-                      _TopBar(
-                        item: item,
-                        currentIndex: _current,
-                        totalVideos: _videos.length,
-                        isTrash: widget.isTrash,
-                        onRestore: _restoreItem,
-                        onBack: () {
-                          if (_isFullscreen) {
-                            _exitLandscape();
-                          } else {
-                            Navigator.of(context).pop();
-                          }
-                        },
-                        onInfo: () =>
-                            showMediaInfoSheet(context, item),
-                        onDelete: _deleteItem,
-                      ),
-                      const Spacer(),
-                      // Center play button when paused
-                      Center(
-                        child: StreamBuilder<bool>(
-                          stream: _player.stream.playing,
-                          builder: (_, snap) {
-                            final playing = snap.data ?? false;
-                            if (playing) return const SizedBox.shrink();
-                            return BouncyTap(
-                              onTap: _player.play,
-                              child: Container(
-                                width: 72,
-                                height: 72,
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.55),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.4),
-                                    width: 1.5,
+                  // ── Double-tap seek feedback overlay ────────────────
+                  if (_seekSeconds > 0)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Align(
+                          alignment: _seekIsForward
+                              ? const Alignment(0.65, 0.0)
+                              : const Alignment(-0.65, 0.0),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.7),
+                              borderRadius: BorderRadius.circular(32),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.35),
+                                  width: 1.5),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (!_seekIsForward) ...[
+                                  const Icon(Icons.fast_rewind_rounded,
+                                      color: Colors.white, size: 28),
+                                  const SizedBox(width: 8),
+                                ],
+                                Text(
+                                  '${_seekIsForward ? '+' : '-'}${_seekSeconds}s',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
                                   ),
                                 ),
-                                child: const Icon(
-                                  Icons.play_arrow_rounded,
-                                  size: 48,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            );
-                          },
+                                if (_seekIsForward) ...[
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.fast_forward_rounded,
+                                      color: Colors.white, size: 28),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                      const Spacer(),
-                      // Bottom controls
-                      _BottomBar(
-                        player: _player,
-                        item: item,
-                        isFullscreen: _isFullscreen,
-                        onToggleFullscreen: _toggleFullscreen,
+                    ),
+
+                  // ── Controls overlay ───────────────────────────────
+                  AnimatedOpacity(
+                    opacity: (_showControls && _dragOffsetY < 20) ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: IgnorePointer(
+                      ignoring: !_showControls || _dragOffsetY >= 20,
+                      child: Column(
+                        children: [
+                          // Top bar
+                          _TopBar(
+                            item: item,
+                            currentIndex: _current,
+                            totalVideos: _videos.length,
+                            isTrash: widget.isTrash,
+                            playbackSpeed: _playbackSpeed,
+                            isLooping: _isLooping,
+                            onSelectSpeed: _showPlaybackSpeedSheet,
+                            onToggleLoop: _toggleLoop,
+                            onRestore: _restoreItem,
+                            onBack: () {
+                              if (_isFullscreen) {
+                                _exitFullscreen();
+                              } else {
+                                Navigator.of(context).pop();
+                              }
+                            },
+                            onInfo: () =>
+                                showMediaInfoSheet(context, item),
+                            onDelete: _deleteItem,
+                            onRename: _renameCurrentItem,
+                          ),
+                          const Spacer(),
+                          // Center play button when paused
+                          Center(
+                            child: StreamBuilder<bool>(
+                              stream: _player.stream.playing,
+                              builder: (_, snap) {
+                                final playing = snap.data ?? false;
+                                if (playing) return const SizedBox.shrink();
+                                return BouncyTap(
+                                  onTap: _player.play,
+                                  child: Container(
+                                    width: 72,
+                                    height: 72,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.55),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: 0.4),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.play_arrow_rounded,
+                                      size: 48,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const Spacer(),
+                          // Bottom controls
+                          _BottomBar(
+                            player: _player,
+                            item: item,
+                            isFullscreen: _isFullscreen,
+                            isLooping: _isLooping,
+                            onToggleFullscreen: _toggleFullscreen,
+                            onToggleLoop: _toggleLoop,
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -455,7 +735,12 @@ class _TopBar extends StatelessWidget {
     required this.onInfo,
     required this.onDelete,
     this.isTrash = false,
+    this.playbackSpeed = 1.0,
+    this.isLooping = false,
+    this.onSelectSpeed,
+    this.onToggleLoop,
     this.onRestore,
+    this.onRename,
   });
   final MediaItem item;
   final int currentIndex;
@@ -464,7 +749,12 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onInfo;
   final VoidCallback onDelete;
   final bool isTrash;
+  final double playbackSpeed;
+  final bool isLooping;
+  final VoidCallback? onSelectSpeed;
+  final VoidCallback? onToggleLoop;
   final VoidCallback? onRestore;
+  final VoidCallback? onRename;
 
   @override
   Widget build(BuildContext context) {
@@ -532,6 +822,44 @@ class _TopBar extends StatelessWidget {
               onPressed: onDelete,
             ),
           ] else ...[
+            Consumer(
+              builder: (context, ref, _) {
+                final isFav = ref.watch(
+                  settingsNotifierProvider.select(
+                    (s) => s.favoriteIds.contains(item.id),
+                  ),
+                );
+                return IconButton(
+                  icon: Icon(
+                    isFav ? Icons.favorite : Icons.favorite_border,
+                    color: isFav ? Colors.redAccent : Colors.white,
+                    size: 22,
+                  ),
+                  tooltip: isFav ? 'Remove from favorites' : 'Add to favorites',
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    final currentFavs = Set<String>.from(
+                      ref.read(settingsNotifierProvider).favoriteIds,
+                    );
+                    if (currentFavs.contains(item.id)) {
+                      currentFavs.remove(item.id);
+                    } else {
+                      currentFavs.add(item.id);
+                    }
+                    ref
+                        .read(settingsNotifierProvider.notifier)
+                        .update((s) => s.copyWith(favoriteIds: currentFavs.toList()));
+                  },
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.share_outlined,
+                  color: Colors.white, size: 22),
+              tooltip: 'Share',
+              onPressed: () =>
+                  ShareService.shareSingle(item.path, isVideo: true),
+            ),
             IconButton(
               icon: const Icon(Icons.delete_outline,
                   color: Colors.white, size: 22),
@@ -544,6 +872,78 @@ class _TopBar extends StatelessWidget {
               tooltip: 'Details',
               onPressed: onInfo,
             ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert,
+                  color: Colors.white, size: 22),
+              tooltip: 'More options',
+              color: const Color(0xFF222222),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              onSelected: (value) {
+                if (value == 'rename') {
+                  onRename?.call();
+                } else if (value == 'speed') {
+                  onSelectSpeed?.call();
+                } else if (value == 'loop') {
+                  onToggleLoop?.call();
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'speed',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.speed,
+                          size: 20, color: Colors.white),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Speed (${playbackSpeed == 1.0 ? 'Normal' : '${playbackSpeed}x'})',
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'loop',
+                  child: Row(
+                    children: [
+                      Icon(
+                        isLooping ? Icons.repeat_one : Icons.repeat,
+                        size: 20,
+                        color: isLooping
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.white,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        isLooping ? 'Loop: On' : 'Loop: Off',
+                        style: TextStyle(
+                          color: isLooping
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (!isTrash)
+                  const PopupMenuItem(
+                    value: 'rename',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined,
+                            size: 20, color: Colors.white),
+                        SizedBox(width: 12),
+                        Text('Rename',
+                            style: TextStyle(
+                                color: Colors.white, fontSize: 14)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ],
         ],
       ),
@@ -553,20 +953,35 @@ class _TopBar extends StatelessWidget {
 
 // ── Bottom bar ────────────────────────────────────────────────────────────
 
-class _BottomBar extends StatelessWidget {
+class _BottomBar extends StatefulWidget {
   const _BottomBar({
     required this.player,
     required this.item,
     required this.isFullscreen,
+    required this.isLooping,
     required this.onToggleFullscreen,
+    required this.onToggleLoop,
   });
+
   final Player player;
   final MediaItem item;
   final bool isFullscreen;
+  final bool isLooping;
   final VoidCallback onToggleFullscreen;
+  final VoidCallback onToggleLoop;
+
+  @override
+  State<_BottomBar> createState() => _BottomBarState();
+}
+
+class _BottomBarState extends State<_BottomBar> {
+  bool _isDragging = false;
+  double? _dragFraction;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       decoration: const BoxDecoration(
@@ -581,27 +996,48 @@ class _BottomBar extends StatelessWidget {
         children: [
           // Seek bar
           StreamBuilder<Duration>(
-            stream: player.stream.position,
+            stream: widget.player.stream.position,
             builder: (_, posSnap) {
               return StreamBuilder<Duration>(
-                stream: player.stream.duration,
+                stream: widget.player.stream.duration,
                 builder: (_, durSnap) {
                   final pos = posSnap.data ?? Duration.zero;
                   final dur =
-                      durSnap.data ?? item.duration ?? Duration.zero;
-                  final frac =
-                      dur.inMilliseconds > 0
-                          ? pos.inMilliseconds / dur.inMilliseconds
-                          : 0.0;
+                      durSnap.data ?? widget.item.duration ?? Duration.zero;
+                  final displayPos = (_isDragging &&
+                          _dragFraction != null &&
+                          dur.inMilliseconds > 0)
+                      ? Duration(
+                          milliseconds:
+                              (_dragFraction! * dur.inMilliseconds).round())
+                      : pos;
+                  final frac = dur.inMilliseconds > 0
+                      ? (_dragFraction ??
+                          (pos.inMilliseconds / dur.inMilliseconds))
+                      : 0.0;
                   return Column(
                     children: [
                       Slider(
                         value: frac.clamp(0.0, 1.0),
+                        onChangeStart: (_) {
+                          setState(() {
+                            _isDragging = true;
+                          });
+                        },
                         onChanged: (v) {
+                          setState(() {
+                            _dragFraction = v;
+                          });
+                        },
+                        onChangeEnd: (v) {
                           final target = Duration(
-                              milliseconds:
-                                  (v * dur.inMilliseconds).round());
-                          player.seek(target);
+                            milliseconds: (v * dur.inMilliseconds).round(),
+                          );
+                          widget.player.seek(target);
+                          setState(() {
+                            _isDragging = false;
+                            _dragFraction = null;
+                          });
                         },
                         activeColor: Colors.white,
                         inactiveColor: Colors.white30,
@@ -614,7 +1050,7 @@ class _BottomBar extends StatelessWidget {
                           mainAxisAlignment:
                               MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(MediaUtils.formatDuration(pos),
+                            Text(MediaUtils.formatDuration(displayPos),
                                 style: const TextStyle(
                                     color: Colors.white, fontSize: 12)),
                             Text(MediaUtils.formatDuration(dur),
@@ -636,6 +1072,25 @@ class _BottomBar extends StatelessWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
+                // Loop toggle on the left
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: BouncyTap(
+                    onTap: widget.onToggleLoop,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Icon(
+                        widget.isLooping
+                            ? Icons.repeat_one
+                            : Icons.repeat,
+                        size: 26,
+                        color: widget.isLooping
+                            ? cs.primary
+                            : Colors.white70,
+                      ),
+                    ),
+                  ),
+                ),
                 // Centered backward, play/pause, forward (enlarged with bouncy tap)
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -643,8 +1098,9 @@ class _BottomBar extends StatelessWidget {
                     // Seek -10s
                     BouncyTap(
                       onTap: () async {
-                        final pos = player.state.position;
-                        await player.seek(pos - const Duration(seconds: 10));
+                        final pos = widget.player.state.position;
+                        await widget.player
+                            .seek(pos - const Duration(seconds: 10));
                       },
                       child: const Padding(
                         padding: EdgeInsets.all(8),
@@ -655,11 +1111,11 @@ class _BottomBar extends StatelessWidget {
                     const SizedBox(width: 6),
                     // Play/Pause
                     StreamBuilder<bool>(
-                      stream: player.stream.playing,
+                      stream: widget.player.stream.playing,
                       builder: (_, snap) {
                         final playing = snap.data ?? false;
                         return BouncyTap(
-                          onTap: player.playOrPause,
+                          onTap: widget.player.playOrPause,
                           child: Padding(
                             padding: const EdgeInsets.all(4),
                             child: Icon(
@@ -677,8 +1133,9 @@ class _BottomBar extends StatelessWidget {
                     // Seek +10s
                     BouncyTap(
                       onTap: () async {
-                        final pos = player.state.position;
-                        await player.seek(pos + const Duration(seconds: 10));
+                        final pos = widget.player.state.position;
+                        await widget.player
+                            .seek(pos + const Duration(seconds: 10));
                       },
                       child: const Padding(
                         padding: EdgeInsets.all(8),
@@ -692,11 +1149,11 @@ class _BottomBar extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerRight,
                   child: BouncyTap(
-                    onTap: onToggleFullscreen,
+                    onTap: widget.onToggleFullscreen,
                     child: Padding(
                       padding: const EdgeInsets.all(12),
                       child: Icon(
-                        isFullscreen
+                        widget.isFullscreen
                             ? Icons.fullscreen_exit
                             : Icons.fullscreen,
                         size: 28,

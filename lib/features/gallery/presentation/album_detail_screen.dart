@@ -154,8 +154,9 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     final settings = ref.watch(settingsNotifierProvider);
 
     final allItems = mediaAsync.value ?? [];
-    final albumItems =
-        allItems.where((e) => e.albumName == widget.albumName).toList();
+    final albumItems = widget.albumName == 'Favorites'
+        ? allItems.where((e) => settings.favoriteIds.contains(e.id)).toList()
+        : allItems.where((e) => e.albumName == widget.albumName).toList();
 
     // 1. Filter by All / Photos / Videos
     final filteredItems = switch (_filter) {

@@ -4,6 +4,8 @@
     <external-path name="ota_downloads" path="Download/" />
     <!-- App-specific external cache fallback -->
     <external-cache-path name="external_cache" path="." />
+    <!-- External storage files for sharing -->
+    <external-path name="external_files" path="." />
     <!-- App-specific internal cache fallback -->
     <cache-path name="ota_apk" path="ota/" />
 </paths>

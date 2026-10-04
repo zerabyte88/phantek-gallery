@@ -16,9 +16,11 @@ class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
 
   @override
   Future<List<MediaItem>> build() async {
-    final settings = ref.watch(settingsNotifierProvider);
+    final excludedFolders = ref.watch(
+      settingsNotifierProvider.select((s) => s.excludedFolders),
+    );
     final scanner  = ref.read(mediaScannerProvider);
-    final items = await scanner.scanAll(excludedFolders: settings.excludedFolders);
+    final items = await scanner.scanAll(excludedFolders: excludedFolders);
     if (_deletedIds.isEmpty) return items;
     return items.where((e) => !_deletedIds.contains(e.id)).toList();
   }
@@ -37,6 +39,13 @@ class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
   /// Un-blacklists items when restored from trash.
   void restoreItems(Iterable<String> ids) {
     _deletedIds.removeAll(ids);
+  }
+
+  /// Updates a single item in state (e.g. after rename).
+  void updateItem(MediaItem updated) {
+    state = state.whenData(
+      (items) => items.map((e) => e.id == updated.id ? updated : e).toList(),
+    );
   }
 
   /// Refreshes from disk without blanking the UI with a full loading spinner.

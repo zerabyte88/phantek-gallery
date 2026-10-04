@@ -52,12 +52,18 @@ class MediaScannerService {
 
     final total = assets.length;
     final results = <MediaItem>[];
+    const chunkSize = 30;
 
-    for (var i = 0; i < total; i++) {
-      final entity = assets[i];
-      final item = await _toMediaItem(entity, excludedFolders);
-      if (item != null) results.add(item);
-      onProgress?.call(i + 1, total);
+    for (var i = 0; i < total; i += chunkSize) {
+      final end = (i + chunkSize < total) ? i + chunkSize : total;
+      final chunk = assets.sublist(i, end);
+      final chunkResults = await Future.wait(
+        chunk.map((entity) => _toMediaItem(entity, excludedFolders)),
+      );
+      for (final item in chunkResults) {
+        if (item != null) results.add(item);
+      }
+      onProgress?.call(end, total);
     }
 
     return results;
@@ -116,14 +122,5 @@ class MediaScannerService {
       height: entity.height,
       mimeType: entity.mimeType,
     );
-  }
-
-  /// Watch for new/deleted media by polling (simple approach).
-  /// Returns a stream that emits whenever the library should be refreshed.
-  ///
-  /// ponytail: polling every 30 s is simpler than ContentObserver bridge;
-  ///           upgrade to native observer if battery becomes an issue.
-  Stream<void> watchChanges({Duration interval = const Duration(seconds: 30)}) {
-    return Stream.periodic(interval).asyncMap((_) async {});
   }
 }
