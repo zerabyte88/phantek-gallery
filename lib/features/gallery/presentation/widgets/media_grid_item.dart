@@ -41,7 +41,8 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
   @override
   void didUpdateWidget(covariant MediaGridItem oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.item.id != widget.item.id) {
+    if (oldWidget.item.id != widget.item.id ||
+        oldWidget.item.path != widget.item.path) {
       _initThumbnail();
     }
   }
@@ -107,7 +108,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
     return FutureBuilder<Uint8List?>(
       future: _thumbFuture,
       builder: (_, snap) {
-        if (snap.data != null) {
+        if (snap.data != null && snap.data!.isNotEmpty) {
           return Image.memory(
             snap.data!,
             fit: BoxFit.cover,
@@ -115,18 +116,41 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
             filterQuality: FilterQuality.medium,
           );
         }
-        if (snap.connectionState == ConnectionState.done &&
-            !widget.item.isVideo) {
-          final file = File(widget.item.path);
-          if (file.existsSync()) {
+        if (snap.connectionState == ConnectionState.done) {
+          final currentMem =
+              ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
+          if (currentMem != null) {
+            return Image.memory(
+              currentMem,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
+            );
+          }
+          final currentDisk =
+              ThumbnailService.instance.getCachedFile(widget.item.id);
+          if (currentDisk != null) {
             return Image.file(
-              file,
-              cacheWidth: 512,
+              currentDisk,
               fit: BoxFit.cover,
               gaplessPlayback: true,
               filterQuality: FilterQuality.medium,
               errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
             );
+          }
+
+          if (!widget.item.isVideo) {
+            final file = File(widget.item.path);
+            if (file.existsSync()) {
+              return Image.file(
+                file,
+                cacheWidth: 256,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                filterQuality: FilterQuality.medium,
+                errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
+              );
+            }
           }
         }
         return _buildPlaceholder(cs);

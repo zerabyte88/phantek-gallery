@@ -611,7 +611,7 @@ class _TrashThumbnail extends StatelessWidget {
         }
         return Image.file(
           file,
-          cacheWidth: 512,
+          cacheWidth: 256,
           fit: BoxFit.cover,
           gaplessPlayback: true,
           filterQuality: FilterQuality.medium,

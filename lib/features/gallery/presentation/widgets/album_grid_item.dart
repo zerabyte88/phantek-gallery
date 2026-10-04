@@ -32,7 +32,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
   @override
   void didUpdateWidget(covariant AlbumGridItem oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.album.coverItem.id != widget.album.coverItem.id) {
+    if (oldWidget.album.coverItem.id != widget.album.coverItem.id ||
+        oldWidget.album.coverItem.path != widget.album.coverItem.path) {
       _initThumbnail();
     }
   }
@@ -101,7 +102,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
     return FutureBuilder<Uint8List?>(
       future: _thumbFuture,
       builder: (_, snap) {
-        if (snap.data != null) {
+        if (snap.data != null && snap.data!.isNotEmpty) {
           return Image.memory(
             snap.data!,
             fit: BoxFit.cover,
@@ -109,18 +110,40 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
             filterQuality: FilterQuality.medium,
           );
         }
-        if (snap.connectionState == ConnectionState.done &&
-            !widget.album.coverItem.isVideo) {
-          final file = File(widget.album.coverItem.path);
-          if (file.existsSync()) {
+        if (snap.connectionState == ConnectionState.done) {
+          final currentMem = ThumbnailService.instance
+              .getMemoryThumbnail(widget.album.coverItem.id);
+          if (currentMem != null) {
+            return Image.memory(
+              currentMem,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
+            );
+          }
+          final currentDisk = ThumbnailService.instance
+              .getCachedFile(widget.album.coverItem.id);
+          if (currentDisk != null) {
             return Image.file(
-              file,
-              cacheWidth: 512,
+              currentDisk,
               fit: BoxFit.cover,
               gaplessPlayback: true,
               filterQuality: FilterQuality.medium,
               errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
             );
+          }
+          if (!widget.album.coverItem.isVideo) {
+            final file = File(widget.album.coverItem.path);
+            if (file.existsSync()) {
+              return Image.file(
+                file,
+                cacheWidth: 256,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                filterQuality: FilterQuality.medium,
+                errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
+              );
+            }
           }
         }
         return _buildPlaceholder(cs);

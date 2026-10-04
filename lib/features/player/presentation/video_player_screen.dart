@@ -73,10 +73,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   bool get _isCurrentlyVideoZoomed {
     if (_isVideoZoomed) return true;
     final scale = _transformationController.value.getMaxScaleOnAxis();
-    if (scale > 1.05) return true;
-    final translation = _transformationController.value.getTranslation();
-    if (translation.x.abs() > 8.0 || translation.y.abs() > 8.0) return true;
-    return false;
+    return scale > 1.05;
   }
 
   @override
@@ -119,6 +116,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     _zoomAnimController!.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
+        _transformationController.value = Matrix4.identity();
         if (mounted) {
           setState(() {
             _isVideoZoomed = false;
@@ -135,13 +133,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _zoomAnimController?.dispose();
 
     final currentScale = _transformationController.value.getMaxScaleOnAxis();
-    final bool isZoomed = currentScale > 1.01;
+    final bool isZoomed = currentScale > 1.05 || _isVideoZoomed;
 
     final Matrix4 endMatrix;
     if (isZoomed) {
       endMatrix = Matrix4.identity();
     } else {
-      const double targetScale = 1.8;
+      const double targetScale = 2.0;
       endMatrix = Matrix4.identity()
         ..translateByDouble(tapPos.dx, tapPos.dy, 0.0, 1.0)
         ..scaleByDouble(targetScale, targetScale, 1.0, 1.0)
@@ -167,6 +165,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     _zoomAnimController!.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
+        if (isZoomed) {
+          _transformationController.value = Matrix4.identity();
+        }
         setState(() {
           _isVideoZoomed = !isZoomed;
         });
@@ -714,6 +715,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           child: Listener(
             onPointerDown: (e) {
               _activePointers.add(e.pointer);
+              _zoomAnimController?.stop();
               if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
                 // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
                 _isMultiTouch = true;
@@ -878,12 +880,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                   transformationController:
                                       _transformationController,
                                   minScale: 1.0,
-                                  maxScale: 5.0,
+                                  maxScale: 4.0,
                                   panEnabled: true,
                                   scaleEnabled: true,
                                   clipBehavior: Clip.hardEdge,
-                                  interactionEndFrictionCoefficient: 0.0001,
                                   onInteractionStart: (details) {
+                                    _zoomAnimController?.stop();
                                     if (details.pointerCount >= 2) {
                                       _isPinching = true;
                                     }
@@ -902,12 +904,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     final scale = _transformationController
                                         .value
                                         .getMaxScaleOnAxis();
-                                    if (scale <= 1.08) {
-                                      // Cleanly reset to exact 1.0x (identity) if released near contained scale
+                                    if (scale <= 1.02) {
                                       _resetVideoZoom();
                                     } else {
-                                      _isVideoZoomed = true;
-                                      if (mounted) setState(() {});
+                                      if (!_isVideoZoomed && mounted) {
+                                        setState(() {
+                                          _isVideoZoomed = true;
+                                        });
+                                      }
                                     }
                                   },
                                   child: Center(
