@@ -998,6 +998,17 @@ class _VideoThumbnailPage extends StatelessWidget {
       );
     }
 
+    final diskFile = ThumbnailService.instance.getCachedFile(item.id);
+    if (diskFile != null) {
+      return Center(
+        child: Image.file(
+          diskFile,
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+        ),
+      );
+    }
+
     return FutureBuilder<Uint8List?>(
       future:
           ThumbnailService.instance.getThumbnail(item.id, filePath: item.path),

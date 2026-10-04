@@ -45,6 +45,20 @@ class ThumbnailService {
   final Queue<_ThumbnailRequest> _queue = Queue();
   int _activeWorkers = 0;
   Directory? _cacheDir;
+  String? _cacheDirPath;
+
+  /// Pre-initializes the persistent cache directory at application launch.
+  static Future<void> init() async {
+    await instance._getCacheDirectory();
+  }
+
+  /// Synchronously returns the cached File on disk if it already exists, or null.
+  File? getCachedFile(String assetId) {
+    final dirPath = _cacheDirPath ?? _cacheDir?.path;
+    if (dirPath == null) return null;
+    final file = File(p.join(dirPath, _cacheFileName(assetId)));
+    return file.existsSync() ? file : null;
+  }
 
   /// Register pre-discovered AssetEntities to avoid IPC lookups.
   void registerEntities(Iterable<AssetEntity> entities) {
@@ -71,38 +85,72 @@ class ThumbnailService {
   }
 
   /// Extracts a single video frame via media_kit's MPV engine.
-  /// Handles codecs (VP9, HEVC, AV1) that Android's native MediaMetadataRetriever cannot decode.
+  /// Handles exotic codecs and containers (VP9, HEVC 10-bit, AV1, MKV, WebM, AVI, FLV, TS)
+  /// that Android's native MediaMetadataRetriever cannot decode.
   Future<Uint8List?> _extractFrameViaMpv(String filePath) async {
     final player = Player();
     try {
       if (player.platform is NativePlayer) {
         final native = player.platform as NativePlayer;
-        await native.setProperty('vo', 'null'); // no video output
-        await native.setProperty('ao', 'null'); // no audio output
-        await native.setProperty('pause', 'yes');
-        await native.setProperty('video-timing-offset', '0');
-      }
-
-      await player.open(Media(filePath), play: false);
-      // Seek to 1 second for a representative frame
-      await player.seek(const Duration(seconds: 1));
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      if (player.platform is NativePlayer) {
-        final native = player.platform as NativePlayer;
         final dir = await _getCacheDirectory();
-        final tmpPath = p.join(dir.path, 'mpv_frame_${filePath.hashCode.abs()}.jpg');
-        await native.setProperty('screenshot-format', 'jpg');
-        await native.setProperty('screenshot-jpeg-quality', '80');
-        await native.command(['screenshot-to-file', tmpPath, 'video']);
+        final outDir =
+            Directory(p.join(dir.path, 'mpv_tmp_${filePath.hashCode.abs()}'));
+        if (!await outDir.exists()) {
+          await outDir.create(recursive: true);
+        }
 
-        await Future.delayed(const Duration(milliseconds: 200));
-        final tmpFile = File(tmpPath);
-        if (await tmpFile.exists()) {
-          final bytes = await tmpFile.readAsBytes();
-          await tmpFile.delete();
+        // Configure headless image extraction via MPV's image video-out driver
+        await native.setProperty('ao', 'null');
+        await native.setProperty('vo', 'image');
+        await native.setProperty('vo-image-format', 'jpg');
+        await native.setProperty('vo-image-jpeg-quality', '80');
+        await native.setProperty('vo-image-outdir', outDir.path);
+        await native.setProperty('frames', '1');
+        await native.setProperty('vf',
+            'scale=256:256:force_original_aspect_ratio=decrease:force_divisible_by=2');
+        await native.setProperty('hwdec', 'auto-copy');
+
+        await player.open(Media(filePath), play: true);
+
+        // Wait up to 1.5 seconds for the single frame to be written
+        File? generated;
+        for (int i = 0; i < 15; i++) {
+          await Future.delayed(const Duration(milliseconds: 100));
+          if (!await outDir.exists()) break;
+          final files = outDir.listSync();
+          for (final f in files) {
+            if (f is File &&
+                (f.path.endsWith('.jpg') || f.path.endsWith('.jpeg'))) {
+              generated = f;
+              break;
+            }
+          }
+          if (generated != null) break;
+        }
+
+        if (generated != null && await generated.exists()) {
+          final bytes = await generated.readAsBytes();
+          try {
+            await outDir.delete(recursive: true);
+          } catch (_) {}
           if (bytes.isNotEmpty) return bytes;
         }
+
+        // Fallback: try player.screenshot
+        try {
+          final screenshotBytes =
+              await player.screenshot(format: 'image/jpeg');
+          if (screenshotBytes != null && screenshotBytes.isNotEmpty) {
+            try {
+              await outDir.delete(recursive: true);
+            } catch (_) {}
+            return screenshotBytes;
+          }
+        } catch (_) {}
+
+        try {
+          await outDir.delete(recursive: true);
+        } catch (_) {}
       }
       return null;
     } catch (e) {
@@ -130,6 +178,7 @@ class ThumbnailService {
       await dir.create(recursive: true);
     }
     _cacheDir = dir;
+    _cacheDirPath = dir.path;
     return dir;
   }
 
@@ -158,6 +207,15 @@ class ThumbnailService {
     final inFlight = _inFlight[assetId];
     if (inFlight != null) return inFlight.future;
 
+    // 3. Fast persistent disk cache lookup (SKIPS the generator queue entirely!)
+    final diskFile = getCachedFile(assetId);
+    if (diskFile != null) {
+      final completer = Completer<Uint8List?>();
+      _inFlight[assetId] = completer;
+      _readDiskCacheFile(diskFile, assetId, completer);
+      return completer.future;
+    }
+
     final completer = Completer<Uint8List?>();
     _inFlight[assetId] = completer;
     _queue.add(_ThumbnailRequest(
@@ -168,6 +226,28 @@ class ThumbnailService {
     ));
     _processQueue();
     return completer.future;
+  }
+
+  void _readDiskCacheFile(
+    File file,
+    String assetId,
+    Completer<Uint8List?> completer,
+  ) async {
+    try {
+      final bytes = await file.readAsBytes();
+      if (bytes.isNotEmpty) {
+        _putInMemory(assetId, bytes);
+        _inFlight.remove(assetId);
+        completer.complete(bytes);
+        return;
+      }
+    } catch (_) {}
+    _inFlight.remove(assetId);
+    final fallbackCompleter = Completer<Uint8List?>();
+    _inFlight[assetId] = fallbackCompleter;
+    _queue.add(_ThumbnailRequest(assetId, fallbackCompleter));
+    _processQueue();
+    completer.complete(await fallbackCompleter.future);
   }
 
   void _processQueue() {
@@ -221,12 +301,21 @@ class ThumbnailService {
 
     try {
       if (isVideo) {
-        // 1. If we have a file path, directly extract video thumbnail using native extractor!
-        // This takes ~15ms and NEVER triggers photo_manager scoped-cache copy!
-        if (req.filePath != null && req.filePath!.isNotEmpty) {
+        String? targetPath = req.filePath;
+        if (targetPath == null || targetPath.isEmpty) {
+          final entity =
+              _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
+          if (entity != null) {
+            final f = await entity.file ?? await entity.originFile;
+            targetPath = f?.path;
+          }
+        }
+
+        // 1. Direct native extractor (fast MediaStore cache + MediaMetadataRetriever for 4K/2K/1080p, HEVC, VP9)
+        if (targetPath != null && targetPath.isNotEmpty) {
           try {
-            bytes = await _extractNativeVideoThumbnail(req.filePath!)
-                .timeout(const Duration(seconds: 4), onTimeout: () => null);
+            bytes = await _extractNativeVideoThumbnail(targetPath)
+                .timeout(const Duration(seconds: 6), onTimeout: () => null);
           } catch (_) {}
         }
 
@@ -247,10 +336,13 @@ class ThumbnailService {
         }
 
         // 3. Last resort: use media_kit (MPV/FFmpeg) to extract a single frame.
-        //    This handles VP9, WebM, HEVC that Android's MediaMetadataRetriever can't decode.
-        if ((bytes == null || bytes.isEmpty) && req.filePath != null) {
+        //    Handles exotic formats/codecs (MKV, WebM, AVI, FLV, TS, VP9, AV1, HEVC 10-bit)
+        if ((bytes == null || bytes.isEmpty) &&
+            targetPath != null &&
+            targetPath.isNotEmpty) {
           try {
-            bytes = await _extractFrameViaMpv(req.filePath!);
+            bytes = await _extractFrameViaMpv(targetPath)
+                .timeout(const Duration(seconds: 5), onTimeout: () => null);
           } catch (_) {}
         }
       } else {
@@ -308,8 +400,15 @@ class ThumbnailService {
 
   void _saveToDisk(String assetId, Uint8List bytes) async {
     try {
-      final file = await _fileForAsset(assetId);
-      await file.writeAsBytes(bytes, flush: true);
+      final dir = await _getCacheDirectory();
+      final targetPath = p.join(dir.path, _cacheFileName(assetId));
+      final targetFile = File(targetPath);
+      final tmpFile = File('$targetPath.tmp');
+      await tmpFile.writeAsBytes(bytes, flush: true);
+      if (await targetFile.exists()) {
+        await targetFile.delete();
+      }
+      await tmpFile.rename(targetPath);
     } catch (e) {
       debugPrint('[ThumbnailService] Failed to persist thumbnail $assetId: $e');
     }

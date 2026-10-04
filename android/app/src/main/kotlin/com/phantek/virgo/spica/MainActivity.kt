@@ -116,68 +116,151 @@ class MainActivity : FlutterActivity() {
 
         var bitmap: android.graphics.Bitmap? = null
 
-        // 1. Android Q+ (API 29+) ThumbnailUtils
+        // 1. Android Q+ (API 29+) MediaStore contentResolver.loadThumbnail
+        // Fast system-level cache that handles 4K, 2K, 1080p, HEVC, VP9, and all MediaStore indexed formats
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
-                bitmap = android.media.ThumbnailUtils.createVideoThumbnail(
-                    file,
-                    android.util.Size(targetSize, targetSize),
+                val projection = arrayOf(
+                    android.provider.MediaStore.Video.Media._ID,
+                    android.provider.MediaStore.Video.Media.WIDTH,
+                    android.provider.MediaStore.Video.Media.HEIGHT
+                )
+                val cursor = contentResolver.query(
+                    android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                    projection,
+                    "${android.provider.MediaStore.Video.Media.DATA} = ?",
+                    arrayOf(path),
                     null
                 )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val id = it.getLong(it.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media._ID))
+                        val wIdx = it.getColumnIndex(android.provider.MediaStore.Video.Media.WIDTH)
+                        val hIdx = it.getColumnIndex(android.provider.MediaStore.Video.Media.HEIGHT)
+                        val mW = if (wIdx >= 0) it.getInt(wIdx) else 0
+                        val mH = if (hIdx >= 0) it.getInt(hIdx) else 0
+
+                        val reqSize = if (mW > 0 && mH > 0) {
+                            val maxDim = mW.coerceAtLeast(mH)
+                            val scale = if (maxDim > targetSize) targetSize.toFloat() / maxDim.toFloat() else 1f
+                            val w = (((mW * scale).toInt() / 2) * 2).coerceAtLeast(2)
+                            val h = (((mH * scale).toInt() / 2) * 2).coerceAtLeast(2)
+                            android.util.Size(w, h)
+                        } else {
+                            android.util.Size(targetSize, targetSize)
+                        }
+
+                        val uri = android.content.ContentUris.withAppendedId(
+                            android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                            id
+                        )
+                        bitmap = contentResolver.loadThumbnail(uri, reqSize, null)
+                    }
+                }
             } catch (_: Throwable) {}
         }
 
-        // 2. MediaMetadataRetriever directly on file descriptor or path (robust for MKV, MOV, WebM, MP4)
+        // 2. Direct MediaMetadataRetriever (handles MKV, WebM, MOV, MP4, 3GP, H.265/HEVC, VP9, H.264, 2K/4K)
         if (bitmap == null) {
             val retriever = android.media.MediaMetadataRetriever()
+            var fis: java.io.FileInputStream? = null
             try {
-                var set = false
                 try {
-                    val fis = java.io.FileInputStream(file)
+                    fis = java.io.FileInputStream(file)
                     retriever.setDataSource(fis.fd)
-                    fis.close()
-                    set = true
-                } catch (_: Throwable) {}
-
-                if (!set) {
+                } catch (_: Throwable) {
                     retriever.setDataSource(path)
                 }
 
-                bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                    retriever.getScaledFrameAtTime(
-                        1000000L,
-                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        targetSize,
-                        targetSize
-                    ) ?: retriever.getScaledFrameAtTime(
-                        0L,
-                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        targetSize,
-                        targetSize
-                    ) ?: retriever.getScaledFrameAtTime(
-                        -1L,
-                        android.media.MediaMetadataRetriever.OPTION_CLOSEST,
-                        targetSize,
-                        targetSize
-                    ) ?: retriever.frameAtTime
+                // Extract video dimensions and orientation
+                val widthStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                val heightStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                val rotationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+                val origW = widthStr?.toIntOrNull() ?: 0
+                val origH = heightStr?.toIntOrNull() ?: 0
+                val rotation = rotationStr?.toIntOrNull() ?: 0
+
+                // Proportional dimensions strictly matching original aspect ratio (never stretched into square)
+                val (dstW, dstH) = if (origW > 0 && origH > 0) {
+                    val maxDim = origW.coerceAtLeast(origH)
+                    val scale = if (maxDim > targetSize) targetSize.toFloat() / maxDim.toFloat() else 1f
+                    val w = ((origW * scale).toInt() / 2) * 2
+                    val h = ((origH * scale).toInt() / 2) * 2
+                    Pair(w.coerceAtLeast(2), h.coerceAtLeast(2))
                 } else {
-                    retriever.getFrameAtTime(
-                        1000000L,
-                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-                    ) ?: retriever.getFrameAtTime(
-                        0L,
-                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-                    ) ?: retriever.frameAtTime
+                    Pair(0, 0)
+                }
+
+                val timePoints = longArrayOf(-1L, 1000000L, 0L, 500000L)
+                val syncOptions = intArrayOf(
+                    android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                    android.media.MediaMetadataRetriever.OPTION_CLOSEST
+                )
+
+                // 3a. Hardware-scaled frame decoding with exact aspect ratio (avoids stretching and large 4K/2K allocations)
+                if (dstW > 0 && dstH > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    for (t in timePoints) {
+                        for (opt in syncOptions) {
+                            try {
+                                bitmap = retriever.getScaledFrameAtTime(t, opt, dstW, dstH)
+                                if (bitmap != null) break
+                            } catch (_: Throwable) {}
+                        }
+                        if (bitmap != null) break
+                    }
+                }
+
+                // 3b. Fallback: RGB_565 (50% less RAM) for Android P+
+                if (bitmap == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    try {
+                        val params = android.media.MediaMetadataRetriever.BitmapParams()
+                        params.preferredConfig = android.graphics.Bitmap.Config.RGB_565
+                        for (t in timePoints) {
+                            for (opt in syncOptions) {
+                                try {
+                                    bitmap = retriever.getFrameAtTime(t, opt, params)
+                                    if (bitmap != null) break
+                                } catch (_: Throwable) {}
+                            }
+                            if (bitmap != null) break
+                        }
+                    } catch (_: Throwable) {}
+                }
+
+                // 3c. Fallback: standard getFrameAtTime (natural aspect ratio)
+                if (bitmap == null) {
+                    for (t in timePoints) {
+                        for (opt in syncOptions) {
+                            try {
+                                bitmap = retriever.getFrameAtTime(t, opt)
+                                if (bitmap != null) break
+                            } catch (_: Throwable) {}
+                        }
+                        if (bitmap != null) break
+                    }
+                }
+
+                // Handle camera/recorded video rotation (90, 180, 270)
+                if (bitmap != null && rotation != 0) {
+                    try {
+                        val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
+                        val rotated = android.graphics.Bitmap.createBitmap(
+                            bitmap!!, 0, 0, bitmap!!.width, bitmap!!.height, matrix, true
+                        )
+                        if (rotated != bitmap) {
+                            bitmap?.recycle()
+                            bitmap = rotated
+                        }
+                    } catch (_: Throwable) {}
                 }
             } catch (_: Throwable) {
             } finally {
-                try {
-                    retriever.release()
-                } catch (_: Throwable) {}
+                try { retriever.release() } catch (_: Throwable) {}
+                try { fis?.close() } catch (_: Throwable) {}
             }
         }
 
-        // 3. Legacy ThumbnailUtils (API < 29)
+        // 3. Legacy ThumbnailUtils fallback (API < 29)
         if (bitmap == null) {
             try {
                 bitmap = android.media.ThumbnailUtils.createVideoThumbnail(
@@ -189,19 +272,25 @@ class MainActivity : FlutterActivity() {
 
         if (bitmap == null) return null
 
-        // Scale if larger than targetSize
-        val scaled = if (bitmap.width > targetSize || bitmap.height > targetSize) {
-            val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
+        // Scale down if larger than targetSize and recycle original bitmap to save memory
+        val scaled = if (bitmap!!.width > targetSize || bitmap!!.height > targetSize) {
+            val ratio = bitmap!!.width.toFloat() / bitmap!!.height.toFloat()
             val w = if (ratio >= 1f) targetSize else (targetSize * ratio).toInt().coerceAtLeast(1)
             val h = if (ratio >= 1f) (targetSize / ratio).toInt().coerceAtLeast(1) else targetSize
-            android.graphics.Bitmap.createScaledBitmap(bitmap, w, h, true)
+            val sc = android.graphics.Bitmap.createScaledBitmap(bitmap!!, w, h, true)
+            if (sc != bitmap) {
+                bitmap?.recycle()
+            }
+            sc
         } else {
-            bitmap
+            bitmap!!
         }
 
         val bos = java.io.ByteArrayOutputStream()
         scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, bos)
-        return bos.toByteArray()
+        scaled.recycle()
+        val resultBytes = bos.toByteArray()
+        return if (resultBytes.isNotEmpty()) resultBytes else null
     }
 
     private fun installApk(apkPath: String) {
