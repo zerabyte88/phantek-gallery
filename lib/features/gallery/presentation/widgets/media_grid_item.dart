@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,6 +38,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
     _thumbFuture = ThumbnailService.instance.getThumbnail(
       widget.item.id,
       filePath: widget.item.path,
+      isVideo: widget.item.isVideo,
     );
   }
 
@@ -47,6 +49,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
       _thumbFuture = ThumbnailService.instance.getThumbnail(
         widget.item.id,
         filePath: widget.item.path,
+        isVideo: widget.item.isVideo,
       );
     }
   }
@@ -65,18 +68,33 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
           FutureBuilder<Uint8List?>(
             future: _thumbFuture,
             builder: (_, snap) {
-              if (snap.connectionState != ConnectionState.done ||
-                  snap.data == null) {
-                return ColoredBox(
-                  color: cs.surfaceContainerHighest,
-                  child: const Icon(Icons.image_not_supported_outlined,
-                      size: 28, color: Colors.white38),
+              if (snap.data != null) {
+                return Image.memory(
+                  snap.data!,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
                 );
               }
-              return Image.memory(
-                snap.data!,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
+              if (snap.connectionState == ConnectionState.done && !widget.item.isVideo) {
+                final file = File(widget.item.path);
+                if (file.existsSync()) {
+                  return Image.file(
+                    file,
+                    cacheWidth: 360,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    errorBuilder: (_, __, ___) => ColoredBox(
+                      color: cs.surfaceContainerHighest,
+                      child: const Icon(Icons.image_not_supported_outlined,
+                          size: 28, color: Colors.white38),
+                    ),
+                  );
+                }
+              }
+              return ColoredBox(
+                color: cs.surfaceContainerHighest,
+                child: const Icon(Icons.image_not_supported_outlined,
+                    size: 28, color: Colors.white38),
               );
             },
           ),

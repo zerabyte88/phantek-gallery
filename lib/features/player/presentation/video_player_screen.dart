@@ -116,12 +116,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   void _precacheAdjacentVideos(int index) {
-    for (final offset in const [-2, -1, 1, 2]) {
+    for (final offset in const [-1, 1]) {
       final target = index + offset;
       if (target >= 0 && target < _videos.length) {
         ThumbnailService.instance.getThumbnail(
           _videos[target].id,
           filePath: _videos[target].path,
+          isVideo: true,
         );
       }
     }
@@ -131,30 +132,29 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     final settings = ref.read(settingsNotifierProvider);
     _player = Player(
       configuration: const PlayerConfiguration(
-        // Hardware acceleration controlled via settings.
-        // media_kit uses platform HW accel by default on Android.
-        // Disable by forcing software renderer when setting is off.
-        bufferSize: 64 * 1024 * 1024, // 64 MB buffer
+        bufferSize: 32 * 1024 * 1024, // 32 MB buffer
         logLevel: MPVLogLevel.warn,
       ),
     );
     _controller = VideoController(
       _player,
       configuration: VideoControllerConfiguration(
-        // enableHardwareAcceleration defaults to true on Android.
-        // We propagate the user preference.
         enableHardwareAcceleration: settings.hardwareAcceleration,
-        hwdec: settings.hardwareAcceleration ? 'auto-safe' : 'no',
+        hwdec: settings.hardwareAcceleration ? 'mediacodec' : 'no',
       ),
     );
 
-    // Apply robust codec configuration:
-    // H.264 and HEVC (H.265) utilize Android MediaCodec hardware decoding.
-    // VP9 and other software-reliable codecs fall back to FFmpeg's robust decoder on Android,
-    // eliminating MediaCodec OMX/C2 buffer-copy crashes and black screens on VP9.
-    if (_player.platform is NativePlayer && settings.hardwareAcceleration) {
+    // Apply hardware acceleration for all codecs (VP9, HEVC, H.264, MPEG4, AV1)
+    // and optimize demuxer for high-bitrate 2K/WebM containers on mobile hardware
+    if (_player.platform is NativePlayer) {
       final native = _player.platform as NativePlayer;
-      native.setProperty('hwdec-codecs', 'h264,hevc,mpeg4,mpeg2video,vp8,av1');
+      if (settings.hardwareAcceleration) {
+        native.setProperty('hwdec-codecs', 'all');
+      }
+      native.setProperty('demuxer-lavf-buffersize', '33554432');
+      native.setProperty('demuxer-lavf-probesize', '33554432');
+      native.setProperty('demuxer-max-bytes', '67108864');
+      native.setProperty('demuxer-readahead-secs', '10');
     }
 
     _player.stream.error.listen((err) {
@@ -191,7 +191,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     final settings = ref.read(settingsNotifierProvider);
     if (_player.platform is NativePlayer && settings.hardwareAcceleration) {
       final native = _player.platform as NativePlayer;
-      native.setProperty('hwdec-codecs', 'h264,hevc,mpeg4,mpeg2video,vp8,av1');
+      native.setProperty('hwdec-codecs', 'all');
     }
 
     // Never auto-play on swipe — user decides whether to play

@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-059669?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Platform" />
   <img src="https://img.shields.io/badge/FLUTTER-3.47+-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
   <img src="https://img.shields.io/badge/APPLICATION_ID-com.phantek.virgo.spica-6366F1?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.1-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.2-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" /></a>
 </p>
 
@@ -22,15 +22,14 @@ Modern mobile galleries often require persistent network connections, cloud sync
 
 ---
 
-## What's New in v1.3.1
+## What's New in v1.3.2
 
-- 🎬 **Silky-Smooth Video Swipe Transitions**: Eliminates stutter and black flickers when swiping between videos by deferring heavy player initialization until page scroll settles, keeping instant thumbnail placeholders visible beneath playback surfaces.
-- 🔍 **Interactive Video Pinch-To-Zoom & Pan**: Full 1.0x–5.0x zoom and pan across all video playback states (before starting, while playing at 60 FPS, and during pause). Includes animated floating scale indicator with one-tap reset and full gesture isolation against swiping.
-- 🖼️ **Polished Photo Viewer Gestures**: Auto-hides top and bottom toolbars during pinch-to-zoom and restores them smoothly upon return. Multi-touch pointer tracking eliminates accidental pull-to-dismiss exits while zooming.
-- 📦 **Expanded Format & Codec Support**: Universal support for `.mkv`, `.mov`, `.webm`, `.mp4`, `.avi`, and `.3gp`. Intelligent decoder routing utilizes hardware acceleration for H.264 & HEVC (H.265) and routes VP9 to robust FFmpeg software decoding to prevent Android OMX crashes.
-- ⚡ **Multi-Tier Native Thumbnail Engine**: Direct file-path frame extraction via native Android Stagefright and `ThumbnailUtils`, ensuring instant video thumbnails for MKV, MOV, and WebM files even when unindexed by MediaStore.
-- 🎨 **Dynamic Filter & Sort Theming**: Sort bottom sheet indicators and "Restore defaults" action dynamically adapt to active theme accents (vibrant Sakura Pink `#FF7597` on AMOLED Sakura, primary accents on AMOLED/Dark/Light).
-- 🧹 **UI Streamlining**: Removed redundant cache labels and cleaned up the developer information card in Settings.
+- ⚡ **Concurrent Multi-Worker Thumbnail Engine**: Fixed thumbnail loading bottleneck where only a few items displayed. Implemented a 4-worker concurrent queue pool with in-flight deduplication, direct native frame extraction without copying heavy files, and instant memory-efficient disk fallbacks for photos to guarantee zero missing thumbnails.
+- 🚀 **Lag-Free 2K Hardware Video Playback**: Fully resolved playback stutter and dropped frames on 2K/4K videos (specifically optimized for mid-range chipsets like Snapdragon 685 / Adreno 610) by enforcing zero-copy `hwdec: mediacodec` direct hardware Surface rendering, bypassing high-overhead RAM buffer copies.
+- 🎞️ **Universal Hardware Acceleration for VP9 & WebM**: Enabled full hardware decoding (`hwdec-codecs: all`) across all supported video formats (WebM, MKV, MP4, MOV) and codecs (VP9, HEVC/H.265, AVC/H.264), backed by tuned 32MB demuxer buffers and lean neighbor-only player preloading.
+- 🔍 **Interactive Media Zoom & Transition Polish**: Complete pinch-to-zoom support (1.0x–5.0x) for photos and videos across all playback states, auto-hiding UI chrome during zoom, and gesture isolation preventing accidental pull-down dismissals.
+- 🎨 **Dynamic Filter & Sort Theming**: Sort bottom sheet indicators and "Restore defaults" action dynamically adapt to active theme accents (Sakura Pink `#FF7597` on AMOLED Sakura, primary accents on AMOLED/Dark/Light).
+- 🧹 **UI Streamlining**: Cleaned up the developer information card and removed redundant cache labels.
 
 ---
 
@@ -54,8 +53,8 @@ Modern mobile galleries often require persistent network connections, cloud sync
 
 ### Hardware-Accelerated Video Playback & Advanced Controls
 - **MediaKit & MPV Engine**: Native MPV and FFmpeg integration for ultra-smooth playback of MKV, MP4, WebM, and high-bitrate video streams up to 4K 60FPS.
-- **Universal Container & Codec Support**: Native playback and scanning for MKV, MOV, WebM, MP4, AVI, and 3GP containers. Intelligent decoder routing: hardware-accelerated MediaCodec for H.264 and HEVC (H.265), with robust FFmpeg software decoding for VP9 to prevent Android OMX buffer-copy crashes.
-- **Native Multi-Tier Video Thumbnail Engine**: Native background thumbnail extraction leveraging Android Q+ `ThumbnailUtils` and direct `MediaMetadataRetriever` file-path parsing, ensuring instant thumbnail rendering for non-MP4 formats (MKV, MOV, WebM) even when Android MediaStore has unindexed or incomplete MIME data.
+- **Universal Container & Codec Support**: Native playback and scanning for MKV, MOV, WebM, MP4, AVI, and 3GP containers. Direct zero-copy MediaCodec hardware Surface rendering across all codecs (`hwdec-codecs: all`), ensuring stutter-free 2K/4K playback on mid-range SoCs like Snapdragon 685 without RAM copy bottlenecks.
+- **Concurrent Multi-Worker Thumbnail Engine**: High-throughput 4-worker concurrent background extraction engine with in-flight deduplication, direct native frame extraction via `ThumbnailUtils` and `MediaMetadataRetriever` (no full-file copies), and instant downsampling fallbacks for seamless photo and video grid rendering.
 - **Lag-Free Slider Scrubbing**: Coalesced seek execution updates timestamps smoothly in real-time without flooding decoder pipelines, eliminating audio pops and stutter.
 - **Silky-Smooth Video Swipe Transitions**: Auto-pauses active playback on swipe to free up 100% GPU and decoder bandwidth, defers heavy player initialization until the page settles, and keeps synchronous thumbnail layers beneath the video surface to completely eliminate black flickers and dropped frames.
 - **Aspect-Ratio-Aware Smart Fullscreen**: Portrait/vertical videos (Reels, TikTok, Shorts) expand into immersive full portrait without shrinking, while widescreen videos automatically rotate to landscape.
