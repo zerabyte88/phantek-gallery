@@ -79,7 +79,7 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        val executor = java.util.concurrent.Executors.newFixedThreadPool(2)
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(4)
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -127,11 +127,22 @@ class MainActivity : FlutterActivity() {
             } catch (_: Throwable) {}
         }
 
-        // 2. MediaMetadataRetriever directly on file path (robust for MKV, MOV, WebM, MP4)
+        // 2. MediaMetadataRetriever directly on file descriptor or path (robust for MKV, MOV, WebM, MP4)
         if (bitmap == null) {
             val retriever = android.media.MediaMetadataRetriever()
             try {
-                retriever.setDataSource(path)
+                var set = false
+                try {
+                    val fis = java.io.FileInputStream(file)
+                    retriever.setDataSource(fis.fd)
+                    fis.close()
+                    set = true
+                } catch (_: Throwable) {}
+
+                if (!set) {
+                    retriever.setDataSource(path)
+                }
+
                 bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                     retriever.getScaledFrameAtTime(
                         1000000L,
@@ -143,10 +154,18 @@ class MainActivity : FlutterActivity() {
                         android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                         targetSize,
                         targetSize
+                    ) ?: retriever.getScaledFrameAtTime(
+                        -1L,
+                        android.media.MediaMetadataRetriever.OPTION_CLOSEST,
+                        targetSize,
+                        targetSize
                     ) ?: retriever.frameAtTime
                 } else {
                     retriever.getFrameAtTime(
                         1000000L,
+                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                    ) ?: retriever.getFrameAtTime(
+                        0L,
                         android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
                     ) ?: retriever.frameAtTime
                 }

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../../core/models/album.dart';
@@ -28,6 +29,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
     _thumbFuture = ThumbnailService.instance.getThumbnail(
       widget.album.coverItem.id,
       filePath: widget.album.coverItem.path,
+      isVideo: widget.album.coverItem.isVideo,
     );
   }
 
@@ -38,6 +40,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
       _thumbFuture = ThumbnailService.instance.getThumbnail(
         widget.album.coverItem.id,
         filePath: widget.album.coverItem.path,
+        isVideo: widget.album.coverItem.isVideo,
       );
     }
   }
@@ -62,21 +65,40 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
                   FutureBuilder<Uint8List?>(
                     future: _thumbFuture,
                     builder: (_, snap) {
-                      if (snap.connectionState != ConnectionState.done ||
-                          snap.data == null) {
-                        return ColoredBox(
-                          color: cs.surfaceContainerHighest,
-                          child: const Icon(
-                            Icons.photo_library_outlined,
-                            size: 32,
-                            color: Colors.white38,
-                          ),
+                      if (snap.data != null) {
+                        return Image.memory(
+                          snap.data!,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
                         );
                       }
-                      return Image.memory(
-                        snap.data!,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
+                      if (snap.connectionState == ConnectionState.done &&
+                          !widget.album.coverItem.isVideo) {
+                        final file = File(widget.album.coverItem.path);
+                        if (file.existsSync()) {
+                          return Image.file(
+                            file,
+                            cacheWidth: 360,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                            errorBuilder: (_, __, ___) => ColoredBox(
+                              color: cs.surfaceContainerHighest,
+                              child: const Icon(
+                                Icons.photo_library_outlined,
+                                size: 32,
+                                color: Colors.white38,
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                      return ColoredBox(
+                        color: cs.surfaceContainerHighest,
+                        child: const Icon(
+                          Icons.photo_library_outlined,
+                          size: 32,
+                          color: Colors.white38,
+                        ),
                       );
                     },
                   ),

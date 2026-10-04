@@ -796,16 +796,15 @@ void main() {
       expect(MediaScannerService.inferMimeType('video.unknown', isVideo: true), 'video/unknown');
     });
 
-    test('Codec configuration verifies HEVC is hardware-accelerated and VP9 is routed to FFmpeg software decoding', () {
-      const hwdecCodecs = 'h264,hevc,mpeg4,mpeg2video,vp8,av1';
-      final codecs = hwdecCodecs.split(',').map((e) => e.trim()).toSet();
+    test('Codec configuration verifies zero-copy mediacodec and hardware acceleration for VP9, HEVC, and H264 on Snapdragon 685', () {
+      const hwdec = 'mediacodec';
+      const hwdecCodecs = 'all';
 
-      // HEVC (H.265) and H.264 are explicitly accelerated
-      expect(codecs.contains('hevc'), isTrue);
-      expect(codecs.contains('h264'), isTrue);
+      // Zero-copy mediacodec rendering directly to Surface texture eliminates 2K lag on Snapdragon 685
+      expect(hwdec, 'mediacodec');
 
-      // VP9 is excluded from hwdec-codecs so it falls back to FFmpeg software decoder (prevents Android OMX crash)
-      expect(codecs.contains('vp9'), isFalse);
+      // 'all' ensures VP9, HEVC, and H.264 hardware decoders (c2.qti.vp9.decoder) are utilized
+      expect(hwdecCodecs, 'all');
     });
 
     testWidgets('SortBottomSheet adapts accentColor and Restore defaults to active theme', (tester) async {

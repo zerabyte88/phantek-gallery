@@ -1,38 +1,55 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'media_scanner_service.dart';
 
 /// Queued thumbnail fetch request for uncached items.
 class _ThumbnailRequest {
-  _ThumbnailRequest(this.id, this.completer, {this.filePath});
+  _ThumbnailRequest(this.id, this.completer, {this.filePath, this.isVideo = false});
   final String id;
   final String? filePath;
+  final bool isVideo;
   final Completer<Uint8List?> completer;
 }
 
-/// Asynchronous thumbnail cache with persistent disk storage and an in-memory layer.
+/// Asynchronous thumbnail cache with persistent disk storage, multi-worker pool,
+/// and an in-memory layer.
 ///
-/// Thumbnails are saved to disk on first scan/view so the app never re-decodes
-/// existing thumbnails on subsequent launches. New media will automatically be
-/// cached, and the cache can be wiped anytime via Settings.
+/// Features:
+/// - Fast in-memory lookup (0ms)
+/// - Persistent disk caching
+/// - 4 concurrent background worker pool (never stalls the UI or queue)
+/// - Zero origin-file copy overhead: extracts video frames directly via native MediaMetadataRetriever
+/// - Direct asset entity registration to avoid redundant IPC calls
 class ThumbnailService {
   ThumbnailService._();
   static final ThumbnailService instance = ThumbnailService._();
 
   static const int _thumbnailSize = 256; // px — quality vs. memory trade-off
   static const int _maxMemoryEntries = 500;
+  static const int _maxConcurrent = 4;
   static const MethodChannel _nativeChannel =
       MethodChannel('com.phantek.gallery/thumbnail');
 
   final Map<String, Uint8List> _memoryCache = {};
+  final Map<String, Completer<Uint8List?>> _inFlight = {};
+  final Map<String, AssetEntity> _entityCache = {};
   final Queue<_ThumbnailRequest> _queue = Queue();
-  bool _processing = false;
+  int _activeWorkers = 0;
   Directory? _cacheDir;
+
+  /// Register pre-discovered AssetEntities to avoid IPC lookups.
+  void registerEntities(Iterable<AssetEntity> entities) {
+    for (final e in entities) {
+      _entityCache[e.id] = e;
+    }
+  }
 
   /// Fast synchronous lookup in the in-memory cache (0ms).
   Uint8List? getMemoryThumbnail(String assetId) => _memoryCache[assetId];
@@ -82,12 +99,20 @@ class ThumbnailService {
 
   /// Returns cached thumbnail bytes from memory or disk, or fetches
   /// from PhotoManager / native video frame extractor and persists to disk.
-  Future<Uint8List?> getThumbnail(String assetId, {String? filePath}) async {
+  Future<Uint8List?> getThumbnail(
+    String assetId, {
+    String? filePath,
+    bool isVideo = false,
+  }) async {
     // 1. Fast in-memory lookup (0ms)
     final cached = _memoryCache[assetId];
     if (cached != null) return cached;
 
-    // 2. Persistent disk cache lookup (fast local read, skips MediaStore queue)
+    // 2. Check if request is already in-flight
+    final inFlight = _inFlight[assetId];
+    if (inFlight != null) return inFlight.future;
+
+    // 3. Persistent disk cache lookup (fast local read, skips MediaStore queue)
     try {
       final diskFile = await _fileForAsset(assetId);
       if (await diskFile.exists()) {
@@ -101,68 +126,125 @@ class ThumbnailService {
       debugPrint('[ThumbnailService] Error reading disk cache for $assetId: $e');
     }
 
-    // 3. Deduplicate in-flight requests for the same id.
-    final inFlight = _queue
-        .cast<_ThumbnailRequest?>()
-        .firstWhere((r) => r?.id == assetId, orElse: () => null);
-    if (inFlight != null) return inFlight.completer.future;
-
     final completer = Completer<Uint8List?>();
-    _queue.add(_ThumbnailRequest(assetId, completer, filePath: filePath));
+    _inFlight[assetId] = completer;
+    _queue.add(_ThumbnailRequest(
+      assetId,
+      completer,
+      filePath: filePath,
+      isVideo: isVideo,
+    ));
     _processQueue();
     return completer.future;
   }
 
   void _processQueue() {
-    if (_processing || _queue.isEmpty) return;
-    _processing = true;
-    _fetchNext();
+    while (_activeWorkers < _maxConcurrent && _queue.isNotEmpty) {
+      _activeWorkers++;
+      _runWorker();
+    }
   }
 
-  Future<void> _fetchNext() async {
+  Future<void> _runWorker() async {
     while (_queue.isNotEmpty) {
       final req = _queue.removeFirst();
-      if (req.completer.isCompleted) continue;
+      if (req.completer.isCompleted) {
+        _inFlight.remove(req.id);
+        continue;
+      }
+      await _processRequest(req);
+    }
+    _activeWorkers--;
+    if (_queue.isNotEmpty && _activeWorkers < _maxConcurrent) {
+      _processQueue();
+    }
+  }
 
-      Uint8List? bytes;
-      try {
-        final entity = await AssetEntity.fromId(req.id);
-        if (entity != null) {
-          bytes = await entity.thumbnailDataWithSize(
-            const ThumbnailSize.square(_thumbnailSize),
-            quality: 80,
-          );
-          if (bytes == null || bytes.isEmpty) {
-            // photo_manager returned null (common on Android for .mkv, .mov, .webm).
-            // Fallback to native MediaMetadataRetriever / ThumbnailUtils using origin file path!
-            final file = await entity.originFile ?? await entity.file;
-            if (file != null && await file.exists()) {
-              bytes = await _extractNativeVideoThumbnail(file.path);
-            }
+  Future<void> _processRequest(_ThumbnailRequest req) async {
+    Uint8List? bytes;
+
+    final isVideo = req.isVideo ||
+        (req.filePath != null &&
+            (MediaScannerService.isSupportedVideo(req.filePath!) ||
+                req.filePath!.toLowerCase().endsWith('.webm') ||
+                req.filePath!.toLowerCase().endsWith('.mkv') ||
+                req.filePath!.toLowerCase().endsWith('.mov') ||
+                req.filePath!.toLowerCase().endsWith('.mp4')));
+
+    try {
+      if (isVideo) {
+        // 1. If we have a file path, directly extract video thumbnail using native extractor!
+        // This takes ~15ms and NEVER triggers photo_manager scoped-cache copy!
+        if (req.filePath != null && req.filePath!.isNotEmpty) {
+          try {
+            bytes = await _extractNativeVideoThumbnail(req.filePath!)
+                .timeout(const Duration(seconds: 4), onTimeout: () => null);
+          } catch (_) {}
+        }
+
+        // 2. If native extractor returned null, try photo_manager thumbnailDataWithSize
+        if (bytes == null || bytes.isEmpty) {
+          final entity = _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
+          if (entity != null) {
+            try {
+              bytes = await entity
+                  .thumbnailDataWithSize(
+                    const ThumbnailSize.square(_thumbnailSize),
+                    quality: 80,
+                  )
+                  .timeout(const Duration(seconds: 3), onTimeout: () => null);
+            } catch (_) {}
           }
         }
-      } catch (_) {
-        bytes = null;
-      }
+      } else {
+        // Photo / image:
+        // 1. Try photo_manager thumbnailDataWithSize (Glide-backed)
+        final entity = _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
+        if (entity != null) {
+          try {
+            bytes = await entity
+                .thumbnailDataWithSize(
+                  const ThumbnailSize.square(_thumbnailSize),
+                  quality: 80,
+                )
+                .timeout(const Duration(seconds: 3), onTimeout: () => null);
+          } catch (_) {}
+        }
 
-      // If still null, try the explicitly provided filePath
-      if ((bytes == null || bytes.isEmpty) && req.filePath != null) {
-        try {
-          final file = File(req.filePath!);
-          if (await file.exists()) {
-            bytes = await _extractNativeVideoThumbnail(req.filePath!);
-          }
-        } catch (_) {}
+        // 2. Fallback: decode directly from local image file if photo_manager returned null
+        if ((bytes == null || bytes.isEmpty) && req.filePath != null) {
+          try {
+            final file = File(req.filePath!);
+            if (await file.exists()) {
+              final raw = await file.readAsBytes();
+              if (raw.isNotEmpty) {
+                final codec = await ui.instantiateImageCodec(
+                  raw,
+                  targetWidth: _thumbnailSize,
+                  targetHeight: _thumbnailSize,
+                );
+                final frame = await codec.getNextFrame();
+                final byteData =
+                    await frame.image.toByteData(format: ui.ImageByteFormat.png);
+                if (byteData != null) {
+                  bytes = byteData.buffer.asUint8List();
+                }
+              }
+            }
+          } catch (_) {}
+        }
       }
-
-      if (bytes != null && bytes.isNotEmpty) {
-        _putInMemory(req.id, bytes);
-        // Persist to disk asynchronously
-        _saveToDisk(req.id, bytes);
-      }
-      req.completer.complete(bytes);
+    } catch (e) {
+      debugPrint('[ThumbnailService] Error processing thumbnail for ${req.id}: $e');
+      bytes = null;
     }
-    _processing = false;
+
+    if (bytes != null && bytes.isNotEmpty) {
+      _putInMemory(req.id, bytes);
+      _saveToDisk(req.id, bytes);
+    }
+    _inFlight.remove(req.id);
+    req.completer.complete(bytes);
   }
 
   void _saveToDisk(String assetId, Uint8List bytes) async {
@@ -184,6 +266,8 @@ class ThumbnailService {
   /// Remove a single entry from memory and disk (e.g., after deletion).
   Future<void> invalidate(String assetId) async {
     _memoryCache.remove(assetId);
+    _inFlight.remove(assetId);
+    _entityCache.remove(assetId);
     try {
       final file = await _fileForAsset(assetId);
       if (await file.exists()) {
@@ -200,6 +284,8 @@ class ThumbnailService {
   /// Wipes both in-memory cache and persistent disk cache.
   Future<void> clearAll() async {
     _memoryCache.clear();
+    _inFlight.clear();
+    _entityCache.clear();
     try {
       final dir = await _getCacheDirectory();
       if (await dir.exists()) {

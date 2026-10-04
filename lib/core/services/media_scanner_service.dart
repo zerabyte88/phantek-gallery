@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 import 'package:photo_manager/photo_manager.dart';
 import '../models/media_item.dart';
+import 'thumbnail_service.dart';
 
 /// Supported video file extensions (MKV, MOV, WebM, MP4, H.265/HEVC, VP9, etc.).
 const _kSupportedVideoExtensions = {
@@ -113,6 +114,9 @@ class MediaScannerService {
     }
 
     final total = assets.length;
+    // Pre-cache entities in ThumbnailService to eliminate expensive IPC fromId calls
+    ThumbnailService.instance.registerEntities(assets);
+
     final results = <MediaItem>[];
     const chunkSize = 30;
 
@@ -139,7 +143,7 @@ class MediaScannerService {
     AssetEntity entity,
     List<String> excludedFolders,
   ) async {
-    final file = await entity.originFile;
+    final file = await entity.file ?? await entity.originFile;
     if (file == null || !await file.exists()) return null;
 
     final path = file.path;
