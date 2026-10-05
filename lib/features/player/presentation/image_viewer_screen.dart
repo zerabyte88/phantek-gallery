@@ -46,6 +46,65 @@ Widget _thumb(String id, BoxFit fit) {
   );
 }
 
+/// Morphing flight shuttle between grid (cover crop) and viewer (contain aspect ratio).
+Widget _buildHeroShuttle({
+  required Animation<double> animation,
+  required HeroFlightDirection flightDirection,
+  required String id,
+  String? path,
+}) {
+  final mem = ThumbnailService.instance.getMemoryThumbnail(id);
+  final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
+  final ImageProvider? p = mem != null
+      ? MemoryImage(mem)
+      : (disk != null
+          ? FileImage(disk)
+          : (path != null ? displayImage(path) : null));
+
+  if (p == null) return const SizedBox.shrink();
+
+  return AnimatedBuilder(
+    animation: animation,
+    builder: (context, _) {
+      final double gridProgress = flightDirection == HeroFlightDirection.pop
+          ? animation.value
+          : (1.0 - animation.value);
+
+      final double coverOpacity = (gridProgress * 1.5 - 0.2).clamp(0.0, 1.0);
+      final double containOpacity = (1.0 - coverOpacity).clamp(0.0, 1.0);
+
+      return ClipRect(
+        clipBehavior: Clip.hardEdge,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (coverOpacity > 0.001)
+              Opacity(
+                opacity: coverOpacity,
+                child: Image(
+                  image: p,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                ),
+              ),
+            if (containOpacity > 0.001)
+              Opacity(
+                opacity: containOpacity,
+                child: Image(
+                  image: p,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                ),
+              ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
 /// Full-screen swipeable image viewer with delete support.
 class ImageViewerScreen extends ConsumerStatefulWidget {
   const ImageViewerScreen({
@@ -418,6 +477,52 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
   }
 
+  void _showMoreOptions(MediaItem item) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_outlined, color: Colors.white),
+                title: const Text('Rename',
+                    style: TextStyle(color: Colors.white, fontSize: 15)),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  final updated =
+                      await showRenameMediaDialog(context, item, ref);
+                  if (updated != null && mounted) {
+                    setState(() {
+                      widget.items[_current] = updated;
+                    });
+                  }
+                },
+              ),
+              ListTile(
+                leading:
+                    const Icon(Icons.wallpaper_outlined, color: Colors.white),
+                title: const Text('Set as wallpaper',
+                    style: TextStyle(color: Colors.white, fontSize: 15)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  ShareService.setAsWallpaper(item.path);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = _currentItem;
@@ -605,8 +710,19 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               child: Hero(
                                 tag: it.id,
                                 transitionOnUserGestures: true,
-                                flightShuttleBuilder: (_, __, ___, ____, _____) =>
-                                    _thumb(it.id, BoxFit.contain),
+                                flightShuttleBuilder: (
+                                  flightContext,
+                                  animation,
+                                  flightDirection,
+                                  fromHeroContext,
+                                  toHeroContext,
+                                ) =>
+                                    _buildHeroShuttle(
+                                  animation: animation,
+                                  flightDirection: flightDirection,
+                                  id: it.id,
+                                  path: it.path,
+                                ),
                                 child: _buildPhotoPage(it),
                               ),
                             ),
@@ -683,62 +799,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               ],
                             ),
                           ),
-                          if (widget.isTrash) ...[
-                            IconButton(
-                              icon: const Icon(Icons.restore,
-                                  color: Colors.white, size: 22),
-                              tooltip: 'Restore',
-                              onPressed: _restoreCurrentItem,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_forever,
-                                  color: Colors.white, size: 22),
-                              tooltip: 'Delete Permanently',
-                              onPressed: _deleteCurrentItem,
-                            ),
-                          ] else ...[
-                            Consumer(
-                              builder: (context, ref, _) {
-                                final isFav = ref.watch(
-                                  settingsNotifierProvider.select(
-                                    (s) => s.favoriteIds.contains(item.id),
-                                  ),
-                                );
-                                return IconButton(
-                                  icon: Icon(
-                                    isFav ? Icons.favorite : Icons.favorite_border,
-                                    color: isFav ? Colors.redAccent : Colors.white,
-                                    size: 22,
-                                  ),
-                                  tooltip: isFav
-                                      ? 'Remove from favorites'
-                                      : 'Add to favorites',
-                                  onPressed: () {
-                                    HapticFeedback.lightImpact();
-                                    final currentFavs = Set<String>.from(
-                                      ref.read(settingsNotifierProvider).favoriteIds,
-                                    );
-                                    if (currentFavs.contains(item.id)) {
-                                      currentFavs.remove(item.id);
-                                    } else {
-                                      currentFavs.add(item.id);
-                                    }
-                                    ref
-                                        .read(settingsNotifierProvider.notifier)
-                                        .update(
-                                          (s) => s.copyWith(favoriteIds: currentFavs.toList()),
-                                        );
-                                  },
-                                );
-                              },
-                            ),
+                          if (!widget.isTrash)
                             IconButton(
                               icon: const Icon(Icons.info_outline,
                                   color: Colors.white, size: 22),
                               tooltip: 'Details',
-                              onPressed: () => showMediaInfoSheet(context, item),
+                              onPressed: () =>
+                                  showMediaInfoSheet(context, item),
                             ),
-                          ],
                         ],
                       ),
                     ),
@@ -784,17 +852,17 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   onTap: _restoreCurrentItem,
                                 ),
                                 _ViewerActionButton(
-                                  icon: const Icon(Icons.delete_forever,
-                                      color: Colors.white, size: 22),
-                                  label: 'Delete',
-                                  onTap: _deleteCurrentItem,
-                                ),
-                                _ViewerActionButton(
                                   icon: const Icon(Icons.info_outline,
                                       color: Colors.white, size: 22),
                                   label: 'Details',
                                   onTap: () =>
                                       showMediaInfoSheet(context, item),
+                                ),
+                                _ViewerActionButton(
+                                  icon: const Icon(Icons.delete_forever,
+                                      color: Colors.white, size: 22),
+                                  label: 'Delete',
+                                  onTap: _deleteCurrentItem,
                                 ),
                               ],
                             )
@@ -809,26 +877,38 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       item.path,
                                       isVideo: false),
                                 ),
-                                _ViewerActionButton(
-                                  icon: const Icon(Icons.edit_outlined,
-                                      color: Colors.white, size: 22),
-                                  label: 'Edit',
-                                  onTap: () async {
-                                    final updated = await showRenameMediaDialog(
-                                        context, item, ref);
-                                    if (updated != null && mounted) {
-                                      setState(() {
-                                        widget.items[_current] = updated;
-                                      });
-                                    }
+                                Consumer(
+                                  builder: (context, ref, _) {
+                                    final isFav = ref.watch(
+                                      settingsNotifierProvider.select(
+                                        (s) => s.favoriteIds.contains(item.id),
+                                      ),
+                                    );
+                                    return _ViewerActionButton(
+                                      icon: Icon(
+                                        isFav ? Icons.favorite : Icons.favorite_border,
+                                        color: isFav ? Colors.redAccent : Colors.white,
+                                        size: 22,
+                                      ),
+                                      label: 'Favorite',
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        final currentFavs = Set<String>.from(
+                                          ref.read(settingsNotifierProvider).favoriteIds,
+                                        );
+                                        if (currentFavs.contains(item.id)) {
+                                          currentFavs.remove(item.id);
+                                        } else {
+                                          currentFavs.add(item.id);
+                                        }
+                                        ref
+                                            .read(settingsNotifierProvider.notifier)
+                                            .update(
+                                              (s) => s.copyWith(favoriteIds: currentFavs.toList()),
+                                            );
+                                      },
+                                    );
                                   },
-                                ),
-                                _ViewerActionButton(
-                                  icon: const Icon(Icons.wallpaper_outlined,
-                                      color: Colors.white, size: 22),
-                                  label: 'Wallpaper',
-                                  onTap: () =>
-                                      ShareService.setAsWallpaper(item.path),
                                 ),
                                 _ViewerActionButton(
                                   icon: const Icon(Icons.delete_outline,
@@ -836,92 +916,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   label: 'Delete',
                                   onTap: _deleteCurrentItem,
                                 ),
-                                PopupMenuButton<String>(
-                                  tooltip: 'More options',
-                                  color: const Color(0xFF222222),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                  offset: const Offset(0, -120),
-                                  onSelected: (value) async {
-                                    if (value == 'wallpaper') {
-                                      ShareService.setAsWallpaper(item.path);
-                                    } else if (value == 'rename') {
-                                      final updated =
-                                          await showRenameMediaDialog(
-                                              context, item, ref);
-                                      if (updated != null && mounted) {
-                                        setState(() {
-                                          widget.items[_current] = updated;
-                                        });
-                                      }
-                                    } else if (value == 'info') {
-                                      showMediaInfoSheet(context, item);
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: 'info',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.info_outline,
-                                              size: 20, color: Colors.white),
-                                          SizedBox(width: 12),
-                                          Text('Details',
-                                              style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 14)),
-                                        ],
-                                      ),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: 'rename',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.edit_outlined,
-                                              size: 20, color: Colors.white),
-                                          SizedBox(width: 12),
-                                          Text('Rename',
-                                              style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 14)),
-                                        ],
-                                      ),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: 'wallpaper',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.wallpaper_outlined,
-                                              size: 20, color: Colors.white),
-                                          SizedBox(width: 12),
-                                          Text('Set as wallpaper',
-                                              style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 14)),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 6),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.more_vert,
-                                            color: Colors.white, size: 22),
-                                        SizedBox(height: 4),
-                                        Text(
-                                          'More',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                _ViewerActionButton(
+                                  icon: const Icon(Icons.more_vert,
+                                      color: Colors.white, size: 22),
+                                  label: 'More',
+                                  onTap: () => _showMoreOptions(item),
                                 ),
                               ],
                             ),

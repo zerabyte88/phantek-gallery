@@ -1,10 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:media_kit/media_kit.dart';
 import '../../../../core/models/media_item.dart';
 import '../../../../core/utils/media_utils.dart';
 
 /// Shows a bottom sheet with complete details about [item].
-void showMediaInfoSheet(BuildContext context, MediaItem item) {
+void showMediaInfoSheet(
+  BuildContext context,
+  MediaItem item, {
+  Player? player,
+  double? fps,
+  String? codec,
+}) {
+  double? effectiveFps = fps;
+  String? effectiveCodec = codec;
+
+  if (player != null) {
+    try {
+      final currentTrack = player.state.track.video;
+      effectiveFps ??= (currentTrack.fps != null && currentTrack.fps! > 0)
+          ? currentTrack.fps
+          : null;
+      effectiveCodec ??=
+          (currentTrack.codec != null && currentTrack.codec!.isNotEmpty)
+              ? currentTrack.codec
+              : null;
+
+      if (effectiveFps == null || effectiveCodec == null) {
+        for (final t in player.state.tracks.video) {
+          if (effectiveFps == null && t.fps != null && t.fps! > 0) {
+            effectiveFps = t.fps;
+          }
+          if (effectiveCodec == null &&
+              t.codec != null &&
+              t.codec!.isNotEmpty) {
+            effectiveCodec = t.codec;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -41,6 +77,20 @@ void showMediaInfoSheet(BuildContext context, MediaItem item) {
                   icon: Icons.aspect_ratio_outlined,
                   label: 'Resolution',
                   value: item.resolution,
+                ),
+              if (item.isVideo && effectiveFps != null && effectiveFps > 0)
+                _InfoRow(
+                  icon: Icons.speed_outlined,
+                  label: 'Frame Rate',
+                  value: MediaUtils.formatFps(effectiveFps),
+                ),
+              if (item.isVideo &&
+                  effectiveCodec != null &&
+                  effectiveCodec.trim().isNotEmpty)
+                _InfoRow(
+                  icon: Icons.video_settings_outlined,
+                  label: 'Codec',
+                  value: MediaUtils.formatCodec(effectiveCodec),
                 ),
               if (item.isVideo && item.duration != null)
                 _InfoRow(

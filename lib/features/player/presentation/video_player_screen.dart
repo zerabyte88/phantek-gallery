@@ -942,8 +942,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     child: Hero(
                                       tag: _videos[index].id,
                                       transitionOnUserGestures: true,
-                                      flightShuttleBuilder: (_, __, ___, ____, _____) =>
-                                          _VideoThumbnailPage(item: _videos[index]),
+                                      flightShuttleBuilder: (
+                                        flightContext,
+                                        animation,
+                                        flightDirection,
+                                        fromHeroContext,
+                                        toHeroContext,
+                                      ) =>
+                                          _buildHeroShuttle(
+                                        animation: animation,
+                                        flightDirection: flightDirection,
+                                        item: _videos[index],
+                                      ),
                                       child: Stack(
                                         fit: StackFit.passthrough,
                                         alignment: Alignment.center,
@@ -1136,7 +1146,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                   Navigator.of(context).pop();
                                 }
                               },
-                              onInfo: () => showMediaInfoSheet(context, item),
+                              onInfo: () => showMediaInfoSheet(context, item, player: _player),
                               onDelete: _deleteItem,
                             ),
                           ),
@@ -1151,6 +1161,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                             child: _BottomBar(
                               player: _player,
                               item: item,
+                              isTrash: widget.isTrash,
+                              onRestore: _restoreItem,
                               isFullscreen: _isFullscreen,
                               isLooping: _isLooping,
                               playbackSpeed: _playbackSpeed,
@@ -1159,7 +1171,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               onSelectSpeed: _showPlaybackSpeedSheet,
                               onDelete: _deleteItem,
                               onRename: _renameCurrentItem,
-                              onInfo: () => showMediaInfoSheet(context, item),
                             ),
                           ),
                         ),
@@ -1179,6 +1190,64 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 }
 
 // ── Video thumbnail placeholder ───────────────────────────────────────────
+
+/// Morphing flight shuttle between grid (cover crop) and viewer (contain aspect ratio).
+Widget _buildHeroShuttle({
+  required Animation<double> animation,
+  required HeroFlightDirection flightDirection,
+  required MediaItem item,
+}) {
+  final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
+  final disk =
+      mem == null ? ThumbnailService.instance.getCachedFile(item.id) : null;
+  final ImageProvider? p =
+      mem != null ? MemoryImage(mem) : (disk != null ? FileImage(disk) : null);
+
+  if (p == null) {
+    return _VideoThumbnailPage(item: item);
+  }
+
+  return AnimatedBuilder(
+    animation: animation,
+    builder: (context, _) {
+      final double gridProgress = flightDirection == HeroFlightDirection.pop
+          ? animation.value
+          : (1.0 - animation.value);
+
+      final double coverOpacity = (gridProgress * 1.5 - 0.2).clamp(0.0, 1.0);
+      final double containOpacity = (1.0 - coverOpacity).clamp(0.0, 1.0);
+
+      return ClipRect(
+        clipBehavior: Clip.hardEdge,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (coverOpacity > 0.001)
+              Opacity(
+                opacity: coverOpacity,
+                child: Image(
+                  image: p,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                ),
+              ),
+            if (containOpacity > 0.001)
+              Opacity(
+                opacity: containOpacity,
+                child: Image(
+                  image: p,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                ),
+              ),
+          ],
+        ),
+      );
+    },
+  );
+}
 
 class _VideoThumbnailPage extends StatelessWidget {
   const _VideoThumbnailPage({required this.item});
@@ -1307,57 +1376,13 @@ class _TopBar extends StatelessWidget {
               ],
             ),
           ),
-          if (isTrash) ...[
-            if (onRestore != null)
-              IconButton(
-                icon: const Icon(Icons.restore, color: Colors.white, size: 22),
-                tooltip: 'Restore',
-                onPressed: onRestore,
-              ),
-            IconButton(
-              icon: const Icon(Icons.delete_forever,
-                  color: Colors.white, size: 22),
-              tooltip: 'Delete Permanently',
-              onPressed: onDelete,
-            ),
-          ] else ...[
-            Consumer(
-              builder: (context, ref, _) {
-                final isFav = ref.watch(
-                  settingsNotifierProvider.select(
-                    (s) => s.favoriteIds.contains(item.id),
-                  ),
-                );
-                return IconButton(
-                  icon: Icon(
-                    isFav ? Icons.favorite : Icons.favorite_border,
-                    color: isFav ? Colors.redAccent : Colors.white,
-                    size: 22,
-                  ),
-                  tooltip: isFav ? 'Remove from favorites' : 'Add to favorites',
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    final currentFavs = Set<String>.from(
-                      ref.read(settingsNotifierProvider).favoriteIds,
-                    );
-                    if (currentFavs.contains(item.id)) {
-                      currentFavs.remove(item.id);
-                    } else {
-                      currentFavs.add(item.id);
-                    }
-                    ref.read(settingsNotifierProvider.notifier).update(
-                        (s) => s.copyWith(favoriteIds: currentFavs.toList()));
-                  },
-                );
-              },
-            ),
+          if (!isTrash)
             IconButton(
               icon:
                   const Icon(Icons.info_outline, color: Colors.white, size: 22),
               tooltip: 'Details',
               onPressed: onInfo,
             ),
-          ],
         ],
       ),
     );
@@ -1377,8 +1402,9 @@ class _BottomBar extends StatefulWidget {
     required this.onToggleLoop,
     required this.onSelectSpeed,
     required this.onDelete,
-    required this.onRename,
-    required this.onInfo,
+    this.isTrash = false,
+    this.onRestore,
+    this.onRename,
   });
 
   final Player player;
@@ -1390,8 +1416,9 @@ class _BottomBar extends StatefulWidget {
   final VoidCallback onToggleLoop;
   final VoidCallback onSelectSpeed;
   final VoidCallback onDelete;
+  final bool isTrash;
+  final VoidCallback? onRestore;
   final VoidCallback? onRename;
-  final VoidCallback onInfo;
 
   @override
   State<_BottomBar> createState() => _BottomBarState();
@@ -1400,6 +1427,86 @@ class _BottomBar extends StatefulWidget {
 class _BottomBarState extends State<_BottomBar> {
   bool _isDragging = false;
   double? _dragFraction;
+
+  void _showMoreOptions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.speed, color: Colors.white),
+                title: Text(
+                  'Speed (${widget.playbackSpeed == 1.0 ? 'Normal' : '${widget.playbackSpeed}x'})',
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onSelectSpeed();
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  widget.isLooping ? Icons.repeat_one : Icons.repeat,
+                  color: widget.isLooping
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.white,
+                ),
+                title: Text(
+                  widget.isLooping ? 'Loop: On' : 'Loop: Off',
+                  style: TextStyle(
+                    color: widget.isLooping
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.white,
+                    fontSize: 15,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onToggleLoop();
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  widget.isFullscreen
+                      ? Icons.fullscreen_exit
+                      : Icons.fullscreen,
+                  color: Colors.white,
+                ),
+                title: Text(
+                  widget.isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onToggleFullscreen();
+                },
+              ),
+              if (widget.onRename != null)
+                ListTile(
+                  leading:
+                      const Icon(Icons.edit_outlined, color: Colors.white),
+                  title: const Text('Rename',
+                      style: TextStyle(color: Colors.white, fontSize: 15)),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    widget.onRename?.call();
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1494,165 +1601,109 @@ class _BottomBarState extends State<_BottomBar> {
             },
           ),
           const SizedBox(height: 6),
-          // 5 Bottom Action Buttons (Photo 2 Reference)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              // 1. Share
-              _ViewerActionButton(
-                icon: const Icon(Icons.share_outlined,
-                    color: Colors.white, size: 22),
-                label: 'Share',
-                onTap: () =>
-                    ShareService.shareSingle(widget.item.path, isVideo: true),
-              ),
-              // 2. Edit / Rename
-              _ViewerActionButton(
-                icon: const Icon(Icons.edit_outlined,
-                    color: Colors.white, size: 22),
-                label: 'Edit',
-                onTap: () => widget.onRename?.call(),
-              ),
-              // 3. Play / Pause
-              StreamBuilder<bool>(
-                stream: widget.player.stream.playing,
-                builder: (_, snap) {
-                  final playing = snap.data ?? false;
-                  return _ViewerActionButton(
-                    icon: Icon(
-                      playing
-                          ? Icons.pause_circle_outline
-                          : Icons.play_circle_outline,
-                      color: Colors.white,
-                      size: 24,
+          widget.isTrash
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _ViewerActionButton(
+                      icon: const Icon(Icons.restore,
+                          color: Colors.white, size: 22),
+                      label: 'Restore',
+                      onTap: widget.onRestore ?? () {},
                     ),
-                    label: playing ? 'Pause' : 'Play',
-                    onTap: widget.player.playOrPause,
-                  );
-                },
-              ),
-              // 4. Delete
-              _ViewerActionButton(
-                icon: const Icon(Icons.delete_outline,
-                    color: Colors.white, size: 22),
-                label: 'Delete',
-                onTap: widget.onDelete,
-              ),
-              // 5. More (Popup menu)
-              PopupMenuButton<String>(
-                tooltip: 'More options',
-                color: const Color(0xFF222222),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                offset: const Offset(0, -160),
-                onSelected: (value) {
-                  if (value == 'speed') {
-                    widget.onSelectSpeed();
-                  } else if (value == 'loop') {
-                    widget.onToggleLoop();
-                  } else if (value == 'fullscreen') {
-                    widget.onToggleFullscreen();
-                  } else if (value == 'info') {
-                    widget.onInfo();
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'speed',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.speed, size: 20, color: Colors.white),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Speed (${widget.playbackSpeed == 1.0 ? 'Normal' : '${widget.playbackSpeed}x'})',
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 14),
-                        ),
-                      ],
+                    _ViewerActionButton(
+                      icon: const Icon(Icons.info_outline,
+                          color: Colors.white, size: 22),
+                      label: 'Details',
+                      onTap: () =>
+                          showMediaInfoSheet(context, widget.item, player: widget.player),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'loop',
-                    child: Row(
-                      children: [
-                        Icon(
-                          widget.isLooping ? Icons.repeat_one : Icons.repeat,
-                          size: 20,
-                          color: widget.isLooping
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.white,
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          widget.isLooping ? 'Loop: On' : 'Loop: Off',
-                          style: TextStyle(
-                            color: widget.isLooping
-                                ? Theme.of(context).colorScheme.primary
-                                : Colors.white,
-                            fontSize: 14,
+                    _ViewerActionButton(
+                      icon: const Icon(Icons.delete_forever,
+                          color: Colors.white, size: 22),
+                      label: 'Delete',
+                      onTap: widget.onDelete,
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    // 1. Share
+                    _ViewerActionButton(
+                      icon: const Icon(Icons.share_outlined,
+                          color: Colors.white, size: 22),
+                      label: 'Share',
+                      onTap: () => ShareService.shareSingle(widget.item.path,
+                          isVideo: true),
+                    ),
+                    // 2. Favorite
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final isFav = ref.watch(
+                          settingsNotifierProvider.select(
+                            (s) => s.favoriteIds.contains(widget.item.id),
                           ),
-                        ),
-                      ],
+                        );
+                        return _ViewerActionButton(
+                          icon: Icon(
+                            isFav ? Icons.favorite : Icons.favorite_border,
+                            color: isFav ? Colors.redAccent : Colors.white,
+                            size: 22,
+                          ),
+                          label: 'Favorite',
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            final currentFavs = Set<String>.from(
+                              ref.read(settingsNotifierProvider).favoriteIds,
+                            );
+                            if (currentFavs.contains(widget.item.id)) {
+                              currentFavs.remove(widget.item.id);
+                            } else {
+                              currentFavs.add(widget.item.id);
+                            }
+                            ref.read(settingsNotifierProvider.notifier).update(
+                                  (s) => s.copyWith(
+                                      favoriteIds: currentFavs.toList()),
+                                );
+                          },
+                        );
+                      },
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'fullscreen',
-                    child: Row(
-                      children: [
-                        Icon(
-                          widget.isFullscreen
-                              ? Icons.fullscreen_exit
-                              : Icons.fullscreen,
-                          size: 20,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          widget.isFullscreen
-                              ? 'Exit Fullscreen'
-                              : 'Fullscreen',
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 14),
-                        ),
-                      ],
+                    // 3. Play / Pause
+                    StreamBuilder<bool>(
+                      stream: widget.player.stream.playing,
+                      builder: (_, snap) {
+                        final playing = snap.data ?? false;
+                        return _ViewerActionButton(
+                          icon: Icon(
+                            playing
+                                ? Icons.pause_circle_outline
+                                : Icons.play_circle_outline,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                          label: playing ? 'Pause' : 'Play',
+                          onTap: widget.player.playOrPause,
+                        );
+                      },
                     ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'info',
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline,
-                            size: 20, color: Colors.white),
-                        SizedBox(width: 12),
-                        Text('Details',
-                            style: TextStyle(
-                                color: Colors.white, fontSize: 14)),
-                      ],
+                    // 4. Delete
+                    _ViewerActionButton(
+                      icon: const Icon(Icons.delete_outline,
+                          color: Colors.white, size: 22),
+                      label: 'Delete',
+                      onTap: widget.onDelete,
                     ),
-                  ),
-                ],
-                child: const Padding(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.more_vert, color: Colors.white, size: 22),
-                      SizedBox(height: 4),
-                      Text(
-                        'More',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
+                    // 5. More (Bottom sheet)
+                    _ViewerActionButton(
+                      icon: const Icon(Icons.more_vert,
+                          color: Colors.white, size: 22),
+                      label: 'More',
+                      onTap: () => _showMoreOptions(context),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ],
       ),
     );
