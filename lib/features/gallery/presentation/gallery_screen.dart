@@ -452,19 +452,26 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
 
                   final cs = Theme.of(context).colorScheme;
 
-                  return Positioned.fill(
+                  final topPadding = MediaQuery.paddingOf(context).top;
+                  return Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: topPadding + kToolbarHeight,
                     child: SafeArea(
                       bottom: false,
-                      child: Opacity(
-                        opacity: curvedProgress.clamp(0.0, 1.0),
-                        child: Transform.translate(
-                          offset: Offset(20.0 * (1.0 - curvedProgress), 0.0),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16.0,
-                              vertical: 8.0,
-                            ),
-                            child: Row(
+                      child: SizedBox(
+                        height: kToolbarHeight,
+                        child: Center(
+                          child: Opacity(
+                            opacity: curvedProgress.clamp(0.0, 1.0),
+                            child: Transform.translate(
+                              offset: Offset(20.0 * (1.0 - curvedProgress), 0.0),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16.0,
+                                ),
+                                child: Row(
                               children: [
                                 Expanded(
                                   child: Container(
@@ -548,8 +555,10 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                         ),
                       ),
                     ),
-                  );
-                },
+                  ),
+                ),
+              );
+            },
               ),
             ],
           ),

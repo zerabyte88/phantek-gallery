@@ -42,6 +42,7 @@ class ThumbnailService {
       MethodChannel('com.phantek.gallery/thumbnail');
 
   final Map<String, Uint8List> _memoryCache = {};
+  final Map<String, double> _thumbnailAspectRatioCache = {};
   final Map<String, Completer<Uint8List?>> _inFlight = {};
   final Map<String, AssetEntity> _entityCache = {};
   final Queue<_ThumbnailRequest> _queue = Queue();
@@ -72,6 +73,66 @@ class ThumbnailService {
 
   /// Fast synchronous lookup in the in-memory cache (0ms).
   Uint8List? getMemoryThumbnail(String assetId) => _memoryCache[assetId];
+
+  /// Returns the visual aspect ratio (width / height) of the cached thumbnail.
+  /// Reads directly from memory or extracts from cached JPEG bytes in <1µs.
+  double? getThumbnailAspectRatio(String assetId) {
+    if (_thumbnailAspectRatioCache.containsKey(assetId)) {
+      return _thumbnailAspectRatioCache[assetId];
+    }
+    final bytes = _memoryCache[assetId];
+    if (bytes != null && bytes.length >= 9) {
+      final size = parseJpegDimensions(bytes);
+      if (size != null && size.height > 0) {
+        final ratio = size.width / size.height;
+        _thumbnailAspectRatioCache[assetId] = ratio;
+        return ratio;
+      }
+    }
+    final file = getCachedFile(assetId);
+    if (file != null) {
+      try {
+        final raf = file.openSync();
+        try {
+          final header = raf.readSync(4096);
+          final size = parseJpegDimensions(header);
+          if (size != null && size.height > 0) {
+            final ratio = size.width / size.height;
+            _thumbnailAspectRatioCache[assetId] = ratio;
+            return ratio;
+          }
+        } finally {
+          raf.closeSync();
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// Extracts physical pixel dimensions (width, height) directly from JPEG
+  /// markers (SOF0 = 0xC0 baseline, SOF2 = 0xC2 progressive).
+  /// Ultra-fast: parses ~10 bytes from memory without decoding pixel bitmaps.
+  static ui.Size? parseJpegDimensions(Uint8List bytes) {
+    if (bytes.length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) return null;
+    var i = 2;
+    while (i + 8 < bytes.length) {
+      if (bytes[i] != 0xFF) {
+        i++;
+        continue;
+      }
+      final marker = bytes[i + 1];
+      if (marker == 0xC0 || marker == 0xC2) {
+        final h = (bytes[i + 5] << 8) | bytes[i + 6];
+        final w = (bytes[i + 7] << 8) | bytes[i + 8];
+        return ui.Size(w.toDouble(), h.toDouble());
+      }
+      if (marker == 0xD9 || marker == 0xDA) break;
+      final len = (bytes[i + 2] << 8) | bytes[i + 3];
+      if (len < 2) break;
+      i += 2 + len;
+    }
+    return null;
+  }
 
   Future<Uint8List?> _extractNativeVideoThumbnail(String filePath) async {
     try {
@@ -462,11 +523,16 @@ class ThumbnailService {
       _memoryCache.remove(_memoryCache.keys.first);
     }
     _memoryCache[id] = bytes;
+    final size = parseJpegDimensions(bytes);
+    if (size != null && size.height > 0) {
+      _thumbnailAspectRatioCache[id] = size.width / size.height;
+    }
   }
 
   /// Remove a single entry from memory and disk (e.g., after deletion).
   Future<void> invalidate(String assetId) async {
     _memoryCache.remove(assetId);
+    _thumbnailAspectRatioCache.remove(assetId);
     _inFlight.remove(assetId);
     _entityCache.remove(assetId);
     try {
@@ -480,11 +546,13 @@ class ThumbnailService {
   /// Trims in-memory cache to free up RAM when the application is minimized or backgrounded.
   void trimMemory() {
     _memoryCache.clear();
+    _thumbnailAspectRatioCache.clear();
   }
 
   /// Wipes both in-memory cache and persistent disk cache.
   Future<void> clearAll() async {
     _memoryCache.clear();
+    _thumbnailAspectRatioCache.clear();
     _inFlight.clear();
     _entityCache.clear();
     try {

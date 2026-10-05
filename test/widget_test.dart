@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -834,6 +835,11 @@ void main() {
       expect(find.text('Search media or albums...'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
 
+      final searchFieldRect = tester.getRect(find.byType(TextField));
+      final filterBarRect = tester.getRect(find.byType(FilterSortBar));
+      expect(searchFieldRect.bottom, lessThanOrEqualTo(filterBarRect.top),
+          reason: 'Search bar must strictly reside inside the toolbar above FilterSortBar with zero collision');
+
       // Enter search query
       await tester.enterText(find.byType(TextField), '3.mp4');
       await tester.pump();
@@ -1346,6 +1352,47 @@ void main() {
         };
         expect(find.byIcon(expectedIcon), findsOneWidget);
       }
+    });
+
+    test('ThumbnailService.parseJpegDimensions parses SOF0 marker accurately', () {
+      final bytes = Uint8List.fromList([
+        0xFF, 0xD8, // SOI
+        0xFF, 0xE0, // APP0
+        0x00, 0x10, // length = 16
+        0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00,
+        0xFF, 0xC0, // SOF0
+        0x00, 0x11, // length = 17
+        0x08,       // precision
+        0x05, 0x00, // height = 1280 (0x0500)
+        0x02, 0xD0, // width = 720 (0x02D0)
+        0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+        0xFF, 0xD9, // EOI
+      ]);
+
+      final size = ThumbnailService.parseJpegDimensions(bytes);
+      expect(size, isNotNull);
+      expect(size!.width, 720.0);
+      expect(size.height, 1280.0);
+      expect(size.width / size.height, 0.5625);
+    });
+
+    test('ThumbnailService.parseJpegDimensions parses SOF2 progressive marker accurately', () {
+      final bytes = Uint8List.fromList([
+        0xFF, 0xD8, // SOI
+        0xFF, 0xC2, // SOF2 progressive
+        0x00, 0x0B,
+        0x08,
+        0x04, 0x38, // height = 1080 (0x0438)
+        0x07, 0x80, // width = 1920 (0x0780)
+        0x01, 0x01, 0x11, 0x00,
+        0xFF, 0xD9,
+      ]);
+
+      final size = ThumbnailService.parseJpegDimensions(bytes);
+      expect(size, isNotNull);
+      expect(size!.width, 1920.0);
+      expect(size!.height, 1080.0);
+      expect(size.width / size.height, closeTo(1.777, 0.001));
     });
   });
 }
