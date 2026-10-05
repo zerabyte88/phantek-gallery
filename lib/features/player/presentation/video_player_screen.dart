@@ -72,9 +72,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   AnimationController? _zoomAnimController;
 
   bool get _isCurrentlyVideoZoomed {
-    if (_isVideoZoomed) return true;
-    final scale = _transformationController.value.getMaxScaleOnAxis();
-    return scale > 1.05;
+    return _transformationController.value.getMaxScaleOnAxis() > 1.05;
   }
 
   @override
@@ -469,9 +467,26 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
   }
 
+  double _resolveAspectRatio(MediaItem item, int index) {
+    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
+      return item.width! / item.height!;
+    }
+    if (index == _current) {
+      final vParams = _player.state.videoParams;
+      if (vParams.w != null && vParams.h != null && vParams.w! > 0 && vParams.h! > 0) {
+        final rotate = vParams.rotate ?? 0;
+        final isRot90or270 = rotate == 90 || rotate == 270;
+        final w = isRot90or270 ? vParams.h! : vParams.w!;
+        final h = isRot90or270 ? vParams.w! : vParams.h!;
+        return w / h;
+      }
+    }
+    return 16.0 / 9.0;
+  }
+
   Widget _buildVideoPage(int index) {
     final item = _videos[index];
-    Widget content = Stack(
+    final content = Stack(
       alignment: Alignment.center,
       children: [
         _VideoThumbnailPage(item: item),
@@ -497,14 +512,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       ],
     );
 
-    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
-      content = AspectRatio(
-        aspectRatio: item.width! / item.height!,
-        child: content,
-      );
-    }
-
-    return content;
+    final ratio = _resolveAspectRatio(item, index);
+    return AspectRatio(
+      aspectRatio: ratio,
+      child: content,
+    );
   }
 
   void _handleDoubleTap() {
@@ -790,6 +802,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   _settle.stop(); // grab a returning video mid-flight
                   _zoomAnimController?.stop();
                   _isSwipingHorizontal = false;
+                  if (_activePointers.length == 1) {
+                    _isMultiTouch = false;
+                    _isPinching = false;
+                    if (_transformationController.value.getMaxScaleOnAxis() <= 1.05) {
+                      _isVideoZoomed = false;
+                    }
+                  }
                   if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
                     // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
                     _isMultiTouch = true;
