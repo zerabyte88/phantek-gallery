@@ -146,11 +146,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         }
       });
       if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          targetIdx,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-        );
+        _pageController.jumpToPage(targetIdx);
       }
     }
   }
@@ -644,102 +640,72 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               ),
             ],
           ],
+          bottom: FilterSortBar(
+            currentFilter: _tabs[_currentPage],
+            onFilterChanged: _onTabSelected,
+          ),
         ),
-        body: Column(
-          children: [
-            FilterSortBar(
-              currentFilter: _tabs[_currentPage],
-              onFilterChanged: _onTabSelected,
-            ),
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final allItems = mediaAsync.valueOrNull;
-                  if (allItems == null) {
-                    if (mediaAsync.isLoading) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (mediaAsync.hasError) {
-                      return _ErrorState(
-                        error: mediaAsync.error!,
-                        onRetry: _bootstrap,
-                      );
-                    }
-                    return const Center(child: CircularProgressIndicator());
-                  }
+        body: Builder(
+          builder: (context) {
+            final allItems = mediaAsync.valueOrNull;
+            if (allItems == null) {
+              if (mediaAsync.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (mediaAsync.hasError) {
+                return _ErrorState(
+                  error: mediaAsync.error!,
+                  onRetry: _bootstrap,
+                );
+              }
+              return const Center(child: CircularProgressIndicator());
+            }
 
-                  if (allItems.isEmpty) {
-                    return _EmptyState(onRefresh: _bootstrap);
-                  }
+            if (allItems.isEmpty) {
+              return _EmptyState(onRefresh: _bootstrap);
+            }
 
-                  return PageView(
-                    controller: _pageController,
-                    physics: _selecting
-                        ? const NeverScrollableScrollPhysics()
-                        : const PageScrollPhysics(),
-                    onPageChanged: _onPageChanged,
-                    children: [
-                      _KeepAlivePage(
-                        child: _buildMediaGrid(
-                          items: _filterBySearch(
-                            applyFiltersAndSort(
-                              allItems,
-                              sort: settings.defaultSort,
-                              filter: FilterOption.all,
-                            ),
-                          ),
-                          tab: FilterOption.all,
-                          settings: settings,
-                          storageKey: 'gallery_tab_all',
+            return PageView.builder(
+              controller: _pageController,
+              physics: _selecting
+                  ? const NeverScrollableScrollPhysics()
+                  : const PageScrollPhysics(),
+              onPageChanged: _onPageChanged,
+              itemCount: _tabs.length,
+              itemBuilder: (context, index) {
+                final tab = _tabs[index];
+                if (tab == FilterOption.albums) {
+                  return _KeepAlivePage(
+                    child: _buildAlbumsGrid(
+                      albums: _filterAlbumsBySearch(
+                        groupMediaIntoAlbums(
+                          allItems,
+                          sort: settings.defaultSort,
+                          favoriteIds: settings.favoriteIds,
                         ),
                       ),
-                      _KeepAlivePage(
-                        child: _buildMediaGrid(
-                          items: _filterBySearch(
-                            applyFiltersAndSort(
-                              allItems,
-                              sort: settings.defaultSort,
-                              filter: FilterOption.photosOnly,
-                            ),
-                          ),
-                          tab: FilterOption.photosOnly,
-                          settings: settings,
-                          storageKey: 'gallery_tab_photos',
-                        ),
-                      ),
-                      _KeepAlivePage(
-                        child: _buildMediaGrid(
-                          items: _filterBySearch(
-                            applyFiltersAndSort(
-                              allItems,
-                              sort: settings.defaultSort,
-                              filter: FilterOption.videosOnly,
-                            ),
-                          ),
-                          tab: FilterOption.videosOnly,
-                          settings: settings,
-                          storageKey: 'gallery_tab_videos',
-                        ),
-                      ),
-                      _KeepAlivePage(
-                        child: _buildAlbumsGrid(
-                          albums: _filterAlbumsBySearch(
-                            groupMediaIntoAlbums(
-                              allItems,
-                              sort: settings.defaultSort,
-                              favoriteIds: settings.favoriteIds,
-                            ),
-                          ),
-                          settings: settings,
-                          storageKey: 'gallery_tab_albums',
-                        ),
-                      ),
-                    ],
+                      settings: settings,
+                      storageKey: 'gallery_tab_albums',
+                    ),
                   );
-                },
-              ),
-            ),
-          ],
+                }
+                return _KeepAlivePage(
+                  child: _buildMediaGrid(
+                    items: _filterBySearch(
+                      applyFiltersAndSort(
+                        allItems,
+                        sort: settings.defaultSort,
+                        filter: tab,
+                      ),
+                    ),
+                    tab: tab,
+                    settings: settings,
+                    storageKey: 'gallery_tab_${tab.name}',
+                  ),
+                );
+              },
+            );
+          },
         ),
       ),
     );

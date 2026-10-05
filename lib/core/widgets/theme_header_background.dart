@@ -10,7 +10,7 @@ import '../providers/settings_provider.dart';
 /// - [AppThemeMode.amoled]: Pitch-black night sky with a glowing crescent moon,
 ///   twinkling stars, and shooting meteor streaks.
 /// - [AppThemeMode.amoledSakura]: OLED black with an artistic sakura tree branch
-///   and fluttering pink cherry blossom petals.
+///   with fresh leaves, abundant blossoms, and fluttering pink cherry blossom petals.
 /// - [AppThemeMode.dark]: Flowing cyber plasma aurora waves and floating luminescent embers.
 /// - [AppThemeMode.light]: Radiant morning sunburst with rotating prism rays and golden bokeh sparkles.
 /// - [AppThemeMode.system]: Dynamically follows the system brightness.
@@ -88,7 +88,7 @@ class _StarData {
   final double x; // normalized 0..1
   final double y; // normalized 0..1
   final double size;
-  final double speed;
+  final double speed; // integer multiplier for seamless continuous looping
   final double phase;
   final bool hasCrossGlow;
 
@@ -108,24 +108,24 @@ class _AmoledHeaderPainter extends CustomPainter {
   _AmoledHeaderPainter({required this.progress});
 
   static final List<_StarData> _stars = [
-    const _StarData(0.06, 0.28, 1.4, 2.3, 0.1),
-    const _StarData(0.12, 0.68, 1.8, 1.7, 1.4, true),
-    const _StarData(0.18, 0.22, 1.2, 3.1, 2.2),
+    const _StarData(0.06, 0.28, 1.4, 2.0, 0.1),
+    const _StarData(0.12, 0.68, 1.8, 1.0, 1.4, true),
+    const _StarData(0.18, 0.22, 1.2, 3.0, 2.2),
     const _StarData(0.24, 0.54, 1.5, 2.0, 0.8),
-    const _StarData(0.31, 0.35, 1.1, 1.5, 3.1),
-    const _StarData(0.38, 0.72, 1.9, 2.6, 1.9, true),
-    const _StarData(0.44, 0.18, 1.3, 3.4, 0.4),
-    const _StarData(0.52, 0.62, 1.6, 1.9, 2.7),
-    const _StarData(0.58, 0.30, 1.2, 2.8, 1.1),
-    const _StarData(0.65, 0.75, 1.7, 1.6, 0.5, true),
-    const _StarData(0.72, 0.25, 1.5, 2.4, 3.5),
+    const _StarData(0.31, 0.35, 1.1, 1.0, 3.1),
+    const _StarData(0.38, 0.72, 1.9, 3.0, 1.9, true),
+    const _StarData(0.44, 0.18, 1.3, 4.0, 0.4),
+    const _StarData(0.52, 0.62, 1.6, 2.0, 2.7),
+    const _StarData(0.58, 0.30, 1.2, 3.0, 1.1),
+    const _StarData(0.65, 0.75, 1.7, 1.0, 0.5, true),
+    const _StarData(0.72, 0.25, 1.5, 2.0, 3.5),
     const _StarData(0.79, 0.65, 1.3, 3.0, 1.8),
-    const _StarData(0.85, 0.32, 2.0, 1.8, 0.9, true),
-    const _StarData(0.92, 0.70, 1.4, 2.2, 2.4),
-    const _StarData(0.96, 0.20, 1.6, 2.7, 1.5),
-    const _StarData(0.04, 0.80, 1.2, 3.2, 2.0),
-    const _StarData(0.28, 0.82, 1.5, 1.4, 0.7),
-    const _StarData(0.68, 0.48, 1.1, 2.9, 1.3),
+    const _StarData(0.85, 0.32, 2.0, 2.0, 0.9, true),
+    const _StarData(0.92, 0.70, 1.4, 2.0, 2.4),
+    const _StarData(0.96, 0.20, 1.6, 3.0, 1.5),
+    const _StarData(0.04, 0.80, 1.2, 3.0, 2.0),
+    const _StarData(0.28, 0.82, 1.5, 1.0, 0.7),
+    const _StarData(0.68, 0.48, 1.1, 3.0, 1.3),
   ];
 
   @override
@@ -148,7 +148,7 @@ class _AmoledHeaderPainter extends CustomPainter {
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, skyWashPaint);
 
-    // 2. Twinkling Stars
+    // 2. Twinkling Stars (Continuous integer harmonics)
     final starPaint = Paint()..style = PaintingStyle.fill;
     final starGlowPaint = Paint()
       ..style = PaintingStyle.stroke
@@ -173,7 +173,7 @@ class _AmoledHeaderPainter extends CustomPainter {
     }
 
     // 3. Glowing Crescent Moon (Near Top-Right)
-    final moonCenter = Offset(size.width - 42, size.height * 0.44);
+    final moonCenter = Offset(size.width - 42, math.min(size.height * 0.28, 48.0));
     const moonRadius = 13.5;
 
     // Ambient lunar atmospheric halo
@@ -271,10 +271,10 @@ class _PetalData {
   final double startX; // normalized
   final double startY; // normalized
   final double size;
-  final double fallSpeed;
-  final double swaySpeed;
+  final double fallSpeed; // integer cycle speed
+  final double swaySpeed; // integer cycle speed
   final double swayAmplitude;
-  final double rotSpeed;
+  final double rotSpeed; // integer cycle speed
   final double phase;
 
   const _PetalData(
@@ -295,18 +295,20 @@ class _SakuraHeaderPainter extends CustomPainter {
   _SakuraHeaderPainter({required this.progress});
 
   static final List<_PetalData> _petals = [
-    const _PetalData(0.88, 0.1, 6.5, 1.2, 2.4, 22.0, 1.8, 0.0),
-    const _PetalData(0.78, 0.3, 5.0, 0.9, 1.8, 16.0, 2.2, 1.2),
-    const _PetalData(0.65, 0.0, 7.2, 1.4, 2.1, 26.0, 1.5, 2.5),
-    const _PetalData(0.55, 0.4, 4.8, 1.0, 2.8, 18.0, 3.0, 0.7),
-    const _PetalData(0.42, 0.2, 6.0, 1.3, 1.9, 24.0, 2.0, 3.2),
-    const _PetalData(0.30, 0.5, 5.5, 1.1, 2.5, 20.0, 1.7, 1.8),
-    const _PetalData(0.20, 0.1, 6.8, 1.5, 2.0, 28.0, 2.4, 0.4),
-    const _PetalData(0.12, 0.3, 4.5, 0.8, 2.2, 14.0, 2.8, 2.9),
-    const _PetalData(0.92, 0.6, 5.8, 1.2, 2.6, 20.0, 1.9, 1.5),
-    const _PetalData(0.72, 0.7, 6.2, 1.4, 1.7, 25.0, 2.1, 0.9),
-    const _PetalData(0.48, 0.8, 5.2, 1.0, 2.3, 17.0, 2.6, 2.2),
-    const _PetalData(0.05, 0.6, 6.4, 1.3, 2.0, 22.0, 1.6, 3.7),
+    const _PetalData(0.88, 0.1, 6.5, 1.0, 2.0, 22.0, 2.0, 0.0),
+    const _PetalData(0.78, 0.3, 5.0, 1.0, 1.0, 16.0, 2.0, 1.2),
+    const _PetalData(0.65, 0.0, 7.2, 2.0, 2.0, 26.0, 1.0, 2.5),
+    const _PetalData(0.55, 0.4, 4.8, 1.0, 3.0, 18.0, 3.0, 0.7),
+    const _PetalData(0.42, 0.2, 6.0, 1.0, 2.0, 24.0, -2.0, 3.2),
+    const _PetalData(0.30, 0.5, 5.5, 1.0, 2.0, 20.0, 1.0, 1.8),
+    const _PetalData(0.20, 0.1, 6.8, 2.0, 2.0, 28.0, 2.0, 0.4),
+    const _PetalData(0.12, 0.3, 4.5, 1.0, 2.0, 14.0, -2.0, 2.9),
+    const _PetalData(0.92, 0.6, 5.8, 1.0, 3.0, 20.0, 2.0, 1.5),
+    const _PetalData(0.72, 0.7, 6.2, 2.0, 1.0, 25.0, 2.0, 0.9),
+    const _PetalData(0.48, 0.8, 5.2, 1.0, 2.0, 17.0, -1.0, 2.2),
+    const _PetalData(0.05, 0.6, 6.4, 1.0, 2.0, 22.0, 1.0, 3.7),
+    const _PetalData(0.35, 0.85, 4.8, 2.0, 3.0, 19.0, 2.0, 4.1),
+    const _PetalData(0.82, 0.45, 5.6, 1.0, 2.0, 23.0, -2.0, 0.5),
   ];
 
   @override
@@ -329,10 +331,10 @@ class _SakuraHeaderPainter extends CustomPainter {
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, sakuraGlow);
 
-    // 2. Artistic Sakura Tree Branch (Top-Right side)
+    // 2. Artistic Multi-Branch Sakura Tree with Leaves & Blossoms (Top-Right side)
     _drawSakuraBranch(canvas, size);
 
-    // 3. Falling / Fluttering Sakura Petals
+    // 3. Falling / Fluttering Sakura Petals (Seamless continuous loop)
     for (final petal in _petals) {
       _drawPetal(canvas, size, petal, progress);
     }
@@ -340,61 +342,164 @@ class _SakuraHeaderPainter extends CustomPainter {
 
   void _drawSakuraBranch(Canvas canvas, Size size) {
     final branchPaint = Paint()
-      ..color = const Color(0xFF2E1720) // Deep dark cherry wood
+      ..color = const Color(0xFF2B1620) // Deep dark cherry wood
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    final branchWidth = size.width;
-    final startPt = Offset(branchWidth + 6, -6);
+    final w = size.width;
+    final h = size.height;
 
-    // Main Bough
-    final mainBranch = Path()
-      ..moveTo(startPt.dx, startPt.dy)
-      ..cubicTo(
-        branchWidth - 30,
-        size.height * 0.15,
-        branchWidth - 65,
-        size.height * 0.22,
-        branchWidth - 110,
-        size.height * 0.32,
-      );
+    // ── 1. Main Trunk ────────────────────────────────────────────────────────
+    final trunk = Path()
+      ..moveTo(w + 10, -8)
+      ..cubicTo(w - 35, h * 0.12, w - 75, h * 0.20, w - 120, h * 0.26);
+    branchPaint.strokeWidth = 3.6;
+    canvas.drawPath(trunk, branchPaint);
 
-    branchPaint.strokeWidth = 3.2;
-    canvas.drawPath(mainBranch, branchPaint);
+    // ── 2. Primary Branch: Central-Left Deep Reach ────────────────────────────
+    final midBranch = Path()
+      ..moveTo(w - 120, h * 0.26)
+      ..cubicTo(w - 155, h * 0.28, w - 180, h * 0.22, w - 215, h * 0.25);
+    branchPaint.strokeWidth = 2.2;
+    canvas.drawPath(midBranch, branchPaint);
 
-    // Secondary twigs
-    final twig1 = Path()
-      ..moveTo(branchWidth - 50, size.height * 0.18)
-      ..quadraticBezierTo(
-        branchWidth - 75,
-        size.height * 0.48,
-        branchWidth - 88,
-        size.height * 0.65,
-      );
-    branchPaint.strokeWidth = 1.8;
-    canvas.drawPath(twig1, branchPaint);
+    // Mid twigs
+    final twigMid1 = Path()
+      ..moveTo(w - 165, h * 0.27)
+      ..quadraticBezierTo(w - 175, h * 0.35, w - 190, h * 0.40);
+    final twigMid2 = Path()
+      ..moveTo(w - 195, h * 0.24)
+      ..quadraticBezierTo(w - 210, h * 0.17, w - 230, h * 0.19);
+    branchPaint.strokeWidth = 1.3;
+    canvas.drawPath(twigMid1, branchPaint);
+    canvas.drawPath(twigMid2, branchPaint);
 
-    final twig2 = Path()
-      ..moveTo(branchWidth - 85, size.height * 0.27)
-      ..quadraticBezierTo(
-        branchWidth - 115,
-        size.height * 0.18,
-        branchWidth - 138,
-        size.height * 0.22,
-      );
-    branchPaint.strokeWidth = 1.4;
-    canvas.drawPath(twig2, branchPaint);
+    // ── 3. Primary Branch: Lower Sweeping Bough ──────────────────────────────
+    final lowBranch = Path()
+      ..moveTo(w - 60, h * 0.17)
+      ..cubicTo(w - 85, h * 0.40, w - 95, h * 0.62, w - 112, h * 0.80);
+    branchPaint.strokeWidth = 2.4;
+    canvas.drawPath(lowBranch, branchPaint);
 
-    // Blooming Sakura Flowers on the Branch
-    _drawBlossom(canvas, Offset(branchWidth - 45, size.height * 0.18), 7.5, 0.4);
-    _drawBlossom(canvas, Offset(branchWidth - 88, size.height * 0.65), 6.5, 1.2);
-    _drawBlossom(canvas, Offset(branchWidth - 110, size.height * 0.32), 8.0, 2.1);
-    _drawBlossom(canvas, Offset(branchWidth - 138, size.height * 0.22), 6.0, 0.9);
-    _drawBlossom(canvas, Offset(branchWidth - 25, size.height * 0.08), 7.0, 3.0);
+    // Low twigs
+    final twigLow1 = Path()
+      ..moveTo(w - 80, h * 0.38)
+      ..quadraticBezierTo(w - 100, h * 0.44, w - 118, h * 0.48);
+    final twigLow2 = Path()
+      ..moveTo(w - 100, h * 0.65)
+      ..quadraticBezierTo(w - 118, h * 0.78, w - 130, h * 0.90);
+    final twigLow3 = Path()
+      ..moveTo(w - 90, h * 0.52)
+      ..quadraticBezierTo(w - 75, h * 0.62, w - 62, h * 0.70);
+    branchPaint.strokeWidth = 1.3;
+    canvas.drawPath(twigLow1, branchPaint);
+    canvas.drawPath(twigLow2, branchPaint);
+    canvas.drawPath(twigLow3, branchPaint);
 
-    // Tiny buds
-    _drawBud(canvas, Offset(branchWidth - 75, size.height * 0.48), 3.0);
-    _drawBud(canvas, Offset(branchWidth - 125, size.height * 0.19), 2.6);
+    // ── 4. Primary Branch: Upper Crest Bough ─────────────────────────────────
+    final topBranch = Path()
+      ..moveTo(w - 95, h * 0.22)
+      ..cubicTo(w - 120, h * 0.10, w - 145, h * 0.08, w - 170, h * 0.12);
+    branchPaint.strokeWidth = 2.0;
+    canvas.drawPath(topBranch, branchPaint);
+
+    // Top twigs
+    final twigTop1 = Path()
+      ..moveTo(w - 135, h * 0.09)
+      ..quadraticBezierTo(w - 142, h * 0.03, w - 152, h * -0.02);
+    final twigTop2 = Path()
+      ..moveTo(w - 155, h * 0.11)
+      ..quadraticBezierTo(w - 168, h * 0.16, w - 182, h * 0.17);
+    branchPaint.strokeWidth = 1.3;
+    canvas.drawPath(twigTop1, branchPaint);
+    canvas.drawPath(twigTop2, branchPaint);
+
+    // ── 5. Sakura Leaves (Dedaunan) ──────────────────────────────────────────
+    // Leaves on main trunk & base
+    _drawLeaf(canvas, Offset(w - 32, h * 0.08), 8.5, -0.6);
+    _drawLeaf(canvas, Offset(w - 55, h * 0.15), 7.5, 0.8);
+    _drawLeaf(canvas, Offset(w - 70, h * 0.23), 8.0, -1.2);
+
+    // Leaves on lower branch & twigs
+    _drawLeaf(canvas, Offset(w - 78, h * 0.36), 7.0, 1.4);
+    _drawLeaf(canvas, Offset(w - 116, h * 0.46), 7.5, -0.3);
+    _drawLeaf(canvas, Offset(w - 92, h * 0.54), 6.8, 2.1);
+    _drawLeaf(canvas, Offset(w - 64, h * 0.68), 6.5, 0.4);
+    _drawLeaf(canvas, Offset(w - 108, h * 0.76), 7.2, 1.8);
+    _drawLeaf(canvas, Offset(w - 128, h * 0.88), 6.0, 2.5);
+
+    // Leaves on central reach
+    _drawLeaf(canvas, Offset(w - 118, h * 0.24), 8.0, 0.2);
+    _drawLeaf(canvas, Offset(w - 145, h * 0.28), 7.0, 1.1);
+    _drawLeaf(canvas, Offset(w - 188, h * 0.38), 6.5, 2.0);
+    _drawLeaf(canvas, Offset(w - 212, h * 0.23), 7.0, -0.7);
+    _drawLeaf(canvas, Offset(w - 228, h * 0.18), 6.0, -1.5);
+
+    // Leaves on upper crest
+    _drawLeaf(canvas, Offset(w - 132, h * 0.08), 7.2, -1.8);
+    _drawLeaf(canvas, Offset(w - 150, h * 0.01), 6.0, -2.4);
+    _drawLeaf(canvas, Offset(w - 168, h * 0.10), 6.8, 0.3);
+    _drawLeaf(canvas, Offset(w - 180, h * 0.15), 6.2, 1.0);
+
+    // ── 6. Blooming Sakura Blossoms (Full 5-Petal) ───────────────────────────
+    _drawBlossom(canvas, Offset(w - 30, h * 0.09), 7.5, 0.4);
+    _drawBlossom(canvas, Offset(w - 60, h * 0.17), 9.0, 1.8);
+    _drawBlossom(canvas, Offset(w - 120, h * 0.26), 8.5, 2.7);
+    _drawBlossom(canvas, Offset(w - 165, h * 0.27), 7.0, 0.9);
+    _drawBlossom(canvas, Offset(w - 215, h * 0.25), 6.5, 3.1);
+    _drawBlossom(canvas, Offset(w - 190, h * 0.40), 6.0, 1.3);
+
+    _drawBlossom(canvas, Offset(w - 80, h * 0.38), 7.5, 0.6);
+    _drawBlossom(canvas, Offset(w - 118, h * 0.48), 6.5, 2.2);
+    _drawBlossom(canvas, Offset(w - 112, h * 0.80), 7.0, 1.5);
+    _drawBlossom(canvas, Offset(w - 62, h * 0.70), 5.8, 0.8);
+
+    _drawBlossom(canvas, Offset(w - 135, h * 0.09), 6.8, 2.0);
+    _drawBlossom(canvas, Offset(w - 170, h * 0.12), 6.2, 0.5);
+
+    // ── 7. Buds & Bud Clusters ───────────────────────────────────────────────
+    _drawBud(canvas, Offset(w - 152, h * -0.02), 3.0);
+    _drawBud(canvas, Offset(w - 182, h * 0.17), 2.8);
+    _drawBud(canvas, Offset(w - 230, h * 0.19), 2.8);
+    _drawBud(canvas, Offset(w - 130, h * 0.90), 3.2);
+    _drawBud(canvas, Offset(w - 98, h * 0.66), 2.6);
+    _drawBud(canvas, Offset(w - 146, h * 0.29), 2.5);
+  }
+
+  void _drawLeaf(Canvas canvas, Offset stem, double length, double angle) {
+    canvas.save();
+    canvas.translate(stem.dx, stem.dy);
+    canvas.rotate(angle);
+
+    final leafPath = Path()
+      ..moveTo(0, 0)
+      ..quadraticBezierTo(length * 0.4, -length * 0.28, length, 0)
+      ..quadraticBezierTo(length * 0.4, length * 0.28, 0, 0);
+
+    final leafPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          const Color(0xFF3B5D3E), // Deep tender leaf green
+          const Color(0xFF5A855A), // Vibrant spring green
+          const Color(0xFF82A882), // Soft leaf tip
+        ],
+        stops: const [0.0, 0.6, 1.0],
+      ).createShader(Rect.fromLTWH(0, -length * 0.3, length, length * 0.6))
+      ..style = PaintingStyle.fill;
+
+    canvas.drawPath(leafPath, leafPaint);
+
+    // Subtle central vein
+    final veinPaint = Paint()
+      ..color = const Color(0xFF2C4A2F).withValues(alpha: 0.65)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.65
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset.zero, Offset(length * 0.8, 0), veinPaint);
+
+    canvas.restore();
   }
 
   void _drawBlossom(Canvas canvas, Offset center, double radius, double rot) {
@@ -452,7 +557,7 @@ class _SakuraHeaderPainter extends CustomPainter {
     final currentX = (petal.startX * size.width + sway + size.width) % size.width;
 
     final angle = progress * 2 * math.pi * petal.rotSpeed + petal.phase;
-    final flutterScale = (math.cos(progress * 2 * math.pi * petal.swaySpeed * 1.5 + petal.phase) * 0.4 + 0.6).abs();
+    final flutterScale = (math.cos(progress * 2 * math.pi * petal.swaySpeed + petal.phase) * 0.35 + 0.65).abs();
 
     canvas.save();
     canvas.translate(currentX, currentY);
@@ -493,7 +598,7 @@ class _EmberData {
   final double x;
   final double y;
   final double size;
-  final double speed;
+  final double speed; // integer cycle speed
   final double phase;
 
   const _EmberData(this.x, this.y, this.size, this.speed, this.phase);
@@ -505,15 +610,15 @@ class _DarkHeaderPainter extends CustomPainter {
   _DarkHeaderPainter({required this.progress});
 
   static final List<_EmberData> _embers = [
-    const _EmberData(0.08, 0.8, 1.8, 1.1, 0.2),
-    const _EmberData(0.18, 0.4, 2.2, 0.9, 1.5),
-    const _EmberData(0.28, 0.9, 1.5, 1.3, 2.7),
-    const _EmberData(0.40, 0.6, 2.4, 0.8, 0.8),
-    const _EmberData(0.52, 0.3, 1.6, 1.4, 3.1),
+    const _EmberData(0.08, 0.8, 1.8, 1.0, 0.2),
+    const _EmberData(0.18, 0.4, 2.2, 1.0, 1.5),
+    const _EmberData(0.28, 0.9, 1.5, 1.0, 2.7),
+    const _EmberData(0.40, 0.6, 2.4, 1.0, 0.8),
+    const _EmberData(0.52, 0.3, 1.6, 2.0, 3.1),
     const _EmberData(0.64, 0.85, 2.0, 1.0, 1.9),
-    const _EmberData(0.76, 0.5, 1.4, 1.2, 0.4),
-    const _EmberData(0.88, 0.75, 2.5, 0.7, 2.3),
-    const _EmberData(0.95, 0.2, 1.7, 1.5, 1.1),
+    const _EmberData(0.76, 0.5, 1.4, 1.0, 0.4),
+    const _EmberData(0.88, 0.75, 2.5, 1.0, 2.3),
+    const _EmberData(0.95, 0.2, 1.7, 2.0, 1.1),
   ];
 
   @override
@@ -524,7 +629,7 @@ class _DarkHeaderPainter extends CustomPainter {
       Paint()..color = const Color(0xFF0E0E0E),
     );
 
-    // 2. Dual Undulating Cyber Aurora Plasma Ribbons
+    // 2. Dual Undulating Cyber Aurora Plasma Ribbons (Continuous integer harmonics)
     final wave1 = Path();
     final wave2 = Path();
 
@@ -535,11 +640,11 @@ class _DarkHeaderPainter extends CustomPainter {
     for (double x = 0; x <= w; x += 12) {
       final normX = x / w;
       final y1 = size.height * 0.42 +
-          math.sin(normX * 2 * math.pi + progress * 2 * math.pi) * 12.0 +
-          math.cos(normX * 4 * math.pi - progress * 2 * math.pi * 0.5) * 6.0;
+          math.sin(normX * 2 * math.pi + progress * 2 * math.pi * 1.0) * 12.0 +
+          math.cos(normX * 4 * math.pi - progress * 2 * math.pi * 1.0) * 6.0;
       final y2 = size.height * 0.58 +
-          math.cos(normX * 2.5 * math.pi - progress * 2 * math.pi) * 10.0 +
-          math.sin(normX * 3 * math.pi + progress * 2 * math.pi * 0.7) * 7.0;
+          math.cos(normX * 2.5 * math.pi - progress * 2 * math.pi * 1.0) * 10.0 +
+          math.sin(normX * 3 * math.pi + progress * 2 * math.pi * 2.0) * 7.0;
 
       wave1.lineTo(x, y1);
       wave2.lineTo(x, y2);
@@ -573,13 +678,13 @@ class _DarkHeaderPainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
     canvas.drawPath(wave2, wave2Paint);
 
-    // 3. Floating Cosmic Firefly Embers
+    // 3. Floating Cosmic Firefly Embers (Seamless continuous loop)
     for (final ember in _embers) {
       final curY = (ember.y * size.height - progress * ember.speed * size.height + size.height) % size.height;
-      final sway = math.sin(progress * 2 * math.pi * 1.5 + ember.phase) * 10.0;
+      final sway = math.sin(progress * 2 * math.pi * 2.0 + ember.phase) * 10.0;
       final curX = (ember.x * size.width + sway + size.width) % size.width;
 
-      final pulse = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(progress * 2 * math.pi * 2.5 + ember.phase));
+      final pulse = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(progress * 2 * math.pi * 3.0 + ember.phase));
 
       final emberGlow = Paint()
         ..color = const Color(0xFF818CF8).withValues(alpha: pulse * 0.3)
@@ -605,7 +710,7 @@ class _SparkleData {
   final double x;
   final double y;
   final double size;
-  final double speed;
+  final double speed; // integer cycle speed
   final double phase;
 
   const _SparkleData(this.x, this.y, this.size, this.speed, this.phase);
@@ -617,14 +722,14 @@ class _LightHeaderPainter extends CustomPainter {
   _LightHeaderPainter({required this.progress});
 
   static final List<_SparkleData> _sparkles = [
-    const _SparkleData(0.08, 0.65, 2.2, 1.2, 0.4),
+    const _SparkleData(0.08, 0.65, 2.2, 1.0, 0.4),
     const _SparkleData(0.18, 0.35, 1.6, 2.0, 1.8),
-    const _SparkleData(0.32, 0.75, 2.4, 1.5, 2.9),
-    const _SparkleData(0.45, 0.25, 1.8, 1.8, 0.7),
-    const _SparkleData(0.58, 0.68, 2.0, 1.4, 3.3),
-    const _SparkleData(0.70, 0.38, 2.6, 1.1, 1.2),
-    const _SparkleData(0.82, 0.70, 1.5, 2.2, 2.1),
-    const _SparkleData(0.92, 0.45, 2.2, 1.7, 0.2),
+    const _SparkleData(0.32, 0.75, 2.4, 1.0, 2.9),
+    const _SparkleData(0.45, 0.25, 1.8, 2.0, 0.7),
+    const _SparkleData(0.58, 0.68, 2.0, 1.0, 3.3),
+    const _SparkleData(0.70, 0.38, 2.6, 1.0, 1.2),
+    const _SparkleData(0.82, 0.70, 1.5, 2.0, 2.1),
+    const _SparkleData(0.92, 0.45, 2.2, 2.0, 0.2),
   ];
 
   @override
@@ -643,7 +748,7 @@ class _LightHeaderPainter extends CustomPainter {
     canvas.drawRect(Offset.zero & size, solarGlow);
 
     // 2. Radiant Golden Sunburst & Rotating Solar Prism Rays (Top-Right)
-    final sunCenter = Offset(size.width - 36, size.height * 0.38);
+    final sunCenter = Offset(size.width - 36, math.min(size.height * 0.26, 44.0));
     const sunRadius = 14.0;
 
     // Ambient Sun Halo
@@ -652,10 +757,10 @@ class _LightHeaderPainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12.0);
     canvas.drawCircle(sunCenter, sunRadius * 1.8, sunHalo);
 
-    // Rotating Rays
+    // Rotating Rays (Continuous full 360-degree rotation cycle)
     canvas.save();
     canvas.translate(sunCenter.dx, sunCenter.dy);
-    canvas.rotate(progress * 2 * math.pi * 0.1); // Slow majestic rotation
+    canvas.rotate(progress * 2 * math.pi); // Smooth continuous rotation
 
     final rayPaint = Paint()
       ..shader = RadialGradient(
@@ -694,7 +799,7 @@ class _LightHeaderPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     canvas.drawCircle(sunCenter, sunRadius, sunCorePaint);
 
-    // 3. Floating Golden Bokeh Dust & Sparkles
+    // 3. Floating Golden Bokeh Dust & Sparkles (Seamless continuous loop)
     final sparkPaint = Paint()..style = PaintingStyle.fill;
     final sparkCross = Paint()
       ..style = PaintingStyle.stroke
@@ -702,8 +807,8 @@ class _LightHeaderPainter extends CustomPainter {
 
     for (final s in _sparkles) {
       final sx = s.x * size.width;
-      final sy = (s.y * size.height - progress * s.speed * 15.0 + size.height) % size.height;
-      final twinkle = 0.3 + 0.7 * (0.5 + 0.5 * math.sin(progress * 2 * math.pi * s.speed + s.phase));
+      final sy = (s.y * size.height - progress * s.speed * size.height + size.height) % size.height;
+      final twinkle = 0.3 + 0.7 * (0.5 + 0.5 * math.sin(progress * 2 * math.pi * s.speed * 2.0 + s.phase));
 
       sparkPaint.color = const Color(0xFFD97706).withValues(alpha: twinkle * 0.6);
       canvas.drawCircle(Offset(sx, sy), s.size * 0.85, sparkPaint);

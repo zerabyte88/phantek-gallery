@@ -1278,9 +1278,9 @@ void main() {
         final expectedIcon = switch (mode) {
           AppThemeMode.amoled => Icons.nights_stay_rounded,
           AppThemeMode.amoledSakura => Icons.local_florist_rounded,
-          AppThemeMode.dark => Icons.local_fire_department_rounded,
+          AppThemeMode.dark => Icons.auto_awesome_rounded,
           AppThemeMode.light => Icons.wb_sunny_rounded,
-          AppThemeMode.system => Icons.local_fire_department_rounded, // in dark theme
+          AppThemeMode.system => Icons.auto_awesome_rounded, // in dark theme
         };
         expect(find.byIcon(expectedIcon), findsOneWidget);
       }
