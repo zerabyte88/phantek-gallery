@@ -744,6 +744,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   _startDragY = e.position.dy;
                   _startDragX = e.position.dx;
                   _vt = VelocityTracker.withKind(e.kind);
+                  _vt.addPosition(e.timeStamp, e.position);
                 },
                 onPointerMove: (e) {
                   // Detach the MPV texture on the first horizontal movement, before
@@ -776,9 +777,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   _vt.addPosition(e.timeStamp, e.position);
                   final dy = e.position.dy - _startDragY!;
                   final dx = e.position.dx - _startDragX!;
-                  // Strict gesture slop: at least 28px downward and dominant vertical trajectory (> 2.2 * dx)
-                  if (_dragNotifier.value != Offset.zero || (dy > 28 && dy > dx.abs() * 2.2)) {
-                    _setDrag(Offset(dx, (dy - 28).clamp(0.0, 600.0)));
+                  // Responsive vertical swipe deadzone: natural downward drag (dy > 8 and dy > dx.abs() * 1.1)
+                  if (_dragNotifier.value != Offset.zero || (dy > 8 && dy > dx.abs() * 1.1)) {
+                    _setDrag(Offset(dx, (dy - 8).clamp(0.0, 600.0)));
                   }
                 },
                 onPointerUp: (e) {
@@ -799,7 +800,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     if (!wasMultiTouch &&
                         !_isCurrentlyVideoZoomed &&
                         d.dy > 0 &&
-                        (d.dy > 90 || (vy > 900 && d.dy > 20))) {
+                        (d.dy > 60 || (vy > 400 && d.dy > 15))) {
                       _player.pause();
                       Navigator.of(context).pop();
                     } else if (d != Offset.zero) {
@@ -902,7 +903,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                       _transformationController,
                                   minScale: 1.0,
                                   maxScale: 6.0,
-                                  panEnabled: true,
+                                  panEnabled: _isCurrentlyVideoZoomed,
                                   scaleEnabled: true,
                                   clipBehavior: Clip.hardEdge,
                                   onInteractionStart: (details) {

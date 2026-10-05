@@ -898,22 +898,23 @@ void main() {
       expect(controller.value.getMaxScaleOnAxis() > 1.05, isFalse);
     });
 
-    test('Strict gesture slop deadzone filters minor touch variations and requires pure vertical drag', () {
+    test('Responsive gesture slop deadzone filters minor horizontal jitters and accepts natural downward drag', () {
       bool shouldStartDrag(double dx, double dy) {
-        return dy > 28 && dy > dx.abs() * 2.2;
+        return dy > 8 && dy > dx.abs() * 1.1;
       }
 
-      // Small jitter (< 28px) -> rejected
-      expect(shouldStartDrag(5, 20), isFalse);
-      expect(shouldStartDrag(0, 27), isFalse);
+      // Small jitter (< 8px) -> rejected
+      expect(shouldStartDrag(2, 6), isFalse);
+      expect(shouldStartDrag(0, 7), isFalse);
 
-      // Diagonal swipe / horizontal swipe variation -> rejected
-      expect(shouldStartDrag(25, 40), isFalse); // 40 is not > 25 * 2.2 (55)
-      expect(shouldStartDrag(50, 60), isFalse);
+      // Horizontal swipe variation -> rejected
+      expect(shouldStartDrag(25, 20), isFalse);
+      expect(shouldStartDrag(40, 30), isFalse);
 
-      // Pure intentional vertical downward drag -> accepted
-      expect(shouldStartDrag(0, 35), isTrue);
-      expect(shouldStartDrag(10, 45), isTrue); // 45 > 10 * 2.2 (22)
+      // Natural downward drag (including slight thumb arc) -> accepted
+      expect(shouldStartDrag(0, 15), isTrue);
+      expect(shouldStartDrag(10, 25), isTrue); // 25 > 10 * 1.1 (11)
+      expect(shouldStartDrag(20, 30), isTrue); // 30 > 20 * 1.1 (22)
     });
 
     test('Snapdragon 685 WebM and VP9 codec safety rules route to software decode', () {
