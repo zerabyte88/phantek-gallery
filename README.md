@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-059669?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Platform" />
   <img src="https://img.shields.io/badge/FLUTTER-3.47+-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
   <img src="https://img.shields.io/badge/APPLICATION_ID-com.phantek.virgo.spica-6366F1?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.10-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.13-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" /></a>
 </p>
 
@@ -22,14 +22,11 @@ Modern mobile galleries often require persistent network connections, cloud sync
 
 ---
 
-## What's New in v1.3.10
+## What's New in v1.3.13
 
-- ⚡ **Ultra-High Resolution Photo Optimization (50MB+ / 100MP+)**: Built-in 4096px display-fit downsampling (`ResizeImage`) reduces memory allocation from ~408 MB down to ~50 MB per photo, fitting seamlessly into the 256MB `imageCache` so returning to viewed photos is instantaneous without repeated decoding.
-- 🖼️ **Instant Thumbnail Previews & Hero Flight**: Smooth, non-blocking thumbnail placeholders in `loadingBuilder` and `Hero` flight shuttle transitions eliminate blank screens and decode pauses while sliding through albums.
-- 🎬 **Zero Black Flash Video Swiping & GPU Texture Sync**: Seamless `AnimatedOpacity` cross-fade between active `Video()` texture surfaces and underlying high-DPI thumbnails, paired with a 50ms SurfaceTexture binding synchronization delay for buttery smooth 60/120 FPS swiping.
-- 🔍 **Double-Tap Focal Point Zooming (2.5x) for Photos & Videos**: Double-tapping on specific regions zooms directly into the tapped focal point at 2.5x magnification across both photos and videos.
-- 🔽 **Interactive Pull-Down to Dismiss for Videos**: Matches photo behavior with real-time `SpringSimulation` physics and `Hero` return animation back to the grid.
-- 🎨 **Anti-Aliased High-DPI Thumbnails (512px / 90% Quality)**: Increased thumbnail resolution and bicubic `FilterQuality.high` interpolation to eliminate blurriness and compression artifacts across full-screen previews and grid tiles.
+- 🎨 **Redesigned Modern Settings Screen**: Clean grouped cards, theme-coordinated icon badges, and centered modern action buttons with spring tactile bouncy feedback.
+- 📱 **Sleek Video & Photo Fullscreen Viewers**: Centered video play buttons, natural gesture physics for pull-down-to-dismiss, and unified modern top/bottom overlay controls.
+- ⚡ **Streamlined UI & Performance Improvements**: Cleaner AppBar layout, optimized OTA update checks, and reduced memory footprint.
 
 ---
 

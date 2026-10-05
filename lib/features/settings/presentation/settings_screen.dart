@@ -4,7 +4,6 @@ import '../../../core/models/settings_model.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/thumbnail_service.dart';
-import '../../../core/utils/easter_egg_handler.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import '../../../features/update/data/update_provider.dart';
 import 'widgets/developer_about_card.dart';
@@ -17,7 +16,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  final _easterEggHandler = EasterEggTapHandler();
   String _cacheSizeStr = 'Calculating...';
 
   @override
@@ -53,38 +51,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Center(
-              child: BouncyTap(
-                key: const ValueKey('settings_appbar_badge_easter_egg'),
-                scaleDown: 0.92,
-                onTap: () => _easterEggHandler.handleTap(context, ref),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00382B),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: const Color(0xFF00E676).withValues(alpha: 0.6),
-                      width: 1,
-                    ),
-                  ),
-                  child: const Text(
-                    'v1.3.10',
-                    style: TextStyle(
-                      color: Color(0xFF00E676),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
       body: Theme(
         data: Theme.of(context).copyWith(
@@ -94,221 +60,216 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           hoverColor: Colors.transparent,
         ),
         child: ListView(
+          padding: const EdgeInsets.only(bottom: 24),
           children: [
-          // ══ Appearance ══════════════════════════════════════
-          _SectionHeader('Appearance'),
-
-          BouncyTap(
-            scaleDown: 0.98,
-            child: ListTile(
-              title: const Text('Theme'),
-              subtitle: Text(settings.themeMode.label),
-              leading: const Icon(Icons.palette_outlined),
-              onTap: () async {
-                final chosen = await _showModernThemeDialog(
-                  context,
-                  settings.themeMode,
-                  availableThemeModes,
-                );
-                if (chosen != null) {
-                  patch((s) => s.copyWith(themeMode: chosen));
-                }
-              },
+            // ══ Appearance ══════════════════════════════════════
+            const _SectionHeader('Appearance'),
+            _SettingsCard(
+              children: [
+                _ModernTile(
+                  icon: Icons.palette_rounded,
+                  iconColor: const Color(0xFF8B5CF6),
+                  title: 'Theme',
+                  subtitle: settings.themeMode.label,
+                  onTap: () async {
+                    final chosen = await _showModernThemeDialog(
+                      context,
+                      settings.themeMode,
+                      availableThemeModes,
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(themeMode: chosen));
+                    }
+                  },
+                ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.grid_view_rounded,
+                  iconColor: const Color(0xFF3B82F6),
+                  title: 'Grid Columns',
+                  subtitle: '${settings.gridColumns} columns',
+                  onTap: () async {
+                    final chosen = await _showModernGridColumnsDialog(
+                      context,
+                      settings.gridColumns,
+                      isAlbum: false,
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(gridColumns: chosen));
+                    }
+                  },
+                ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.photo_library_rounded,
+                  iconColor: const Color(0xFF6366F1),
+                  title: 'Albums Grid Columns',
+                  subtitle: '${settings.albumGridColumns} columns',
+                  onTap: () async {
+                    final chosen = await _showModernGridColumnsDialog(
+                      context,
+                      settings.albumGridColumns,
+                      isAlbum: true,
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(albumGridColumns: chosen));
+                    }
+                  },
+                ),
+                const _CardDivider(),
+                _ModernSwitchTile(
+                  icon: Icons.badge_rounded,
+                  iconColor: const Color(0xFFF59E0B),
+                  title: 'Show Duration Badges',
+                  subtitle: 'Video duration overlay on thumbnails',
+                  value: settings.showBadges,
+                  onChanged: (v) => patch((s) => s.copyWith(showBadges: v)),
+                ),
+              ],
             ),
-          ),
 
-          BouncyTap(
-            scaleDown: 0.98,
-            child: ListTile(
-              title: const Text('Grid Columns'),
-              subtitle: Text('${settings.gridColumns} columns'),
-              leading: const Icon(Icons.grid_view_outlined),
-              onTap: () async {
-                final chosen = await _showModernGridColumnsDialog(
-                  context,
-                  settings.gridColumns,
-                  isAlbum: false,
-                );
-                if (chosen != null) {
-                  patch((s) => s.copyWith(gridColumns: chosen));
-                }
-              },
-            ),
-          ),
-
-          BouncyTap(
-            scaleDown: 0.98,
-            child: ListTile(
-              title: const Text('Albums Grid Columns'),
-              subtitle: Text('${settings.albumGridColumns} columns'),
-              leading: const Icon(Icons.photo_library_outlined),
-              onTap: () async {
-                final chosen = await _showModernGridColumnsDialog(
-                  context,
-                  settings.albumGridColumns,
-                  isAlbum: true,
-                );
-                if (chosen != null) {
-                  patch((s) => s.copyWith(albumGridColumns: chosen));
-                }
-              },
-            ),
-          ),
-
-          BouncyTap(
-            scaleDown: 0.99,
-            child: SwitchListTile(
-              title: const Text('Show Duration Badges'),
-              subtitle: const Text('Video duration overlay on thumbnails'),
-              secondary: const Icon(Icons.badge_outlined),
-              value: settings.showBadges,
-              onChanged: (v) => patch((s) => s.copyWith(showBadges: v)),
-            ),
-          ),
-
-          // ══ Thumbnail Cache ══════════════════════════════════
-          _SectionHeader('Cache'),
-
-          BouncyTap(
-            scaleDown: 0.98,
-            child: ListTile(
-              title: const Text('Clear Thumbnail Cache'),
-              subtitle: Text('Disk size: $_cacheSizeStr'),
-              leading: const Icon(Icons.cleaning_services_outlined),
-              trailing: const Icon(Icons.delete_outline),
-              onTap: () async {
-                await ThumbnailService.instance.clearAll();
-                await _loadCacheSize();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Thumbnail cache cleared', textAlign: TextAlign.center),
-                    ),
-                  );
-                }
-              },
-            ),
-          ),
-
-          // ══ Storage ═════════════════════════════════════════
-          _SectionHeader('Storage'),
-
-          BouncyTap(
-            scaleDown: 0.99,
-            child: SwitchListTile(
-              title: const Text('Trash Bin'),
-              subtitle: const Text('Move to trash instead of deleting'),
-              secondary: const Icon(Icons.delete_outline),
-              value: settings.enableTrash,
-              onChanged: (v) => patch((s) => s.copyWith(enableTrash: v)),
-            ),
-          ),
-
-          BouncyTap(
-            scaleDown: 0.98,
-            child: ListTile(
-              title: const Text('Excluded Folders'),
-              subtitle: settings.excludedFolders.isEmpty
-                  ? const Text('None')
-                  : Text(settings.excludedFolders.join('\n'),
-                      style: const TextStyle(fontSize: 12)),
-              leading: const Icon(Icons.folder_off_outlined),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _showExcludedFoldersDialog(context, ref, settings),
-            ),
-          ),
-
-          BouncyTap(
-            scaleDown: 0.98,
-            child: ListTile(
-              title: const Text('All Files Access (Android 11+)'),
-              subtitle: const Text('Enables complete trash and deletion across storage'),
-              leading: const Icon(Icons.security_outlined),
-              trailing: const Icon(Icons.open_in_new),
-              onTap: () async {
-                final granted = await PermissionService.instance.requestManageStorage();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        granted
-                            ? 'All Files Access granted'
-                            : 'Manage All Files permission is not granted',
-                        textAlign: TextAlign.center,
+            // ══ Thumbnail Cache ══════════════════════════════════
+            const _SectionHeader('Cache'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: _ModernActionButton(
+                icon: Icons.cleaning_services_rounded,
+                iconColor: const Color(0xFFF97316),
+                title: 'Clear Thumbnail Cache',
+                subtitle: 'Disk size: $_cacheSizeStr',
+                onTap: () async {
+                  await ThumbnailService.instance.clearAll();
+                  await _loadCacheSize();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Thumbnail cache cleared',
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                    ),
-                  );
-                }
-              },
+                    );
+                  }
+                },
+              ),
             ),
-          ),
 
-          // ══ Playback ═════════════════════════════════════════
-          _SectionHeader('Playback'),
-
-          BouncyTap(
-            scaleDown: 0.99,
-            child: SwitchListTile(
-              title: const Text('Hardware Acceleration'),
-              subtitle: const Text('Use GPU decoding for video'),
-              secondary: const Icon(Icons.memory_outlined),
-              value: settings.hardwareAcceleration,
-              onChanged: (v) =>
-                  patch((s) => s.copyWith(hardwareAcceleration: v)),
+            // ══ Storage ═════════════════════════════════════════
+            const _SectionHeader('Storage'),
+            _SettingsCard(
+              children: [
+                _ModernSwitchTile(
+                  icon: Icons.delete_outline_rounded,
+                  iconColor: const Color(0xFF14B8A6),
+                  title: 'Trash Bin',
+                  subtitle: 'Move to trash instead of deleting',
+                  value: settings.enableTrash,
+                  onChanged: (v) => patch((s) => s.copyWith(enableTrash: v)),
+                ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.folder_off_rounded,
+                  iconColor: const Color(0xFF64748B),
+                  title: 'Excluded Folders',
+                  subtitle: settings.excludedFolders.isEmpty
+                      ? 'None'
+                      : settings.excludedFolders.join('\n'),
+                  onTap: () =>
+                      _showExcludedFoldersDialog(context, ref, settings),
+                ),
+                const _CardDivider(),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: _ModernActionButton(
+                    icon: Icons.security_rounded,
+                    iconColor: const Color(0xFFEF4444),
+                    title: 'All Files Access (Android 11+)',
+                    subtitle:
+                        'Enables complete trash and deletion across storage',
+                    onTap: () async {
+                      final granted = await PermissionService.instance
+                          .requestManageStorage();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              granted
+                                  ? 'All Files Access granted'
+                                  : 'Manage All Files permission is not granted',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
-          ),
 
-          BouncyTap(
-            scaleDown: 0.99,
-            child: SwitchListTile(
-              title: const Text('Auto-Play Video'),
-              subtitle: const Text('Start playback automatically'),
-              secondary: const Icon(Icons.play_circle_outline),
-              value: settings.autoPlayVideo,
-              onChanged: (v) => patch((s) => s.copyWith(autoPlayVideo: v)),
+            // ══ Playback ═════════════════════════════════════════
+            const _SectionHeader('Playback'),
+            _SettingsCard(
+              children: [
+                _ModernSwitchTile(
+                  icon: Icons.memory_rounded,
+                  iconColor: const Color(0xFF10B981),
+                  title: 'Hardware Acceleration',
+                  subtitle: 'Use GPU decoding for video',
+                  value: settings.hardwareAcceleration,
+                  onChanged: (v) =>
+                      patch((s) => s.copyWith(hardwareAcceleration: v)),
+                ),
+                const _CardDivider(),
+                _ModernSwitchTile(
+                  icon: Icons.play_circle_outline_rounded,
+                  iconColor: const Color(0xFF06B6D4),
+                  title: 'Auto-Play Video',
+                  subtitle: 'Start playback automatically',
+                  value: settings.autoPlayVideo,
+                  onChanged: (v) => patch((s) => s.copyWith(autoPlayVideo: v)),
+                ),
+              ],
             ),
-          ),
 
-          // ══ Updates ══════════════════════════════════════════
-          _SectionHeader('Updates'),
-
-          BouncyTap(
-            scaleDown: 0.99,
-            child: SwitchListTile(
-              title: const Text('Auto-check for Updates'),
-              subtitle: const Text('Check GitHub Releases on launch'),
-              secondary: const Icon(Icons.update),
-              value: settings.autoCheckUpdate,
-              onChanged: (v) =>
-                  patch((s) => s.copyWith(autoCheckUpdate: v)),
+            // ══ Updates ══════════════════════════════════════════
+            const _SectionHeader('Updates'),
+            _SettingsCard(
+              children: [
+                _ModernSwitchTile(
+                  icon: Icons.update_rounded,
+                  iconColor: const Color(0xFF10B981),
+                  title: 'Auto-check for Updates',
+                  subtitle: 'Check GitHub Releases on launch',
+                  value: settings.autoCheckUpdate,
+                  onChanged: (v) =>
+                      patch((s) => s.copyWith(autoCheckUpdate: v)),
+                ),
+                const _CardDivider(),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: _ModernActionButton(
+                    icon: Icons.system_update_alt_rounded,
+                    iconColor: const Color(0xFF8B5CF6),
+                    title: 'Check for Updates Now',
+                    subtitle: 'Check GitHub for newer APK releases',
+                    isLoading: update.isLoading,
+                    enabled: !update.isLoading,
+                    onTap: () => ref
+                        .read(updateNotifierProvider.notifier)
+                        .checkForUpdate(silent: false),
+                  ),
+                ),
+              ],
             ),
-          ),
 
-          BouncyTap(
-            scaleDown: 0.98,
-            child: ListTile(
-              title: const Text('Check for Updates Now'),
-              leading: const Icon(Icons.system_update_alt_outlined),
-              trailing: update.isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.chevron_right),
-              enabled: !update.isLoading,
-              onTap: () => ref
-                  .read(updateNotifierProvider.notifier)
-                  .checkForUpdate(silent: false),
-            ),
-          ),
-
-          // ══ Developer Card ══════════════════════════════════
-          const DeveloperAboutCard(),
-        ],
+            // ══ Developer Card ══════════════════════════════════
+            const DeveloperAboutCard(),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -320,16 +281,300 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 4),
+      padding: const EdgeInsets.fromLTRB(20, 20, 16, 6),
       child: Text(
         title.toUpperCase(),
         style: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: Theme.of(context).colorScheme.primary,
           letterSpacing: 1.2,
         ),
       ),
+    );
+  }
+}
+
+class _SettingsCard extends StatelessWidget {
+  const _SettingsCard({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: cs.outline.withValues(alpha: 0.12),
+          width: 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: children,
+        ),
+      ),
+    );
+  }
+}
+
+class _ModernActionButton extends StatelessWidget {
+  const _ModernActionButton({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    this.subtitle,
+    this.isLoading = false,
+    this.onTap,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String? subtitle;
+  final bool isLoading;
+  final VoidCallback? onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isClickable = enabled && !isLoading && onTap != null;
+
+    return BouncyTap(
+      scaleDown: isClickable ? 0.96 : 1.0,
+      onTap: isClickable ? onTap : null,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: iconColor.withValues(alpha: 0.28),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (isLoading)
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: iconColor,
+                    ),
+                  )
+                else
+                  Icon(icon, color: iconColor, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: enabled
+                        ? (cs.brightness == Brightness.dark
+                            ? Colors.white
+                            : cs.onSurface)
+                        : cs.onSurface.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModernTile extends StatelessWidget {
+  const _ModernTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    this.subtitle,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return BouncyTap(
+      scaleDown: onTap != null ? 0.98 : 1.0,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModernSwitchTile extends StatelessWidget {
+  const _ModernSwitchTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return BouncyTap(
+      scaleDown: 0.99,
+      onTap: () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardDivider extends StatelessWidget {
+  const _CardDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Divider(
+      height: 1,
+      thickness: 1,
+      indent: 68,
+      endIndent: 16,
+      color: cs.outline.withValues(alpha: 0.08),
     );
   }
 }
@@ -341,12 +586,34 @@ Future<void> _showExcludedFoldersDialog(
 ) async {
   final controller = TextEditingController();
   final current = List<String>.from(settings.excludedFolders);
+  final cs = Theme.of(context).colorScheme;
 
   await showDialog<void>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setSt) => AlertDialog(
-        title: const Text('Excluded Folders'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF64748B).withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.folder_off_rounded,
+                color: Color(0xFF64748B),
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Excluded Folders',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
         content: SizedBox(
           width: double.maxFinite,
           child: Column(
@@ -354,49 +621,93 @@ Future<void> _showExcludedFoldersDialog(
             children: [
               TextField(
                 controller: controller,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: '/storage/emulated/0/DCIM/...',
-                  prefixIcon: Icon(Icons.folder_open),
-                ),
-              ),
-              const SizedBox(height: 8),
-              FilledButton.tonal(
-                onPressed: () {
-                  final path = controller.text.trim();
-                  if (path.isNotEmpty && !current.contains(path)) {
-                    setSt(() => current.add(path));
-                    controller.clear();
-                  }
-                },
-                child: const Text('Add'),
-              ),
-              const Divider(),
-              ...current.map(
-                (p) => ListTile(
-                  dense: true,
-                  title:
-                      Text(p, style: const TextStyle(fontSize: 13)),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    onPressed: () => setSt(() => current.remove(p)),
+                  prefixIcon: const Icon(Icons.folder_open),
+                  filled: true,
+                  fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.4),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
                   ),
                 ),
               ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: BouncyTap(
+                  scaleDown: 0.96,
+                  child: FilledButton.tonal(
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () {
+                      final path = controller.text.trim();
+                      if (path.isNotEmpty && !current.contains(path)) {
+                        setSt(() => current.add(path));
+                        controller.clear();
+                      }
+                    },
+                    child: const Text(
+                      'Add',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+              if (current.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Divider(),
+                ...current.map(
+                  (p) => ListTile(
+                    dense: true,
+                    title: Text(p, style: const TextStyle(fontSize: 13)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => setSt(() => current.remove(p)),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
+        actionsAlignment: MainAxisAlignment.end,
         actions: [
-          TextButton(
+          BouncyTap(
+            scaleDown: 0.95,
+            child: TextButton(
+              style: TextButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              ),
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              ref
-                  .read(settingsNotifierProvider.notifier)
-                  .update((s) => s.copyWith(excludedFolders: current));
-              Navigator.pop(ctx);
-            },
-            child: const Text('Save'),
+              child: const Text('Cancel', textAlign: TextAlign.center),
+            ),
+          ),
+          BouncyTap(
+            scaleDown: 0.95,
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              onPressed: () {
+                ref
+                    .read(settingsNotifierProvider.notifier)
+                    .update((s) => s.copyWith(excludedFolders: current));
+                Navigator.pop(ctx);
+              },
+              child: const Text('Save', textAlign: TextAlign.center),
+            ),
           ),
         ],
       ),

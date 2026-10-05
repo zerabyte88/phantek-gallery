@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/utils/easter_egg_handler.dart';
+import '../../../../core/widgets/bouncy_tap.dart';
 
 /// Developer & About card placed at the bottom of the Settings screen.
-class DeveloperAboutCard extends StatelessWidget {
+class DeveloperAboutCard extends ConsumerWidget {
   const DeveloperAboutCard({super.key});
 
   static const _cyan = Color(0xFF00C7D7);
   static const _githubProfileUrl = 'https://github.com/zerabyte88';
+  static final _easterEggHandler = EasterEggTapHandler();
 
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
@@ -19,12 +23,12 @@ class DeveloperAboutCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return FutureBuilder<PackageInfo>(
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
-        final version = snapshot.data?.version ?? '1.3.12';
-        final buildNumber = snapshot.data?.buildNumber ?? '18';
+        final version = snapshot.data?.version ?? '1.3.13';
+        final buildNumber = snapshot.data?.buildNumber ?? '19';
 
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -59,23 +63,28 @@ class DeveloperAboutCard extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00382B),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: const Color(0xFF00E676).withValues(alpha: 0.6),
-                        width: 1,
+                  BouncyTap(
+                    key: const ValueKey('settings_appbar_badge_easter_egg'),
+                    scaleDown: 0.92,
+                    onTap: () => _easterEggHandler.handleTap(context, ref),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00382B),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFF00E676).withValues(alpha: 0.6),
+                          width: 1,
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      'v$version',
-                      style: const TextStyle(
-                        color: Color(0xFF00E676),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                      child: Text(
+                        'v$version',
+                        style: const TextStyle(
+                          color: Color(0xFF00E676),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ),
@@ -155,18 +164,40 @@ class DeveloperAboutCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.open_in_new,
-                      color: _cyan,
-                      size: 20,
-                    ),
-                    tooltip: 'Open GitHub Profile',
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    onPressed: () => _openUrl(_githubProfileUrl),
-                  ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              // Centered modern action button
+              GestureDetector(
+                onTap: () => _openUrl(_githubProfileUrl),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _cyan.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: _cyan.withValues(alpha: 0.35),
+                      width: 1,
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.open_in_new, color: _cyan, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'Open GitHub Profile',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _cyan,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
