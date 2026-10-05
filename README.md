@@ -125,19 +125,20 @@ The compiled release APK will be generated at:
 
 ## Version History
 
+- **v2.5.17 (Build 24):**
+  - **Seamless Continuous Header Animations:** Synchronized all harmonic frequencies and movement cycles to integer multiples, eliminating loop stutter across all themes.
+  - **Extended Header Canvas:** Header animation spans continuously across both AppBar and Filter/Sort Bar, eliminating empty spaces.
+  - **Enriched Sakura Tree Visuals:** Multi-tier natural branching, fresh green sakura leaves, and clustered radiant blossoms with buds.
+  - **Dark Theme Cyber Aurora Badge:** Synchronized border gradient and shimmer spark badge icon for Dark Mode.
+  - **Direct Tab Jump & Butter-Smooth Capsule Glides:** Direct navigation between tabs without intermediate page scrolling, paired with 60/120 FPS jitter-free capsule transitions via lazy page evaluation.
+
 - **v2.5.16 (Build 23):**
   - **Theme-Adaptive Animated Headers:** Procedural lightweight 60fps animations for AMOLED (moon, stars & meteors), AMOLED Sakura (falling sakura petals & branch), Dark (cyber plasma aurora waves & embers), and Light (radiant sunburst & sparkles).
   - **Theme-Harmonized Title Badge:** Dynamic gradient borders and icons in `AnimatedFlameTitle` matching active theme mode while preserving the 10-tap Easter Egg.
   - **Glitch-Free Tab Bar Animations:** Replaced separated tab backgrounds with a single sliding capsule indicator and synchronized typography to eliminate momentary white flashes.
   - **Refined Swipe-to-Dismiss:** Proportionate drag scaling, corner radius morphing, instant overlay fading, and organic damping spring simulation.
   - **Optimized Selection UI:** Replaced the favorite button with Select All in the multi-select bar for faster bulk management.
-
-- **v2.4.14 (Build 20):**
-  - **Modern Front Page Redesign:** Unified capsule segmented filter navigation, pill-shaped search bar, borderless header, and refined grid spacing.
-  - **Video Technical Metadata:** Live display of video **Frame Rate (FPS)** and **Video Codec** in the Details sheet.
-  - **Perfected Swipe-to-Dismiss:** Seamless Hero return transition with contain-to-cover crossfade and hard-edge cell clipping.
-  - **Enhanced Trash & Footers:** Dedicated bottom action bar for trash viewer (Restore, Details, Delete), streamlined photo/video action bars, and smooth bottom sheet menus.
-
+  
 ---
 
 ## License

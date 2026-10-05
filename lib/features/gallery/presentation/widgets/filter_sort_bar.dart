@@ -8,7 +8,7 @@ import 'sort_bottom_sheet.dart';
 
 /// Modern, responsive unified filter and sort bar.
 /// Features an elegant segmented capsule controller for tabs and a compact sort chip.
-class FilterSortBar extends ConsumerWidget {
+class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
   const FilterSortBar({
     super.key,
     this.isAlbumDetail = false,
@@ -23,6 +23,9 @@ class FilterSortBar extends ConsumerWidget {
   final ValueChanged<FilterOption>? onFilterChanged;
   final SortOption? currentSort;
   final ValueChanged<SortOption>? onSortChanged;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(96);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -67,7 +70,7 @@ class FilterSortBar extends ConsumerWidget {
               children: [
                 // ── Sliding Capsule Indicator ────────────────────────────
                 AnimatedAlign(
-                  duration: const Duration(milliseconds: 250),
+                  duration: const Duration(milliseconds: 280),
                   curve: Curves.easeOutCubic,
                   alignment: Alignment(alignmentX, 0.0),
                   child: FractionallySizedBox(
@@ -94,38 +97,35 @@ class FilterSortBar extends ConsumerWidget {
                   children: options.map((f) {
                     final selected = activeFilter == f;
                     return Expanded(
-                      child: BouncyTap(
-                        scaleDown: 0.96,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () {
-                            if (onFilterChanged != null) {
-                              onFilterChanged!(f);
-                            } else {
-                              ref
-                                  .read(settingsNotifierProvider.notifier)
-                                  .update((s) => s.copyWith(defaultFilter: f));
-                            }
-                          },
-                          child: Center(
-                            child: AnimatedDefaultTextStyle(
-                              duration: const Duration(milliseconds: 220),
-                              curve: Curves.easeOutCubic,
-                              style: TextStyle(
-                                color: selected
-                                    ? cs.onPrimary
-                                    : cs.onSurfaceVariant,
-                                fontSize: 13,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                              ),
-                              child: Text(
-                                f.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                              ),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          if (onFilterChanged != null) {
+                            onFilterChanged!(f);
+                          } else {
+                            ref
+                                .read(settingsNotifierProvider.notifier)
+                                .update((s) => s.copyWith(defaultFilter: f));
+                          }
+                        },
+                        child: Center(
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 280),
+                            curve: Curves.easeOutCubic,
+                            style: TextStyle(
+                              color: selected
+                                  ? cs.onPrimary
+                                  : cs.onSurfaceVariant,
+                              fontSize: 13,
+                              fontWeight: selected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                            child: Text(
+                              f.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ),
