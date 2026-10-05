@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-059669?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Platform" />
   <img src="https://img.shields.io/badge/FLUTTER-3.47+-0284C7?style=for-the-badge&logo=flutter&logoColor=white&labelColor=0F172A" alt="Flutter" />
   <img src="https://img.shields.io/badge/APPLICATION_ID-com.phantek.virgo.spica-6366F1?style=for-the-badge&logo=android&logoColor=white&labelColor=0F172A" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.5-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/badge/VERSION-v1.3.10-2563EB?style=for-the-badge&logo=github&logoColor=white&labelColor=0F172A" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-GPLv3-475569?style=for-the-badge&logo=gnu&logoColor=white&labelColor=0F172A" alt="License" /></a>
 </p>
 
@@ -22,12 +22,14 @@ Modern mobile galleries often require persistent network connections, cloud sync
 
 ---
 
-## What's New in v1.3.5
+## What's New in v1.3.10
 
-- 🪂 **Dynamic Drag-Down to Dismiss with Hero Fly-Back**: Pulling down on an image smoothly scales and tracks the finger with spring physics (`SpringSimulation`). Upon release, a dynamic Hero shared-element transition seamlessly animates the image back to its exact grid tile—even after horizontally swiping across adjacent photos.
-- ⚡ **Proactive MPV Texture Unmounting for 60/120 FPS Video Swiping**: `VideoPlayerScreen` now proactively detaches the heavy hardware MPV `Video()` texture on the very first touch gesture, displaying a dimension-matched thumbnail placeholder until the page settles and the player finishes loading.
-- 🎯 **Fine-Grained UI Rebuild Isolation**: Refactored drag-to-dismiss offsets and control overlays to use `ValueNotifier` and `RepaintBoundary`, eliminating root-level `setState` rebuilds across the heavy `PageView` and `InteractiveViewer` hierarchies.
-- 🎬 **High-Resolution (1080p, 2K, 4K) Video Thumbnail Decoding**: Tuned native extraction thread pools and switched to keyframe synchronization (`OPTION_CLOSEST_SYNC`) to prevent Android MediaCodec hardware decoder starvation on high-resolution/HEVC videos, paired with LIFO queue scheduling for instantaneous visible thumbnail loading.
+- ⚡ **Ultra-High Resolution Photo Optimization (50MB+ / 100MP+)**: Built-in 4096px display-fit downsampling (`ResizeImage`) reduces memory allocation from ~408 MB down to ~50 MB per photo, fitting seamlessly into the 256MB `imageCache` so returning to viewed photos is instantaneous without repeated decoding.
+- 🖼️ **Instant Thumbnail Previews & Hero Flight**: Smooth, non-blocking thumbnail placeholders in `loadingBuilder` and `Hero` flight shuttle transitions eliminate blank screens and decode pauses while sliding through albums.
+- 🎬 **Zero Black Flash Video Swiping & GPU Texture Sync**: Seamless `AnimatedOpacity` cross-fade between active `Video()` texture surfaces and underlying high-DPI thumbnails, paired with a 50ms SurfaceTexture binding synchronization delay for buttery smooth 60/120 FPS swiping.
+- 🔍 **Double-Tap Focal Point Zooming (2.5x) for Photos & Videos**: Double-tapping on specific regions zooms directly into the tapped focal point at 2.5x magnification across both photos and videos.
+- 🔽 **Interactive Pull-Down to Dismiss for Videos**: Matches photo behavior with real-time `SpringSimulation` physics and `Hero` return animation back to the grid.
+- 🎨 **Anti-Aliased High-DPI Thumbnails (512px / 90% Quality)**: Increased thumbnail resolution and bicubic `FilterQuality.high` interpolation to eliminate blurriness and compression artifacts across full-screen previews and grid tiles.
 
 ---
 

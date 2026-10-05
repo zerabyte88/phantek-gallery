@@ -64,7 +64,7 @@ class DeveloperAboutCard extends StatelessWidget {
                   ),
                 ),
                 child: const Text(
-                  'v1.3.9',
+                  'v1.3.10',
                   style: TextStyle(
                     color: Color(0xFF00E676),
                     fontWeight: FontWeight.bold,
@@ -85,9 +85,9 @@ class DeveloperAboutCard extends StatelessWidget {
           const SizedBox(height: 20),
 
           // ── Key-Value Information Rows ──────────────────────────
-          _buildInfoRow('App Version', 'v1.3.9'),
+          _buildInfoRow('App Version', 'v1.3.10'),
           const SizedBox(height: 10),
-          _buildInfoRow('Build', '13901 (Release APK)'),
+          _buildInfoRow('Build', '131001 (Release APK)'),
           const SizedBox(height: 10),
           _buildInfoRow('Architecture', 'ARM64-v8a (MediaKit)'),
           const SizedBox(height: 10),

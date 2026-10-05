@@ -34,8 +34,8 @@ class ThumbnailService {
   ThumbnailService._();
   static final ThumbnailService instance = ThumbnailService._();
 
-  static const int _thumbnailSize = 256; // px — high-DPI physical pixels for fast & crystal-clear rendering
-  static const int _thumbnailQuality = 85; // 85% quality (fast encode, zero pixelation / artifacts)
+  static const int _thumbnailSize = 512; // px — high-DPI physical pixels for ultra-sharp full-screen preview & crisp gallery grid
+  static const int _thumbnailQuality = 90; // 90% quality (fast encode, zero pixelation / artifacts)
   static const int _maxMemoryEntries = 500;
   static const int _maxConcurrent = 4;
   static const MethodChannel _nativeChannel =

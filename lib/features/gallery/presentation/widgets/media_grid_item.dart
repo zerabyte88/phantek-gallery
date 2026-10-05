@@ -144,7 +144,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
             if (file.existsSync()) {
               return Image.file(
                 file,
-                cacheWidth: 256,
+                cacheWidth: 512,
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
                 filterQuality: FilterQuality.medium,
