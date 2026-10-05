@@ -1,8 +1,10 @@
 package com.phantek.virgo.spica
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.DocumentsContract
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -11,8 +13,35 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
 
+    private var pendingFolderPickerResult: MethodChannel.Result? = null
+    private val REQUEST_CODE_PICK_FOLDER = 9921
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.phantek.gallery/folder_picker"
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "pickFolder") {
+                if (pendingFolderPickerResult != null) {
+                    result.error("BUSY", "A folder picker is already in progress", null)
+                    return@setMethodCallHandler
+                }
+                pendingFolderPickerResult = result
+                try {
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                    }
+                    startActivityForResult(intent, REQUEST_CODE_PICK_FOLDER)
+                } catch (e: Exception) {
+                    pendingFolderPickerResult = null
+                    result.error("PICK_FAILED", e.message, null)
+                }
+            } else {
+                result.notImplemented()
+            }
+        }
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -401,5 +430,32 @@ class MainActivity : FlutterActivity() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         startActivity(chooser)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_PICK_FOLDER) {
+            val result = pendingFolderPickerResult ?: return
+            pendingFolderPickerResult = null
+            if (resultCode == Activity.RESULT_OK && data != null && data.data != null) {
+                val uri = data.data!!
+                try {
+                    val docId = DocumentsContract.getTreeDocumentId(uri)
+                    val split = docId.split(":")
+                    val type = split[0]
+                    val relPath = if (split.size > 1) split[1] else ""
+                    val path = if ("primary".equals(type, ignoreCase = true)) {
+                        if (relPath.isNotEmpty()) "/storage/emulated/0/$relPath" else "/storage/emulated/0"
+                    } else {
+                        if (relPath.isNotEmpty()) "/storage/$type/$relPath" else "/storage/$type"
+                    }
+                    result.success(path)
+                } catch (e: Exception) {
+                    result.error("PARSE_FAILED", e.message, null)
+                }
+            } else {
+                result.success(null)
+            }
+        }
     }
 }

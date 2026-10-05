@@ -3,10 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/settings_model.dart';
 import '../enums/sort_option.dart';
 import '../enums/filter_option.dart';
+import '../localization/app_language.dart';
 
 /// Keys used in SharedPreferences.
 class _K {
   static const themeMode          = 'themeMode';
+  static const language           = 'language';
   static const gridColumns        = 'gridColumns';
   static const albumGridColumns   = 'albumGridColumns';
   static const showBadges         = 'showBadges';
@@ -45,6 +47,7 @@ class SettingsService {
 
   SettingsModel get settings => SettingsModel(
         themeMode:           _readEnum(_K.themeMode, AppThemeMode.values, AppThemeMode.system),
+        language:            _readEnum(_K.language, AppLanguage.values, AppLanguage.system),
         gridColumns:         _prefs.getInt(_K.gridColumns) ?? 3,
         albumGridColumns:    _prefs.getInt(_K.albumGridColumns) ?? 3,
         showBadges:          _prefs.getBool(_K.showBadges) ?? true,
@@ -64,6 +67,7 @@ class SettingsService {
   Future<void> save(SettingsModel model) async {
     await Future.wait([
       _prefs.setString(_K.themeMode,       model.themeMode.name),
+      _prefs.setString(_K.language,        model.language.name),
       _prefs.setInt   (_K.gridColumns,     model.gridColumns),
       _prefs.setInt   (_K.albumGridColumns, model.albumGridColumns),
       _prefs.setBool  (_K.showBadges,      model.showBadges),

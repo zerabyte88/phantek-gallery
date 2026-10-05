@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart' hide FilterOption;
 import '../../../core/enums/filter_option.dart';
+import '../../../core/enums/sort_option.dart';
 import '../../../core/models/album.dart';
 import '../../../core/models/media_item.dart';
 import '../../../core/models/settings_model.dart';
@@ -12,6 +13,7 @@ import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/services/share_service.dart';
 import '../../../app/router.dart';
 import '../../../core/utils/easter_egg_handler.dart';
@@ -50,6 +52,60 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   final _easterEggHandler = EasterEggTapHandler();
   StreamSubscription<bool>? _mediaChangeSub;
   DateTime _lastAutoRefresh = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // Memoized lists per tab to guarantee zero-rebuild / zero-re-sort jitter during tab swipes
+  List<MediaItem>? _cachedAllItemsRef;
+  SortOption? _cachedSort;
+  String? _cachedSearchQuery;
+  List<String>? _cachedFavoriteIds;
+
+  List<MediaItem> _memoizedAll = const [];
+  List<MediaItem> _memoizedPhotos = const [];
+  List<MediaItem> _memoizedVideos = const [];
+  List<Album> _memoizedAlbums = const [];
+
+  void _updateMemoizedTabs(List<MediaItem> allItems, SettingsModel settings) {
+    if (identical(_cachedAllItemsRef, allItems) &&
+        _cachedSort == settings.defaultSort &&
+        _cachedSearchQuery == _searchQuery &&
+        _cachedFavoriteIds == settings.favoriteIds) {
+      return;
+    }
+
+    _cachedAllItemsRef = allItems;
+    _cachedSort = settings.defaultSort;
+    _cachedSearchQuery = _searchQuery;
+    _cachedFavoriteIds = settings.favoriteIds;
+
+    _memoizedAll = _filterBySearch(
+      applyFiltersAndSort(
+        allItems,
+        sort: settings.defaultSort,
+        filter: FilterOption.all,
+      ),
+    );
+    _memoizedPhotos = _filterBySearch(
+      applyFiltersAndSort(
+        allItems,
+        sort: settings.defaultSort,
+        filter: FilterOption.photosOnly,
+      ),
+    );
+    _memoizedVideos = _filterBySearch(
+      applyFiltersAndSort(
+        allItems,
+        sort: settings.defaultSort,
+        filter: FilterOption.videosOnly,
+      ),
+    );
+    _memoizedAlbums = _filterAlbumsBySearch(
+      groupMediaIntoAlbums(
+        allItems,
+        sort: settings.defaultSort,
+        favoriteIds: settings.favoriteIds,
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -170,7 +226,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         }
       });
       if (_pageController.hasClients) {
-        _pageController.jumpToPage(targetIdx);
+        _pageController.animateToPage(
+          targetIdx,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+        );
       }
     }
   }
@@ -495,7 +555,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                                             focusNode: _searchFocusNode,
                                             style: const TextStyle(fontSize: 14),
                                             decoration: InputDecoration(
-                                              hintText: 'Search media or albums...',
+                                              hintText: context.tr.searchHint,
                                               isDense: true,
                                               contentPadding:
                                                   const EdgeInsets.symmetric(vertical: 8),
@@ -540,7 +600,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                                       vertical: 6.0,
                                     ),
                                     child: Text(
-                                      'Cancel',
+                                      context.tr.cancel,
                                       style: TextStyle(
                                         color: cs.primary,
                                         fontSize: 14,
@@ -580,7 +640,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               );
             },
             child: _selecting
-                ? Text('${_selected.length} selected')
+                ? Text('${_selected.length} ${context.tr.selected}')
                 : BouncyTap(
                     key: const ValueKey('appbar_badge_easter_egg'),
                     scaleDown: 0.94,
@@ -608,6 +668,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           bottom: FilterSortBar(
             currentFilter: _tabs[_currentPage],
             onFilterChanged: _onTabSelected,
+            pageController: _pageController,
           ),
         ),
         body: Builder(
@@ -630,6 +691,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               return _EmptyState(onRefresh: _bootstrap);
             }
 
+            _updateMemoizedTabs(allItems, settings);
+
             return PageView.builder(
               controller: _pageController,
               physics: _selecting
@@ -642,27 +705,27 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                 if (tab == FilterOption.albums) {
                   return _KeepAlivePage(
                     child: _buildAlbumsGrid(
-                      albums: _filterAlbumsBySearch(
-                        groupMediaIntoAlbums(
-                          allItems,
-                          sort: settings.defaultSort,
-                          favoriteIds: settings.favoriteIds,
-                        ),
-                      ),
+                      albums: _memoizedAlbums,
                       settings: settings,
                       storageKey: 'gallery_tab_albums',
                     ),
                   );
                 }
+                final List<MediaItem> tabItems;
+                switch (tab) {
+                  case FilterOption.photosOnly:
+                    tabItems = _memoizedPhotos;
+                    break;
+                  case FilterOption.videosOnly:
+                    tabItems = _memoizedVideos;
+                    break;
+                  default:
+                    tabItems = _memoizedAll;
+                    break;
+                }
                 return _KeepAlivePage(
                   child: _buildMediaGrid(
-                    items: _filterBySearch(
-                      applyFiltersAndSort(
-                        allItems,
-                        sort: settings.defaultSort,
-                        filter: tab,
-                      ),
-                    ),
+                    items: tabItems,
                     tab: tab,
                     settings: settings,
                     storageKey: 'gallery_tab_${tab.name}',
@@ -1098,7 +1161,7 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return widget.child;
+    return RepaintBoundary(child: widget.child);
   }
 }
 

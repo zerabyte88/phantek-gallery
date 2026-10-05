@@ -11,8 +11,8 @@ import '../providers/settings_provider.dart';
 ///   twinkling stars, and shooting meteor streaks.
 /// - [AppThemeMode.amoledSakura]: OLED black with an artistic sakura tree branch
 ///   with fresh leaves, abundant blossoms, and fluttering pink cherry blossom petals.
-/// - [AppThemeMode.dark]: Flowing cyber plasma aurora waves and floating luminescent embers.
-/// - [AppThemeMode.light]: Radiant morning sunburst with rotating prism rays and golden bokeh sparkles.
+/// - [AppThemeMode.dark]: Luminous volumetric Aurora Borealis curtains with shimmering ray pillars and firefly embers.
+/// - [AppThemeMode.light]: Prismatic morning breeze with flowing pastel silk waves, floating pearlescent glass orbs, and diamond prism sparkles.
 /// - [AppThemeMode.system]: Dynamically follows the system brightness.
 class ThemeHeaderBackground extends ConsumerStatefulWidget {
   const ThemeHeaderBackground({super.key});
@@ -206,9 +206,13 @@ class _AmoledHeaderPainter extends CustomPainter {
 
     canvas.drawPath(moonPath, moonPaint);
 
-    // 4. Shooting Meteor / Falling Star
-    _drawMeteor(canvas, size, progress, cycleStart: 0.08, cycleDuration: 0.22, startX: 0.78, startY: -10);
-    _drawMeteor(canvas, size, progress, cycleStart: 0.58, cycleDuration: 0.20, startX: 0.42, startY: -10);
+    // 4. Shooting Celestial Meteor Shower (6 Staggered Streaks Traversing Past Bottom Edge)
+    _drawMeteor(canvas, size, progress, cycleStart: 0.04, cycleDuration: 0.17, startX: 0.80, startY: -15, angle: math.pi * 0.26, glowColor: const Color(0xFF67E8F9));
+    _drawMeteor(canvas, size, progress, cycleStart: 0.19, cycleDuration: 0.15, startX: 0.44, startY: -15, angle: math.pi * 0.28, glowColor: const Color(0xFF93C5FD));
+    _drawMeteor(canvas, size, progress, cycleStart: 0.36, cycleDuration: 0.18, startX: 0.95, startY: -15, angle: math.pi * 0.25, glowColor: const Color(0xFF38BDF8));
+    _drawMeteor(canvas, size, progress, cycleStart: 0.54, cycleDuration: 0.16, startX: 0.28, startY: -15, angle: math.pi * 0.27, glowColor: const Color(0xFFE2E8F0));
+    _drawMeteor(canvas, size, progress, cycleStart: 0.70, cycleDuration: 0.18, startX: 0.68, startY: -15, angle: math.pi * 0.26, glowColor: const Color(0xFF67E8F9));
+    _drawMeteor(canvas, size, progress, cycleStart: 0.86, cycleDuration: 0.15, startX: 0.52, startY: -15, angle: math.pi * 0.29, glowColor: const Color(0xFF818CF8));
   }
 
   void _drawMeteor(
@@ -219,21 +223,34 @@ class _AmoledHeaderPainter extends CustomPainter {
     required double cycleDuration,
     required double startX,
     required double startY,
+    double angle = math.pi * 0.26,
+    Color glowColor = const Color(0xFF67E8F9),
   }) {
     if (progress < cycleStart || progress > cycleStart + cycleDuration) return;
 
     final t = (progress - cycleStart) / cycleDuration;
-    final travel = t * 180.0;
-    final angle = math.pi * 0.26; // ~47 degrees diagonal
+    // Dynamic trajectory guarantees meteor crosses fully through and beyond bottom edge
+    final targetY = size.height + 50.0;
+    final totalVerticalTravel = targetY - startY;
+    final totalTravel = totalVerticalTravel / math.sin(angle);
+    final currentTravel = t * totalTravel;
 
-    final headX = startX * size.width + math.cos(angle) * travel;
-    final headY = startY + math.sin(angle) * travel;
+    final headX = startX * size.width + math.cos(angle) * currentTravel;
+    final headY = startY + math.sin(angle) * currentTravel;
 
-    final trailLength = 55.0 * math.sin(t * math.pi);
+    // Sustained trail length: grows quickly upon entry, stays full-bodied throughout fall
+    final maxTrail = math.min(size.width * 0.22, 65.0);
+    final trailLength = maxTrail * math.min(1.0, t * 4.0);
     final tailX = headX - math.cos(angle) * trailLength;
     final tailY = headY - math.sin(angle) * trailLength;
 
-    if (trailLength <= 2) return;
+    if (trailLength <= 1) return;
+
+    // Opacity: rapid fade-in upon entry (0..0.12), full brightness, smooth fade-out as head exits past bottom (0.82..1.0)
+    final opacity = (t < 0.12
+            ? (t / 0.12)
+            : (t > 0.82 ? ((1.0 - t) / 0.18) : 1.0))
+        .clamp(0.0, 1.0);
 
     final meteorPaint = Paint()
       ..shader = LinearGradient(
@@ -241,21 +258,21 @@ class _AmoledHeaderPainter extends CustomPainter {
         end: Alignment.bottomRight,
         colors: [
           Colors.transparent,
-          const Color(0xFF67E8F9).withValues(alpha: 0.6),
-          Colors.white,
+          glowColor.withValues(alpha: 0.65 * opacity),
+          Colors.white.withValues(alpha: opacity),
         ],
-        stops: const [0.0, 0.7, 1.0],
+        stops: const [0.0, 0.65, 1.0],
       ).createShader(Rect.fromPoints(Offset(tailX, tailY), Offset(headX, headY)))
-      ..strokeWidth = 1.8
+      ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
     canvas.drawLine(Offset(tailX, tailY), Offset(headX, headY), meteorPaint);
 
     final sparkPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.9)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
-    canvas.drawCircle(Offset(headX, headY), 1.8, sparkPaint);
+      ..color = Colors.white.withValues(alpha: 0.95 * opacity)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.8);
+    canvas.drawCircle(Offset(headX, headY), 2.0, sparkPaint);
   }
 
   @override
@@ -591,7 +608,7 @@ class _SakuraHeaderPainter extends CustomPainter {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 3. DARK Header Painter (Cyber Plasma Aurora Waves & Floating Embers)
+// 3. DARK Header Painter (Volumetric Aurora Borealis Curtains & Embers)
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _EmberData {
@@ -623,62 +640,149 @@ class _DarkHeaderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
     // 1. Dark surface background (#0E0E0E)
     canvas.drawRect(
       Offset.zero & size,
       Paint()..color = const Color(0xFF0E0E0E),
     );
 
-    // 2. Dual Undulating Cyber Aurora Plasma Ribbons (Continuous integer harmonics)
-    final wave1 = Path();
-    final wave2 = Path();
+    // 2. Luminous Boreal Atmospheric Glow (Deep Emerald & Arctic Indigo wash)
+    final auroraAtmosphere = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-0.25, -0.75),
+        radius: 1.4,
+        colors: [
+          const Color(0xFF065F46).withValues(alpha: 0.42), // Luminous emerald night
+          const Color(0xFF1E1B4B).withValues(alpha: 0.30), // Deep Arctic indigo
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.55, 1.0],
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, auroraAtmosphere);
 
-    wave1.moveTo(0, size.height * 0.4);
-    wave2.moveTo(0, size.height * 0.6);
+    // 3. Shimmering Aurora Vertical Ray Striations (Curtain Ray Pillars)
+    final rayPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2;
+    for (int i = 0; i < 15; i++) {
+      final rx = (i / 14) * w;
+      final raySine = math.sin(progress * 2 * math.pi * 1.0 + i * 0.45);
+      final rayHeight = (28.0 + raySine * 14.0).clamp(14.0, 52.0);
+      final rayTop = h * 0.16 + math.cos(progress * 2 * math.pi * 2.0 + i * 0.6) * 6.0;
+      final rayBottom = rayTop + rayHeight;
+      final rayAlpha = (0.20 + 0.50 * (0.5 + 0.5 * raySine)).clamp(0.0, 0.75);
 
-    final w = size.width;
-    for (double x = 0; x <= w; x += 12) {
-      final normX = x / w;
-      final y1 = size.height * 0.42 +
-          math.sin(normX * 2 * math.pi + progress * 2 * math.pi * 1.0) * 12.0 +
-          math.cos(normX * 4 * math.pi - progress * 2 * math.pi * 1.0) * 6.0;
-      final y2 = size.height * 0.58 +
-          math.cos(normX * 2.5 * math.pi - progress * 2 * math.pi * 1.0) * 10.0 +
-          math.sin(normX * 3 * math.pi + progress * 2 * math.pi * 2.0) * 7.0;
+      final rayColor = (i % 2 == 0)
+          ? const Color(0xFF34D399).withValues(alpha: rayAlpha)
+          : const Color(0xFF38BDF8).withValues(alpha: rayAlpha * 0.9);
 
-      wave1.lineTo(x, y1);
-      wave2.lineTo(x, y2);
+      rayPaint.shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Colors.transparent, rayColor, Colors.transparent],
+      ).createShader(Rect.fromLTWH(rx - 1.1, rayTop, 2.2, rayBottom - rayTop));
+
+      canvas.drawLine(Offset(rx, rayTop), Offset(rx, rayBottom), rayPaint);
     }
 
-    // Cyber Indigo/Violet Plasma Glow
-    final wave1Paint = Paint()
+    // 4. Primary Luminous Aurora Curtain 1: Emerald & Arctic Cyan Sheet
+    final curtain1 = Path();
+    final crest1 = Path();
+    curtain1.moveTo(0, h);
+    curtain1.lineTo(0, h * 0.28);
+    crest1.moveTo(0, h * 0.28);
+
+    for (double x = 0; x <= w; x += 10) {
+      final normX = x / w;
+      final waveY = h * 0.28 +
+          math.sin(normX * 2 * math.pi + progress * 2 * math.pi * 1.0) * 15.0 +
+          math.cos(normX * 4 * math.pi - progress * 2 * math.pi * 1.0) * 8.0;
+      curtain1.lineTo(x, waveY);
+      crest1.lineTo(x, waveY);
+    }
+    curtain1.lineTo(w, h);
+    curtain1.close();
+
+    final curtain1Paint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0xFF10B981).withValues(alpha: 0.55), // Radiant Emerald
+          const Color(0xFF06B6D4).withValues(alpha: 0.42), // Arctic Cyan
+          const Color(0xFF3B82F6).withValues(alpha: 0.18), // Deep Blue wash
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.40, 0.75, 1.0],
+      ).createShader(Offset.zero & size)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(curtain1, curtain1Paint);
+
+    // Radiant Crest Edge for Curtain 1
+    final crest1Paint = Paint()
       ..shader = LinearGradient(
         colors: [
-          const Color(0xFF6366F1).withValues(alpha: 0.25),
-          const Color(0xFF9333EA).withValues(alpha: 0.35),
-          const Color(0xFFEC4899).withValues(alpha: 0.25),
+          const Color(0xFF34D399).withValues(alpha: 0.80),
+          const Color(0xFF67E8F9).withValues(alpha: 0.90),
+          const Color(0xFF818CF8).withValues(alpha: 0.75),
         ],
       ).createShader(Offset.zero & size)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0);
-    canvas.drawPath(wave1, wave1Paint);
+      ..strokeWidth = 2.4
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
+    canvas.drawPath(crest1, crest1Paint);
 
-    // Electric Cyan/Blue Glow
-    final wave2Paint = Paint()
+    // 5. Secondary Flowing Aurora Curtain 2: Electric Cyan & Neon Violet
+    final curtain2 = Path();
+    final crest2 = Path();
+    curtain2.moveTo(0, h);
+    curtain2.lineTo(0, h * 0.48);
+    crest2.moveTo(0, h * 0.48);
+
+    for (double x = 0; x <= w; x += 10) {
+      final normX = x / w;
+      final waveY = h * 0.48 +
+          math.cos(normX * 2.5 * math.pi - progress * 2 * math.pi * 1.0) * 14.0 +
+          math.sin(normX * 3.5 * math.pi + progress * 2 * math.pi * 2.0) * 9.0;
+      curtain2.lineTo(x, waveY);
+      crest2.lineTo(x, waveY);
+    }
+    curtain2.lineTo(w, h);
+    curtain2.close();
+
+    final curtain2Paint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0xFF06B6D4).withValues(alpha: 0.50), // Electric Cyan
+          const Color(0xFF8B5CF6).withValues(alpha: 0.45), // Neon Violet
+          const Color(0xFFEC4899).withValues(alpha: 0.22), // Magenta glow
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.45, 0.80, 1.0],
+      ).createShader(Offset.zero & size)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(curtain2, curtain2Paint);
+
+    // Radiant Crest Edge for Curtain 2
+    final crest2Paint = Paint()
       ..shader = LinearGradient(
         colors: [
-          const Color(0xFF06B6D4).withValues(alpha: 0.22),
-          const Color(0xFF3B82F6).withValues(alpha: 0.30),
-          const Color(0xFF6366F1).withValues(alpha: 0.20),
+          const Color(0xFF22D3EE).withValues(alpha: 0.85),
+          const Color(0xFFA855F7).withValues(alpha: 0.88),
+          const Color(0xFFF472B6).withValues(alpha: 0.72),
         ],
       ).createShader(Offset.zero & size)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
-    canvas.drawPath(wave2, wave2Paint);
+      ..strokeWidth = 2.0
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0);
+    canvas.drawPath(crest2, crest2Paint);
 
-    // 3. Floating Cosmic Firefly Embers (Seamless continuous loop)
+    // 6. Floating Cosmic Firefly Embers (Seamless continuous loop)
     for (final ember in _embers) {
       final curY = (ember.y * size.height - progress * ember.speed * size.height + size.height) % size.height;
       final sway = math.sin(progress * 2 * math.pi * 2.0 + ember.phase) * 10.0;
@@ -687,13 +791,13 @@ class _DarkHeaderPainter extends CustomPainter {
       final pulse = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(progress * 2 * math.pi * 3.0 + ember.phase));
 
       final emberGlow = Paint()
-        ..color = const Color(0xFF818CF8).withValues(alpha: pulse * 0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
-      canvas.drawCircle(Offset(curX, curY), ember.size * 1.8, emberGlow);
+        ..color = const Color(0xFF67E8F9).withValues(alpha: pulse * 0.45)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
+      canvas.drawCircle(Offset(curX, curY), ember.size * 2.0, emberGlow);
 
       final emberCore = Paint()
-        ..color = const Color(0xFFE0E7FF).withValues(alpha: pulse * 0.85);
-      canvas.drawCircle(Offset(curX, curY), ember.size * 0.8, emberCore);
+        ..color = const Color(0xFFF0FDFA).withValues(alpha: pulse * 0.92);
+      canvas.drawCircle(Offset(curX, curY), ember.size * 0.85, emberCore);
     }
   }
 
@@ -703,17 +807,37 @@ class _DarkHeaderPainter extends CustomPainter {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 4. LIGHT Header Painter (Radiant Sunburst, Rotating Rays & Golden Sparkles)
+// 4. LIGHT Header Painter (Prismatic Morning Breeze & Floating Glass Orbs)
 // ═════════════════════════════════════════════════════════════════════════════
 
-class _SparkleData {
+class _GlassOrbData {
+  final double startX;
+  final double startY;
+  final double radius;
+  final double speed;
+  final double swaySpeed;
+  final double swayAmplitude;
+  final double phase;
+
+  const _GlassOrbData(
+    this.startX,
+    this.startY,
+    this.radius,
+    this.speed,
+    this.swaySpeed,
+    this.swayAmplitude,
+    this.phase,
+  );
+}
+
+class _PrismSparkleData {
   final double x;
   final double y;
   final double size;
-  final double speed; // integer cycle speed
+  final double speed;
   final double phase;
 
-  const _SparkleData(this.x, this.y, this.size, this.speed, this.phase);
+  const _PrismSparkleData(this.x, this.y, this.size, this.speed, this.phase);
 }
 
 class _LightHeaderPainter extends CustomPainter {
@@ -721,105 +845,211 @@ class _LightHeaderPainter extends CustomPainter {
 
   _LightHeaderPainter({required this.progress});
 
-  static final List<_SparkleData> _sparkles = [
-    const _SparkleData(0.08, 0.65, 2.2, 1.0, 0.4),
-    const _SparkleData(0.18, 0.35, 1.6, 2.0, 1.8),
-    const _SparkleData(0.32, 0.75, 2.4, 1.0, 2.9),
-    const _SparkleData(0.45, 0.25, 1.8, 2.0, 0.7),
-    const _SparkleData(0.58, 0.68, 2.0, 1.0, 3.3),
-    const _SparkleData(0.70, 0.38, 2.6, 1.0, 1.2),
-    const _SparkleData(0.82, 0.70, 1.5, 2.0, 2.1),
-    const _SparkleData(0.92, 0.45, 2.2, 2.0, 0.2),
+  static final List<_GlassOrbData> _orbs = [
+    const _GlassOrbData(0.12, 0.70, 7.5, 1.0, 2.0, 14.0, 0.4),
+    const _GlassOrbData(0.24, 0.35, 5.0, 1.0, 3.0, 10.0, 1.8),
+    const _GlassOrbData(0.38, 0.80, 8.5, 2.0, 2.0, 16.0, 2.9),
+    const _GlassOrbData(0.50, 0.20, 6.0, 1.0, 2.0, 12.0, 0.7),
+    const _GlassOrbData(0.66, 0.75, 7.0, 1.0, 3.0, 15.0, 3.3),
+    const _GlassOrbData(0.78, 0.30, 9.0, 2.0, 2.0, 18.0, 1.2),
+    const _GlassOrbData(0.88, 0.65, 5.5, 1.0, 2.0, 11.0, 2.1),
+    const _GlassOrbData(0.04, 0.40, 6.5, 1.0, 3.0, 13.0, 0.9),
+  ];
+
+  static final List<_PrismSparkleData> _sparkles = [
+    const _PrismSparkleData(0.07, 0.30, 2.2, 1.0, 0.5),
+    const _PrismSparkleData(0.20, 0.60, 1.8, 2.0, 1.4),
+    const _PrismSparkleData(0.35, 0.25, 2.5, 1.0, 2.8),
+    const _PrismSparkleData(0.48, 0.70, 1.6, 2.0, 0.3),
+    const _PrismSparkleData(0.62, 0.35, 2.4, 1.0, 3.1),
+    const _PrismSparkleData(0.74, 0.75, 1.9, 2.0, 1.6),
+    const _PrismSparkleData(0.85, 0.20, 2.6, 1.0, 2.2),
+    const _PrismSparkleData(0.94, 0.55, 2.0, 2.0, 0.8),
   ];
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Crisp light canvas with warm solar morning glow
-    final solarGlow = Paint()
+    final w = size.width;
+    final h = size.height;
+
+    // 1. Soft, radiant daylight ambient wash
+    final morningGlow = Paint()
       ..shader = RadialGradient(
-        center: const Alignment(0.88, -0.6),
-        radius: 1.3,
+        center: const Alignment(0.85, -0.65),
+        radius: 1.30,
         colors: [
-          const Color(0xFFFEF3C7).withValues(alpha: 0.6), // Warm Amber Cream
-          const Color(0xFFFDE68A).withValues(alpha: 0.2),
+          const Color(0xFFBAE6FD).withValues(alpha: 0.38), // Morning sky cyan
+          const Color(0xFFE0E7FF).withValues(alpha: 0.28), // Soft periwinkle
+          const Color(0xFFFDF4FF).withValues(alpha: 0.16), // Morning blush
           Colors.transparent,
         ],
+        stops: const [0.0, 0.45, 0.75, 1.0],
       ).createShader(Offset.zero & size);
-    canvas.drawRect(Offset.zero & size, solarGlow);
+    canvas.drawRect(Offset.zero & size, morningGlow);
 
-    // 2. Radiant Golden Sunburst & Rotating Solar Prism Rays (Top-Right)
-    final sunCenter = Offset(size.width - 36, math.min(size.height * 0.26, 44.0));
-    const sunRadius = 14.0;
+    // 2. Dual Iridescent Fluid Silk Waves
+    // ── Wave 1: Sky Azure & Periwinkle Silk Ribbon ──
+    final silkWave1 = Path();
+    final crest1 = Path();
+    silkWave1.moveTo(0, h);
+    silkWave1.lineTo(0, h * 0.35);
+    crest1.moveTo(0, h * 0.35);
 
-    // Ambient Sun Halo
-    final sunHalo = Paint()
-      ..color = const Color(0xFFFBBF24).withValues(alpha: 0.22)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12.0);
-    canvas.drawCircle(sunCenter, sunRadius * 1.8, sunHalo);
+    for (double x = 0; x <= w; x += 10) {
+      final normX = x / w;
+      final waveY = h * 0.35 +
+          math.sin(normX * 2 * math.pi + progress * 2 * math.pi * 1.0) * 11.0 +
+          math.cos(normX * 4 * math.pi - progress * 2 * math.pi * 1.0) * 6.0;
+      silkWave1.lineTo(x, waveY);
+      crest1.lineTo(x, waveY);
+    }
+    silkWave1.lineTo(w, h);
+    silkWave1.close();
 
-    // Rotating Rays (Continuous full 360-degree rotation cycle)
-    canvas.save();
-    canvas.translate(sunCenter.dx, sunCenter.dy);
-    canvas.rotate(progress * 2 * math.pi); // Smooth continuous rotation
-
-    final rayPaint = Paint()
-      ..shader = RadialGradient(
+    final silkPaint1 = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFFF59E0B).withValues(alpha: 0.35),
-          const Color(0xFFFBBF24).withValues(alpha: 0.15),
+          const Color(0xFF38BDF8).withValues(alpha: 0.26), // Sky Cyan
+          const Color(0xFF818CF8).withValues(alpha: 0.20), // Periwinkle
+          const Color(0xFFC084FC).withValues(alpha: 0.12), // Soft Violet
           Colors.transparent,
         ],
-      ).createShader(Rect.fromCircle(center: Offset.zero, radius: sunRadius * 3.0))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..strokeCap = StrokeCap.round;
-
-    for (var i = 0; i < 8; i++) {
-      final rayAngle = (i * 2 * math.pi) / 8;
-      final rayLen = sunRadius * (2.2 + 0.4 * math.sin(progress * 2 * math.pi * 2.0 + i));
-      canvas.drawLine(
-        Offset(math.cos(rayAngle) * (sunRadius * 1.2), math.sin(rayAngle) * (sunRadius * 1.2)),
-        Offset(math.cos(rayAngle) * rayLen, math.sin(rayAngle) * rayLen),
-        rayPaint,
-      );
-    }
-    canvas.restore();
-
-    // Solid Sun Core
-    final sunCorePaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Color(0xFFFFFBEB),
-          Color(0xFFFDE68A),
-          Color(0xFFF59E0B),
-        ],
-      ).createShader(Rect.fromCircle(center: sunCenter, radius: sunRadius))
+        stops: const [0.0, 0.40, 0.75, 1.0],
+      ).createShader(Offset.zero & size)
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(sunCenter, sunRadius, sunCorePaint);
+    canvas.drawPath(silkWave1, silkPaint1);
 
-    // 3. Floating Golden Bokeh Dust & Sparkles (Seamless continuous loop)
-    final sparkPaint = Paint()..style = PaintingStyle.fill;
-    final sparkCross = Paint()
+    final crestPaint1 = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          const Color(0xFF0284C7).withValues(alpha: 0.42),
+          const Color(0xFF6366F1).withValues(alpha: 0.45),
+          const Color(0xFFA855F7).withValues(alpha: 0.35),
+        ],
+      ).createShader(Offset.zero & size)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.9;
+      ..strokeWidth = 1.8
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
+    canvas.drawPath(crest1, crestPaint1);
 
+    // ── Wave 2: Rose Quartz & Sunrise Blush Ribbon ──
+    final silkWave2 = Path();
+    final crest2 = Path();
+    silkWave2.moveTo(0, h);
+    silkWave2.lineTo(0, h * 0.58);
+    crest2.moveTo(0, h * 0.58);
+
+    for (double x = 0; x <= w; x += 10) {
+      final normX = x / w;
+      final waveY = h * 0.58 +
+          math.cos(normX * 2.5 * math.pi - progress * 2 * math.pi * 1.0) * 10.0 +
+          math.sin(normX * 3.5 * math.pi + progress * 2 * math.pi * 2.0) * 6.0;
+      silkWave2.lineTo(x, waveY);
+      crest2.lineTo(x, waveY);
+    }
+    silkWave2.lineTo(w, h);
+    silkWave2.close();
+
+    final silkPaint2 = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0xFFF472B6).withValues(alpha: 0.22), // Rose Quartz
+          const Color(0xFFFB923C).withValues(alpha: 0.16), // Morning Sunrise
+          const Color(0xFF38BDF8).withValues(alpha: 0.12), // Cyan wash
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.45, 0.75, 1.0],
+      ).createShader(Offset.zero & size)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(silkWave2, silkPaint2);
+
+    final crestPaint2 = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          const Color(0xFFEC4899).withValues(alpha: 0.36),
+          const Color(0xFFF97316).withValues(alpha: 0.36),
+          const Color(0xFF06B6D4).withValues(alpha: 0.30),
+        ],
+      ).createShader(Offset.zero & size)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
+    canvas.drawPath(crest2, crestPaint2);
+
+    // 3. Floating Pearlescent Glass Orbs / Iridescent Bubbles (Seamless continuous loop)
+    for (final orb in _orbs) {
+      final totalH = h + 40.0;
+      final curY = ((orb.startY * totalH) - progress * orb.speed * totalH + totalH) % totalH - 20.0;
+      final sway = math.sin(progress * 2 * math.pi * orb.swaySpeed + orb.phase) * orb.swayAmplitude;
+      final curX = (orb.startX * w + sway + w) % w;
+
+      _drawGlassOrb(canvas, Offset(curX, curY), orb.radius);
+    }
+
+    // 4. Prismatic Diamond Sparkles & Refraction Glints (Seamless continuous loop)
     for (final s in _sparkles) {
-      final sx = s.x * size.width;
-      final sy = (s.y * size.height - progress * s.speed * size.height + size.height) % size.height;
-      final twinkle = 0.3 + 0.7 * (0.5 + 0.5 * math.sin(progress * 2 * math.pi * s.speed * 2.0 + s.phase));
+      final sx = s.x * w;
+      final sy = (s.y * h - progress * s.speed * h + h) % h;
+      final twinkle = 0.25 + 0.75 * (0.5 + 0.5 * math.sin(progress * 2 * math.pi * s.speed * 2.0 + s.phase));
 
-      sparkPaint.color = const Color(0xFFD97706).withValues(alpha: twinkle * 0.6);
-      canvas.drawCircle(Offset(sx, sy), s.size * 0.85, sparkPaint);
+      if (twinkle > 0.60) {
+        final sparkLen = s.size * 2.4 * ((twinkle - 0.60) / 0.40);
+        final sparkPaint = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0
+          ..color = const Color(0xFF0284C7).withValues(alpha: (twinkle - 0.60) * 1.8);
+        canvas.drawLine(Offset(sx - sparkLen, sy), Offset(sx + sparkLen, sy), sparkPaint);
+        canvas.drawLine(Offset(sx, sy - sparkLen), Offset(sx, sy + sparkLen), sparkPaint);
 
-      if (twinkle > 0.7) {
-        final sparkLen = s.size * 2.2 * ((twinkle - 0.7) / 0.3);
-        sparkCross.color = const Color(0xFFF59E0B).withValues(alpha: (twinkle - 0.7) * 2.2);
-        canvas.drawLine(Offset(sx - sparkLen, sy), Offset(sx + sparkLen, sy), sparkCross);
-        canvas.drawLine(Offset(sx, sy - sparkLen), Offset(sx, sy + sparkLen), sparkCross);
+        final sparkCenter = Paint()..color = Colors.white.withValues(alpha: twinkle);
+        canvas.drawCircle(Offset(sx, sy), 1.0, sparkCenter);
       }
     }
+  }
+
+  void _drawGlassOrb(Canvas canvas, Offset center, double radius) {
+    // Translucent pearlescent glass bubble body
+    final orbFill = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-0.35, -0.35),
+        radius: 0.95,
+        colors: [
+          Colors.white.withValues(alpha: 0.65),
+          const Color(0xFFBAE6FD).withValues(alpha: 0.32),
+          const Color(0xFFF5D0FE).withValues(alpha: 0.12),
+        ],
+        stops: const [0.0, 0.55, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: radius))
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius, orbFill);
+
+    // Subtle iridescent glass rim
+    final rimPaint = Paint()
+      ..shader = SweepGradient(
+        colors: [
+          const Color(0xFF38BDF8).withValues(alpha: 0.45),
+          const Color(0xFFC084FC).withValues(alpha: 0.40),
+          const Color(0xFFF472B6).withValues(alpha: 0.35),
+          const Color(0xFF38BDF8).withValues(alpha: 0.45),
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: radius))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.85;
+    canvas.drawCircle(center, radius, rimPaint);
+
+    // Specular refraction highlight (crescent reflection)
+    final highlightPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.85)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+      Offset(center.dx - radius * 0.35, center.dy - radius * 0.35),
+      radius * 0.28,
+      highlightPaint,
+    );
   }
 
   @override

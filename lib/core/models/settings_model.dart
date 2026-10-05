@@ -1,11 +1,13 @@
 import 'package:equatable/equatable.dart';
 import '../enums/sort_option.dart';
 import '../enums/filter_option.dart';
+import '../localization/app_language.dart';
 
 /// Application-wide user preferences – stored locally via SettingsService.
 class SettingsModel extends Equatable {
   const SettingsModel({
     this.themeMode = AppThemeMode.system,
+    this.language = AppLanguage.system,
     this.gridColumns = 3,
     this.albumGridColumns = 3,
     this.showBadges = true,
@@ -21,6 +23,7 @@ class SettingsModel extends Equatable {
   });
 
   final AppThemeMode themeMode;
+  final AppLanguage language;
 
   /// Number of grid columns in the gallery view (2–5).
   final int gridColumns;
@@ -57,6 +60,7 @@ class SettingsModel extends Equatable {
 
   SettingsModel copyWith({
     AppThemeMode? themeMode,
+    AppLanguage? language,
     int? gridColumns,
     int? albumGridColumns,
     bool? showBadges,
@@ -72,6 +76,7 @@ class SettingsModel extends Equatable {
   }) {
     return SettingsModel(
       themeMode: themeMode ?? this.themeMode,
+      language: language ?? this.language,
       gridColumns: gridColumns ?? this.gridColumns,
       albumGridColumns: albumGridColumns ?? this.albumGridColumns,
       showBadges: showBadges ?? this.showBadges,
@@ -90,6 +95,7 @@ class SettingsModel extends Equatable {
   @override
   List<Object?> get props => [
         themeMode,
+        language,
         gridColumns,
         albumGridColumns,
         showBadges,
