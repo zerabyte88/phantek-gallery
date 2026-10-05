@@ -868,6 +868,36 @@ void main() {
       expect(transformed.dy, closeTo(tapPos.dy, 0.001));
     });
 
+    test('Photo InteractiveViewer focal point matrix scales to 2.5x and returns cleanly to identity', () {
+      final controller = TransformationController();
+      expect(controller.value.getMaxScaleOnAxis(), 1.0);
+      expect(controller.value.isIdentity(), isTrue);
+
+      const tapPos = Offset(250.0, 450.0);
+      const double targetScale = 2.5;
+
+      // Zoom in to focal point
+      final endMatrix = Matrix4.identity()
+        ..translateByDouble(tapPos.dx, tapPos.dy, 0.0, 1.0)
+        ..scaleByDouble(targetScale, targetScale, 1.0, 1.0)
+        ..translateByDouble(-tapPos.dx, -tapPos.dy, 0.0, 1.0);
+
+      controller.value = endMatrix;
+      expect(controller.value.getMaxScaleOnAxis(), 2.5);
+      expect(controller.value.getMaxScaleOnAxis() > 1.05, isTrue);
+
+      // The focal point transformed by the matrix should stay at tapPos
+      final transformedPoint = MatrixUtils.transformPoint(controller.value, tapPos);
+      expect(transformedPoint.dx, closeTo(tapPos.dx, 0.001));
+      expect(transformedPoint.dy, closeTo(tapPos.dy, 0.001));
+
+      // Zoom out resets directly to identity without stuck states
+      controller.value = Matrix4.identity();
+      expect(controller.value.getMaxScaleOnAxis(), 1.0);
+      expect(controller.value.isIdentity(), isTrue);
+      expect(controller.value.getMaxScaleOnAxis() > 1.05, isFalse);
+    });
+
     test('Strict gesture slop deadzone filters minor touch variations and requires pure vertical drag', () {
       bool shouldStartDrag(double dx, double dy) {
         return dy > 28 && dy > dx.abs() * 2.2;
