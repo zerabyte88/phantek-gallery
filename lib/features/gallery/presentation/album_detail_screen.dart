@@ -5,6 +5,7 @@ import 'package:photo_manager/photo_manager.dart' hide FilterOption;
 import '../../../app/router.dart';
 import '../../../core/enums/filter_option.dart';
 import '../../../core/enums/sort_option.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/media_item.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
@@ -69,9 +70,8 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     if (!hasPerm) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Manage All Files permission is required to delete or move items to trash.'),
+          SnackBar(
+            content: Text(context.tr.manageFilesPermissionRequired),
           ),
         );
       }
@@ -118,29 +118,29 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
   Future<bool> _confirmDelete(int count) async {
     final settings = ref.read(settingsNotifierProvider);
     final isTrash = settings.enableTrash;
-    final itemText = count == 1 ? '1 item' : '$count items';
+    final itemText = context.tr.itemsCount(count);
 
     final result = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(isTrash ? 'Move to Trash?' : 'Delete Permanently?'),
+        title: Text(isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle),
         content: Text(
           isTrash
-              ? '$itemText will be moved to trash.'
-              : '$itemText will be permanently deleted. This action cannot be undone.',
+              ? context.tr.moveToTrashConfirm(itemText)
+              : context.tr.deletePermanentlyConfirm(itemText),
         ),
         actionsOverflowButtonSpacing: 8,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr.cancel),
           ),
           FilledButton(
             style: isTrash
                 ? null
                 : FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
-            child: Text(isTrash ? 'Move to Trash' : 'Delete'),
+            child: Text(isTrash ? context.tr.moveToTrash : context.tr.delete),
           ),
         ],
       ),
@@ -192,19 +192,21 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
             onPressed: () => Navigator.of(context).pop(),
           ),
           title: _selecting
-              ? Text('${_selected.length} selected')
+              ? Text('${_selected.length} ${context.tr.selected}')
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.albumName,
+                      widget.albumName == 'Favorites'
+                          ? context.tr.favorites
+                          : widget.albumName,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     Text(
-                      '${sortedItems.length} items',
+                      context.tr.itemsCount(sortedItems.length),
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -217,7 +219,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
             if (_selecting) ...[
               IconButton(
                 icon: const Icon(Icons.select_all),
-                tooltip: 'Select all',
+                tooltip: context.tr.selectAll,
                 onPressed: () {
                   setState(() {
                     _selected.addAll(sortedItems.map((e) => e.id));
@@ -226,7 +228,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.delete_outline),
-                tooltip: 'Delete selected',
+                tooltip: context.tr.deleteSelected,
                 onPressed: () => _deleteSelected(sortedItems),
               ),
               IconButton(

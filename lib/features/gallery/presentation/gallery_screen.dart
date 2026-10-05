@@ -336,29 +336,29 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   Future<bool> _confirmDelete(int count) async {
     final settings = ref.read(settingsNotifierProvider);
     final isTrash = settings.enableTrash;
-    final itemText = count == 1 ? '1 item' : '$count items';
+    final itemText = context.tr.itemsCount(count);
 
     final result = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(isTrash ? 'Move to Trash?' : 'Delete Permanently?'),
+        title: Text(isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle),
         content: Text(
           isTrash
-              ? '$itemText will be moved to trash.'
-              : '$itemText will be permanently deleted. This action cannot be undone.',
+              ? context.tr.moveToTrashConfirm(itemText)
+              : context.tr.deletePermanentlyConfirm(itemText),
         ),
         actionsOverflowButtonSpacing: 8,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr.cancel),
           ),
           FilledButton(
             style: isTrash
                 ? null
                 : FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
-            child: Text(isTrash ? 'Move to Trash' : 'Delete'),
+            child: Text(isTrash ? context.tr.moveToTrash : context.tr.delete),
           ),
         ],
       ),
@@ -405,14 +405,14 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr.cancel),
           ),
           FilledButton(
             style: isTrash
                 ? null
                 : FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
-            child: Text(isTrash ? 'Move to Trash' : 'Delete'),
+            child: Text(isTrash ? context.tr.moveToTrash : context.tr.delete),
           ),
         ],
       ),
@@ -424,9 +424,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     if (!hasPerm) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Manage All Files permission is required to delete or move items to trash.'),
+          SnackBar(
+            content: Text(context.tr.manageFilesPermissionRequired),
           ),
         );
       }
@@ -758,7 +757,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           children: [
             IconButton(
               icon: const Icon(Icons.select_all),
-              tooltip: 'Select all',
+              tooltip: context.tr.selectAll,
               onPressed: () {
                 setState(() {
                   if (_selected.length == allAlbums.length) {
@@ -771,7 +770,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
-              tooltip: 'Delete selected albums',
+              tooltip: context.tr.deleteSelectedAlbums,
               onPressed: () => _deleteSelectedAlbums(allItems, allAlbums),
             ),
             IconButton(
@@ -786,7 +785,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           children: [
             IconButton(
               icon: const Icon(Icons.share_outlined),
-              tooltip: 'Share',
+              tooltip: context.tr.share,
               onPressed: () {
                 final paths = (mediaAsync.value ?? [])
                     .where((e) => _selected.contains(e.id))
@@ -799,7 +798,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             ),
             IconButton(
               icon: const Icon(Icons.select_all),
-              tooltip: 'Select all',
+              tooltip: context.tr.selectAll,
               onPressed: () {
                 final all = applyFiltersAndSort(
                   mediaAsync.value ?? [],
@@ -817,7 +816,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
-              tooltip: 'Delete selected',
+              tooltip: context.tr.deleteSelected,
               onPressed: () => _deleteSelected(mediaAsync.value ?? []),
             ),
             IconButton(
@@ -836,12 +835,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           scaleDown: 0.88,
           child: IconButton(
             icon: const Icon(Icons.search),
-            tooltip: 'Search',
+            tooltip: context.tr.searchTooltip,
             onPressed: _openSearch,
           ),
         ),
         PopupMenuButton<String>(
-          tooltip: 'More options',
+          tooltip: context.tr.moreOptions,
           color: const Color(0xFF222222),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -859,33 +858,33 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             }
           },
           itemBuilder: (context) => [
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'select',
               child: Row(
                 children: [
-                  Icon(Icons.checklist_rounded, size: 20, color: Colors.white),
-                  SizedBox(width: 12),
-                  Text('Select', style: TextStyle(color: Colors.white, fontSize: 14)),
+                  const Icon(Icons.checklist_rounded, size: 20, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Text(context.tr.select, style: const TextStyle(color: Colors.white, fontSize: 14)),
                 ],
               ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'trash',
               child: Row(
                 children: [
-                  Icon(Icons.delete_sweep_outlined, size: 20, color: Colors.white),
-                  SizedBox(width: 12),
-                  Text('Trash bin', style: TextStyle(color: Colors.white, fontSize: 14)),
+                  const Icon(Icons.delete_sweep_outlined, size: 20, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Text(context.tr.trashBin, style: const TextStyle(color: Colors.white, fontSize: 14)),
                 ],
               ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'settings',
               child: Row(
                 children: [
-                  Icon(Icons.settings_outlined, size: 20, color: Colors.white),
-                  SizedBox(width: 12),
-                  Text('Settings', style: TextStyle(color: Colors.white, fontSize: 14)),
+                  const Icon(Icons.settings_outlined, size: 20, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Text(context.tr.settings, style: const TextStyle(color: Colors.white, fontSize: 14)),
                 ],
               ),
             ),
@@ -926,10 +925,10 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                     const SizedBox(height: 12),
                     Text(
                       _searchQuery.isNotEmpty
-                          ? 'No media matching "$_searchQuery"'
+                          ? context.tr.noMediaMatching(_searchQuery)
                           : (tab == FilterOption.videosOnly
-                              ? 'No videos found'
-                              : 'No photos found'),
+                              ? context.tr.noVideosFound
+                              : context.tr.noPhotosFound),
                       style: const TextStyle(fontSize: 16, color: Colors.grey),
                     ),
                   ],
@@ -1027,8 +1026,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                     const SizedBox(height: 12),
                     Text(
                       _searchQuery.isNotEmpty
-                          ? 'No albums matching "$_searchQuery"'
-                          : 'No albums found',
+                          ? context.tr.noAlbumsMatching(_searchQuery)
+                          : context.tr.noAlbumsFound,
                       style: const TextStyle(fontSize: 16, color: Colors.grey),
                     ),
                   ],

@@ -21,6 +21,23 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            "com.phantek.gallery/screen_keeper"
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "keepOn" -> {
+                    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    result.success(null)
+                }
+                "clearKeepOn" -> {
+                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             "com.phantek.gallery/folder_picker"
         ).setMethodCallHandler { call, result ->
             if (call.method == "pickFolder") {

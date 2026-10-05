@@ -108,7 +108,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon: Icons.grid_view_rounded,
                   iconColor: const Color(0xFF3B82F6),
                   title: context.tr.gridColumns,
-                  subtitle: '${settings.gridColumns} columns',
+                  subtitle: context.tr.columnsCount(settings.gridColumns),
                   onTap: () async {
                     final chosen = await _showModernGridColumnsDialog(
                       context,
@@ -125,7 +125,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon: Icons.photo_library_rounded,
                   iconColor: const Color(0xFF6366F1),
                   title: context.tr.albumsGridColumns,
-                  subtitle: '${settings.albumGridColumns} columns',
+                  subtitle: context.tr.columnsCount(settings.albumGridColumns),
                   onTap: () async {
                     final chosen = await _showModernGridColumnsDialog(
                       context,
@@ -146,6 +146,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   value: settings.showBadges,
                   onChanged: (v) => patch((s) => s.copyWith(showBadges: v)),
                 ),
+                const _CardDivider(),
+                _ModernSwitchTile(
+                  icon: Icons.light_mode_outlined,
+                  iconColor: const Color(0xFFFACC15),
+                  title: context.tr.keepScreenOn,
+                  subtitle: context.tr.keepScreenOnSubtitle,
+                  value: settings.keepScreenOn,
+                  onChanged: (v) => patch((s) => s.copyWith(keepScreenOn: v)),
+                ),
               ],
             ),
 
@@ -157,7 +166,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.cleaning_services_rounded,
                 iconColor: const Color(0xFFF97316),
                 title: context.tr.clearThumbnailCache,
-                subtitle: 'Disk size: $_cacheSizeStr',
+                subtitle: context.tr.diskSize(_cacheSizeStr),
                 onTap: () async {
                   await ThumbnailService.instance.clearAll();
                   await _loadCacheSize();
@@ -214,8 +223,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           SnackBar(
                             content: Text(
                               granted
-                                  ? 'All Files Access granted'
-                                  : 'Manage All Files permission is not granted',
+                                  ? context.tr.allFilesGranted
+                                  : context.tr.allFilesNotGranted,
                               textAlign: TextAlign.center,
                             ),
                           ),
@@ -260,7 +269,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon: Icons.update_rounded,
                   iconColor: const Color(0xFF10B981),
                   title: context.tr.autoCheckUpdate,
-                  subtitle: 'Check GitHub Releases on launch',
+                  subtitle: context.tr.checkUpdateOnLaunchSubtitle,
                   value: settings.autoCheckUpdate,
                   onChanged: (v) =>
                       patch((s) => s.copyWith(autoCheckUpdate: v)),
@@ -272,7 +281,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     icon: Icons.system_update_alt_rounded,
                     iconColor: const Color(0xFF8B5CF6),
                     title: context.tr.checkUpdateNow,
-                    subtitle: 'Check GitHub for newer APK releases',
+                    subtitle: context.tr.checkGitHubReleasesSubtitle,
                     isLoading: update.isLoading,
                     enabled: !update.isLoading,
                     onTap: () => ref
@@ -894,7 +903,7 @@ Future<AppLanguage?> _showModernLanguageDialog(
                         ),
                       ),
                       Text(
-                        '11 languages supported',
+                        context.tr.supportedLanguagesCount,
                         style: TextStyle(
                           fontSize: 12,
                           color: cs.onSurfaceVariant,
@@ -1077,15 +1086,15 @@ Future<AppThemeMode?> _showModernThemeDialog(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Select Theme',
-                          style: TextStyle(
+                        Text(
+                          context.tr.selectTheme,
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
-                          'Choose visual mode and contrast',
+                          context.tr.chooseVisualMode,
                           style: TextStyle(
                             fontSize: 12,
                             color: cs.onSurfaceVariant,
@@ -1139,7 +1148,7 @@ class _ThemeOptionCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          'Follows device system settings',
+          context.tr.themeSystemDesc,
         ),
       AppThemeMode.light => (
           Icons.wb_sunny_rounded,
@@ -1147,7 +1156,7 @@ class _ThemeOptionCard extends StatelessWidget {
           const LinearGradient(
             colors: [Color(0xFFFAFAFA), Color(0xFFE2E8F0)],
           ),
-          'Clean & bright daytime palette',
+          context.tr.themeLightDesc,
         ),
       AppThemeMode.dark => (
           Icons.dark_mode_rounded,
@@ -1155,7 +1164,7 @@ class _ThemeOptionCard extends StatelessWidget {
           const LinearGradient(
             colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
           ),
-          'Sleek charcoal dark mode',
+          context.tr.themeDarkDesc,
         ),
       AppThemeMode.amoled => (
           Icons.phone_android_rounded,
@@ -1163,7 +1172,7 @@ class _ThemeOptionCard extends StatelessWidget {
           const LinearGradient(
             colors: [Color(0xFF000000), Color(0xFF0A0A0A)],
           ),
-          'Pure pitch black for OLED displays',
+          context.tr.themeAmoledDesc,
         ),
       AppThemeMode.amoledSakura => (
           Icons.local_florist_rounded,
@@ -1171,7 +1180,7 @@ class _ThemeOptionCard extends StatelessWidget {
           const LinearGradient(
             colors: [Color(0xFF000000), Color(0xFF1E0F16)],
           ),
-          'Pure black with cherry sakura pink \u{1F338}',
+          context.tr.themeSakuraDesc,
         ),
     };
 
@@ -1218,7 +1227,7 @@ class _ThemeOptionCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          mode.label,
+                          context.tr.themeModeLabel(mode),
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight:
@@ -1271,10 +1280,10 @@ Future<int?> _showModernGridColumnsDialog(
 }) {
   final cs = Theme.of(context).colorScheme;
   final title =
-      isAlbum ? 'Select Albums Grid Columns' : 'Select Grid Columns';
+      isAlbum ? context.tr.selectAlbumsGridColumns : context.tr.selectGridColumns;
   final subtitle = isAlbum
-      ? 'Choose album cards density'
-      : 'Choose media thumbnail density';
+      ? context.tr.chooseAlbumDensity
+      : context.tr.chooseThumbnailDensity;
 
   return showDialog<int>(
     context: context,
@@ -1365,11 +1374,11 @@ class _ColumnOptionCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     final subtitle = switch (columns) {
-      2 => 'Large comfortable view',
-      3 => 'Standard balanced (Default)',
-      4 => 'Compact detailed view',
-      5 => 'Dense high-capacity overview',
-      _ => '$columns columns layout',
+      2 => context.tr.largeComfortableView,
+      3 => context.tr.standardBalanced,
+      4 => context.tr.compactDetailedView,
+      5 => context.tr.denseHighCapacity,
+      _ => context.tr.columnsCount(columns),
     };
 
     return Padding(
@@ -1434,7 +1443,7 @@ class _ColumnOptionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '$columns columns',
+                      context.tr.columnsCount(columns),
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight:

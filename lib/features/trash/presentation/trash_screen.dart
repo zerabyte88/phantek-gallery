@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/router.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/trash_item.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
@@ -70,7 +71,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$count item${count == 1 ? '' : 's'} restored')),
+        SnackBar(content: Text(context.tr.itemRestored(context.tr.itemsCount(count)))),
       );
     }
   }
@@ -80,8 +81,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     if (count == 0) return;
     final allSelected = _selected.length == all.length;
     final title = allSelected
-        ? 'Permanently delete all items?'
-        : (count == 1 ? 'Permanently delete 1 item?' : 'Permanently delete $count items?');
+        ? context.tr.permanentlyDeleteAllTitle
+        : context.tr.permanentlyDeleteCountTitle(count);
 
     final ok = await showModalBottomSheet<bool>(
       context: context,
@@ -125,9 +126,9 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                     elevation: 0,
                   ),
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text(
-                    'Permanently delete',
-                    style: TextStyle(
+                  child: Text(
+                    context.tr.delete,
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -144,7 +145,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                   ),
                   onPressed: () => Navigator.pop(ctx, false),
                   child: Text(
-                    'Cancel',
+                    context.tr.cancel,
                     style: TextStyle(
                       fontSize: 15,
                       color: cs.onSurfaceVariant,
@@ -173,7 +174,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     final bool partialSelected = _selected.isNotEmpty && !allSelected;
 
     return IconButton(
-      tooltip: allSelected ? 'Deselect all' : 'Select all',
+      tooltip: allSelected ? context.tr.deselectAll : context.tr.selectAll,
       icon: Container(
         width: 22,
         height: 22,
@@ -183,8 +184,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
               : Colors.transparent,
           border: Border.all(
             color: (allSelected || partialSelected)
-                ? cs.primary
-                : cs.onSurface.withValues(alpha: 0.6),
+              ? cs.primary
+              : cs.onSurface.withValues(alpha: 0.6),
             width: 2,
           ),
           borderRadius: BorderRadius.circular(5),
@@ -229,21 +230,21 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           centerTitle: _selecting,
           title: Text(
             _selecting
-                ? (_selected.isEmpty ? 'Select items' : '${_selected.length} selected')
-                : 'Recently deleted',
+                ? (_selected.isEmpty ? context.tr.selectItems : '${_selected.length} ${context.tr.selected}')
+                : context.tr.recentlyDeleted,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
           ),
           actions: [
             if (_selecting)
               IconButton(
                 icon: const Icon(Icons.close, size: 22),
-                tooltip: 'Cancel',
+                tooltip: context.tr.cancel,
                 onPressed: _clearSelection,
               )
             else if (trashAsync.value?.isNotEmpty ?? false)
               IconButton(
                 icon: const Icon(Icons.check_box_outlined, size: 22),
-                tooltip: 'Select',
+                tooltip: context.tr.select,
                 onPressed: () => setState(() => _selecting = true),
               ),
           ],
@@ -259,7 +260,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                   child: Text(
-                    'Deleted content is kept for 30 days before permanent deletion.',
+                    context.tr.trashRetentionNote,
                     style: TextStyle(
                       fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
@@ -327,7 +328,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                   children: [
                     _BottomActionItem(
                       icon: Icons.restore_rounded,
-                      label: 'Restore',
+                      label: context.tr.restore,
                       enabled: _selected.isNotEmpty,
                       onTap: _selected.isNotEmpty
                           ? () => _restoreSelected(trashAsync.value ?? [])
@@ -335,7 +336,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                     ),
                     _BottomActionItem(
                       icon: Icons.delete_outline_rounded,
-                      label: 'Delete',
+                      label: context.tr.delete,
                       enabled: _selected.isNotEmpty,
                       onTap: _selected.isNotEmpty
                           ? () => _deleteSelected(trashAsync.value ?? [])
@@ -424,7 +425,7 @@ class _TrashEmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            'No recently deleted content',
+            context.tr.noRecentlyDeleted,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
@@ -561,7 +562,7 @@ class _TrashGridItem extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(left: 2),
             child: Text(
-              daysRemaining == 1 ? '1 day' : '$daysRemaining days',
+              context.tr.daysLeft(daysRemaining),
               style: TextStyle(
                 fontSize: 12,
                 color: cs.onSurfaceVariant,

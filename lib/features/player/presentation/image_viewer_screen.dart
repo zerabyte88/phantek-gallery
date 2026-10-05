@@ -6,11 +6,13 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/media_item.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
+import '../../../core/services/screen_keeper_service.dart';
 import '../../../core/services/share_service.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../../core/utils/media_utils.dart';
@@ -134,6 +136,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         }
       });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    if (ref.read(settingsNotifierProvider).keepScreenOn) {
+      ScreenKeeperService.setKeepScreenOn(true);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _precacheAdjacent(_current));
   }
 
@@ -150,6 +155,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   @override
   void dispose() {
+    ScreenKeeperService.setKeepScreenOn(false);
     _transformationController.dispose();
     _zoomAnimController?.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -319,7 +325,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"${item.name}" restored')),
+        SnackBar(content: Text(context.tr.itemRestored(item.name))),
       );
       if (widget.items.length <= 1) {
         Navigator.of(context).pop();
@@ -342,20 +348,20 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       final ok = await showDialog<bool>(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('Delete Permanently?'),
+          title: Text(context.tr.deletePermanentlyTitle),
           content: Text(
-            '"${item.name}" will be permanently deleted. This action cannot be undone.',
+            context.tr.deletePermanentlyConfirm(item.name),
           ),
           actionsOverflowButtonSpacing: 8,
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(context.tr.cancel),
             ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete'),
+              child: Text(context.tr.delete),
             ),
           ],
         ),
@@ -385,24 +391,24 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(isTrash ? 'Move to Trash?' : 'Delete Permanently?'),
+        title: Text(isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle),
         content: Text(
           isTrash
-              ? '"${item.name}" will be moved to trash.'
-              : '"${item.name}" will be permanently deleted. This action cannot be undone.',
+              ? context.tr.moveToTrashConfirm(item.name)
+              : context.tr.deletePermanentlyConfirm(item.name),
         ),
         actionsOverflowButtonSpacing: 8,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr.cancel),
           ),
           FilledButton(
             style: isTrash
                 ? null
                 : FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
-            child: Text(isTrash ? 'Move to Trash' : 'Delete'),
+            child: Text(isTrash ? context.tr.moveToTrash : context.tr.delete),
           ),
         ],
       ),
@@ -413,9 +419,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     if (!hasPerm) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Manage All Files permission is required to delete or move items to trash.'),
+          SnackBar(
+            content: Text(context.tr.manageFilesPermissionRequired),
           ),
         );
       }
@@ -443,7 +448,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete item: $e')),
+          SnackBar(content: Text(context.tr.failedToDelete(e.toString()))),
         );
       }
       return;
@@ -480,8 +485,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             children: [
               ListTile(
                 leading: const Icon(Icons.edit_outlined, color: Colors.white),
-                title: const Text('Rename',
-                    style: TextStyle(color: Colors.white, fontSize: 15)),
+                title: Text(context.tr.rename,
+                    style: const TextStyle(color: Colors.white, fontSize: 15)),
                 onTap: () async {
                   Navigator.pop(sheetContext);
                   final updated =
@@ -496,8 +501,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
               ListTile(
                 leading:
                     const Icon(Icons.wallpaper_outlined, color: Colors.white),
-                title: const Text('Set as wallpaper',
-                    style: TextStyle(color: Colors.white, fontSize: 15)),
+                title: Text(context.tr.setAsWallpaper,
+                    style: const TextStyle(color: Colors.white, fontSize: 15)),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   ShareService.setAsWallpaper(item.path);
@@ -828,7 +833,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                             IconButton(
                               icon: const Icon(Icons.info_outline,
                                   color: Colors.white, size: 22),
-                              tooltip: 'Details',
+                              tooltip: context.tr.details,
                               onPressed: () =>
                                   showMediaInfoSheet(context, item),
                             ),
@@ -875,20 +880,20 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 _ViewerActionButton(
                                   icon: const Icon(Icons.restore,
                                       color: Colors.white, size: 22),
-                                  label: 'Restore',
+                                  label: context.tr.restore,
                                   onTap: _restoreCurrentItem,
                                 ),
                                 _ViewerActionButton(
                                   icon: const Icon(Icons.info_outline,
                                       color: Colors.white, size: 22),
-                                  label: 'Details',
+                                  label: context.tr.details,
                                   onTap: () =>
                                       showMediaInfoSheet(context, item),
                                 ),
                                 _ViewerActionButton(
                                   icon: const Icon(Icons.delete_forever,
                                       color: Colors.white, size: 22),
-                                  label: 'Delete',
+                                  label: context.tr.delete,
                                   onTap: _deleteCurrentItem,
                                 ),
                               ],
@@ -899,7 +904,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 _ViewerActionButton(
                                   icon: const Icon(Icons.share_outlined,
                                       color: Colors.white, size: 22),
-                                  label: 'Share',
+                                  label: context.tr.share,
                                   onTap: () => ShareService.shareSingle(
                                       item.path,
                                       isVideo: false),
@@ -917,7 +922,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                         color: isFav ? Colors.redAccent : Colors.white,
                                         size: 22,
                                       ),
-                                      label: 'Favorite',
+                                      label: context.tr.favorite,
                                       onTap: () {
                                         HapticFeedback.lightImpact();
                                         final currentFavs = Set<String>.from(
@@ -940,13 +945,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 _ViewerActionButton(
                                   icon: const Icon(Icons.delete_outline,
                                       color: Colors.white, size: 22),
-                                  label: 'Delete',
+                                  label: context.tr.delete,
                                   onTap: _deleteCurrentItem,
                                 ),
                                 _ViewerActionButton(
                                   icon: const Icon(Icons.more_vert,
                                       color: Colors.white, size: 22),
-                                  label: 'More',
+                                  label: context.tr.more,
                                   onTap: () => _showMoreOptions(item),
                                 ),
                               ],

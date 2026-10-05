@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,7 +10,9 @@ import 'package:phantek_gallery/core/models/album.dart';
 import 'package:phantek_gallery/core/models/media_item.dart';
 import 'package:phantek_gallery/core/models/settings_model.dart';
 import 'package:phantek_gallery/core/providers/media_provider.dart';
+import 'package:flutter/services.dart';
 import 'package:phantek_gallery/core/services/settings_service.dart';
+import 'package:phantek_gallery/core/services/screen_keeper_service.dart';
 import 'package:phantek_gallery/core/services/media_scanner_service.dart';
 import 'package:phantek_gallery/core/services/thumbnail_service.dart';
 import 'package:phantek_gallery/core/services/trash_service.dart';
@@ -210,6 +211,7 @@ void main() {
       expect(settings.enableTrash, isTrue);
       expect(settings.hardwareAcceleration, isTrue);
       expect(settings.autoCheckUpdate, isTrue);
+      expect(settings.keepScreenOn, isFalse);
       expect(settings.defaultSort, SortOption.newest);
       expect(settings.defaultFilter, FilterOption.all);
     });
@@ -1651,7 +1653,7 @@ void main() {
 
       // Open Excluded Folders dialog (now localized to 'Folder yang Dikecualikan')
       final excludedTile = find.text('Folder yang Dikecualikan');
-      await tester.ensureVisible(excludedTile);
+      await tester.scrollUntilVisible(excludedTile, 200);
       await tester.pumpAndSettle();
       await tester.tap(excludedTile);
       await tester.pumpAndSettle();
@@ -1669,6 +1671,77 @@ void main() {
 
       final disabled = enabled.copyWith(autoPlayVideo: false);
       expect(disabled.autoPlayVideo, isFalse);
+    });
+
+    test('SettingsModel keepScreenOn flag toggles and persists', () async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      const defaultSettings = SettingsModel();
+      expect(defaultSettings.keepScreenOn, isFalse);
+
+      final enabled = defaultSettings.copyWith(keepScreenOn: true);
+      expect(enabled.keepScreenOn, isTrue);
+
+      await SettingsService.instance.save(enabled);
+      final reloaded = SettingsService.instance.settings;
+      expect(reloaded.keepScreenOn, isTrue);
+    });
+
+    test('ScreenKeeperService platform channel dispatch', () async {
+      final log = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('com.phantek.gallery/screen_keeper'),
+        (methodCall) async {
+          log.add(methodCall);
+          return null;
+        },
+      );
+
+      await ScreenKeeperService.setKeepScreenOn(true);
+      expect(log.length, 1);
+      expect(log.last.method, 'keepOn');
+
+      await ScreenKeeperService.setKeepScreenOn(false);
+      expect(log.length, 2);
+      expect(log.last.method, 'clearKeepOn');
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('com.phantek.gallery/screen_keeper'),
+        null,
+      );
+    });
+
+    test('AppLocalizations complete coverage across all 11 supported languages', () {
+      for (final lang in AppLanguage.values) {
+        if (lang == AppLanguage.system || lang.code == null) continue;
+        final loc = AppLocalizations(Locale(lang.code!));
+        expect(loc.keepScreenOn.isNotEmpty, isTrue, reason: '${lang.code} keepScreenOn');
+        expect(loc.keepScreenOnSubtitle.isNotEmpty, isTrue, reason: '${lang.code} keepScreenOnSubtitle');
+        expect(loc.themeSystemDesc.isNotEmpty, isTrue, reason: '${lang.code} themeSystemDesc');
+        expect(loc.themeLightDesc.isNotEmpty, isTrue, reason: '${lang.code} themeLightDesc');
+        expect(loc.themeDarkDesc.isNotEmpty, isTrue, reason: '${lang.code} themeDarkDesc');
+        expect(loc.themeAmoledDesc.isNotEmpty, isTrue, reason: '${lang.code} themeAmoledDesc');
+        expect(loc.themeSakuraDesc.isNotEmpty, isTrue, reason: '${lang.code} themeSakuraDesc');
+        expect(loc.aboutPhantek.isNotEmpty, isTrue, reason: '${lang.code} aboutPhantek');
+        expect(loc.offlineGalleryDesc.isNotEmpty, isTrue, reason: '${lang.code} offlineGalleryDesc');
+        expect(loc.appVersion.isNotEmpty, isTrue, reason: '${lang.code} appVersion');
+        expect(loc.buildNumberLabel.isNotEmpty, isTrue, reason: '${lang.code} buildNumberLabel');
+        expect(loc.architecture.isNotEmpty, isTrue, reason: '${lang.code} architecture');
+        expect(loc.license.isNotEmpty, isTrue, reason: '${lang.code} license');
+        expect(loc.developerLabel.isNotEmpty, isTrue, reason: '${lang.code} developerLabel');
+        expect(loc.creatorMaintainer.isNotEmpty, isTrue, reason: '${lang.code} creatorMaintainer');
+        expect(loc.openGitHubProfile.isNotEmpty, isTrue, reason: '${lang.code} openGitHubProfile');
+        expect(loc.newVersionAvailable.isNotEmpty, isTrue, reason: '${lang.code} newVersionAvailable');
+        expect(loc.whatsNew.isNotEmpty, isTrue, reason: '${lang.code} whatsNew');
+        expect(loc.downloadAndInstall.isNotEmpty, isTrue, reason: '${lang.code} downloadAndInstall');
+        expect(loc.later.isNotEmpty, isTrue, reason: '${lang.code} later');
+        expect(loc.downloading.isNotEmpty, isTrue, reason: '${lang.code} downloading');
+        expect(loc.alreadyUpToDate.isNotEmpty, isTrue, reason: '${lang.code} alreadyUpToDate');
+        expect(loc.downloadFailed.isNotEmpty, isTrue, reason: '${lang.code} downloadFailed');
+      }
     });
 
     testWidgets('FilterSortBar with PageController renders and updates with page navigation', (tester) async {
