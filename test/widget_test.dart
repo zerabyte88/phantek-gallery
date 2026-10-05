@@ -775,23 +775,24 @@ void main() {
       expect(searchBtn, findsOneWidget);
       await tester.tap(searchBtn);
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 350));
 
-      // Search bar TextField should now be visible
+      // Search bar TextField and Cancel button should now be visible
       expect(find.byType(TextField), findsOneWidget);
       expect(find.text('Search media or albums...'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
 
       // Enter search query
       await tester.enterText(find.byType(TextField), '3.mp4');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Close search via back button
-      final closeSearchBtn = find.byTooltip('Close search');
-      expect(closeSearchBtn, findsOneWidget);
-      await tester.tap(closeSearchBtn);
+      // Clear search query via Cancel button
+      final cancelBtn = find.text('Cancel');
+      expect(cancelBtn, findsOneWidget);
+      await tester.tap(cancelBtn);
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 350));
 
       // Search bar is closed, normal Phantek title restored
       expect(find.text('Phantek'), findsOneWidget);
@@ -1119,22 +1120,31 @@ void main() {
       expect(bytes * 3, lessThan(256 * 1024 * 1024));
     });
 
-    test('Hero morphing flight shuttle interpolates cover and contain opacities correctly', () {
-      double computeCoverOpacity(double progress) => (progress * 1.5 - 0.2).clamp(0.0, 1.0);
-      double computeContainOpacity(double coverOpacity) => (1.0 - coverOpacity).clamp(0.0, 1.0);
+    test('Hero flight shuttle preserves AspectRatio and interpolates bounds without vertical distortion', () {
+      // Starting from 120x120 grid cell (1:1 aspect ratio)
+      const srcWidth = 120.0;
+      const srcHeight = 120.0;
 
-      // In viewer (progress = 0.0) -> contain is 1.0, cover is 0.0
-      expect(computeCoverOpacity(0.0), 0.0);
-      expect(computeContainOpacity(computeCoverOpacity(0.0)), 1.0);
+      // Destination 16:9 landscape photo on 412px screen (412 x 231.75)
+      const dstWidth = 412.0;
+      const dstHeight = 412.0 / (16.0 / 9.0); // 231.75
 
-      // Halfway (progress = 0.5) -> smooth transition
-      final halfCover = computeCoverOpacity(0.5);
-      expect(halfCover, closeTo(0.55, 0.01));
-      expect(computeContainOpacity(halfCover), closeTo(0.45, 0.01));
+      double widthAt(double t) => srcWidth + t * (dstWidth - srcWidth);
+      double heightAt(double t) => srcHeight + t * (dstHeight - srcHeight);
+      double ratioAt(double t) => widthAt(t) / heightAt(t);
 
-      // Landing on grid tile (progress = 1.0) -> cover is 1.0, contain is 0.0
-      expect(computeCoverOpacity(1.0), 1.0);
-      expect(computeContainOpacity(computeCoverOpacity(1.0)), 0.0);
+      // t = 0 (Grid cell): 1.0 (Square)
+      expect(ratioAt(0.0), 1.0);
+
+      // t = 0.5 (Mid flight): 1.512 (smoothly widening, never tall/distorted!)
+      expect(ratioAt(0.5), closeTo(1.512, 0.01));
+      expect(heightAt(0.5), closeTo(175.875, 0.01));
+      expect(widthAt(0.5), 266.0);
+
+      // t = 1.0 (Viewer): 1.777 (16:9 Landscape)
+      expect(ratioAt(1.0), closeTo(1.777, 0.01));
+      expect(heightAt(1.0), closeTo(231.75, 0.01));
+      expect(widthAt(1.0), 412.0);
     });
 
     testWidgets('MediaGridItem renders Hero thumbnail inside a ClipRect', (tester) async {

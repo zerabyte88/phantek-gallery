@@ -62,8 +62,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   double? _startDragX;
   TapDownDetails? _doubleTapDetails;
   bool _isSwiping = false;
-  // Drives only the Video() subtree so drag start/end doesn't rebuild the screen.
-  final ValueNotifier<bool> _swipeNotifier = ValueNotifier(false);
+  // Controls the visibility of the active Video() texture surface.
+  final ValueNotifier<bool> _videoSurfaceVisible = ValueNotifier(false);
   int? _pendingIndex;
   bool _isVideoZoomed = false;
   bool _isPinching = false;
@@ -298,6 +298,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       }
     });
 
+    _player.stream.playing.listen((playing) {
+      if (playing && mounted && !_videoSurfaceVisible.value) {
+        _videoSurfaceVisible.value = true;
+      }
+    });
+
     final currentPath = _videos[_current].path;
     final isWebM = currentPath.toLowerCase().endsWith('.webm');
     if (_player.platform is NativePlayer) {
@@ -310,20 +316,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       }
     }
 
-    _swipeNotifier.value = true;
+    _videoSurfaceVisible.value = false;
     _player.open(
       Media(currentPath),
       play: false,
-    ).then((_) async {
-      try {
-        await _controller.waitUntilFirstFrameRendered
-            .timeout(const Duration(seconds: 1), onTimeout: () => null);
-        await Future.delayed(const Duration(milliseconds: 50));
-      } catch (_) {}
-      if (mounted && !_isSwiping && _activePointers.isEmpty) {
-        _swipeNotifier.value = false;
-      }
-    });
+    );
   }
 
   void _changeToVideo(int index) {
@@ -339,9 +336,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _current = index;
     });
 
-    // Keep the texture transparent until the new media is loaded so the old
-    // video's last frame never flashes on the new page.
-    _swipeNotifier.value = true;
+    _videoSurfaceVisible.value = false;
 
     // Open after the frame is built so the native call never lands mid-gesture.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -363,14 +358,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         await _player.open(Media(path), play: false);
         if (_isLooping) _player.setPlaylistMode(PlaylistMode.loop);
         if (_playbackSpeed != 1.0) _player.setRate(_playbackSpeed);
-        // Wait until MPV has decoded and rendered the first frame before revealing the Video surface
-        await _controller.waitUntilFirstFrameRendered
-            .timeout(const Duration(seconds: 1), onTimeout: () => null);
-        await Future.delayed(const Duration(milliseconds: 50));
       } catch (_) {}
-      if (mounted && _current == index && !_isSwiping && _activePointers.isEmpty) {
-        _swipeNotifier.value = false;
-      }
     });
     if (_isFullscreen) {
       if (_isCurrentVideoPortrait()) {
@@ -413,7 +401,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _zoomAnimController?.dispose();
     _settle.dispose();
     _isDraggingDown.dispose();
-    _swipeNotifier.dispose();
+    _videoSurfaceVisible.dispose();
     _dragNotifier.dispose();
     _transformationController.dispose();
     _player.dispose(); // releases native MPV context
@@ -479,6 +467,44 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     } else {
       _enterFullscreen();
     }
+  }
+
+  Widget _buildVideoPage(int index) {
+    final item = _videos[index];
+    Widget content = Stack(
+      alignment: Alignment.center,
+      children: [
+        _VideoThumbnailPage(item: item),
+        if (index == _current)
+          ValueListenableBuilder<bool>(
+            valueListenable: _videoSurfaceVisible,
+            builder: (context, visible, _) => AnimatedOpacity(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              opacity: visible ? 1.0 : 0.0,
+              child: IgnorePointer(
+                ignoring: !visible,
+                child: Video(
+                  key: const ValueKey('active_video_surface'),
+                  controller: _controller,
+                  controls: NoVideoControls,
+                  fit: BoxFit.contain,
+                  fill: Colors.transparent,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+
+    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
+      content = AspectRatio(
+        aspectRatio: item.width! / item.height!,
+        child: content,
+      );
+    }
+
+    return content;
   }
 
   void _handleDoubleTap() {
@@ -781,7 +807,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 onPointerMove: (e) {
                   // Detach the MPV texture on the first horizontal movement, before
                   // the PageView's own drag slop triggers ScrollStartNotification.
-                  if (!_swipeNotifier.value &&
+                  if (_videoSurfaceVisible.value &&
                       !_isCurrentlyVideoZoomed &&
                       !_isMultiTouch &&
                       !_isPinching &&
@@ -791,7 +817,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     final adx = (e.position.dx - _startDragX!).abs();
                     final ady = (e.position.dy - _startDragY!).abs();
                     if (adx > 10 && adx > ady * 1.3) {
-                      _swipeNotifier.value = true;
+                      _videoSurfaceVisible.value = false;
                       _isSwipingHorizontal = true;
                       return;
                     }
@@ -835,8 +861,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     _isSwipingHorizontal = false;
                     _startDragY = null;
                     _startDragX = null;
-                    // No page scroll in progress: this was a tap / non-swipe gesture.
-                    if (!_isSwiping) _swipeNotifier.value = false;
+                    // Restore video surface if not swiping and player is playing
+                    if (!_isSwiping && _player.state.playing) {
+                      _videoSurfaceVisible.value = true;
+                    }
 
                     final d = _dragNotifier.value;
                     final vy = _vt.getVelocity().pixelsPerSecond.dy;
@@ -855,7 +883,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 onPointerCancel: (e) {
                   _activePointers.remove(e.pointer);
                   if (_activePointers.isEmpty) {
-                    if (!_isSwiping) _swipeNotifier.value = false;
                     _isMultiTouch = false;
                     _isPinching = false;
                     _isSwipingHorizontal = false;
@@ -902,7 +929,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         if (notification is ScrollStartNotification) {
                           if (notification.dragDetails != null) {
                             _isSwiping = true;
-                            _swipeNotifier.value = true;
+                            _videoSurfaceVisible.value = false;
                             // Immediately pause playback on swipe to free hardware decoder
                             // and GPU pipeline for silky-smooth 60/120fps motion.
                             if (_player.state.playing) {
@@ -912,7 +939,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         } else if (notification is ScrollUpdateNotification) {
                           if (notification.dragDetails != null && !_isSwiping) {
                             _isSwiping = true;
-                            _swipeNotifier.value = true;
+                            _videoSurfaceVisible.value = false;
                             if (_player.state.playing) {
                               _player.pause();
                             }
@@ -929,8 +956,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                           if (changing) {
                             // _changeToVideo re-mounts the texture once loaded.
                             _changeToVideo(target);
-                          } else {
-                            _swipeNotifier.value = false;
                           }
                         }
                         return false;
@@ -1007,44 +1032,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                         flightDirection: flightDirection,
                                         item: _videos[index],
                                       ),
-                                      child: Stack(
-                                        fit: StackFit.passthrough,
-                                        alignment: Alignment.center,
-                                        children: [
-                                          _VideoThumbnailPage(
-                                              item: _videos[index]),
-                                          // Texture fades out smoothly while dragging/settling;
-                                          // the thumbnail underneath keeps the frame with 0 black screen.
-                                          ValueListenableBuilder<bool>(
-                                            valueListenable: _swipeNotifier,
-                                            builder: (context, swiping, _) =>
-                                                AnimatedOpacity(
-                                              duration: const Duration(
-                                                  milliseconds: 150),
-                                              curve: Curves.easeOut,
-                                              opacity: swiping ? 0.0 : 1.0,
-                                              child: IgnorePointer(
-                                                ignoring: swiping,
-                                                child: Video(
-                                                  key: const ValueKey(
-                                                      'active_video_surface'),
-                                                  controller: _controller,
-                                                  controls: NoVideoControls,
-                                                  fit: BoxFit.contain,
-                                                  fill: Colors.transparent,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                      child: _buildVideoPage(index),
                                     ),
                                   ),
                                 ),
                               ),
                             );
                           }
-                          return _VideoThumbnailPage(item: _videos[index]);
+                          return Center(child: _buildVideoPage(index));
                         },
                       );
                     },
@@ -1134,52 +1129,39 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       children: [
                         // Center play button when paused (exact center of the screen)
                         Center(
-                          child: ValueListenableBuilder<bool>(
-                            valueListenable: _swipeNotifier,
-                            builder: (context, swiping, child) =>
-                                AnimatedOpacity(
-                              opacity: swiping ? 0.0 : 1.0,
-                              duration: const Duration(milliseconds: 250),
-                              curve: Curves.easeInOut,
-                              child: IgnorePointer(
-                                ignoring: swiping,
-                                child: child,
-                              ),
-                            ),
-                            child: StreamBuilder<bool>(
-                              stream: _player.stream.playing,
-                              builder: (_, snap) {
-                                final playing = snap.data ?? false;
-                                if (playing) return const SizedBox.shrink();
-                                return BouncyTap(
-                                  onTap: _player.play,
-                                  child: Container(
-                                    width: 72,
-                                    height: 72,
-                                    decoration: BoxDecoration(
-                                      color: Colors.black
-                                          .withValues(alpha: 0.55),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.4),
-                                        width: 1.5,
-                                      ),
+                          child: StreamBuilder<bool>(
+                            stream: _player.stream.playing,
+                            builder: (_, snap) {
+                              final playing = snap.data ?? false;
+                              if (playing) return const SizedBox.shrink();
+                              return BouncyTap(
+                                onTap: _player.play,
+                                child: Container(
+                                  width: 72,
+                                  height: 72,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black
+                                        .withValues(alpha: 0.55),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white
+                                          .withValues(alpha: 0.4),
+                                      width: 1.5,
                                     ),
-                                    child: const Center(
-                                      child: Padding(
-                                        padding: EdgeInsets.only(left: 3),
-                                        child: Icon(
-                                          Icons.play_arrow_rounded,
-                                          size: 48,
-                                          color: Colors.white,
-                                        ),
+                                  ),
+                                  child: const Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.only(left: 3),
+                                      child: Icon(
+                                        Icons.play_arrow_rounded,
+                                        size: 48,
+                                        color: Colors.white,
                                       ),
                                     ),
                                   ),
-                                );
-                              },
-                            ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                         // Top bar
@@ -1263,46 +1245,14 @@ Widget _buildHeroShuttle({
     return _VideoThumbnailPage(item: item);
   }
 
-  return AnimatedBuilder(
-    animation: animation,
-    builder: (context, _) {
-      // In Flutter Hero flight, animation.value goes 0.0 (Grid) -> 1.0 (Viewer) on push,
-      // and 1.0 (Viewer) -> 0.0 (Grid) on pop.
-      // Progress toward the Grid state (1.0 at Grid, 0.0 at Viewer) is always (1.0 - animation.value).
-      final double gridProgress = (1.0 - animation.value).clamp(0.0, 1.0);
-
-      final double coverOpacity = (gridProgress * 1.5 - 0.2).clamp(0.0, 1.0);
-      final double containOpacity = (1.0 - coverOpacity).clamp(0.0, 1.0);
-
-      return ClipRect(
-        clipBehavior: Clip.hardEdge,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (containOpacity > 0.001)
-              Opacity(
-                opacity: containOpacity,
-                child: Image(
-                  image: p,
-                  fit: BoxFit.contain,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.medium,
-                ),
-              ),
-            if (coverOpacity > 0.001)
-              Opacity(
-                opacity: coverOpacity,
-                child: Image(
-                  image: p,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.medium,
-                ),
-              ),
-          ],
-        ),
-      );
-    },
+  return ClipRect(
+    clipBehavior: Clip.hardEdge,
+    child: Image(
+      image: p,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+    ),
   );
 }
 
@@ -1314,29 +1264,21 @@ class _VideoThumbnailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final cached = ThumbnailService.instance.getMemoryThumbnail(item.id);
     if (cached != null) {
-      return Center(
-        child: Image.memory(
-          cached,
-          fit: BoxFit.contain,
-          width: double.infinity,
-          height: double.infinity,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.high,
-        ),
+      return Image.memory(
+        cached,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.high,
       );
     }
 
     final diskFile = ThumbnailService.instance.getCachedFile(item.id);
     if (diskFile != null) {
-      return Center(
-        child: Image.file(
-          diskFile,
-          fit: BoxFit.contain,
-          width: double.infinity,
-          height: double.infinity,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.high,
-        ),
+      return Image.file(
+        diskFile,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.high,
       );
     }
 
@@ -1345,15 +1287,11 @@ class _VideoThumbnailPage extends StatelessWidget {
           .getThumbnail(item.id, filePath: item.path, isVideo: true),
       builder: (context, snapshot) {
         if (snapshot.data != null) {
-          return Center(
-            child: Image.memory(
-              snapshot.data!,
-              fit: BoxFit.contain,
-              width: double.infinity,
-              height: double.infinity,
-              gaplessPlayback: true,
-              filterQuality: FilterQuality.high,
-            ),
+          return Image.memory(
+            snapshot.data!,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.high,
           );
         }
         return const Center(
