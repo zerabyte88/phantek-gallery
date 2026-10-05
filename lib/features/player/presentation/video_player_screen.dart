@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
@@ -50,10 +52,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   double _playbackSpeed = 1.0;
   // Drag-to-dismiss offset lives in a notifier so pointer-move never rebuilds
   // the PageView / InteractiveViewer hierarchy.
-  final ValueNotifier<double> _dragNotifier = ValueNotifier(0.0);
-  double get _dragOffsetY => _dragNotifier.value;
-  set _dragOffsetY(double v) => _dragNotifier.value = v;
-  bool _isDragging = false;
+  final ValueNotifier<Offset> _dragNotifier = ValueNotifier(Offset.zero);
+  late final AnimationController _settle;
+  Offset _settleFrom = Offset.zero;
+  VelocityTracker _vt = VelocityTracker.withKind(PointerDeviceKind.touch);
   double? _startDragY;
   double? _startDragX;
   TapDownDetails? _doubleTapDetails;
@@ -86,8 +88,33 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
     _pageController = PageController(initialPage: _current);
     _transformationController = TransformationController();
+    _settle = AnimationController.unbounded(vsync: this)
+      ..addListener(() {
+        _setDrag(_settleFrom * _settle.value);
+        if (!_settle.isAnimating && _activePointers.isEmpty) {
+          _setDrag(Offset.zero);
+        }
+      });
     _initPlayer();
     _precacheAdjacentVideos(_current);
+  }
+
+  void _setDrag(Offset o) {
+    _dragNotifier.value = o;
+  }
+
+  /// Spring the dragged video back to center, carrying release velocity.
+  void _springBack(double vy) {
+    _settleFrom = _dragNotifier.value;
+    final v = _settleFrom.dy.abs() > 1 ? vy / _settleFrom.dy : 0.0;
+    _settle.value = 1.0;
+    _settle.animateWith(SpringSimulation(
+      SpringDescription.withDampingRatio(
+          mass: 1, stiffness: 400, ratio: 0.85),
+      1.0,
+      0.0,
+      v.clamp(-10.0, 10.0),
+    ));
   }
 
   void _resetVideoZoom() {
@@ -136,7 +163,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (isZoomed) {
       endMatrix = Matrix4.identity();
     } else {
-      const double targetScale = 2.0;
+      const double targetScale = 2.5;
       endMatrix = Matrix4.identity()
         ..translateByDouble(tapPos.dx, tapPos.dy, 0.0, 1.0)
         ..scaleByDouble(targetScale, targetScale, 1.0, 1.0)
@@ -175,16 +202,32 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   void _precacheAdjacentVideos(int index) {
-    for (final offset in const [0, -1, 1]) {
-      final target = index + offset;
-      if (target >= 0 && target < _videos.length) {
-        ThumbnailService.instance.getThumbnail(
-          _videos[target].id,
-          filePath: _videos[target].path,
-          isVideo: true,
-        );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      for (final offset in const [-2, -1, 0, 1, 2]) {
+        final target = index + offset;
+        if (target >= 0 && target < _videos.length) {
+          final video = _videos[target];
+          final mem = ThumbnailService.instance.getMemoryThumbnail(video.id);
+          if (mem != null && mounted) {
+            precacheImage(MemoryImage(mem), context);
+          } else {
+            final file = ThumbnailService.instance.getCachedFile(video.id);
+            if (file != null && mounted) {
+              precacheImage(FileImage(file), context);
+            } else {
+              ThumbnailService.instance
+                  .getThumbnail(video.id, filePath: video.path, isVideo: true)
+                  .then((bytes) {
+                if (bytes != null && mounted) {
+                  precacheImage(MemoryImage(bytes), context);
+                }
+              });
+            }
+          }
+        }
       }
-    }
+    });
   }
 
   void _initPlayer() {
@@ -254,6 +297,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       try {
         await _controller.waitUntilFirstFrameRendered
             .timeout(const Duration(seconds: 1), onTimeout: () => null);
+        await Future.delayed(const Duration(milliseconds: 50));
       } catch (_) {}
       if (mounted && !_isSwiping && _activePointers.isEmpty) {
         _swipeNotifier.value = false;
@@ -274,7 +318,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _current = index;
     });
 
-    // Keep the texture unmounted until the new media is loaded so the old
+    // Keep the texture transparent until the new media is loaded so the old
     // video's last frame never flashes on the new page.
     _swipeNotifier.value = true;
 
@@ -301,6 +345,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         // Wait until MPV has decoded and rendered the first frame before revealing the Video surface
         await _controller.waitUntilFirstFrameRendered
             .timeout(const Duration(seconds: 1), onTimeout: () => null);
+        await Future.delayed(const Duration(milliseconds: 50));
       } catch (_) {}
       if (mounted && _current == index && !_isSwiping && _activePointers.isEmpty) {
         _swipeNotifier.value = false;
@@ -345,6 +390,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _zoomAnimController?.dispose();
+    _settle.dispose();
     _swipeNotifier.dispose();
     _dragNotifier.dispose();
     _transformationController.dispose();
@@ -663,128 +709,142 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           _exitFullscreen();
         }
       },
-      child: ValueListenableBuilder<double>(
-        valueListenable: _dragNotifier,
-        builder: (context, drag, child) => Scaffold(
-          backgroundColor: Colors.black
-              .withValues(alpha: (1.0 - (drag / 250)).clamp(0.0, 1.0)),
-          body: child,
-        ),
-        child: SafeArea(
-          top: !_isFullscreen,
-          bottom: !_isFullscreen,
-          child: Listener(
-            onPointerDown: (e) {
-              _activePointers.add(e.pointer);
-              _zoomAnimController?.stop();
-              if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
-                // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
-                _isMultiTouch = true;
-                _isPinching = true;
-                _isDragging = false;
-                _startDragY = null;
-                _startDragX = null;
-                _dragOffsetY = 0.0;
-                return;
-              }
-              _startDragY = e.position.dy;
-              _startDragX = e.position.dx;
-            },
-            onPointerMove: (e) {
-              // Detach the MPV texture on the first horizontal movement, before
-              // the PageView's own drag slop triggers ScrollStartNotification.
-              if (!_swipeNotifier.value &&
-                  !_isCurrentlyVideoZoomed &&
-                  !_isMultiTouch &&
-                  !_isPinching &&
-                  _activePointers.length == 1 &&
-                  _startDragX != null &&
-                  _startDragY != null) {
-                final adx = (e.position.dx - _startDragX!).abs();
-                final ady = (e.position.dy - _startDragY!).abs();
-                if (adx > 12 && adx > ady * 1.5) _swipeNotifier.value = true;
-              }
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            // ── Background scrim: opacity follows drag distance ──
+            Positioned.fill(
+              child: ValueListenableBuilder<Offset>(
+                valueListenable: _dragNotifier,
+                builder: (_, d, __) => ColoredBox(
+                  color: Colors.black.withValues(
+                      alpha: (1.0 - d.dy / 300).clamp(0.0, 1.0)),
+                ),
+              ),
+            ),
+            // ── Main Content inside SafeArea and Listener ──────────
+            SafeArea(
+              top: !_isFullscreen,
+              bottom: !_isFullscreen,
+              child: Listener(
+                onPointerDown: (e) {
+                  _activePointers.add(e.pointer);
+                  _settle.stop(); // grab a returning video mid-flight
+                  _zoomAnimController?.stop();
+                  if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
+                    // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
+                    _isMultiTouch = true;
+                    _isPinching = true;
+                    _startDragY = null;
+                    _startDragX = null;
+                    if (_dragNotifier.value != Offset.zero) _setDrag(Offset.zero);
+                    return;
+                  }
+                  _startDragY = e.position.dy;
+                  _startDragX = e.position.dx;
+                  _vt = VelocityTracker.withKind(e.kind);
+                },
+                onPointerMove: (e) {
+                  // Detach the MPV texture on the first horizontal movement, before
+                  // the PageView's own drag slop triggers ScrollStartNotification.
+                  if (!_swipeNotifier.value &&
+                      !_isCurrentlyVideoZoomed &&
+                      !_isMultiTouch &&
+                      !_isPinching &&
+                      _activePointers.length == 1 &&
+                      _startDragX != null &&
+                      _startDragY != null) {
+                    final adx = (e.position.dx - _startDragX!).abs();
+                    final ady = (e.position.dy - _startDragY!).abs();
+                    if (adx > 12 && adx > ady * 1.5) _swipeNotifier.value = true;
+                  }
 
-              // Keep pull-to-dismiss and page swiping completely locked whenever
-              // the video is zoomed above 1.0x, pinching, or multi-touching.
-              if (_isFullscreen ||
-                  _isCurrentlyVideoZoomed ||
-                  _isPinching ||
-                  _isMultiTouch ||
-                  _activePointers.length >= 2 ||
-                  _startDragY == null ||
-                  _startDragX == null) {
-                if (_dragOffsetY > 0) _dragOffsetY = 0.0;
-                return;
-              }
+                  // Keep pull-to-dismiss and page swiping completely locked whenever
+                  // the video is zoomed above 1.0x, pinching, or multi-touching.
+                  if (_isFullscreen ||
+                      _isCurrentlyVideoZoomed ||
+                      _isPinching ||
+                      _isMultiTouch ||
+                      _activePointers.length >= 2 ||
+                      _startDragY == null ||
+                      _startDragX == null) {
+                    if (_dragNotifier.value != Offset.zero) _setDrag(Offset.zero);
+                    return;
+                  }
 
-              final dy = e.position.dy - _startDragY!;
-              final dx = (e.position.dx - _startDragX!).abs();
-              // Strict gesture slop: at least 28px downward and dominant vertical trajectory (> 2.2 * dx)
-              if (_dragOffsetY > 0 || (dy > 28 && dy > dx * 2.2)) {
-                _isDragging = true;
-                _dragOffsetY = (dy - 28).clamp(0.0, 400.0);
-              }
-            },
-            onPointerUp: (e) {
-              _activePointers.remove(e.pointer);
-              if (_activePointers.isEmpty) {
-                final wasMultiTouch = _isMultiTouch;
-                _isMultiTouch = false;
-                _isPinching = false;
-                _startDragY = null;
-                _startDragX = null;
-                // No page scroll in progress: this was a tap / non-swipe gesture.
-                if (!_isSwiping) _swipeNotifier.value = false;
-                if (_dragOffsetY > 90 && !wasMultiTouch && !_isCurrentlyVideoZoomed) {
-                  _player.pause();
-                  Navigator.of(context).pop();
-                } else if (_dragOffsetY > 0 || _isDragging) {
-                  _isDragging = false;
-                  _dragOffsetY = 0.0;
-                }
-              }
-            },
-            onPointerCancel: (e) {
-              _activePointers.remove(e.pointer);
-              if (_activePointers.isEmpty) {
-                if (!_isSwiping) _swipeNotifier.value = false;
-                setState(() {
-                  _isMultiTouch = false;
-                  _isPinching = false;
-                  _isDragging = false;
-                  _dragOffsetY = 0.0;
-                  _startDragY = null;
-                  _startDragX = null;
-                });
-              }
-            },
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                if (_dragOffsetY < 10) {
-                  setState(() => _showControls = !_showControls);
-                }
-              },
-              onDoubleTapDown: (details) {
-                _doubleTapDetails = details;
-              },
-              onDoubleTap: _handleDoubleTap,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // ── Video PageView with drag translation ───────────────
-                  ValueListenableBuilder<double>(
-                    valueListenable: _dragNotifier,
-                    builder: (context, drag, child) => AnimatedContainer(
-                      duration: _isDragging
-                          ? Duration.zero
-                          : const Duration(milliseconds: 200),
-                      curve: Curves.easeOutCubic,
-                      transform: Matrix4.translationValues(0, drag, 0),
-                      child: child,
-                    ),
-                    child: RepaintBoundary(
+                  _vt.addPosition(e.timeStamp, e.position);
+                  final dy = e.position.dy - _startDragY!;
+                  final dx = e.position.dx - _startDragX!;
+                  // Strict gesture slop: at least 28px downward and dominant vertical trajectory (> 2.2 * dx)
+                  if (_dragNotifier.value != Offset.zero || (dy > 28 && dy > dx.abs() * 2.2)) {
+                    _setDrag(Offset(dx, (dy - 28).clamp(0.0, 600.0)));
+                  }
+                },
+                onPointerUp: (e) {
+                  _vt.addPosition(e.timeStamp, e.position);
+                  _activePointers.remove(e.pointer);
+                  if (_activePointers.isEmpty) {
+                    final wasMultiTouch = _isMultiTouch;
+                    _isMultiTouch = false;
+                    _isPinching = false;
+                    _startDragY = null;
+                    _startDragX = null;
+                    // No page scroll in progress: this was a tap / non-swipe gesture.
+                    if (!_isSwiping) _swipeNotifier.value = false;
+
+                    final d = _dragNotifier.value;
+                    final vy = _vt.getVelocity().pixelsPerSecond.dy;
+
+                    if (!wasMultiTouch &&
+                        !_isCurrentlyVideoZoomed &&
+                        d.dy > 0 &&
+                        (d.dy > 90 || (vy > 900 && d.dy > 20))) {
+                      _player.pause();
+                      Navigator.of(context).pop();
+                    } else if (d != Offset.zero) {
+                      _springBack(vy);
+                    }
+                  }
+                },
+                onPointerCancel: (e) {
+                  _activePointers.remove(e.pointer);
+                  if (_activePointers.isEmpty) {
+                    if (!_isSwiping) _swipeNotifier.value = false;
+                    _isMultiTouch = false;
+                    _isPinching = false;
+                    _startDragY = null;
+                    _startDragX = null;
+                    if (_dragNotifier.value != Offset.zero) _springBack(0);
+                  }
+                },
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (_dragNotifier.value.dy < 10) {
+                      setState(() => _showControls = !_showControls);
+                    }
+                  },
+                  onDoubleTapDown: (details) {
+                    _doubleTapDetails = details;
+                  },
+                  onDoubleTap: _handleDoubleTap,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // ── Video PageView with translation + proportional scale-down ──
+                      ValueListenableBuilder<Offset>(
+                        valueListenable: _dragNotifier,
+                        builder: (context, d, child) {
+                          final s = (1.0 - d.dy / 900).clamp(0.6, 1.0);
+                          return Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.translationValues(d.dx, d.dy, 0)
+                              ..scaleByDouble(s, s, 1.0, 1.0),
+                            child: child,
+                          );
+                        },
+                        child: RepaintBoundary(
                     child: NotificationListener<ScrollNotification>(
                       onNotification: (notification) {
                         if (notification is ScrollStartNotification) {
@@ -876,30 +936,42 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     }
                                   },
                                   child: Center(
-                                    child: Stack(
-                                      fit: StackFit.passthrough,
-                                      alignment: Alignment.center,
-                                      children: [
-                                        _VideoThumbnailPage(
-                                            item: _videos[index]),
-                                        // Texture is unmounted while dragging/settling;
-                                        // the thumbnail underneath keeps the frame.
-                                        ValueListenableBuilder<bool>(
-                                          valueListenable: _swipeNotifier,
-                                          builder: (context, swiping, _) =>
-                                              swiping
-                                                  ? const SizedBox.shrink()
-                                                  : Video(
-                                                      key: const ValueKey(
-                                                          'active_video_surface'),
-                                                      controller: _controller,
-                                                      controls: NoVideoControls,
-                                                      fit: BoxFit.contain,
-                                                      // Transparent so the thumbnail shows until the first frame.
-                                                      fill: Colors.transparent,
-                                                    ),
-                                        ),
-                                      ],
+                                    child: Hero(
+                                      tag: _videos[index].id,
+                                      transitionOnUserGestures: true,
+                                      flightShuttleBuilder: (_, __, ___, ____, _____) =>
+                                          _VideoThumbnailPage(item: _videos[index]),
+                                      child: Stack(
+                                        fit: StackFit.passthrough,
+                                        alignment: Alignment.center,
+                                        children: [
+                                          _VideoThumbnailPage(
+                                              item: _videos[index]),
+                                          // Texture fades out smoothly while dragging/settling;
+                                          // the thumbnail underneath keeps the frame with 0 black screen.
+                                          ValueListenableBuilder<bool>(
+                                            valueListenable: _swipeNotifier,
+                                            builder: (context, swiping, _) =>
+                                                AnimatedOpacity(
+                                              duration: const Duration(
+                                                  milliseconds: 150),
+                                              curve: Curves.easeOut,
+                                              opacity: swiping ? 0.0 : 1.0,
+                                              child: IgnorePointer(
+                                                ignoring: swiping,
+                                                child: Video(
+                                                  key: const ValueKey(
+                                                      'active_video_surface'),
+                                                  controller: _controller,
+                                                  controls: NoVideoControls,
+                                                  fit: BoxFit.contain,
+                                                  fill: Colors.transparent,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -977,15 +1049,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     ),
 
                   // ── Controls overlay ───────────────────────────────
-                  ValueListenableBuilder<double>(
+                  ValueListenableBuilder<Offset>(
                     valueListenable: _dragNotifier,
                     builder: (context, drag, child) => AnimatedOpacity(
-                      opacity: (_showControls && drag < 20 && !_isPinching)
+                      opacity: (_showControls && drag.dy < 20 && !_isPinching)
                           ? 1.0
                           : 0.0,
                       duration: const Duration(milliseconds: 200),
                       child: IgnorePointer(
-                        ignoring: !_showControls || drag >= 20 || _isPinching,
+                        ignoring: !_showControls || drag.dy >= 20 || _isPinching,
                         child: child,
                       ),
                     ),
@@ -1078,6 +1150,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
             ),
           ),
         ),
+          ],
+        ),
       ),
     );
   }
@@ -1100,7 +1174,7 @@ class _VideoThumbnailPage extends StatelessWidget {
           width: double.infinity,
           height: double.infinity,
           gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
+          filterQuality: FilterQuality.high,
         ),
       );
     }
@@ -1114,7 +1188,7 @@ class _VideoThumbnailPage extends StatelessWidget {
           width: double.infinity,
           height: double.infinity,
           gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
+          filterQuality: FilterQuality.high,
         ),
       );
     }
@@ -1131,7 +1205,7 @@ class _VideoThumbnailPage extends StatelessWidget {
               width: double.infinity,
               height: double.infinity,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.medium,
+              filterQuality: FilterQuality.high,
             ),
           );
         }

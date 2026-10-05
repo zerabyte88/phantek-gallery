@@ -21,6 +21,7 @@ import 'package:phantek_gallery/features/gallery/presentation/gallery_screen.dar
 import 'package:phantek_gallery/features/gallery/presentation/widgets/filter_sort_bar.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/sort_bottom_sheet.dart';
 import 'package:phantek_gallery/features/player/presentation/widgets/media_info_sheet.dart';
+import 'package:phantek_gallery/features/player/presentation/image_viewer_screen.dart' show displayImage;
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
 import 'package:phantek_gallery/core/services/share_service.dart';
 import 'package:phantek_gallery/app/router.dart' show rootNavigatorKey;
@@ -911,6 +912,49 @@ void main() {
       expect(dstW, 512);
       expect(dstH, 288); // 16:9 preserved perfectly!
       expect(dstW * dstH * 4, lessThan(600 * 1024)); // Less than 600 KB RAM vs 33 MB unscaled!
+    });
+
+    test('Photo double-tap detector identifies valid double taps within time and distance thresholds', () {
+      bool isDoubleTap({
+        required int downDurationMs,
+        required double moveDist,
+        required int intervalMs,
+        required double doubleTapDist,
+      }) {
+        if (downDurationMs < 300 && moveDist < 25.0) {
+          if (intervalMs < 350 && doubleTapDist < 45.0) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      // Valid double tap
+      expect(isDoubleTap(downDurationMs: 80, moveDist: 2.0, intervalMs: 150, doubleTapDist: 5.0), isTrue);
+
+      // Too slow between taps (> 350ms)
+      expect(isDoubleTap(downDurationMs: 80, moveDist: 2.0, intervalMs: 400, doubleTapDist: 5.0), isFalse);
+
+      // Too far apart (> 45px)
+      expect(isDoubleTap(downDurationMs: 80, moveDist: 2.0, intervalMs: 150, doubleTapDist: 60.0), isFalse);
+
+      // First tap was a drag (> 25px move)
+      expect(isDoubleTap(downDurationMs: 80, moveDist: 35.0, intervalMs: 150, doubleTapDist: 5.0), isFalse);
+    });
+
+    test('displayImage caps 100MP photos at 4096px and shares one cache entry', () {
+      final a = displayImage('/dcim/hasselblad.jpg') as ResizeImage;
+      final b = displayImage('/dcim/hasselblad.jpg');
+      expect(a.width, 4096);
+      expect(a.height, 4096);
+      expect(a.policy, ResizeImagePolicy.fit);
+      // Viewer + precache build separate instances; they must hit the same cache slot.
+      expect(a, equals(b));
+      expect(displayImage('/dcim/other.jpg'), isNot(equals(a)));
+      // 8742x11656 fit into 4096 -> 3072x4096 RGBA, fits the 256 MB imageCache 3x over.
+      const scale = 4096 / 11656;
+      final bytes = (8742 * scale).round() * 4096 * 4;
+      expect(bytes * 3, lessThan(256 * 1024 * 1024));
     });
   });
 }

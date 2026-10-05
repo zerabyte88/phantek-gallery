@@ -14,9 +14,38 @@ import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/share_service.dart';
+import '../../../core/services/thumbnail_service.dart';
 import '../../../core/utils/media_utils.dart';
 import 'widgets/media_info_sheet.dart';
 import 'widgets/rename_dialog.dart';
+
+/// Display-capped provider shared by viewer + precache (same cache key).
+/// A 100MP photo decodes to ~50 MB instead of ~408 MB, so it fits imageCache.
+// ponytail: fixed 4096px cap, sharp to ~3x zoom on 1080p. Swap to full-res
+// FileImage on deep zoom if pixel-peeping beyond 3x matters.
+ImageProvider displayImage(String path) => ResizeImage(
+      FileImage(File(path)),
+      width: 4096,
+      height: 4096,
+      policy: ResizeImagePolicy.fit,
+    );
+
+/// Cached 512px grid thumbnail, shown instantly while the full image decodes.
+Widget _thumb(String id, BoxFit fit) {
+  final mem = ThumbnailService.instance.getMemoryThumbnail(id);
+  final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
+  final ImageProvider? p =
+      mem != null ? MemoryImage(mem) : (disk != null ? FileImage(disk) : null);
+  if (p == null) return const SizedBox.shrink();
+  return Image(
+    image: p,
+    fit: fit,
+    width: double.infinity,
+    height: double.infinity,
+    gaplessPlayback: true,
+    filterQuality: FilterQuality.high,
+  );
+}
 
 /// Full-screen swipeable image viewer with delete support.
 class ImageViewerScreen extends ConsumerStatefulWidget {
@@ -55,7 +84,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   final Set<int> _activePointers = {};
   final Map<int, PhotoViewController> _photoControllers = {};
   AnimationController? _photoZoomAnim;
-  TapDownDetails? _doubleTapDetails;
+  int? _lastTapDownTimeMs;
+  Offset? _lastTapDownPosition;
+  int? _lastTapUpTimeMs;
+  Offset? _lastTapUpPosition;
 
   PhotoViewController _getPhotoController(int index) {
     return _photoControllers.putIfAbsent(index, () => PhotoViewController());
@@ -79,11 +111,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   void _precacheAdjacent(int index) {
     if (!mounted) return;
-    if (index + 1 < widget.items.length) {
-      precacheImage(FileImage(File(widget.items[index + 1].path)), context);
-    }
-    if (index - 1 >= 0) {
-      precacheImage(FileImage(File(widget.items[index - 1].path)), context);
+    // ±1 only: 3 × ~50 MB stays inside the 256 MB imageCache.
+    for (final offset in const [-1, 1]) {
+      final target = index + offset;
+      if (target >= 0 && target < widget.items.length) {
+        precacheImage(displayImage(widget.items[target].path), context);
+      }
     }
   }
 
@@ -129,9 +162,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
   }
 
-  void _handlePhotoDoubleTap() {
-    if (_doubleTapDetails == null) return;
-    final tapPos = _doubleTapDetails!.localPosition;
+  void _handlePhotoDoubleTap(Offset tapPos) {
     final controller = _getPhotoController(_current);
     final currentScale = controller.scale ?? 1.0;
     final isZoomed = _isZoomed || currentScale > 1.05;
@@ -345,6 +376,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       body: Listener(
         onPointerDown: (e) {
           _activePointers.add(e.pointer);
+          _lastTapDownTimeMs = DateTime.now().millisecondsSinceEpoch;
+          _lastTapDownPosition = e.position;
           _settle.stop(); // grab a returning image mid-flight
           if (_activePointers.length >= 2 || _isZoomed) {
             // Multi-touch, pinch, or zoomed: abort any drag-to-dismiss immediately.
@@ -381,6 +414,38 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         onPointerUp: (e) {
           _vt.addPosition(e.timeStamp, e.position);
           _activePointers.remove(e.pointer);
+
+          final now = DateTime.now().millisecondsSinceEpoch;
+          bool isDoubleTap = false;
+          if (_drag.value == Offset.zero &&
+              _lastTapDownTimeMs != null &&
+              _lastTapDownPosition != null) {
+            final downDuration = now - _lastTapDownTimeMs!;
+            final moveDist = (e.position - _lastTapDownPosition!).distance;
+            if (downDuration < 300 && moveDist < 25.0) {
+              if (_lastTapUpTimeMs != null && _lastTapUpPosition != null) {
+                final interval = now - _lastTapUpTimeMs!;
+                final doubleTapDist =
+                    (e.position - _lastTapUpPosition!).distance;
+                if (interval < 350 && doubleTapDist < 45.0) {
+                  isDoubleTap = true;
+                  _lastTapUpTimeMs = null;
+                  _lastTapUpPosition = null;
+                  _lastTapDownTimeMs = null;
+                  _lastTapDownPosition = null;
+                  _handlePhotoDoubleTap(e.position);
+                }
+              }
+              if (!isDoubleTap) {
+                _lastTapUpTimeMs = now;
+                _lastTapUpPosition = e.position;
+              }
+            } else {
+              _lastTapUpTimeMs = null;
+              _lastTapUpPosition = null;
+            }
+          }
+
           if (_activePointers.isEmpty) {
             final wasMultiTouch = _isMultiTouch;
             _isMultiTouch = false;
@@ -406,6 +471,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         },
         onPointerCancel: (e) {
           _activePointers.remove(e.pointer);
+          _lastTapDownTimeMs = null;
+          _lastTapDownPosition = null;
+          _lastTapUpTimeMs = null;
+          _lastTapUpPosition = null;
           if (_activePointers.isEmpty) {
             _isMultiTouch = false;
             _isPinching = false;
@@ -438,11 +507,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   child: child,
                 );
               },
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onDoubleTapDown: (d) => _doubleTapDetails = d,
-                onDoubleTap: _handlePhotoDoubleTap,
-                child: PhotoViewGallery.builder(
+              child: PhotoViewGallery.builder(
                 pageController: _page,
                 itemCount: widget.items.length,
                 onPageChanged: (i) {
@@ -451,6 +516,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                     _isZoomed = false;
                     _isPinching = false;
                   });
+                  _lastTapUpTimeMs = null;
+                  _lastTapUpPosition = null;
                   _precacheAdjacent(i);
                 },
                 scaleStateChangedCallback: (state) {
@@ -477,13 +544,26 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       ),
                 backgroundDecoration:
                     const BoxDecoration(color: Colors.transparent),
+                // Gallery-level builder has no index: resolve the page's item
+                // from the enclosing PhotoView's provider.
+                loadingBuilder: (ctx, _) {
+                  final p = ctx
+                      .findAncestorWidgetOfExactType<PhotoView>()
+                      ?.imageProvider;
+                  final inner = p is ResizeImage ? p.imageProvider : p;
+                  if (inner is! FileImage) return const SizedBox.shrink();
+                  final i = widget.items
+                      .indexWhere((m) => m.path == inner.file.path);
+                  return i < 0
+                      ? const SizedBox.shrink()
+                      : _thumb(widget.items[i].id, BoxFit.contain);
+                },
                 builder: (_, i) {
                   final it = widget.items[i];
-                  final file = File(it.path);
                   return PhotoViewGalleryPageOptions(
                     controller: _getPhotoController(i),
                     scaleStateCycle: (actual) => actual,
-                    imageProvider: FileImage(file),
+                    imageProvider: displayImage(it.path),
                     // Only the current page carries the tag, so the fly-back always
                     // targets the grid tile of the photo currently shown.
                     heroAttributes: i == _current
@@ -491,13 +571,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                             tag: it.id,
                             transitionOnUserGestures: true,
                             flightShuttleBuilder: (_, __, ___, ____, _____) =>
-                                Image(image: FileImage(file), fit: BoxFit.cover),
+                                _thumb(it.id, BoxFit.cover),
                           )
                         : null,
                     minScale: PhotoViewComputedScale.contained,
                     maxScale: PhotoViewComputedScale.covered * 6.0,
                     initialScale: PhotoViewComputedScale.contained,
-                    filterQuality: FilterQuality.medium,
+                    filterQuality: FilterQuality.high,
                     basePosition: Alignment.center,
                     onTapUp: (_, __, ___) => _toggleBars(),
                     errorBuilder: (_, __, ___) => const Center(
@@ -507,7 +587,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   );
                 },
               ),
-            ),
             ),
 
             // ── Top bar ────────────────────────────────────────
