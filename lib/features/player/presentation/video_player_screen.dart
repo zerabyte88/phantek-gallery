@@ -110,10 +110,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _settle.value = 1.0;
     _settle.animateWith(SpringSimulation(
       SpringDescription.withDampingRatio(
-          mass: 1, stiffness: 400, ratio: 0.85),
+          mass: 1, stiffness: 350, ratio: 0.95),
       1.0,
       0.0,
-      v.clamp(-10.0, 10.0),
+      v.clamp(-8.0, 8.0),
     ));
   }
 
@@ -719,7 +719,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 valueListenable: _dragNotifier,
                 builder: (_, d, __) => ColoredBox(
                   color: Colors.black.withValues(
-                      alpha: (1.0 - d.dy / 300).clamp(0.0, 1.0)),
+                      alpha: (1.0 - (d.dy / 350)).clamp(0.0, 1.0)),
                 ),
               ),
             ),
@@ -779,7 +779,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   final dx = e.position.dx - _startDragX!;
                   // Responsive vertical swipe deadzone: natural downward drag (dy > 8 and dy > dx.abs() * 1.1)
                   if (_dragNotifier.value != Offset.zero || (dy > 8 && dy > dx.abs() * 1.1)) {
-                    _setDrag(Offset(dx, (dy - 8).clamp(0.0, 600.0)));
+                    final dampedDx = dx * 0.35;
+                    final dragY = (dy - 8).clamp(0.0, 600.0);
+                    _setDrag(Offset(dampedDx, dragY));
                   }
                 },
                 onPointerUp: (e) {
@@ -800,7 +802,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     if (!wasMultiTouch &&
                         !_isCurrentlyVideoZoomed &&
                         d.dy > 0 &&
-                        (d.dy > 60 || (vy > 400 && d.dy > 15))) {
+                        (d.dy > 100 || (vy > 600 && d.dy > 25))) {
                       _player.pause();
                       Navigator.of(context).pop();
                     } else if (d != Offset.zero) {
@@ -837,7 +839,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       ValueListenableBuilder<Offset>(
                         valueListenable: _dragNotifier,
                         builder: (context, d, child) {
-                          final s = (1.0 - d.dy / 900).clamp(0.6, 1.0);
+                          final s = (1.0 - (d.dy / 800) * 0.25).clamp(0.75, 1.0);
                           return Transform(
                             alignment: Alignment.center,
                             transform: Matrix4.translationValues(d.dx, d.dy, 0)
@@ -1062,90 +1064,108 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         child: child,
                       ),
                     ),
-                    child: Column(
-                        children: [
-                          // Top bar
-                          _TopBar(
-                            item: item,
-                            currentIndex: _current,
-                            totalVideos: _videos.length,
-                            isTrash: widget.isTrash,
-                            playbackSpeed: _playbackSpeed,
-                            isLooping: _isLooping,
-                            onSelectSpeed: _showPlaybackSpeedSheet,
-                            onToggleLoop: _toggleLoop,
-                            onRestore: _restoreItem,
-                            onBack: () {
-                              if (_isFullscreen) {
-                                _exitFullscreen();
-                              } else {
-                                Navigator.of(context).pop();
-                              }
-                            },
-                            onInfo: () => showMediaInfoSheet(context, item),
-                            onDelete: _deleteItem,
-                            onRename: _renameCurrentItem,
-                          ),
-                          const Spacer(),
-                          // Center play button when paused (fades out while swiping/loading next video, fades in when settled)
-                          Center(
-                            child: ValueListenableBuilder<bool>(
-                              valueListenable: _swipeNotifier,
-                              builder: (context, swiping, child) =>
-                                  AnimatedOpacity(
-                                opacity: swiping ? 0.0 : 1.0,
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeInOut,
-                                child: IgnorePointer(
-                                  ignoring: swiping,
-                                  child: child,
-                                ),
-                              ),
-                              child: StreamBuilder<bool>(
-                                stream: _player.stream.playing,
-                                builder: (_, snap) {
-                                  final playing = snap.data ?? false;
-                                  if (playing) return const SizedBox.shrink();
-                                  return BouncyTap(
-                                    onTap: _player.play,
-                                    child: Container(
-                                      width: 72,
-                                      height: 72,
-                                      decoration: BoxDecoration(
-                                        color: Colors.black
-                                            .withValues(alpha: 0.55),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.4),
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                      child: const Icon(
-                                        Icons.play_arrow_rounded,
-                                        size: 48,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  );
-                                },
+                    child: Stack(
+                      children: [
+                        // Center play button when paused (exact center of the screen)
+                        Center(
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: _swipeNotifier,
+                            builder: (context, swiping, child) =>
+                                AnimatedOpacity(
+                              opacity: swiping ? 0.0 : 1.0,
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeInOut,
+                              child: IgnorePointer(
+                                ignoring: swiping,
+                                child: child,
                               ),
                             ),
+                            child: StreamBuilder<bool>(
+                              stream: _player.stream.playing,
+                              builder: (_, snap) {
+                                final playing = snap.data ?? false;
+                                if (playing) return const SizedBox.shrink();
+                                return BouncyTap(
+                                  onTap: _player.play,
+                                  child: Container(
+                                    width: 72,
+                                    height: 72,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black
+                                          .withValues(alpha: 0.55),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.4),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.only(left: 3),
+                                        child: Icon(
+                                          Icons.play_arrow_rounded,
+                                          size: 48,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
-                          const Spacer(),
-                          // Bottom controls
-                          _BottomBar(
-                            player: _player,
-                            item: item,
-                            isFullscreen: _isFullscreen,
-                            isLooping: _isLooping,
-                            onToggleFullscreen: _toggleFullscreen,
-                            onToggleLoop: _toggleLoop,
+                        ),
+                        // Top bar
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: SafeArea(
+                            bottom: false,
+                            child: _TopBar(
+                              item: item,
+                              currentIndex: _current,
+                              totalVideos: _videos.length,
+                              isTrash: widget.isTrash,
+                              onRestore: _restoreItem,
+                              onBack: () {
+                                if (_isFullscreen) {
+                                  _exitFullscreen();
+                                } else {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                              onInfo: () => showMediaInfoSheet(context, item),
+                              onDelete: _deleteItem,
+                            ),
                           ),
-                        ],
-                      ),
+                        ),
+                        // Bottom controls
+                        Positioned(
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          child: SafeArea(
+                            top: false,
+                            child: _BottomBar(
+                              player: _player,
+                              item: item,
+                              isFullscreen: _isFullscreen,
+                              isLooping: _isLooping,
+                              playbackSpeed: _playbackSpeed,
+                              onToggleFullscreen: _toggleFullscreen,
+                              onToggleLoop: _toggleLoop,
+                              onSelectSpeed: _showPlaybackSpeedSheet,
+                              onDelete: _deleteItem,
+                              onRename: _renameCurrentItem,
+                              onInfo: () => showMediaInfoSheet(context, item),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  
+                  ),
                 ],
               ),
             ),
@@ -1158,7 +1178,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 }
 
-// ── Inactive video thumbnail placeholder ───────────────────────────────────
+// ── Video thumbnail placeholder ───────────────────────────────────────────
 
 class _VideoThumbnailPage extends StatelessWidget {
   const _VideoThumbnailPage({required this.item});
@@ -1218,7 +1238,7 @@ class _VideoThumbnailPage extends StatelessWidget {
   }
 }
 
-// ── Top bar ───────────────────────────────────────────────────────────────
+// ── Top bar (Photo 2 reference) ───────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   const _TopBar({
@@ -1229,12 +1249,7 @@ class _TopBar extends StatelessWidget {
     required this.onInfo,
     required this.onDelete,
     this.isTrash = false,
-    this.playbackSpeed = 1.0,
-    this.isLooping = false,
-    this.onSelectSpeed,
-    this.onToggleLoop,
     this.onRestore,
-    this.onRename,
   });
   final MediaItem item;
   final int currentIndex;
@@ -1243,19 +1258,10 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onInfo;
   final VoidCallback onDelete;
   final bool isTrash;
-  final double playbackSpeed;
-  final bool isLooping;
-  final VoidCallback? onSelectSpeed;
-  final VoidCallback? onToggleLoop;
   final VoidCallback? onRestore;
-  final VoidCallback? onRename;
 
   @override
   Widget build(BuildContext context) {
-    final subtext = totalVideos > 1
-        ? '${currentIndex + 1} / $totalVideos • ${MediaUtils.formatViewerDate(item.date)}, ${MediaUtils.formatViewerTime(item.date)}'
-        : '${MediaUtils.formatViewerDate(item.date)}, ${MediaUtils.formatViewerTime(item.date)}';
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: const BoxDecoration(
@@ -1279,7 +1285,7 @@ class _TopBar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  item.name,
+                  MediaUtils.formatViewerDate(item.date),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -1290,7 +1296,7 @@ class _TopBar extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  subtext,
+                  MediaUtils.formatViewerTime(item.date),
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
@@ -1346,93 +1352,10 @@ class _TopBar extends StatelessWidget {
               },
             ),
             IconButton(
-              icon: const Icon(Icons.share_outlined,
-                  color: Colors.white, size: 22),
-              tooltip: 'Share',
-              onPressed: () =>
-                  ShareService.shareSingle(item.path, isVideo: true),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline,
-                  color: Colors.white, size: 22),
-              tooltip: 'Delete',
-              onPressed: onDelete,
-            ),
-            IconButton(
               icon:
                   const Icon(Icons.info_outline, color: Colors.white, size: 22),
               tooltip: 'Details',
               onPressed: onInfo,
-            ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: Colors.white, size: 22),
-              tooltip: 'More options',
-              color: const Color(0xFF222222),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              onSelected: (value) {
-                if (value == 'rename') {
-                  onRename?.call();
-                } else if (value == 'speed') {
-                  onSelectSpeed?.call();
-                } else if (value == 'loop') {
-                  onToggleLoop?.call();
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: 'speed',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.speed, size: 20, color: Colors.white),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Speed (${playbackSpeed == 1.0 ? 'Normal' : '${playbackSpeed}x'})',
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'loop',
-                  child: Row(
-                    children: [
-                      Icon(
-                        isLooping ? Icons.repeat_one : Icons.repeat,
-                        size: 20,
-                        color: isLooping
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.white,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        isLooping ? 'Loop: On' : 'Loop: Off',
-                        style: TextStyle(
-                          color: isLooping
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.white,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (!isTrash)
-                  const PopupMenuItem(
-                    value: 'rename',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined,
-                            size: 20, color: Colors.white),
-                        SizedBox(width: 12),
-                        Text('Rename',
-                            style:
-                                TextStyle(color: Colors.white, fontSize: 14)),
-                      ],
-                    ),
-                  ),
-              ],
             ),
           ],
         ],
@@ -1441,7 +1364,7 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// ── Bottom bar ────────────────────────────────────────────────────────────
+// ── Bottom bar (Photo 2 reference) ────────────────────────────────────────
 
 class _BottomBar extends StatefulWidget {
   const _BottomBar({
@@ -1449,16 +1372,26 @@ class _BottomBar extends StatefulWidget {
     required this.item,
     required this.isFullscreen,
     required this.isLooping,
+    required this.playbackSpeed,
     required this.onToggleFullscreen,
     required this.onToggleLoop,
+    required this.onSelectSpeed,
+    required this.onDelete,
+    required this.onRename,
+    required this.onInfo,
   });
 
   final Player player;
   final MediaItem item;
   final bool isFullscreen;
   final bool isLooping;
+  final double playbackSpeed;
   final VoidCallback onToggleFullscreen;
   final VoidCallback onToggleLoop;
+  final VoidCallback onSelectSpeed;
+  final VoidCallback onDelete;
+  final VoidCallback? onRename;
+  final VoidCallback onInfo;
 
   @override
   State<_BottomBar> createState() => _BottomBarState();
@@ -1470,8 +1403,6 @@ class _BottomBarState extends State<_BottomBar> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       decoration: const BoxDecoration(
@@ -1507,31 +1438,40 @@ class _BottomBarState extends State<_BottomBar> {
                       : 0.0;
                   return Column(
                     children: [
-                      Slider(
-                        value: frac.clamp(0.0, 1.0),
-                        onChangeStart: (_) {
-                          setState(() {
-                            _isDragging = true;
-                          });
-                        },
-                        onChanged: (v) {
-                          setState(() {
-                            _dragFraction = v;
-                          });
-                        },
-                        onChangeEnd: (v) {
-                          final target = Duration(
-                            milliseconds: (v * dur.inMilliseconds).round(),
-                          );
-                          widget.player.seek(target);
-                          setState(() {
-                            _isDragging = false;
-                            _dragFraction = null;
-                          });
-                        },
-                        activeColor: Colors.white,
-                        inactiveColor: Colors.white30,
-                        thumbColor: Colors.white,
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 2.5,
+                          thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 6),
+                          overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 14),
+                        ),
+                        child: Slider(
+                          value: frac.clamp(0.0, 1.0),
+                          onChangeStart: (_) {
+                            setState(() {
+                              _isDragging = true;
+                            });
+                          },
+                          onChanged: (v) {
+                            setState(() {
+                              _dragFraction = v;
+                            });
+                          },
+                          onChangeEnd: (v) {
+                            final target = Duration(
+                              milliseconds: (v * dur.inMilliseconds).round(),
+                            );
+                            widget.player.seek(target);
+                            setState(() {
+                              _isDragging = false;
+                              _dragFraction = null;
+                            });
+                          },
+                          activeColor: Colors.white,
+                          inactiveColor: Colors.white30,
+                          thumbColor: Colors.white,
+                        ),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1553,100 +1493,204 @@ class _BottomBarState extends State<_BottomBar> {
               );
             },
           ),
-          // Play controls
-          SizedBox(
-            height: 72,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Loop toggle on the left
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: BouncyTap(
-                    onTap: widget.onToggleLoop,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(
-                        widget.isLooping ? Icons.repeat_one : Icons.repeat,
-                        size: 26,
-                        color: widget.isLooping ? cs.primary : Colors.white70,
-                      ),
+          const SizedBox(height: 6),
+          // 5 Bottom Action Buttons (Photo 2 Reference)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              // 1. Share
+              _ViewerActionButton(
+                icon: const Icon(Icons.share_outlined,
+                    color: Colors.white, size: 22),
+                label: 'Share',
+                onTap: () =>
+                    ShareService.shareSingle(widget.item.path, isVideo: true),
+              ),
+              // 2. Edit / Rename
+              _ViewerActionButton(
+                icon: const Icon(Icons.edit_outlined,
+                    color: Colors.white, size: 22),
+                label: 'Edit',
+                onTap: () => widget.onRename?.call(),
+              ),
+              // 3. Play / Pause
+              StreamBuilder<bool>(
+                stream: widget.player.stream.playing,
+                builder: (_, snap) {
+                  final playing = snap.data ?? false;
+                  return _ViewerActionButton(
+                    icon: Icon(
+                      playing
+                          ? Icons.pause_circle_outline
+                          : Icons.play_circle_outline,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    label: playing ? 'Pause' : 'Play',
+                    onTap: widget.player.playOrPause,
+                  );
+                },
+              ),
+              // 4. Delete
+              _ViewerActionButton(
+                icon: const Icon(Icons.delete_outline,
+                    color: Colors.white, size: 22),
+                label: 'Delete',
+                onTap: widget.onDelete,
+              ),
+              // 5. More (Popup menu)
+              PopupMenuButton<String>(
+                tooltip: 'More options',
+                color: const Color(0xFF222222),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                offset: const Offset(0, -160),
+                onSelected: (value) {
+                  if (value == 'speed') {
+                    widget.onSelectSpeed();
+                  } else if (value == 'loop') {
+                    widget.onToggleLoop();
+                  } else if (value == 'fullscreen') {
+                    widget.onToggleFullscreen();
+                  } else if (value == 'info') {
+                    widget.onInfo();
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'speed',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.speed, size: 20, color: Colors.white),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Speed (${widget.playbackSpeed == 1.0 ? 'Normal' : '${widget.playbackSpeed}x'})',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 14),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                // Centered backward, play/pause, forward (enlarged with bouncy tap)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Seek -10s
-                    BouncyTap(
-                      onTap: () async {
-                        final pos = widget.player.state.position;
-                        await widget.player
-                            .seek(pos - const Duration(seconds: 10));
-                      },
-                      child: const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Icon(Icons.replay_10,
-                            size: 36, color: Colors.white),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    // Play/Pause
-                    StreamBuilder<bool>(
-                      stream: widget.player.stream.playing,
-                      builder: (_, snap) {
-                        final playing = snap.data ?? false;
-                        return BouncyTap(
-                          onTap: widget.player.playOrPause,
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: Icon(
-                              playing ? Icons.pause_circle : Icons.play_circle,
-                              size: 64,
-                              color: Colors.white,
-                            ),
+                  PopupMenuItem(
+                    value: 'loop',
+                    child: Row(
+                      children: [
+                        Icon(
+                          widget.isLooping ? Icons.repeat_one : Icons.repeat,
+                          size: 20,
+                          color: widget.isLooping
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.white,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          widget.isLooping ? 'Loop: On' : 'Loop: Off',
+                          style: TextStyle(
+                            color: widget.isLooping
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.white,
+                            fontSize: 14,
                           ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 6),
-                    // Seek +10s
-                    BouncyTap(
-                      onTap: () async {
-                        final pos = widget.player.state.position;
-                        await widget.player
-                            .seek(pos + const Duration(seconds: 10));
-                      },
-                      child: const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Icon(Icons.forward_10,
-                            size: 36, color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
-                // Fullscreen toggle on the right
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: BouncyTap(
-                    onTap: widget.onToggleFullscreen,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(
-                        widget.isFullscreen
-                            ? Icons.fullscreen_exit
-                            : Icons.fullscreen,
-                        size: 28,
-                        color: Colors.white,
-                      ),
+                        ),
+                      ],
                     ),
                   ),
+                  PopupMenuItem(
+                    value: 'fullscreen',
+                    child: Row(
+                      children: [
+                        Icon(
+                          widget.isFullscreen
+                              ? Icons.fullscreen_exit
+                              : Icons.fullscreen,
+                          size: 20,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          widget.isFullscreen
+                              ? 'Exit Fullscreen'
+                              : 'Fullscreen',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'info',
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 20, color: Colors.white),
+                        SizedBox(width: 12),
+                        Text('Details',
+                            style: TextStyle(
+                                color: Colors.white, fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                ],
+                child: const Padding(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.more_vert, color: Colors.white, size: 22),
+                      SizedBox(height: 4),
+                      Text(
+                        'More',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ViewerActionButton extends StatelessWidget {
+  const _ViewerActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final Widget icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return BouncyTap(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            icon,
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

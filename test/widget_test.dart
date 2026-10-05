@@ -419,15 +419,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(SettingsService.instance.settings.isSakuraUnlocked, isFalse);
 
-      // Scroll back up to AppBar
-      await tester.scrollUntilVisible(find.text('Theme'), -200);
-      await tester.pumpAndSettle();
-
-      // Find AppBar badge
+      // Find version badge in DeveloperAboutCard
       final badgeFinder = find.byKey(const ValueKey('settings_appbar_badge_easter_egg'));
+      await tester.scrollUntilVisible(badgeFinder, 200);
+      await tester.pumpAndSettle();
       expect(badgeFinder, findsOneWidget);
 
-      // Tap AppBar badge 10 times
+      // Tap version badge 10 times
       for (var i = 0; i < 10; i++) {
         await tester.tap(badgeFinder);
         await tester.pump(const Duration(milliseconds: 100));
@@ -437,6 +435,10 @@ void main() {
       // SnackBar shows Easter Egg Unlocked
       expect(find.textContaining('Easter Egg Unlocked!'), findsOneWidget);
       expect(SettingsService.instance.settings.isSakuraUnlocked, isTrue);
+
+      // Scroll back up to Theme tile
+      await tester.scrollUntilVisible(find.text('Theme'), -200);
+      await tester.pumpAndSettle();
 
       // Open Theme dialog again
       await tester.tap(find.text('Theme'));

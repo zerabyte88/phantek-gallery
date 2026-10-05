@@ -14,6 +14,7 @@ import '../../../core/services/permission_service.dart';
 import '../../../core/services/share_service.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../../core/utils/media_utils.dart';
+import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
 import 'widgets/rename_dialog.dart';
 
@@ -70,7 +71,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   // Drag-to-dismiss translation lives in a notifier: pointer-move repaints only
   // the Transform, never the gallery/bars hierarchy.
   final ValueNotifier<Offset> _drag = ValueNotifier(Offset.zero);
-  bool _dragHidesBars = false;
   late final AnimationController _settle; // 1 -> 0 spring, scales _settleFrom
   Offset _settleFrom = Offset.zero;
   VelocityTracker _vt = VelocityTracker.withKind(PointerDeviceKind.touch);
@@ -130,8 +130,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   void _setDrag(Offset o) {
     _drag.value = o;
-    final hide = o.dy >= 20;
-    if (hide != _dragHidesBars) setState(() => _dragHidesBars = hide);
   }
 
   /// Spring the dragged image back to center, carrying the release velocity.
@@ -141,10 +139,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _settle.value = 1.0;
     _settle.animateWith(SpringSimulation(
       SpringDescription.withDampingRatio(
-          mass: 1, stiffness: 400, ratio: 0.85),
+          mass: 1, stiffness: 350, ratio: 0.95),
       1.0,
       0.0,
-      v.clamp(-10.0, 10.0),
+      v.clamp(-8.0, 8.0),
     ));
   }
 
@@ -423,8 +421,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   @override
   Widget build(BuildContext context) {
     final item = _currentItem;
-    final showBars =
-        _barsVisible && !_dragHidesBars && !_isCurrentlyZoomed && !_isPinching;
+    final showBars = _barsVisible && !_isCurrentlyZoomed && !_isPinching;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -463,7 +460,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           final dx = e.position.dx - _startDragX!;
           // Responsive vertical swipe deadzone: natural downward drag (dy > 8 and dy > dx.abs() * 1.1)
           if (_drag.value != Offset.zero || (dy > 8 && dy > dx.abs() * 1.1)) {
-            _setDrag(Offset(dx, (dy - 8).clamp(0.0, 600.0)));
+            final dampedDx = dx * 0.35;
+            final dragY = (dy - 8).clamp(0.0, 600.0);
+            _setDrag(Offset(dampedDx, dragY));
           }
         },
         onPointerUp: (e) {
@@ -482,7 +481,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             if (!wasMultiTouch &&
                 !_isCurrentlyZoomed &&
                 d.dy > 0 &&
-                (d.dy > 60 || (vy > 400 && d.dy > 15))) {
+                (d.dy > 100 || (vy > 600 && d.dy > 25))) {
               // Hero flies from the image's current (dragged/scaled) rect to the
               // grid tile whose Hero tag == the current item's id.
               Navigator.of(context).pop();
@@ -522,7 +521,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   valueListenable: _drag,
                   builder: (_, d, __) => ColoredBox(
                     color: Colors.black.withValues(
-                        alpha: (1.0 - d.dy / 300).clamp(0.0, 1.0)),
+                        alpha: (1.0 - (d.dy / 350)).clamp(0.0, 1.0)),
                   ),
                 ),
               ),
@@ -530,7 +529,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
               ValueListenableBuilder<Offset>(
                 valueListenable: _drag,
                 builder: (_, d, child) {
-                  final s = (1.0 - d.dy / 900).clamp(0.6, 1.0);
+                  final s = (1.0 - (d.dy / 800) * 0.25).clamp(0.75, 1.0);
                   return Transform(
                     alignment: Alignment.center,
                     transform: Matrix4.translationValues(d.dx, d.dy, 0)
@@ -625,12 +624,17 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 top: 0,
                 left: 0,
                 right: 0,
-                child: IgnorePointer(
-                  ignoring: !showBars,
-                  child: AnimatedOpacity(
-                    opacity: showBars ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 250),
+                child: ValueListenableBuilder<Offset>(
+                  valueListenable: _drag,
+                  builder: (context, d, child) => AnimatedOpacity(
+                    opacity: (showBars && d.dy < 20) ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
                     curve: Curves.easeInOut,
+                    child: IgnorePointer(
+                      ignoring: !showBars || d.dy >= 20,
+                      child: child,
+                    ),
+                  ),
                   child: SafeArea(
                     bottom: false,
                     child: Container(
@@ -657,7 +661,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  item.name,
+                                  MediaUtils.formatViewerDate(item.date),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,
@@ -668,7 +672,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  '${MediaUtils.formatViewerDate(item.date)}, ${MediaUtils.formatViewerTime(item.date)}',
+                                  MediaUtils.formatViewerTime(item.date),
                                   style: const TextStyle(
                                     color: Colors.white70,
                                     fontSize: 12,
@@ -729,72 +733,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               },
                             ),
                             IconButton(
-                              icon: const Icon(Icons.share_outlined,
-                                  color: Colors.white, size: 22),
-                              tooltip: 'Share',
-                              onPressed: () =>
-                                  ShareService.shareSingle(item.path, isVideo: false),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  color: Colors.white, size: 22),
-                              tooltip: 'Delete',
-                              onPressed: _deleteCurrentItem,
-                            ),
-                            IconButton(
                               icon: const Icon(Icons.info_outline,
                                   color: Colors.white, size: 22),
                               tooltip: 'Details',
                               onPressed: () => showMediaInfoSheet(context, item),
-                            ),
-                            PopupMenuButton<String>(
-                              icon: const Icon(Icons.more_vert,
-                                  color: Colors.white, size: 22),
-                              tooltip: 'More options',
-                              color: const Color(0xFF222222),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                              onSelected: (value) async {
-                                if (value == 'wallpaper') {
-                                  ShareService.setAsWallpaper(item.path);
-                                } else if (value == 'rename') {
-                                  final updated =
-                                      await showRenameMediaDialog(context, item, ref);
-                                  if (updated != null && mounted) {
-                                    setState(() {
-                                      widget.items[_current] = updated;
-                                    });
-                                  }
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                const PopupMenuItem(
-                                  value: 'wallpaper',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.wallpaper_outlined,
-                                          size: 20, color: Colors.white),
-                                      SizedBox(width: 12),
-                                      Text('Set as wallpaper',
-                                          style: TextStyle(
-                                              color: Colors.white, fontSize: 14)),
-                                    ],
-                                  ),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'rename',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.edit_outlined,
-                                          size: 20, color: Colors.white),
-                                      SizedBox(width: 12),
-                                      Text('Rename',
-                                          style: TextStyle(
-                                              color: Colors.white, fontSize: 14)),
-                                    ],
-                                  ),
-                                ),
-                              ],
                             ),
                           ],
                         ],
@@ -803,21 +745,27 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   ),
                 ),
               ),
-            ),
 
-              // ── Bottom info bar ─────────────────────────────────
+              // ── Bottom action bar (Photo 2 reference) ───────────
               Positioned(
                 bottom: 0,
                 left: 0,
                 right: 0,
-                child: IgnorePointer(
-                  ignoring: !showBars,
-                  child: AnimatedOpacity(
-                    opacity: showBars ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 250),
+                child: ValueListenableBuilder<Offset>(
+                  valueListenable: _drag,
+                  builder: (context, d, child) => AnimatedOpacity(
+                    opacity: (showBars && d.dy < 20) ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
                     curve: Curves.easeInOut,
+                    child: IgnorePointer(
+                      ignoring: !showBars || d.dy >= 20,
+                      child: child,
+                    ),
+                  ),
+                  child: SafeArea(
+                    top: false,
                     child: Container(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.bottomCenter,
@@ -825,28 +773,158 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           colors: [Colors.black87, Colors.transparent],
                         ),
                       ),
-                      child: Row(
-                        children: [
-                          Text(
-                            '${_current + 1} / ${widget.items.length}',
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 12),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            MediaUtils.formatDateTime(item.date),
-                            style: const TextStyle(
-                                color: Colors.white70, fontSize: 12),
-                          ),
-                          const Spacer(),
-                          if (item.resolution.isNotEmpty)
-                            Text(
-                              item.resolution,
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 12),
+                      child: widget.isTrash
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _ViewerActionButton(
+                                  icon: const Icon(Icons.restore,
+                                      color: Colors.white, size: 22),
+                                  label: 'Restore',
+                                  onTap: _restoreCurrentItem,
+                                ),
+                                _ViewerActionButton(
+                                  icon: const Icon(Icons.delete_forever,
+                                      color: Colors.white, size: 22),
+                                  label: 'Delete',
+                                  onTap: _deleteCurrentItem,
+                                ),
+                                _ViewerActionButton(
+                                  icon: const Icon(Icons.info_outline,
+                                      color: Colors.white, size: 22),
+                                  label: 'Details',
+                                  onTap: () =>
+                                      showMediaInfoSheet(context, item),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _ViewerActionButton(
+                                  icon: const Icon(Icons.share_outlined,
+                                      color: Colors.white, size: 22),
+                                  label: 'Share',
+                                  onTap: () => ShareService.shareSingle(
+                                      item.path,
+                                      isVideo: false),
+                                ),
+                                _ViewerActionButton(
+                                  icon: const Icon(Icons.edit_outlined,
+                                      color: Colors.white, size: 22),
+                                  label: 'Edit',
+                                  onTap: () async {
+                                    final updated = await showRenameMediaDialog(
+                                        context, item, ref);
+                                    if (updated != null && mounted) {
+                                      setState(() {
+                                        widget.items[_current] = updated;
+                                      });
+                                    }
+                                  },
+                                ),
+                                _ViewerActionButton(
+                                  icon: const Icon(Icons.wallpaper_outlined,
+                                      color: Colors.white, size: 22),
+                                  label: 'Wallpaper',
+                                  onTap: () =>
+                                      ShareService.setAsWallpaper(item.path),
+                                ),
+                                _ViewerActionButton(
+                                  icon: const Icon(Icons.delete_outline,
+                                      color: Colors.white, size: 22),
+                                  label: 'Delete',
+                                  onTap: _deleteCurrentItem,
+                                ),
+                                PopupMenuButton<String>(
+                                  tooltip: 'More options',
+                                  color: const Color(0xFF222222),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                  offset: const Offset(0, -120),
+                                  onSelected: (value) async {
+                                    if (value == 'wallpaper') {
+                                      ShareService.setAsWallpaper(item.path);
+                                    } else if (value == 'rename') {
+                                      final updated =
+                                          await showRenameMediaDialog(
+                                              context, item, ref);
+                                      if (updated != null && mounted) {
+                                        setState(() {
+                                          widget.items[_current] = updated;
+                                        });
+                                      }
+                                    } else if (value == 'info') {
+                                      showMediaInfoSheet(context, item);
+                                    }
+                                  },
+                                  itemBuilder: (context) => [
+                                    const PopupMenuItem(
+                                      value: 'info',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.info_outline,
+                                              size: 20, color: Colors.white),
+                                          SizedBox(width: 12),
+                                          Text('Details',
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 14)),
+                                        ],
+                                      ),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'rename',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit_outlined,
+                                              size: 20, color: Colors.white),
+                                          SizedBox(width: 12),
+                                          Text('Rename',
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 14)),
+                                        ],
+                                      ),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'wallpaper',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.wallpaper_outlined,
+                                              size: 20, color: Colors.white),
+                                          SizedBox(width: 12),
+                                          Text('Set as wallpaper',
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 14)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 6),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.more_vert,
+                                            color: Colors.white, size: 22),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          'More',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                        ],
-                      ),
                     ),
                   ),
                 ),
@@ -858,3 +936,41 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     );
   }
 }
+
+class _ViewerActionButton extends StatelessWidget {
+  const _ViewerActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final Widget icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return BouncyTap(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            icon,
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
