@@ -255,18 +255,27 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       native.setProperty('hwdec-codecs', 'h264,hevc,mpeg4,vc1');
       native.setProperty('demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
       native.setProperty('demuxer-max-bytes', '33554432'); // 32 MB read-ahead
+      native.setProperty('demuxer-max-back-bytes', '33554432'); // 32 MB backward seek buffer
       native.setProperty('demuxer-readahead-secs', '10');
       native.setProperty('demuxer-lavf-probesize', '2097152');
+      native.setProperty('hr-seek-framedrop', 'yes');
     }
 
     _player.stream.error.listen((err) {
       debugPrint('[VideoPlayer] Playback error: $err');
-      // Filter non-fatal MPV warnings that occur during normal HW→SW codec fallback.
+      // Filter non-fatal MPV warnings that occur during normal HW→SW codec fallback,
+      // keyframe seeking, or stream buffer flushes.
       final errLower = err.toString().toLowerCase();
       final isNonFatal = errLower.contains('could not open codec') ||
           errLower.contains('decoder init failed') ||
           errLower.contains('hwdec') ||
-          errLower.contains('using software decoding');
+          errLower.contains('using software decoding') ||
+          errLower.contains('error decoding') ||
+          errLower.contains('cannot decode') ||
+          errLower.contains('invalid data') ||
+          errLower.contains('corrupt') ||
+          errLower.contains('missing picture') ||
+          errLower.contains('packet');
       if (mounted && !isNonFatal) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -401,8 +410,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   bool _isCurrentVideoPortrait() {
+    final vParams = _player.state.videoParams;
+    if (vParams.w != null && vParams.h != null && vParams.w! > 0 && vParams.h! > 0) {
+      final rotate = vParams.rotate ?? 0;
+      final isRotated90or270 = rotate == 90 || rotate == 270;
+      final effectiveW = isRotated90or270 ? vParams.h! : vParams.w!;
+      final effectiveH = isRotated90or270 ? vParams.w! : vParams.h!;
+      return effectiveH > effectiveW;
+    }
     final item = _videos[_current];
-    if (item.width != null && item.height != null) {
+    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
       return item.height! > item.width!;
     }
     return false;
@@ -417,6 +434,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (_isCurrentVideoPortrait()) {
       SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
       ]);
     } else {
       SystemChrome.setPreferredOrientations([
@@ -719,7 +737,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 valueListenable: _dragNotifier,
                 builder: (_, d, __) => ColoredBox(
                   color: Colors.black.withValues(
-                      alpha: (1.0 - (d.dy / 350)).clamp(0.0, 1.0)),
+                      alpha: (1.0 - (d.dy / 300)).clamp(0.0, 1.0)),
                 ),
               ),
             ),
@@ -777,11 +795,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   _vt.addPosition(e.timeStamp, e.position);
                   final dy = e.position.dy - _startDragY!;
                   final dx = e.position.dx - _startDragX!;
-                  // Responsive vertical swipe deadzone: natural downward drag (dy > 8 and dy > dx.abs() * 1.1)
-                  if (_dragNotifier.value != Offset.zero || (dy > 8 && dy > dx.abs() * 1.1)) {
-                    final dampedDx = dx * 0.35;
-                    final dragY = (dy - 8).clamp(0.0, 600.0);
+                  // Responsive vertical swipe deadzone: natural downward drag (dy > 6 and dy > dx.abs() * 0.75)
+                  if (_dragNotifier.value != Offset.zero || (dy > 6 && dy > dx.abs() * 0.75)) {
+                    final dampedDx = dx * 0.4;
+                    final dragY = (dy - 6).clamp(0.0, 600.0);
                     _setDrag(Offset(dampedDx, dragY));
+                    if (_player.state.playing && dy > 12) {
+                      _player.pause();
+                    }
                   }
                 },
                 onPointerUp: (e) {
@@ -802,7 +823,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     if (!wasMultiTouch &&
                         !_isCurrentlyVideoZoomed &&
                         d.dy > 0 &&
-                        (d.dy > 100 || (vy > 600 && d.dy > 25))) {
+                        (d.dy > 80 || (vy > 500 && d.dy > 20))) {
                       _player.pause();
                       Navigator.of(context).pop();
                     } else if (d != Offset.zero) {
@@ -1210,9 +1231,10 @@ Widget _buildHeroShuttle({
   return AnimatedBuilder(
     animation: animation,
     builder: (context, _) {
-      final double gridProgress = flightDirection == HeroFlightDirection.pop
-          ? animation.value
-          : (1.0 - animation.value);
+      // In Flutter Hero flight, animation.value goes 0.0 (Grid) -> 1.0 (Viewer) on push,
+      // and 1.0 (Viewer) -> 0.0 (Grid) on pop.
+      // Progress toward the Grid state (1.0 at Grid, 0.0 at Viewer) is always (1.0 - animation.value).
+      final double gridProgress = (1.0 - animation.value).clamp(0.0, 1.0);
 
       final double coverOpacity = (gridProgress * 1.5 - 0.2).clamp(0.0, 1.0);
       final double containOpacity = (1.0 - coverOpacity).clamp(0.0, 1.0);
@@ -1222,22 +1244,22 @@ Widget _buildHeroShuttle({
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (coverOpacity > 0.001)
-              Opacity(
-                opacity: coverOpacity,
-                child: Image(
-                  image: p,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.medium,
-                ),
-              ),
             if (containOpacity > 0.001)
               Opacity(
                 opacity: containOpacity,
                 child: Image(
                   image: p,
                   fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                ),
+              ),
+            if (coverOpacity > 0.001)
+              Opacity(
+                opacity: coverOpacity,
+                child: Image(
+                  image: p,
+                  fit: BoxFit.cover,
                   gaplessPlayback: true,
                   filterQuality: FilterQuality.medium,
                 ),
@@ -1588,9 +1610,28 @@ class _BottomBarState extends State<_BottomBar> {
                             Text(MediaUtils.formatDuration(displayPos),
                                 style: const TextStyle(
                                     color: Colors.white, fontSize: 12)),
-                            Text(MediaUtils.formatDuration(dur),
-                                style: const TextStyle(
-                                    color: Colors.white70, fontSize: 12)),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(MediaUtils.formatDuration(dur),
+                                    style: const TextStyle(
+                                        color: Colors.white70, fontSize: 12)),
+                                const SizedBox(width: 8),
+                                BouncyTap(
+                                  onTap: widget.onToggleFullscreen,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(2),
+                                    child: Icon(
+                                      widget.isFullscreen
+                                          ? Icons.fullscreen_exit_rounded
+                                          : Icons.fullscreen_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
