@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.4.14&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.5.15&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -21,10 +21,10 @@
 ## Key Features
 
 ### 1. Modern & Sleek User Interface
-- **Unified Segmented Capsule Filter Bar:** Clean, single-row pill navigation (`All`, `Photos`, `Videos`, `Albums`) with glowing active tab highlights and instant sort modal access.
-- **Pill-Shaped Modern Search Bar:** Sleek, rounded search bar integrated into the header for real-time media and album filtering without layout clutter.
-- **Seamless Header Transition:** Borderless AppBar design without harsh divider lines for a continuous, immersive gallery feed.
-- **Animated Flame Brand:** Centered AppBar badge with continuous fiery gradient pulsing and dynamic fire icon (`🔥 Phantek`).
+- **Theme-Adaptive Animated Headers:** Procedural real-time animations customized for every theme mode (AMOLED glowing crescent moon, twinkling starfield & falling meteors; AMOLED Sakura drifting cherry blossoms & delicate tree branch; Dark mode flowing cyber plasma aurora ribbons & cosmic embers; Light mode radiant morning sunburst & golden sparkles).
+- **Harmonized Title Badges:** Adaptive animated title badge with dynamic sweep shader gradients and icons matching active themes.
+- **Glitch-Free Sliding Capsule Navigation:** Unified, single-indicator capsule tab filter bar (`All`, `Photos`, `Videos`, `Albums`) with synchronized text styling to prevent white flash during tab switching.
+- **Natural Fluid Swipe-to-Dismiss:** Dynamic image scaling, smooth corner rounding, instant background/overlay reactivity, and organic spring physics for viewer dismissal.
 - **Tactile Bouncy Feedback:** Spring-scale micro-animations (`BouncyTap`) across all interactive cards, chips, dialogs, and controls.
 
 ### 2. High-Performance Media Organization & Search
@@ -124,6 +124,13 @@ The compiled release APK will be generated at:
 ---
 
 ## Version History
+
+- **v2.5.15 (Build 22):**
+  - **Theme-Adaptive Animated Headers:** Procedural lightweight 60fps animations for AMOLED (moon, stars & meteors), AMOLED Sakura (falling sakura petals & branch), Dark (cyber plasma aurora waves & embers), and Light (radiant sunburst & sparkles).
+  - **Theme-Harmonized Title Badge:** Dynamic gradient borders and icons in `AnimatedFlameTitle` matching active theme mode while preserving the 10-tap Easter Egg.
+  - **Glitch-Free Tab Bar Animations:** Replaced separated tab backgrounds with a single sliding capsule indicator and synchronized typography to eliminate momentary white flashes.
+  - **Refined Swipe-to-Dismiss:** Proportionate drag scaling, corner radius morphing, instant overlay fading, and organic damping spring simulation.
+  - **Optimized Selection UI:** Replaced the favorite button with Select All in the multi-select bar for faster bulk management.
 
 - **v2.4.14 (Build 20):**
   - **Modern Front Page Redesign:** Unified capsule segmented filter navigation, pill-shaped search bar, borderless header, and refined grid spacing.

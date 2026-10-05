@@ -28,6 +28,9 @@ import 'package:phantek_gallery/core/services/share_service.dart';
 import 'package:phantek_gallery/app/router.dart' show rootNavigatorKey;
 import 'package:phantek_gallery/features/update/data/update_service.dart';
 import 'package:phantek_gallery/features/update/presentation/update_dialog.dart';
+import 'package:phantek_gallery/core/widgets/animated_flame_title.dart';
+import 'package:phantek_gallery/core/widgets/theme_header_background.dart';
+import 'package:phantek_gallery/core/providers/settings_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -1167,7 +1170,129 @@ void main() {
       final hero = tester.widget<Hero>(heroFinder);
       expect(hero.tag, 'test_grid_item_1');
     });
+
+    test('Swipe-to-dismiss dynamic scale, corner radius, and opacity formulas', () {
+      double computeScale(double dy) =>
+          (1.0 - (dy / 1000.0) * 0.28).clamp(0.72, 1.0);
+      double computeRadius(double dy) =>
+          (dy > 0 ? (dy / 12.0).clamp(0.0, 20.0) : 0.0);
+      double computeScrimAlpha(double dy) =>
+          (1.0 - (dy / 320.0)).clamp(0.0, 1.0);
+      double computeOverlayOpacity(double dy) =>
+          (1.0 - (dy / 35.0)).clamp(0.0, 1.0);
+
+      // At rest (dy = 0)
+      expect(computeScale(0), 1.0);
+      expect(computeRadius(0), 0.0);
+      expect(computeScrimAlpha(0), 1.0);
+      expect(computeOverlayOpacity(0), 1.0);
+
+      // Dragging down slightly (dy = 35)
+      expect(computeScale(35), closeTo(0.99, 0.01));
+      expect(computeRadius(35), closeTo(2.91, 0.05));
+      expect(computeScrimAlpha(35), closeTo(0.89, 0.01));
+      expect(computeOverlayOpacity(35), 0.0); // Bars completely and cleanly hidden!
+
+      // Deep drag (dy = 320)
+      expect(computeScrimAlpha(320), 0.0); // Background completely clear
+      expect(computeRadius(320), 20.0); // Clamped max corner radius
+      expect(computeScale(320), closeTo(0.91, 0.01));
+
+      // Maximum clamp check (dy = 2000)
+      expect(computeScale(2000), 0.72);
+      expect(computeRadius(2000), 20.0);
+      expect(computeScrimAlpha(2000), 0.0);
+      expect(computeOverlayOpacity(2000), 0.0);
+    });
+
+    test('Swipe-to-dismiss SpringSimulation description uses smooth organic damping', () {
+      final spring = SpringDescription.withDampingRatio(
+        mass: 1.0,
+        stiffness: 320,
+        ratio: 0.82,
+      );
+
+      expect(spring.mass, 1.0);
+      expect(spring.stiffness, 320.0);
+      expect(spring.damping, closeTo(2 * 1.0 * 0.82 * 17.888, 0.5)); // 2*m*ratio*sqrt(k)
+    });
+
+    test('FilterSortBar segmented capsule indicator alignment calculation', () {
+      double computeAlignmentX(int selectedIndex, int totalOptions) {
+        if (totalOptions <= 1) return 0.0;
+        final clamped = selectedIndex.clamp(0, totalOptions - 1);
+        return -1.0 + (2.0 * clamped / (totalOptions - 1));
+      }
+
+      // 4 tabs (All, Photos, Videos, Albums)
+      expect(computeAlignmentX(0, 4), -1.0); // All (Far Left)
+      expect(computeAlignmentX(1, 4), closeTo(-0.333, 0.001)); // Photos
+      expect(computeAlignmentX(2, 4), closeTo(0.333, 0.001)); // Videos
+      expect(computeAlignmentX(3, 4), 1.0); // Albums (Far Right)
+
+      // 3 tabs (All, Photos, Videos in AlbumDetail)
+      expect(computeAlignmentX(0, 3), -1.0); // All
+      expect(computeAlignmentX(1, 3), 0.0); // Photos (Center)
+      expect(computeAlignmentX(2, 3), 1.0); // Videos
+    });
+
+    testWidgets('ThemeHeaderBackground and AnimatedFlameTitle adapt to all AppThemeMode options', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      for (final mode in [
+        AppThemeMode.amoled,
+        AppThemeMode.amoledSakura,
+        AppThemeMode.dark,
+        AppThemeMode.light,
+        AppThemeMode.system,
+      ]) {
+        await tester.pumpWidget(
+          ProviderScope(
+            key: ValueKey(mode),
+            overrides: [
+              settingsNotifierProvider.overrideWith(
+                () => _TestSettingsNotifier(SettingsModel(themeMode: mode)),
+              ),
+            ],
+            child: MaterialApp(
+              theme: mode == AppThemeMode.light ? AppTheme.light : AppTheme.dark,
+              home: Scaffold(
+                appBar: AppBar(
+                  flexibleSpace: const ThemeHeaderBackground(),
+                  title: const AnimatedFlameTitle(title: 'Phantek'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // Verify widgets are mounted
+        expect(find.byType(ThemeHeaderBackground), findsOneWidget);
+        expect(find.byType(AnimatedFlameTitle), findsOneWidget);
+        expect(find.text('Phantek'), findsOneWidget);
+
+        // Verify corresponding icon in AnimatedFlameTitle
+        final expectedIcon = switch (mode) {
+          AppThemeMode.amoled => Icons.nights_stay_rounded,
+          AppThemeMode.amoledSakura => Icons.local_florist_rounded,
+          AppThemeMode.dark => Icons.local_fire_department_rounded,
+          AppThemeMode.light => Icons.wb_sunny_rounded,
+          AppThemeMode.system => Icons.local_fire_department_rounded, // in dark theme
+        };
+        expect(find.byIcon(expectedIcon), findsOneWidget);
+      }
+    });
   });
+}
+
+class _TestSettingsNotifier extends SettingsNotifier {
+  final SettingsModel initial;
+  _TestSettingsNotifier(this.initial);
+  @override
+  SettingsModel build() => initial;
 }
 
 class _MockMediaListNotifier extends MediaListNotifier {

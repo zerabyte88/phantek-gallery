@@ -131,6 +131,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   // Drag-to-dismiss translation lives in a notifier: pointer-move repaints only
   // the Transform, never the gallery/bars hierarchy.
   final ValueNotifier<Offset> _drag = ValueNotifier(Offset.zero);
+  final ValueNotifier<bool> _isDraggingDown = ValueNotifier(false);
+  bool _isSwipingHorizontal = false;
   late final AnimationController _settle; // 1 -> 0 spring, scales _settleFrom
   Offset _settleFrom = Offset.zero;
   VelocityTracker _vt = VelocityTracker.withKind(PointerDeviceKind.touch);
@@ -155,9 +157,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _transformationController = TransformationController();
     _settle = AnimationController.unbounded(vsync: this)
       ..addListener(() {
-        _setDrag(_settleFrom * _settle.value);
+        final current = _settleFrom * _settle.value;
+        _setDrag(current);
         if (!_settle.isAnimating && _activePointers.isEmpty) {
           _setDrag(Offset.zero);
+          _isDraggingDown.value = false;
         }
       });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -181,6 +185,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _zoomAnimController?.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _settle.dispose();
+    _isDraggingDown.dispose();
     _drag.dispose();
     _page.dispose();
     super.dispose();
@@ -190,16 +195,24 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   void _setDrag(Offset o) {
     _drag.value = o;
+    final isDown = o != Offset.zero;
+    if (_isDraggingDown.value != isDown) {
+      _isDraggingDown.value = isDown;
+    }
   }
 
   /// Spring the dragged image back to center, carrying the release velocity.
   void _springBack(double vy) {
     _settleFrom = _drag.value;
+    if (_settleFrom == Offset.zero) {
+      _isDraggingDown.value = false;
+      return;
+    }
     final v = _settleFrom.dy.abs() > 1 ? vy / _settleFrom.dy : 0.0;
     _settle.value = 1.0;
     _settle.animateWith(SpringSimulation(
       SpringDescription.withDampingRatio(
-          mass: 1, stiffness: 350, ratio: 0.95),
+          mass: 1.0, stiffness: 320, ratio: 0.82),
       1.0,
       0.0,
       v.clamp(-8.0, 8.0),
@@ -527,15 +540,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   @override
   Widget build(BuildContext context) {
     final item = _currentItem;
-    final showBars = _barsVisible && !_isCurrentlyZoomed && !_isPinching;
-
-    return Scaffold(
+    final showBars = _barsVisible && !_isCurrentlyZoomed && !_isPinching;    return Scaffold(
       backgroundColor: Colors.transparent,
       body: Listener(
         onPointerDown: (e) {
           _activePointers.add(e.pointer);
           _settle.stop(); // grab a returning image mid-flight
           _zoomAnimController?.stop();
+          _isSwipingHorizontal = false;
           if (_activePointers.length >= 2 || _isCurrentlyZoomed) {
             // Multi-touch, pinch, or zoomed: abort any drag-to-dismiss immediately.
             _isMultiTouch = true;
@@ -561,13 +573,28 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             if (_drag.value != Offset.zero) _setDrag(Offset.zero);
             return;
           }
-          _vt.addPosition(e.timeStamp, e.position);
-          final dy = e.position.dy - _startDragY!;
+
           final dx = e.position.dx - _startDragX!;
+          final dy = e.position.dy - _startDragY!;
+
+          // Detect horizontal swipe intention to avoid fighting PageView
+          if (!_isSwipingHorizontal && _drag.value == Offset.zero) {
+            final adx = dx.abs();
+            final ady = dy.abs();
+            if (adx > 10 && adx > ady * 1.3) {
+              _isSwipingHorizontal = true;
+              return;
+            }
+          }
+
+          if (_isSwipingHorizontal) return;
+
+          _vt.addPosition(e.timeStamp, e.position);
+
           // Responsive vertical swipe deadzone: natural downward drag (dy > 6 and dy > dx.abs() * 0.75)
           if (_drag.value != Offset.zero || (dy > 6 && dy > dx.abs() * 0.75)) {
-            final dampedDx = dx * 0.4;
-            final dragY = (dy - 6).clamp(0.0, 600.0);
+            final dampedDx = dx * 0.45;
+            final dragY = (dy - 6).clamp(0.0, 650.0);
             _setDrag(Offset(dampedDx, dragY));
           }
         },
@@ -579,6 +606,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             final wasMultiTouch = _isMultiTouch;
             _isMultiTouch = false;
             _isPinching = false;
+            _isSwipingHorizontal = false;
             _startDragY = null;
             _startDragX = null;
             final d = _drag.value;
@@ -587,7 +615,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             if (!wasMultiTouch &&
                 !_isCurrentlyZoomed &&
                 d.dy > 0 &&
-                (d.dy > 80 || (vy > 500 && d.dy > 20))) {
+                (d.dy > 85 || (vy > 550 && d.dy > 20))) {
               // Hero flies from the image's current (dragged/scaled) rect to the
               // grid tile whose Hero tag == the current item's id.
               Navigator.of(context).pop();
@@ -603,6 +631,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           if (_activePointers.isEmpty) {
             _isMultiTouch = false;
             _isPinching = false;
+            _isSwipingHorizontal = false;
             _startDragY = null;
             _startDragX = null;
             if (_drag.value != Offset.zero) _springBack(0);
@@ -627,111 +656,123 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   valueListenable: _drag,
                   builder: (_, d, __) => ColoredBox(
                     color: Colors.black.withValues(
-                        alpha: (1.0 - (d.dy / 300)).clamp(0.0, 1.0)),
+                        alpha: (1.0 - (d.dy / 320.0)).clamp(0.0, 1.0)),
                   ),
                 ),
               ),
-              // ── Gallery: translate + proportional scale-down ─────
+              // ── Gallery: translate + proportional scale-down + subtle corner radius ─────
               ValueListenableBuilder<Offset>(
                 valueListenable: _drag,
                 builder: (_, d, child) {
-                  final s = (1.0 - (d.dy / 800) * 0.25).clamp(0.75, 1.0);
+                  final s = (1.0 - (d.dy / 1000.0) * 0.28).clamp(0.72, 1.0);
+                  final radius = (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
                   return Transform(
                     alignment: Alignment.center,
                     transform: Matrix4.translationValues(d.dx, d.dy, 0)
                       ..scaleByDouble(s, s, 1.0, 1.0),
-                    child: child,
+                    child: radius > 0
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(radius),
+                            child: child,
+                          )
+                        : child,
                   );
                 },
-                child: PageView.builder(
-                  controller: _page,
-                  itemCount: widget.items.length,
-                  onPageChanged: (i) {
-                    setState(() {
-                      _current = i;
-                      _isPhotoZoomed = false;
-                      _isPinching = false;
-                      _transformationController.value = Matrix4.identity();
-                    });
-                    _precacheAdjacent(i);
-                  },
-                  physics: (_isCurrentlyZoomed ||
-                          _isPinching ||
-                          _isMultiTouch ||
-                          _activePointers.length >= 2)
-                      ? const NeverScrollableScrollPhysics()
-                      : const BouncingScrollPhysics(
-                          parent: AlwaysScrollableScrollPhysics(),
-                        ),
-                  itemBuilder: (context, index) {
-                    final it = widget.items[index];
-                    if (index == _current) {
-                      return Center(
-                        child: ClipRect(
-                          child: InteractiveViewer(
-                            transformationController: _transformationController,
-                            minScale: 1.0,
-                            maxScale: 6.0,
-                            panEnabled: _isCurrentlyZoomed,
-                            scaleEnabled: true,
-                            clipBehavior: Clip.hardEdge,
-                            onInteractionStart: (details) {
-                              _zoomAnimController?.stop();
-                              if (details.pointerCount >= 2) {
-                                _isPinching = true;
-                              }
-                            },
-                            onInteractionUpdate: (details) {
-                              final scale = _transformationController
-                                  .value
-                                  .getMaxScaleOnAxis();
-                              final isZoomed = scale > 1.05;
-                              if (isZoomed != _isPhotoZoomed) {
-                                setState(() {
-                                  _isPhotoZoomed = isZoomed;
-                                });
-                              }
-                            },
-                            onInteractionEnd: (details) {
-                              _isPinching = false;
-                              final scale = _transformationController
-                                  .value
-                                  .getMaxScaleOnAxis();
-                              if (scale <= 1.02) {
-                                _resetPhotoZoom();
-                              } else {
-                                if (!_isPhotoZoomed && mounted) {
-                                  setState(() {
-                                    _isPhotoZoomed = true;
-                                  });
-                                }
-                              }
-                            },
-                            child: Center(
-                              child: Hero(
-                                tag: it.id,
-                                transitionOnUserGestures: true,
-                                flightShuttleBuilder: (
-                                  flightContext,
-                                  animation,
-                                  flightDirection,
-                                  fromHeroContext,
-                                  toHeroContext,
-                                ) =>
-                                    _buildHeroShuttle(
-                                  animation: animation,
-                                  flightDirection: flightDirection,
-                                  id: it.id,
-                                  path: it.path,
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: _isDraggingDown,
+                  builder: (context, isDraggingDown, _) {
+                    return PageView.builder(
+                      controller: _page,
+                      itemCount: widget.items.length,
+                      onPageChanged: (i) {
+                        setState(() {
+                          _current = i;
+                          _isPhotoZoomed = false;
+                          _isPinching = false;
+                          _transformationController.value = Matrix4.identity();
+                        });
+                        _precacheAdjacent(i);
+                      },
+                      physics: (_isCurrentlyZoomed ||
+                              _isPinching ||
+                              _isMultiTouch ||
+                              _activePointers.length >= 2 ||
+                              isDraggingDown)
+                          ? const NeverScrollableScrollPhysics()
+                          : const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                      itemBuilder: (context, index) {
+                        final it = widget.items[index];
+                        if (index == _current) {
+                          return Center(
+                            child: ClipRect(
+                              child: InteractiveViewer(
+                                transformationController: _transformationController,
+                                minScale: 1.0,
+                                maxScale: 6.0,
+                                panEnabled: _isCurrentlyZoomed,
+                                scaleEnabled: true,
+                                clipBehavior: Clip.hardEdge,
+                                onInteractionStart: (details) {
+                                  _zoomAnimController?.stop();
+                                  if (details.pointerCount >= 2) {
+                                    _isPinching = true;
+                                  }
+                                },
+                                onInteractionUpdate: (details) {
+                                  final scale = _transformationController
+                                      .value
+                                      .getMaxScaleOnAxis();
+                                  final isZoomed = scale > 1.05;
+                                  if (isZoomed != _isPhotoZoomed) {
+                                    setState(() {
+                                      _isPhotoZoomed = isZoomed;
+                                    });
+                                  }
+                                },
+                                onInteractionEnd: (details) {
+                                  _isPinching = false;
+                                  final scale = _transformationController
+                                      .value
+                                      .getMaxScaleOnAxis();
+                                  if (scale <= 1.02) {
+                                    _resetPhotoZoom();
+                                  } else {
+                                    if (!_isPhotoZoomed && mounted) {
+                                      setState(() {
+                                        _isPhotoZoomed = true;
+                                      });
+                                    }
+                                  }
+                                },
+                                child: Center(
+                                  child: Hero(
+                                    tag: it.id,
+                                    transitionOnUserGestures: true,
+                                    flightShuttleBuilder: (
+                                      flightContext,
+                                      animation,
+                                      flightDirection,
+                                      fromHeroContext,
+                                      toHeroContext,
+                                    ) =>
+                                        _buildHeroShuttle(
+                                      animation: animation,
+                                      flightDirection: flightDirection,
+                                      id: it.id,
+                                      path: it.path,
+                                    ),
+                                    child: _buildPhotoPage(it),
+                                  ),
                                 ),
-                                child: _buildPhotoPage(it),
                               ),
                             ),
-                          ),
-                        ),
-                      );
-                    }
-                    return _buildPhotoPage(it);
+                          );
+                        }
+                        return _buildPhotoPage(it);
+                      },
+                    );
                   },
                 ),
               ),
@@ -743,15 +784,17 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 right: 0,
                 child: ValueListenableBuilder<Offset>(
                   valueListenable: _drag,
-                  builder: (context, d, child) => AnimatedOpacity(
-                    opacity: (showBars && d.dy < 20) ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
-                    child: IgnorePointer(
-                      ignoring: !showBars || d.dy >= 20,
-                      child: child,
-                    ),
-                  ),
+                  builder: (context, d, child) {
+                    final dragFade = (1.0 - (d.dy / 35.0)).clamp(0.0, 1.0);
+                    final effectiveOpacity = showBars ? dragFade : 0.0;
+                    return Opacity(
+                      opacity: effectiveOpacity,
+                      child: IgnorePointer(
+                        ignoring: !showBars || d.dy > 4,
+                        child: child,
+                      ),
+                    );
+                  },
                   child: SafeArea(
                     bottom: false,
                     child: Container(
@@ -822,15 +865,17 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 right: 0,
                 child: ValueListenableBuilder<Offset>(
                   valueListenable: _drag,
-                  builder: (context, d, child) => AnimatedOpacity(
-                    opacity: (showBars && d.dy < 20) ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
-                    child: IgnorePointer(
-                      ignoring: !showBars || d.dy >= 20,
-                      child: child,
-                    ),
-                  ),
+                  builder: (context, d, child) {
+                    final dragFade = (1.0 - (d.dy / 35.0)).clamp(0.0, 1.0);
+                    final effectiveOpacity = showBars ? dragFade : 0.0;
+                    return Opacity(
+                      opacity: effectiveOpacity,
+                      child: IgnorePointer(
+                        ignoring: !showBars || d.dy > 4,
+                        child: child,
+                      ),
+                    );
+                  },
                   child: SafeArea(
                     top: false,
                     child: Container(
