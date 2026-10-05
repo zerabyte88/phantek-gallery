@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.6.18&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.6.19&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -124,6 +124,11 @@ The compiled release APK will be generated at:
 ---
 
 ## Version History
+
+- **v2.6.19 (Build 27):**
+  - **Header Search Bar & Filter Bar Collision Fix:** Constrained the search capsule strictly within the 56dp toolbar height (`topPadding + kToolbarHeight`), cleanly separating it from category filter chips (`All`, `Photos`, `Videos`, `Albums`) with zero overlapping.
+  - **Landscape Video Fullscreen Boundary & Inset Fix:** Reconfigured `SafeArea` insets for fullscreen landscape playback, implemented dynamic orientation keys on `InteractiveViewer`, and synchronized window metric resets to expand landscape videos edge-to-edge without shrinking or excessive black bars.
+  - **Large Video Aspect Ratio & Frame 0 Precision:** Introduced direct JPEG SOF0/SOF2 header parsing in `ThumbnailService` to resolve visual orientation on frame 0, eliminating momentary zoom-in snaps for large (>200MB, $\ge 720\times 1280$) and rotated videos.
 
 - **v2.6.18 (Build 26):**
   - **Centered Phantek Header Title:** Restored clean dead-center alignment for "Phantek" in the AppBar with responsive action alignment.

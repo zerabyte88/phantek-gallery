@@ -302,6 +302,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       }
     });
 
+    _player.stream.videoParams.listen((params) {
+      if (mounted && params.w != null && params.h != null && params.w! > 0 && params.h! > 0) {
+        setState(() {});
+      }
+    });
+
     final currentPath = _videos[_current].path;
     final isWebM = currentPath.toLowerCase().endsWith('.webm');
     if (_player.platform is NativePlayer) {
@@ -394,6 +400,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    _transformationController.value = Matrix4.identity();
+    if (_isVideoZoomed && mounted) {
+      setState(() => _isVideoZoomed = false);
+    }
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _zoomAnimController?.dispose();
@@ -418,6 +433,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       return effectiveH > effectiveW;
     }
     final item = _videos[_current];
+    final thumbRatio = ThumbnailService.instance.getThumbnailAspectRatio(item.id);
+    if (thumbRatio != null && thumbRatio > 0) {
+      return thumbRatio < 1.0;
+    }
     if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
       return item.height! > item.width!;
     }
@@ -468,9 +487,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   double _resolveAspectRatio(MediaItem item, int index) {
-    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
-      return item.width! / item.height!;
+    // 1. Prioritize visual thumbnail aspect ratio on frame 0
+    // This perfectly matches the thumbnail already rendered in memory/disk with zero stretch or snap
+    final thumbRatio = ThumbnailService.instance.getThumbnailAspectRatio(item.id);
+    if (thumbRatio != null && thumbRatio > 0) {
+      return thumbRatio;
     }
+
+    // 2. Active player videoParams (includes native rotation matrix)
     if (index == _current) {
       final vParams = _player.state.videoParams;
       if (vParams.w != null && vParams.h != null && vParams.w! > 0 && vParams.h! > 0) {
@@ -481,6 +505,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         return w / h;
       }
     }
+
+    // 3. Fallback to MediaItem metadata
+    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
+      return item.width! / item.height!;
+    }
+
     return 16.0 / 9.0;
   }
 
@@ -796,6 +826,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
             SafeArea(
               top: !_isFullscreen,
               bottom: !_isFullscreen,
+              left: !_isFullscreen,
+              right: !_isFullscreen,
               child: Listener(
                 onPointerDown: (e) {
                   _activePointers.add(e.pointer);
@@ -998,6 +1030,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                             return Center(
                               child: ClipRect(
                                 child: InteractiveViewer(
+                                  key: ValueKey('iv_${_videos[index].id}_${_isFullscreen}_${MediaQuery.orientationOf(context)}'),
                                   transformationController:
                                       _transformationController,
                                   minScale: 1.0,
