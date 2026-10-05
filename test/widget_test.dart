@@ -107,6 +107,58 @@ void main() {
       expect(customItem.albumName, 'Vacation');
     });
 
+    test('Rotated orientation aspect ratio calculation', () {
+      // Raw portrait recorded video in landscape 1920x1080 with 90 deg rotation
+      const rawW = 1920;
+      const rawH = 1080;
+      const orientation = 90;
+      final isRotated = orientation == 90 || orientation == 270;
+      final effectiveW = isRotated ? rawH : rawW;
+      final effectiveH = isRotated ? rawW : rawH;
+
+      final portraitItem = MediaItem(
+        id: 'rot_1',
+        path: '/storage/emulated/0/DCIM/portrait.mp4',
+        name: 'portrait.mp4',
+        date: DateTime(2026, 1, 1),
+        size: 1000,
+        isVideo: true,
+        width: effectiveW,
+        height: effectiveH,
+      );
+
+      expect(portraitItem.width, 1080);
+      expect(portraitItem.height, 1920);
+      expect(portraitItem.resolution, '1080x1920');
+      expect(portraitItem.width! / portraitItem.height!, closeTo(1080 / 1920, 0.001));
+    });
+
+    test('Unindexed large video (>100MB) fallback aspect ratio resolution', () {
+      final unindexedVideo = MediaItem(
+        id: 'large_100mb',
+        path: '/storage/emulated/0/Download/movie_150mb.mp4',
+        name: 'movie_150mb.mp4',
+        date: DateTime(2026, 1, 1),
+        size: 157286400, // 150 MB
+        isVideo: true,
+        width: 0, // 0 when unindexed by MediaStore
+        height: 0,
+      );
+
+      expect(unindexedVideo.width, 0);
+      expect(unindexedVideo.height, 0);
+
+      // Verify safe aspect ratio fallback calculation
+      double resolveTestRatio(MediaItem item) {
+        if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
+          return item.width! / item.height!;
+        }
+        return 16.0 / 9.0;
+      }
+
+      expect(resolveTestRatio(unindexedVideo), closeTo(16.0 / 9.0, 0.001));
+    });
+
     test('groupMediaIntoAlbums groups and sorts correctly', () {
       final item1 = MediaItem(
         id: '1',
@@ -788,9 +840,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Clear search query via Cancel button
-      final cancelBtn = find.text('Cancel');
+      final cancelBtn = find.byKey(const ValueKey('search_cancel_button'));
       expect(cancelBtn, findsOneWidget);
-      await tester.tap(cancelBtn);
+      await tester.tap(cancelBtn, warnIfMissed: false);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
 

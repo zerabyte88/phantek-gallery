@@ -30,11 +30,14 @@ ImageProvider displayImage(String path) => ResizeImage(
     );
 
 /// Cached 512px grid thumbnail, shown instantly while the full image decodes.
-Widget _thumb(String id) {
+Widget _thumb(String id, [String? path]) {
   final mem = ThumbnailService.instance.getMemoryThumbnail(id);
   final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
-  final ImageProvider? p =
-      mem != null ? MemoryImage(mem) : (disk != null ? FileImage(disk) : null);
+  final ImageProvider? p = mem != null
+      ? MemoryImage(mem)
+      : (disk != null
+          ? FileImage(disk)
+          : (path != null ? displayImage(path) : null));
   if (p == null) return const SizedBox.shrink();
   return Image(
     image: p,
@@ -113,7 +116,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   final Set<int> _activePointers = {};
 
   bool get _isCurrentlyZoomed =>
-      _isPhotoZoomed || _transformationController.value.getMaxScaleOnAxis() > 1.05;
+      _transformationController.value.getMaxScaleOnAxis() > 1.05;
 
   @override
   void initState() {
@@ -285,7 +288,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     Widget content = Stack(
       alignment: Alignment.center,
       children: [
-        _thumb(it.id),
+        _thumb(it.id, it.path),
         Image(
           image: displayImage(it.path),
           fit: BoxFit.contain,
@@ -518,6 +521,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           _settle.stop(); // grab a returning image mid-flight
           _zoomAnimController?.stop();
           _isSwipingHorizontal = false;
+          if (_activePointers.length == 1) {
+            _isMultiTouch = false;
+            _isPinching = false;
+            if (_transformationController.value.getMaxScaleOnAxis() <= 1.05) {
+              _isPhotoZoomed = false;
+            }
+          }
           if (_activePointers.length >= 2 || _isCurrentlyZoomed) {
             // Multi-touch, pinch, or zoomed: abort any drag-to-dismiss immediately.
             _isMultiTouch = true;

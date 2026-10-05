@@ -185,6 +185,19 @@ class MediaScannerService {
       mimeType = inferMimeType(path, isVideo: isVideo);
     }
 
+    final orientatedW = entity.orientatedWidth;
+    final orientatedH = entity.orientatedHeight;
+    final int w;
+    final int h;
+    if (orientatedW > 0 && orientatedH > 0) {
+      w = orientatedW;
+      h = orientatedH;
+    } else {
+      final isRotated = entity.orientation == 90 || entity.orientation == 270;
+      w = isRotated ? entity.height : entity.width;
+      h = isRotated ? entity.width : entity.height;
+    }
+
     return MediaItem(
       id: entity.id,
       path: path,
@@ -194,8 +207,8 @@ class MediaScannerService {
       size: size,
       isVideo: isVideo,
       duration: isVideo ? Duration(seconds: entity.duration) : null,
-      width: entity.width,
-      height: entity.height,
+      width: w,
+      height: h,
       mimeType: mimeType,
     );
   }

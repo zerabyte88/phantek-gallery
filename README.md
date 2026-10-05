@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.6.17&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.6.18&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -124,6 +124,12 @@ The compiled release APK will be generated at:
 ---
 
 ## Version History
+
+- **v2.6.18 (Build 26):**
+  - **Centered Phantek Header Title:** Restored clean dead-center alignment for "Phantek" in the AppBar with responsive action alignment.
+  - **Smooth Unified Search Overlay:** Re-engineered search bar into a single-row flex overlay in `flexibleSpace` with cubic easing, eliminating boundary overlaps and rightward bleed into the Cancel button.
+  - **Video Orientation & Large Video Zoom Fix:** Corrected width/height swaps for $90^\circ / 270^\circ$ rotated videos and resolved frame 0 aspect ratio fallback for unindexed large video files (>100MB).
+  - **Instant Cold-Start Hero Animations & Gesture Reliability:** Added display fallback for cold start image transitions and refined gesture tracking to prevent stuck swipe-to-dismiss.
 
 - **v2.6.17 (Build 25):**
   - **Zero-Delay Video Transitions & Black Screen Elimination:** Eliminated momentary black screen flashes upon tapping videos or swiping horizontally between videos by retaining instant 0ms cached thumbnails until video frames render.
