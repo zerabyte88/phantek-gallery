@@ -30,7 +30,7 @@ ImageProvider displayImage(String path) => ResizeImage(
     );
 
 /// Cached 512px grid thumbnail, shown instantly while the full image decodes.
-Widget _thumb(String id, BoxFit fit) {
+Widget _thumb(String id) {
   final mem = ThumbnailService.instance.getMemoryThumbnail(id);
   final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
   final ImageProvider? p =
@@ -38,9 +38,7 @@ Widget _thumb(String id, BoxFit fit) {
   if (p == null) return const SizedBox.shrink();
   return Image(
     image: p,
-    fit: fit,
-    width: double.infinity,
-    height: double.infinity,
+    fit: BoxFit.contain,
     gaplessPlayback: true,
     filterQuality: FilterQuality.high,
   );
@@ -63,46 +61,14 @@ Widget _buildHeroShuttle({
 
   if (p == null) return const SizedBox.shrink();
 
-  return AnimatedBuilder(
-    animation: animation,
-    builder: (context, _) {
-      // In Flutter Hero flight, animation.value goes 0.0 (Grid) -> 1.0 (Viewer) on push,
-      // and 1.0 (Viewer) -> 0.0 (Grid) on pop.
-      // Progress toward the Grid state (1.0 at Grid, 0.0 at Viewer) is always (1.0 - animation.value).
-      final double gridProgress = (1.0 - animation.value).clamp(0.0, 1.0);
-
-      final double coverOpacity = (gridProgress * 1.5 - 0.2).clamp(0.0, 1.0);
-      final double containOpacity = (1.0 - coverOpacity).clamp(0.0, 1.0);
-
-      return ClipRect(
-        clipBehavior: Clip.hardEdge,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (containOpacity > 0.001)
-              Opacity(
-                opacity: containOpacity,
-                child: Image(
-                  image: p,
-                  fit: BoxFit.contain,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.medium,
-                ),
-              ),
-            if (coverOpacity > 0.001)
-              Opacity(
-                opacity: coverOpacity,
-                child: Image(
-                  image: p,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.medium,
-                ),
-              ),
-          ],
-        ),
-      );
-    },
+  return ClipRect(
+    clipBehavior: Clip.hardEdge,
+    child: Image(
+      image: p,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+    ),
   );
 }
 
@@ -316,26 +282,30 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   }
 
   Widget _buildPhotoPage(MediaItem it) {
-    return Center(
-      child: Stack(
-        fit: StackFit.passthrough,
-        alignment: Alignment.center,
-        children: [
-          _thumb(it.id, BoxFit.contain),
-          Image(
-            image: displayImage(it.path),
-            fit: BoxFit.contain,
-            width: double.infinity,
-            height: double.infinity,
-            gaplessPlayback: true,
-            filterQuality: FilterQuality.high,
-            errorBuilder: (_, __, ___) => const Center(
-              child: Icon(Icons.broken_image, size: 80, color: Colors.white38),
-            ),
+    Widget content = Stack(
+      alignment: Alignment.center,
+      children: [
+        _thumb(it.id),
+        Image(
+          image: displayImage(it.path),
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, __, ___) => const Center(
+            child: Icon(Icons.broken_image, size: 80, color: Colors.white38),
           ),
-        ],
-      ),
+        ),
+      ],
     );
+
+    if (it.width != null && it.height != null && it.width! > 0 && it.height! > 0) {
+      content = AspectRatio(
+        aspectRatio: it.width! / it.height!,
+        child: content,
+      );
+    }
+
+    return content;
   }
 
   Future<void> _restoreCurrentItem() async {
@@ -770,7 +740,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                             ),
                           );
                         }
-                        return _buildPhotoPage(it);
+                        return Center(child: _buildPhotoPage(it));
                       },
                     );
                   },

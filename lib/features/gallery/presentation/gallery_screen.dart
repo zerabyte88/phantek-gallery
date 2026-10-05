@@ -30,7 +30,7 @@ class GalleryScreen extends ConsumerStatefulWidget {
 }
 
 class _GalleryScreenState extends ConsumerState<GalleryScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   static const _tabs = [
     FilterOption.all,
     FilterOption.photosOnly,
@@ -39,6 +39,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   ];
 
   late final PageController _pageController;
+  late final AnimationController _searchAnimController;
+  final FocusNode _searchFocusNode = FocusNode();
   late int _currentPage;
   final Set<String> _selected = {};
   bool _selecting = false;
@@ -53,6 +55,10 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _searchAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
     final settings = ref.read(settingsNotifierProvider);
     final tabIdx = _tabs.indexOf(settings.defaultFilter);
     _currentPage = tabIdx >= 0 ? tabIdx : 0;
@@ -93,16 +99,34 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     try {
       PhotoManager.stopChangeNotify();
     } catch (_) {}
+    _searchAnimController.dispose();
+    _searchFocusNode.dispose();
     _searchController.dispose();
     _pageController.dispose();
     super.dispose();
   }
 
-  void _clearSearch() {
+  void _openSearch() {
     setState(() {
-      _isSearching = false;
-      _searchController.clear();
-      _searchQuery = '';
+      _isSearching = true;
+    });
+    _searchAnimController.forward().then((_) {
+      if (mounted && _isSearching) {
+        _searchFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _clearSearch() {
+    _searchFocusNode.unfocus();
+    _searchAnimController.reverse().then((_) {
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+          _searchController.clear();
+          _searchQuery = '';
+        });
+      }
     });
   }
 
@@ -411,234 +435,351 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           backgroundColor: Colors.transparent,
           elevation: 0,
           flexibleSpace: const ThemeHeaderBackground(),
-          leading: _isSearching
-              ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  tooltip: 'Close search',
-                  onPressed: _clearSearch,
-                )
-              : null,
-          centerTitle: !_isSearching,
-          title: _isSearching
-              ? Container(
-                  height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest
-                        .withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.search_rounded,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          autofocus: true,
-                          style: const TextStyle(fontSize: 14),
-                          decoration: InputDecoration(
-                            hintText: 'Search media or albums...',
-                            isDense: true,
-                            contentPadding:
-                                const EdgeInsets.symmetric(vertical: 8),
-                            border: InputBorder.none,
-                            hintStyle: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                              fontSize: 14,
-                            ),
+          automaticallyImplyLeading: false,
+          leading: null,
+          titleSpacing: 16.0,
+          centerTitle: false,
+          title: AnimatedBuilder(
+            animation: _searchAnimController,
+            builder: (context, child) {
+              final isSearchActive =
+                  _isSearching || _searchAnimController.value > 0.0;
+              if (!isSearchActive) {
+                return _selecting
+                    ? Text('${_selected.length} selected')
+                    : BouncyTap(
+                        key: const ValueKey('appbar_badge_easter_egg'),
+                        scaleDown: 0.94,
+                        onTap: () => _easterEggHandler.handleTap(context, ref),
+                        child: const AnimatedFlameTitle(title: 'Phantek'),
+                      );
+              }
+
+              final titleOpacity =
+                  (1.0 - (_searchAnimController.value / 0.35)).clamp(0.0, 1.0);
+              final expandCurve = CurvedAnimation(
+                parent: _searchAnimController,
+                curve: const Interval(0.10, 0.85, curve: Curves.easeOutCubic),
+              );
+
+              return Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  if (titleOpacity > 0.0)
+                    Opacity(
+                      opacity: titleOpacity,
+                      child: _selecting
+                          ? Text('${_selected.length} selected')
+                          : const AnimatedFlameTitle(title: 'Phantek'),
+                    ),
+                  if (_searchAnimController.value > 0.0)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FractionallySizedBox(
+                        widthFactor: expandCurve.value.clamp(0.01, 1.0),
+                        child: Container(
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                          onChanged: (q) =>
-                              setState(() => _searchQuery = q.trim()),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.search_rounded,
+                                size: 18,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: _searchController,
+                                  focusNode: _searchFocusNode,
+                                  style: const TextStyle(fontSize: 14),
+                                  decoration: InputDecoration(
+                                    hintText: 'Search media or albums...',
+                                    isDense: true,
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(vertical: 8),
+                                    border: InputBorder.none,
+                                    hintStyle: TextStyle(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  onChanged: (q) =>
+                                      setState(() => _searchQuery = q.trim()),
+                                ),
+                              ),
+                              if (_searchController.text.isNotEmpty)
+                                GestureDetector(
+                                  onTap: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Icon(
+                                      Icons.cancel,
+                                      size: 18,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                )
-              : (_selecting
-                  ? Text('${_selected.length} selected')
-                  : BouncyTap(
-                      key: const ValueKey('appbar_badge_easter_egg'),
-                      scaleDown: 0.94,
-                      onTap: () => _easterEggHandler.handleTap(context, ref),
-                      child: const AnimatedFlameTitle(title: 'Phantek'),
-                    )),
-          actions: [
-            if (_isSearching) ...[
-              if (_searchController.text.isNotEmpty)
-                IconButton(
-                  icon: const Icon(Icons.clear),
-                  tooltip: 'Clear search',
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _searchQuery = '');
-                  },
-                ),
-            ] else if (_selecting && isAlbums) ...[
-              IconButton(
-                icon: const Icon(Icons.select_all),
-                tooltip: 'Select all',
-                onPressed: () {
-                  final allAlbums = _filterAlbumsBySearch(
-                    groupMediaIntoAlbums(
-                      mediaAsync.value ?? [],
-                      sort: settings.defaultSort,
-                      favoriteIds: settings.favoriteIds,
                     ),
-                  );
-                  setState(() {
-                    if (_selected.length == allAlbums.length) {
-                      _selected.clear();
-                    } else {
-                      _selected.addAll(allAlbums.map((a) => a.name));
-                    }
-                  });
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline),
-                tooltip: 'Delete selected albums',
-                onPressed: () {
-                  final allAlbums = _filterAlbumsBySearch(
-                    groupMediaIntoAlbums(
-                      mediaAsync.value ?? [],
-                      sort: settings.defaultSort,
-                      favoriteIds: settings.favoriteIds,
-                    ),
-                  );
-                  _deleteSelectedAlbums(mediaAsync.value ?? [], allAlbums);
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: _clearSelection,
-              ),
-            ] else if (_selecting && !isAlbums) ...[
-              IconButton(
-                icon: const Icon(Icons.share_outlined),
-                tooltip: 'Share selected',
-                onPressed: () {
-                  final all = mediaAsync.value ?? [];
-                  final paths = all
-                      .where((e) => _selected.contains(e.id))
-                      .map((e) => e.path)
-                      .toList();
-                  if (paths.isNotEmpty) {
-                    ShareService.shareFiles(paths);
-                  }
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.select_all),
-                tooltip: 'Select all',
-                onPressed: () {
-                  final all = applyFiltersAndSort(
-                    mediaAsync.value ?? [],
-                    sort: settings.defaultSort,
-                    filter: _tabs[_currentPage],
-                  );
-                  setState(() {
-                    if (_selected.length == all.length) {
-                      _selected.clear();
-                    } else {
-                      _selected.addAll(all.map((e) => e.id));
-                    }
-                  });
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline),
-                tooltip: 'Delete selected',
-                onPressed: () =>
-                    _deleteSelected(mediaAsync.value ?? []),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: _clearSelection,
-              ),
-            ] else ...[
-              BouncyTap(
-                scaleDown: 0.88,
-                child: IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: 'Search',
-                  onPressed: () {
-                    setState(() {
-                      _isSearching = true;
-                    });
-                  },
-                ),
-              ),
-              PopupMenuButton<String>(
-                tooltip: 'More options',
-                color: const Color(0xFF222222),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                offset: const Offset(0, 48),
-                onSelected: (value) {
-                  if (value == 'select') {
-                    setState(() {
-                      _selecting = true;
-                    });
-                  } else if (value == 'trash') {
-                    Navigator.of(context).openTrash();
-                  } else if (value == 'settings') {
-                    Navigator.of(context).openSettings();
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'select',
-                    child: Row(
-                      children: [
-                        Icon(Icons.checklist_rounded,
-                            size: 20, color: Colors.white),
-                        SizedBox(width: 12),
-                        Text('Select',
-                            style:
-                                TextStyle(color: Colors.white, fontSize: 14)),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'trash',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_sweep_outlined,
-                            size: 20, color: Colors.white),
-                        SizedBox(width: 12),
-                        Text('Trash bin',
-                            style:
-                                TextStyle(color: Colors.white, fontSize: 14)),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'settings',
-                    child: Row(
-                      children: [
-                        Icon(Icons.settings_outlined,
-                            size: 20, color: Colors.white),
-                        SizedBox(width: 12),
-                        Text('Settings',
-                            style:
-                                TextStyle(color: Colors.white, fontSize: 14)),
-                      ],
-                    ),
-                  ),
                 ],
-                icon: const Icon(Icons.more_vert),
-              ),
-            ],
+              );
+            },
+          ),
+          actions: [
+            AnimatedBuilder(
+              animation: _searchAnimController,
+              builder: (context, child) {
+                final isSearchActive =
+                    _isSearching || _searchAnimController.value > 0.0;
+                if (!isSearchActive) {
+                  if (_selecting && isAlbums) {
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.select_all),
+                          tooltip: 'Select all',
+                          onPressed: () {
+                            final allAlbums = _filterAlbumsBySearch(
+                              groupMediaIntoAlbums(
+                                mediaAsync.value ?? [],
+                                sort: settings.defaultSort,
+                                favoriteIds: settings.favoriteIds,
+                              ),
+                            );
+                            setState(() {
+                              if (_selected.length == allAlbums.length) {
+                                _selected.clear();
+                              } else {
+                                _selected.addAll(allAlbums.map((a) => a.name));
+                              }
+                            });
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: 'Delete selected albums',
+                          onPressed: () {
+                            final allAlbums = _filterAlbumsBySearch(
+                              groupMediaIntoAlbums(
+                                mediaAsync.value ?? [],
+                                sort: settings.defaultSort,
+                                favoriteIds: settings.favoriteIds,
+                              ),
+                            );
+                            _deleteSelectedAlbums(
+                                mediaAsync.value ?? [], allAlbums);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: _clearSelection,
+                        ),
+                      ],
+                    );
+                  } else if (_selecting && !isAlbums) {
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.share_outlined),
+                          tooltip: 'Share selected',
+                          onPressed: () {
+                            final all = mediaAsync.value ?? [];
+                            final paths = all
+                                .where((e) => _selected.contains(e.id))
+                                .map((e) => e.path)
+                                .toList();
+                            if (paths.isNotEmpty) {
+                              ShareService.shareFiles(paths);
+                            }
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.select_all),
+                          tooltip: 'Select all',
+                          onPressed: () {
+                            final all = applyFiltersAndSort(
+                              mediaAsync.value ?? [],
+                              sort: settings.defaultSort,
+                              filter: _tabs[_currentPage],
+                            );
+                            setState(() {
+                              if (_selected.length == all.length) {
+                                _selected.clear();
+                              } else {
+                                _selected.addAll(all.map((e) => e.id));
+                              }
+                            });
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: 'Delete selected',
+                          onPressed: () =>
+                              _deleteSelected(mediaAsync.value ?? []),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: _clearSelection,
+                        ),
+                      ],
+                    );
+                  } else {
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        BouncyTap(
+                          scaleDown: 0.88,
+                          child: IconButton(
+                            icon: const Icon(Icons.search),
+                            tooltip: 'Search',
+                            onPressed: _openSearch,
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          tooltip: 'More options',
+                          color: const Color(0xFF222222),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          offset: const Offset(0, 48),
+                          onSelected: (value) {
+                            if (value == 'select') {
+                              setState(() {
+                                _selecting = true;
+                              });
+                            } else if (value == 'trash') {
+                              Navigator.of(context).openTrash();
+                            } else if (value == 'settings') {
+                              Navigator.of(context).openSettings();
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'select',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.checklist_rounded,
+                                      size: 20, color: Colors.white),
+                                  SizedBox(width: 12),
+                                  Text('Select',
+                                      style: TextStyle(
+                                          color: Colors.white, fontSize: 14)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'trash',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete_sweep_outlined,
+                                      size: 20, color: Colors.white),
+                                  SizedBox(width: 12),
+                                  Text('Trash bin',
+                                      style: TextStyle(
+                                          color: Colors.white, fontSize: 14)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'settings',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.settings_outlined,
+                                      size: 20, color: Colors.white),
+                                  SizedBox(width: 12),
+                                  Text('Settings',
+                                      style: TextStyle(
+                                          color: Colors.white, fontSize: 14)),
+                                ],
+                              ),
+                            ),
+                          ],
+                          icon: const Icon(Icons.more_vert),
+                        ),
+                      ],
+                    );
+                  }
+                }
+
+                final normalActionsOpacity =
+                    (1.0 - (_searchAnimController.value / 0.35)).clamp(0.0, 1.0);
+                final cancelOpacity = CurvedAnimation(
+                  parent: _searchAnimController,
+                  curve: const Interval(0.65, 1.0, curve: Curves.easeOut),
+                ).value;
+
+                return Stack(
+                  alignment: Alignment.centerRight,
+                  children: [
+                    if (normalActionsOpacity > 0.0)
+                      Opacity(
+                        opacity: normalActionsOpacity,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.search),
+                              tooltip: 'Search',
+                              onPressed: null,
+                            ),
+                            const IconButton(
+                              icon: Icon(Icons.more_vert),
+                              onPressed: null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (cancelOpacity > 0.0)
+                      Opacity(
+                        opacity: cancelOpacity,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: TextButton(
+                            onPressed: _clearSearch,
+                            style: TextButton.styleFrom(
+                              foregroundColor:
+                                  Theme.of(context).colorScheme.primary,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
           ],
           bottom: FilterSortBar(
             currentFilter: _tabs[_currentPage],

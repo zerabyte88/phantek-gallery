@@ -125,6 +125,11 @@ The compiled release APK will be generated at:
 
 ## Version History
 
+- **v2.6.17 (Build 25):**
+  - **Zero-Delay Video Transitions & Black Screen Elimination:** Eliminated momentary black screen flashes upon tapping videos or swiping horizontally between videos by retaining instant 0ms cached thumbnails until video frames render.
+  - **Aspect Ratio Preserved Hero Transitions:** Fixed vertical stretch distortion on landscape/non-square photos and videos during tap-to-open and swipe-to-dismiss Hero animations.
+  - **Animated Search Bar & Theme-Adaptive Cancel:** Redesigned the gallery search bar to expand smoothly from left to right across the AppBar with title fade-out and a theme-adaptive Cancel button.
+
 - **v2.5.17 (Build 24):**
   - **Seamless Continuous Header Animations:** Synchronized all harmonic frequencies and movement cycles to integer multiples, eliminating loop stutter across all themes.
   - **Extended Header Canvas:** Header animation spans continuously across both AppBar and Filter/Sort Bar, eliminating empty spaces.
