@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import '../../../core/localization/app_language.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/settings_model.dart';
+import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
+import '../../../core/services/folder_picker_service.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../../core/widgets/bouncy_tap.dart';
@@ -50,7 +55,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(context.tr.settings),
       ),
       body: Theme(
         data: Theme.of(context).copyWith(
@@ -63,13 +68,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           padding: const EdgeInsets.only(bottom: 24),
           children: [
             // ══ Appearance ══════════════════════════════════════
-            const _SectionHeader('Appearance'),
+            _SectionHeader(context.tr.appearance),
             _SettingsCard(
               children: [
                 _ModernTile(
                   icon: Icons.palette_rounded,
                   iconColor: const Color(0xFF8B5CF6),
-                  title: 'Theme',
+                  title: context.tr.theme,
                   subtitle: settings.themeMode.label,
                   onTap: () async {
                     final chosen = await _showModernThemeDialog(
@@ -84,9 +89,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const _CardDivider(),
                 _ModernTile(
+                  icon: Icons.translate_rounded,
+                  iconColor: const Color(0xFF06B6D4),
+                  title: context.tr.language,
+                  subtitle: settings.language.nativeName,
+                  onTap: () async {
+                    final chosen = await _showModernLanguageDialog(
+                      context,
+                      settings.language,
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(language: chosen));
+                    }
+                  },
+                ),
+                const _CardDivider(),
+                _ModernTile(
                   icon: Icons.grid_view_rounded,
                   iconColor: const Color(0xFF3B82F6),
-                  title: 'Grid Columns',
+                  title: context.tr.gridColumns,
                   subtitle: '${settings.gridColumns} columns',
                   onTap: () async {
                     final chosen = await _showModernGridColumnsDialog(
@@ -103,7 +124,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 _ModernTile(
                   icon: Icons.photo_library_rounded,
                   iconColor: const Color(0xFF6366F1),
-                  title: 'Albums Grid Columns',
+                  title: context.tr.albumsGridColumns,
                   subtitle: '${settings.albumGridColumns} columns',
                   onTap: () async {
                     final chosen = await _showModernGridColumnsDialog(
@@ -120,8 +141,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 _ModernSwitchTile(
                   icon: Icons.badge_rounded,
                   iconColor: const Color(0xFFF59E0B),
-                  title: 'Show Duration Badges',
-                  subtitle: 'Video duration overlay on thumbnails',
+                  title: context.tr.showDurationBadges,
+                  subtitle: context.tr.showDurationBadgesSubtitle,
                   value: settings.showBadges,
                   onChanged: (v) => patch((s) => s.copyWith(showBadges: v)),
                 ),
@@ -129,22 +150,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
 
             // ══ Thumbnail Cache ══════════════════════════════════
-            const _SectionHeader('Cache'),
+            _SectionHeader(context.tr.cache),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: _ModernActionButton(
                 icon: Icons.cleaning_services_rounded,
                 iconColor: const Color(0xFFF97316),
-                title: 'Clear Thumbnail Cache',
+                title: context.tr.clearThumbnailCache,
                 subtitle: 'Disk size: $_cacheSizeStr',
                 onTap: () async {
                   await ThumbnailService.instance.clearAll();
                   await _loadCacheSize();
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text(
-                          'Thumbnail cache cleared',
+                          context.tr.clearThumbnailCache,
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -155,14 +176,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
 
             // ══ Storage ═════════════════════════════════════════
-            const _SectionHeader('Storage'),
+            _SectionHeader(context.tr.storage),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
                   icon: Icons.delete_outline_rounded,
                   iconColor: const Color(0xFF14B8A6),
-                  title: 'Trash Bin',
-                  subtitle: 'Move to trash instead of deleting',
+                  title: context.tr.trashBin,
+                  subtitle: context.tr.trashBinSubtitle,
                   value: settings.enableTrash,
                   onChanged: (v) => patch((s) => s.copyWith(enableTrash: v)),
                 ),
@@ -170,9 +191,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 _ModernTile(
                   icon: Icons.folder_off_rounded,
                   iconColor: const Color(0xFF64748B),
-                  title: 'Excluded Folders',
+                  title: context.tr.excludedFolders,
                   subtitle: settings.excludedFolders.isEmpty
-                      ? 'None'
+                      ? context.tr.none
                       : settings.excludedFolders.join('\n'),
                   onTap: () =>
                       _showExcludedFoldersDialog(context, ref, settings),
@@ -183,9 +204,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: _ModernActionButton(
                     icon: Icons.security_rounded,
                     iconColor: const Color(0xFFEF4444),
-                    title: 'All Files Access (Android 11+)',
-                    subtitle:
-                        'Enables complete trash and deletion across storage',
+                    title: context.tr.allFilesAccess,
+                    subtitle: context.tr.allFilesAccessSubtitle,
                     onTap: () async {
                       final granted = await PermissionService.instance
                           .requestManageStorage();
@@ -208,14 +228,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
 
             // ══ Playback ═════════════════════════════════════════
-            const _SectionHeader('Playback'),
+            _SectionHeader(context.tr.playback),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
                   icon: Icons.memory_rounded,
                   iconColor: const Color(0xFF10B981),
-                  title: 'Hardware Acceleration',
-                  subtitle: 'Use GPU decoding for video',
+                  title: context.tr.hardwareAcceleration,
+                  subtitle: context.tr.hardwareAccelerationSubtitle,
                   value: settings.hardwareAcceleration,
                   onChanged: (v) =>
                       patch((s) => s.copyWith(hardwareAcceleration: v)),
@@ -224,8 +244,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 _ModernSwitchTile(
                   icon: Icons.play_circle_outline_rounded,
                   iconColor: const Color(0xFF06B6D4),
-                  title: 'Auto-Play Video',
-                  subtitle: 'Start playback automatically',
+                  title: context.tr.autoPlayVideo,
+                  subtitle: context.tr.autoPlayVideoSubtitle,
                   value: settings.autoPlayVideo,
                   onChanged: (v) => patch((s) => s.copyWith(autoPlayVideo: v)),
                 ),
@@ -233,13 +253,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
 
             // ══ Updates ══════════════════════════════════════════
-            const _SectionHeader('Updates'),
+            _SectionHeader(context.tr.updates),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
                   icon: Icons.update_rounded,
                   iconColor: const Color(0xFF10B981),
-                  title: 'Auto-check for Updates',
+                  title: context.tr.autoCheckUpdate,
                   subtitle: 'Check GitHub Releases on launch',
                   value: settings.autoCheckUpdate,
                   onChanged: (v) =>
@@ -251,7 +271,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: _ModernActionButton(
                     icon: Icons.system_update_alt_rounded,
                     iconColor: const Color(0xFF8B5CF6),
-                    title: 'Check for Updates Now',
+                    title: context.tr.checkUpdateNow,
                     subtitle: 'Check GitHub for newer APK releases',
                     isLoading: update.isLoading,
                     enabled: !update.isLoading,
@@ -588,132 +608,440 @@ Future<void> _showExcludedFoldersDialog(
   final current = List<String>.from(settings.excludedFolders);
   final cs = Theme.of(context).colorScheme;
 
+  // Retrieve detected folder paths from media items currently loaded in memory
+  final mediaItems = ref.read(mediaListProvider).valueOrNull ?? [];
+  final detectedFolders = mediaItems
+      .map((e) => p.dirname(e.path))
+      .where((path) => path.isNotEmpty && path != '/' && !path.contains('.trash'))
+      .toSet()
+      .toList()
+    ..sort();
+
   await showDialog<void>(
     context: context,
     builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setSt) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF64748B).withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.folder_off_rounded,
-                color: Color(0xFF64748B),
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Excluded Folders',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      builder: (ctx, setSt) {
+        final availableAlbums =
+            detectedFolders.where((f) => !current.contains(f)).toList();
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Row(
             children: [
-              TextField(
-                controller: controller,
-                decoration: InputDecoration(
-                  hintText: '/storage/emulated/0/DCIM/...',
-                  prefixIcon: const Icon(Icons.folder_open),
-                  filled: true,
-                  fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.4),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF64748B).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.folder_off_rounded,
+                  color: Color(0xFF64748B),
+                  size: 22,
                 ),
               ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: BouncyTap(
-                  scaleDown: 0.96,
-                  child: FilledButton.tonal(
-                    style: FilledButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    onPressed: () {
-                      final path = controller.text.trim();
-                      if (path.isNotEmpty && !current.contains(path)) {
-                        setSt(() => current.add(path));
-                        controller.clear();
-                      }
-                    },
-                    child: const Text(
-                      'Add',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  context.tr.excludedFolders,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
-              if (current.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                const Divider(),
-                ...current.map(
-                  (p) => ListTile(
-                    dense: true,
-                    title: Text(p, style: const TextStyle(fontSize: 13)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () => setSt(() => current.remove(p)),
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
-        ),
-        actionsAlignment: MainAxisAlignment.end,
-        actions: [
-          BouncyTap(
-            scaleDown: 0.95,
-            child: TextButton(
-              style: TextButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. Primary Button: Direct Native File Manager Picker
+                  SizedBox(
+                    width: double.infinity,
+                    child: BouncyTap(
+                      scaleDown: 0.96,
+                      child: FilledButton.icon(
+                        icon: const Icon(Icons.folder_open_rounded, size: 20),
+                        label: Text(
+                          context.tr.pickFromManager,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        style: FilledButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 16),
+                        ),
+                        onPressed: () async {
+                          final path =
+                              await FolderPickerService.instance.pickFolder();
+                          if (path != null &&
+                              path.isNotEmpty &&
+                              !current.contains(path)) {
+                            setSt(() => current.add(path));
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+
+                  // 2. Detected Media Albums Quick Pick (Tap to add)
+                  if (availableAlbums.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      context.tr.pickFromAlbums,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: cs.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 120),
+                      child: SingleChildScrollView(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: availableAlbums.map((folder) {
+                            final folderName = p.basename(folder);
+                            return ActionChip(
+                              avatar: const Icon(Icons.add, size: 16),
+                              label: Text(
+                                folderName.isEmpty ? folder : folderName,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              tooltip: folder,
+                              onPressed: () {
+                                setSt(() => current.add(folder));
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  // 3. Manual typing fallback
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: controller,
+                          style: const TextStyle(fontSize: 13),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: context.tr.manualPathEntry,
+                            filled: true,
+                            fillColor: cs.surfaceContainerHighest
+                                .withValues(alpha: 0.4),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      BouncyTap(
+                        scaleDown: 0.94,
+                        child: FilledButton.tonal(
+                          style: FilledButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                          ),
+                          onPressed: () {
+                            final path = controller.text.trim();
+                            if (path.isNotEmpty && !current.contains(path)) {
+                              setSt(() => current.add(path));
+                              controller.clear();
+                            }
+                          },
+                          child: Text(
+                            context.tr.add,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // 4. Excluded folders list
+                  if (current.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Divider(),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 160),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: current.length,
+                        itemBuilder: (ctx, i) {
+                          final item = current[i];
+                          return ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(
+                              Icons.folder_off_rounded,
+                              size: 18,
+                              color: Color(0xFFEF4444),
+                            ),
+                            title: Text(item,
+                                style: const TextStyle(fontSize: 12)),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () => setSt(() => current.remove(item)),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', textAlign: TextAlign.center),
             ),
           ),
-          BouncyTap(
-            scaleDown: 0.95,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          actionsAlignment: MainAxisAlignment.end,
+          actions: [
+            BouncyTap(
+              scaleDown: 0.95,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(context.tr.cancel, textAlign: TextAlign.center),
               ),
-              onPressed: () {
-                ref
-                    .read(settingsNotifierProvider.notifier)
-                    .update((s) => s.copyWith(excludedFolders: current));
-                Navigator.pop(ctx);
-              },
-              child: const Text('Save', textAlign: TextAlign.center),
             ),
-          ),
-        ],
-      ),
+            BouncyTap(
+              scaleDown: 0.95,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                ),
+                onPressed: () {
+                  ref
+                      .read(settingsNotifierProvider.notifier)
+                      .update((s) => s.copyWith(excludedFolders: current));
+                  Navigator.pop(ctx);
+                },
+                child: Text(context.tr.save, textAlign: TextAlign.center),
+              ),
+            ),
+          ],
+        );
+      },
     ),
   );
   controller.dispose();
+}
+
+Future<AppLanguage?> _showModernLanguageDialog(
+  BuildContext context,
+  AppLanguage currentLanguage,
+) {
+  final cs = Theme.of(context).colorScheme;
+  return showDialog<AppLanguage>(
+    context: context,
+    builder: (ctx) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF06B6D4).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.translate_rounded,
+                    color: Color(0xFF06B6D4),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.tr.chooseLanguage,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '11 languages supported',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: AppLanguage.values.map(
+                    (lang) => _ModernLanguageOptionCard(
+                      language: lang,
+                      selected: currentLanguage == lang,
+                      onTap: () async {
+                        await Future.delayed(const Duration(milliseconds: 140));
+                        if (ctx.mounted) Navigator.pop(ctx, lang);
+                      },
+                    ),
+                  ).toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _ModernLanguageOptionCard extends StatelessWidget {
+  const _ModernLanguageOptionCard({
+    required this.language,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppLanguage language;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: BouncyTap(
+        scaleDown: 0.96,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? cs.primary.withValues(alpha: 0.12)
+                : cs.surfaceContainerHighest.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected
+                  ? cs.primary
+                  : cs.outline.withValues(alpha: 0.15),
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? cs.primary.withValues(alpha: 0.18)
+                      : cs.surfaceContainerHighest.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected
+                        ? cs.primary
+                        : Colors.white.withValues(alpha: 0.2),
+                    width: 1.5,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  language.code?.toUpperCase() ?? 'SYS',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: selected ? cs.primary : cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      language.nativeName,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight:
+                            selected ? FontWeight.bold : FontWeight.w600,
+                        color: selected ? cs.primary : cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      language.englishName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected ? cs.primary : Colors.transparent,
+                  border: Border.all(
+                    color: selected
+                        ? cs.primary
+                        : cs.outline.withValues(alpha: 0.4),
+                    width: 2,
+                  ),
+                ),
+                child: selected
+                    ? Icon(Icons.check, size: 14, color: cs.onPrimary)
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Future<AppThemeMode?> _showModernThemeDialog(

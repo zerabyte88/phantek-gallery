@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.6.19&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.20&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -23,24 +23,26 @@
 ### 1. Modern & Sleek User Interface
 - **Theme-Adaptive Animated Headers:** Procedural real-time animations customized for every theme mode (AMOLED glowing crescent moon, twinkling starfield & falling meteors; AMOLED Sakura drifting cherry blossoms & delicate tree branch; Dark mode flowing cyber plasma aurora ribbons & cosmic embers; Light mode radiant morning sunburst & golden sparkles).
 - **Harmonized Title Badges:** Adaptive animated title badge with dynamic sweep shader gradients and icons matching active themes.
-- **Glitch-Free Sliding Capsule Navigation:** Unified, single-indicator capsule tab filter bar (`All`, `Photos`, `Videos`, `Albums`) with synchronized text styling to prevent white flash during tab switching.
+- **Glitch-Free Sliding Capsule Navigation:** Unified, single-indicator capsule tab filter bar (`All`, `Photos`, `Videos`, `Albums`) with real-time 1:1 finger tracking via `PageController` and synchronized text styling.
 - **Natural Fluid Swipe-to-Dismiss:** Dynamic image scaling, smooth corner rounding, instant background/overlay reactivity, and organic spring physics for viewer dismissal.
 - **Tactile Bouncy Feedback:** Spring-scale micro-animations (`BouncyTap`) across all interactive cards, chips, dialogs, and controls.
 
 ### 2. High-Performance Media Organization & Search
+- **120 FPS Butter-Smooth Tab Swiping:** GPU `RepaintBoundary` texture layer isolation, instant `animateToPage` curve transitions, and O(1) tab list memoization to eliminate frame drops and raster jitter during category swipe.
 - **Smart Timeline & Album Grouping:** Browse media chronologically or organized into native folders (Camera, DCIM, Screenshots, Downloads, etc.).
-- **Swipe Category Navigation:** Fluid horizontal gestures between categories with `KeepAlive` state preservation to eliminate frame drops.
+- **Native Directory Picker for Excluded Folders:** Seamless folder exclusion selection directly via Android's native file manager / SAF folder picker without manual path typing.
 - **In-Album Filtering & Sorting:** Comprehensive filtering (`All`, `Photos`, `Videos`) and 4-way sorting (Newest, Oldest, Name A-Z, Name Z-A) inside individual album detail screens.
 - **Customizable Grid Columns:** Interactive column picker dialog with visual mini-grid previews for 2, 3, 4, or 5 grid columns for photos and albums independently.
 - **Folder Blacklisting & Favorites:** Pin favorite media items and exclude unwanted private or system folders from indexing.
 
 ### 3. Hardware-Accelerated Video Playback & Technical Inspection
+- **Configurable Auto-Playback:** Toggleable instant playback on screen entry or swipe, complete with seamless thumbnail crossfade and zero black screen flashes.
 - **MediaKit & MPV Engine:** Native MPV and FFmpeg integration for stutter-free playback of MKV, MP4, MOV, and high-bitrate video streams up to 4K 60FPS.
 - **Auto-Copy Hardware Decoding:** Seamless hardware-to-software fallback decoding (`hwdec: auto-copy`) across H.264, H.265/HEVC, and VP9 codecs.
 - **Technical Video Inspector:** Live extraction and display of video **Frame Rate (FPS)** and **Video Codec** directly inside the media Details sheet.
 - **Interactive 5x Video Zoom:** Pinch-to-zoom and pan during live playback, paused state, or preview poster, complete with animated floating scale indicator and instant one-tap reset.
 - **Proactive Texture Optimization:** Instant GPU texture detaching on horizontal swipe to free decoder pipelines and enable fluid 60/120 FPS swiping with zero black flashes.
-- **Advanced Player Controls:** YouTube-style double-tap seek (-10s / +10s), native playback speed selector (`0.5x` - `2.0x`), loop repeat toggle, and smart portrait/landscape aspect ratio expansion.
+- **Elevated Controls & Fading Playback Indicator:** Centered play button with automatic fade-out during swipe navigation, elevated seekbar (+32dp) with timestamps and fullscreen button.
 
 ### 4. High-Fidelity Photo Viewer & Gesture Dismissal
 - **Spring-Damped Drag-to-Dismiss:** Natural pull-down gesture physics with velocity tracking and proportional scaling.
@@ -54,11 +56,12 @@
 - **0ms Optimistic UI Removal:** Deleted or trashed items vanish immediately from the UI with zero latency while file I/O executes asynchronously.
 - **Batch Selection Mode:** Multi-select photos, videos, or albums for bulk deletion or restoration.
 
-### 6. Comprehensive Theming & Secret Easter Egg
+### 6. Multi-Language Internationalization & Theming
+- **11 Supported Languages:** English, Indonesian (Bahasa Indonesia), Chinese Simplified (简体中文), Spanish (Español), Portuguese (Português), Japanese (日本語), Korean (한국어), Hindi (हिन्दी), Arabic (العربية), French (Français), and Russian (Русский).
 - **Material 3 Themes:** System Default, Clean Light, and Slate Dark.
 - **Pure AMOLED Pitch-Black:** Deep true black (`#000000`) surfaces for maximum OLED battery savings.
 - **Secret AMOLED Sakura Theme 🌸:** Exclusive Japanese Sakura pink accent theme over pure black.
-- **Developer Easter Egg:** Tap the maintainer avatar 10 times in Settings to unlock the secret AMOLED Sakura mode!
+- **Developer Easter Egg:** Tap the maintainer avatar or Phantek title 10 times in Settings or Appbar to unlock the secret AMOLED Sakura mode!
 
 ### 7. Over-The-Air (OTA) Updates & 64-Bit Architecture
 - **Automated GitHub Releases Updater:** In-app version verification, background APK download with live progress bar, and automated installation dispatch via Android `FileProvider`.

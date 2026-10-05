@@ -64,6 +64,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   bool _isSwiping = false;
   // Controls the visibility of the active Video() texture surface.
   final ValueNotifier<bool> _videoSurfaceVisible = ValueNotifier(false);
+  // Controls the opacity of the center play button during horizontal page swipe.
+  final ValueNotifier<bool> _isSwipingPage = ValueNotifier(false);
   int? _pendingIndex;
   bool _isVideoZoomed = false;
   bool _isPinching = false;
@@ -323,7 +325,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _videoSurfaceVisible.value = false;
     _player.open(
       Media(currentPath),
-      play: false,
+      play: settings.autoPlayVideo,
     );
   }
 
@@ -345,7 +347,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     // Open after the frame is built so the native call never lands mid-gesture.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _current != index) return;
-      // Never auto-play on swipe — user decides whether to play
       try {
         final settings = ref.read(settingsNotifierProvider);
         final path = _videos[index].path;
@@ -359,7 +360,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
           }
         }
-        await _player.open(Media(path), play: false);
+        await _player.open(Media(path), play: settings.autoPlayVideo);
         if (_isLooping) _player.setPlaylistMode(PlaylistMode.loop);
         if (_playbackSpeed != 1.0) _player.setRate(_playbackSpeed);
       } catch (_) {}
@@ -415,6 +416,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _settle.dispose();
     _isDraggingDown.dispose();
     _videoSurfaceVisible.dispose();
+    _isSwipingPage.dispose();
     _dragNotifier.dispose();
     _transformationController.dispose();
     _player.dispose(); // releases native MPV context
@@ -870,6 +872,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     if (adx > 10 && adx > ady * 1.3) {
                       _videoSurfaceVisible.value = false;
                       _isSwipingHorizontal = true;
+                      _isSwipingPage.value = true;
                       return;
                     }
                   }
@@ -912,6 +915,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     _isSwipingHorizontal = false;
                     _startDragY = null;
                     _startDragX = null;
+                    if (!_isSwiping) {
+                      _isSwipingPage.value = false;
+                    }
                     // Restore video surface if not swiping and player is playing
                     if (!_isSwiping && _player.state.playing) {
                       _videoSurfaceVisible.value = true;
@@ -939,6 +945,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     _isSwipingHorizontal = false;
                     _startDragY = null;
                     _startDragX = null;
+                    if (!_isSwiping) {
+                      _isSwipingPage.value = false;
+                    }
                     if (_dragNotifier.value != Offset.zero) _springBack(0);
                   }
                 },
@@ -980,6 +989,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         if (notification is ScrollStartNotification) {
                           if (notification.dragDetails != null) {
                             _isSwiping = true;
+                            _isSwipingPage.value = true;
                             _videoSurfaceVisible.value = false;
                             // Immediately pause playback on swipe to free hardware decoder
                             // and GPU pipeline for silky-smooth 60/120fps motion.
@@ -990,6 +1000,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         } else if (notification is ScrollUpdateNotification) {
                           if (notification.dragDetails != null && !_isSwiping) {
                             _isSwiping = true;
+                            _isSwipingPage.value = true;
                             _videoSurfaceVisible.value = false;
                             if (_player.state.playing) {
                               _player.pause();
@@ -1003,6 +1014,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               target >= 0 &&
                               target < _videos.length;
                           _isSwiping = false;
+                          _isSwipingPage.value = false;
                           _pendingIndex = null;
                           if (changing) {
                             // _changeToVideo re-mounts the texture once loaded.
@@ -1181,39 +1193,53 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       children: [
                         // Center play button when paused (exact center of the screen)
                         Center(
-                          child: StreamBuilder<bool>(
-                            stream: _player.stream.playing,
-                            builder: (_, snap) {
-                              final playing = snap.data ?? false;
-                              if (playing) return const SizedBox.shrink();
-                              return BouncyTap(
-                                onTap: _player.play,
-                                child: Container(
-                                  width: 72,
-                                  height: 72,
-                                  decoration: BoxDecoration(
-                                    color: Colors.black
-                                        .withValues(alpha: 0.55),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white
-                                          .withValues(alpha: 0.4),
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  child: const Center(
-                                    child: Padding(
-                                      padding: EdgeInsets.only(left: 3),
-                                      child: Icon(
-                                        Icons.play_arrow_rounded,
-                                        size: 48,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: _isSwipingPage,
+                            builder: (context, isSwiping, child) {
+                              return AnimatedOpacity(
+                                duration: Duration(milliseconds: isSwiping ? 150 : 250),
+                                curve: Curves.easeInOut,
+                                opacity: isSwiping ? 0.0 : 1.0,
+                                child: IgnorePointer(
+                                  ignoring: isSwiping,
+                                  child: child,
                                 ),
                               );
                             },
+                            child: StreamBuilder<bool>(
+                              stream: _player.stream.playing,
+                              builder: (_, snap) {
+                                final playing = snap.data ?? false;
+                                if (playing) return const SizedBox.shrink();
+                                return BouncyTap(
+                                  onTap: _player.play,
+                                  child: Container(
+                                    width: 72,
+                                    height: 72,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black
+                                          .withValues(alpha: 0.55),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.4),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.only(left: 3),
+                                        child: Icon(
+                                          Icons.play_arrow_rounded,
+                                          size: 48,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ),
                         // Top bar
@@ -1666,7 +1692,7 @@ class _BottomBarState extends State<_BottomBar> {
               );
             },
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 32),
           widget.isTrash
               ? Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,

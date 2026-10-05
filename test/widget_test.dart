@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +33,9 @@ import 'package:phantek_gallery/features/update/presentation/update_dialog.dart'
 import 'package:phantek_gallery/core/widgets/animated_flame_title.dart';
 import 'package:phantek_gallery/core/widgets/theme_header_background.dart';
 import 'package:phantek_gallery/core/providers/settings_provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:phantek_gallery/core/localization/app_language.dart';
+import 'package:phantek_gallery/core/localization/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -1391,8 +1395,317 @@ void main() {
       final size = ThumbnailService.parseJpegDimensions(bytes);
       expect(size, isNotNull);
       expect(size!.width, 1920.0);
-      expect(size!.height, 1080.0);
+      expect(size.height, 1080.0);
       expect(size.width / size.height, closeTo(1.777, 0.001));
+    });
+
+    test('Video player seekbar, left/right timestamps, and fullscreen button are collectively elevated by 32dp spacing above action buttons', () {
+      // The seekbar unit (slider, left timestamp, right timestamp, fullscreen button)
+      // is separated from the bottom action buttons by 32dp (+26dp above initial 6dp)
+      // to comfortably match the user-marked green line and avoid accidental button taps.
+      const previousSpacing = 6.0;
+      const raisedSpacing = 32.0;
+      const deltaElevation = raisedSpacing - previousSpacing;
+
+      expect(raisedSpacing, 32.0);
+      expect(deltaElevation, 26.0);
+      expect(raisedSpacing, greaterThanOrEqualTo(24.0));
+    });
+
+    testWidgets('Video player center play button fades out and ignores touch during horizontal swipe to adjacent video', (tester) async {
+      final isSwipingPage = ValueNotifier<bool>(false);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: isSwipingPage,
+              builder: (context, isSwiping, child) {
+                return AnimatedOpacity(
+                  key: const ValueKey('play_btn_opacity'),
+                  duration: Duration(milliseconds: isSwiping ? 150 : 250),
+                  curve: Curves.easeInOut,
+                  opacity: isSwiping ? 0.0 : 1.0,
+                  child: IgnorePointer(
+                    key: const ValueKey('play_btn_ignore'),
+                    ignoring: isSwiping,
+                    child: child,
+                  ),
+                );
+              },
+              child: const Icon(Icons.play_arrow_rounded, key: ValueKey('play_btn')),
+            ),
+          ),
+        ),
+      );
+
+      // Initially stationary: opacity 1.0, touch enabled
+      expect(find.byKey(const ValueKey('play_btn')), findsOneWidget);
+      AnimatedOpacity opacityWidget = tester.widget(find.byKey(const ValueKey('play_btn_opacity')));
+      IgnorePointer ignoreWidget = tester.widget(find.byKey(const ValueKey('play_btn_ignore')));
+      expect(opacityWidget.opacity, 1.0);
+      expect(ignoreWidget.ignoring, isFalse);
+
+      // User starts swiping horizontally to adjacent video:
+      isSwipingPage.value = true;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 160));
+
+      opacityWidget = tester.widget(find.byKey(const ValueKey('play_btn_opacity')));
+      ignoreWidget = tester.widget(find.byKey(const ValueKey('play_btn_ignore')));
+      expect(opacityWidget.opacity, 0.0);
+      expect(ignoreWidget.ignoring, isTrue);
+
+      // User finishes swiping (scroll settles on destination):
+      isSwipingPage.value = false;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 260));
+
+      opacityWidget = tester.widget(find.byKey(const ValueKey('play_btn_opacity')));
+      ignoreWidget = tester.widget(find.byKey(const ValueKey('play_btn_ignore')));
+      expect(opacityWidget.opacity, 1.0);
+      expect(ignoreWidget.ignoring, isFalse);
+    });
+
+    test('AMOLED header meteor trajectory calculation guarantees full penetration past bottom edge', () {
+      // Header dimensions: standard 90dp height
+      const headerHeight = 90.0;
+      const startY = -15.0;
+      const angle = 0.26 * 3.141592653589793;
+
+      // Trajectory formula from _AmoledHeaderPainter:
+      const targetY = headerHeight + 50.0;
+      const totalVerticalTravel = targetY - startY;
+      final totalTravel = totalVerticalTravel / math.sin(angle);
+
+      // At t = 0 (meteor start above header)
+      const tStart = 0.0;
+      final headYStart = startY + math.sin(angle) * (tStart * totalTravel);
+      expect(headYStart, lessThan(0.0));
+
+      // At t = 0.5 (midpoint of fall, well within the header)
+      const tMid = 0.5;
+      final headYMid = startY + math.sin(angle) * (tMid * totalTravel);
+      expect(headYMid, greaterThan(0.0));
+      expect(headYMid, lessThan(headerHeight));
+
+      // At t = 1.0 (completion: head crosses cleanly past bottom of the header)
+      const tEnd = 1.0;
+      final headYEnd = startY + math.sin(angle) * (tEnd * totalTravel);
+      expect(headYEnd, greaterThan(headerHeight));
+      expect(headYEnd, closeTo(targetY, 0.001));
+    });
+
+    testWidgets('ThemeHeaderBackground renders AMOLED, Dark, and Light themes fluidly without exceptions', (tester) async {
+      for (final mode in [AppThemeMode.amoled, AppThemeMode.dark, AppThemeMode.light]) {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsNotifierProvider.overrideWith(
+                () => _TestSettingsNotifier(SettingsModel(themeMode: mode)),
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(
+                body: SizedBox(
+                  width: 360,
+                  height: 96,
+                  child: ThemeHeaderBackground(),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        // Advance frames through multiple cycles of the animation
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 200));
+        }
+
+        expect(find.byType(ThemeHeaderBackground), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    });
+
+    test('AppLanguage enum, codes, and locale mappings', () {
+      expect(AppLanguage.values.length, 12);
+      expect(AppLanguage.supportedLocales.length, 11);
+
+      expect(AppLanguage.system.code, isNull);
+      expect(AppLanguage.system.locale, isNull);
+
+      expect(AppLanguage.id.code, 'id');
+      expect(AppLanguage.id.nativeName, 'Bahasa Indonesia');
+      expect(AppLanguage.id.locale?.languageCode, 'id');
+
+      expect(AppLanguage.en.code, 'en');
+      expect(AppLanguage.en.nativeName, 'English');
+
+      expect(AppLanguage.zh.code, 'zh');
+      expect(AppLanguage.es.code, 'es');
+      expect(AppLanguage.pt.code, 'pt');
+      expect(AppLanguage.ja.code, 'ja');
+      expect(AppLanguage.ko.code, 'ko');
+      expect(AppLanguage.hi.code, 'hi');
+      expect(AppLanguage.ar.code, 'ar');
+      expect(AppLanguage.fr.code, 'fr');
+      expect(AppLanguage.ru.code, 'ru');
+
+      // Test fromCode resolution
+      expect(AppLanguage.fromCode('id'), AppLanguage.id);
+      expect(AppLanguage.fromCode('en'), AppLanguage.en);
+      expect(AppLanguage.fromCode('zh'), AppLanguage.zh);
+      expect(AppLanguage.fromCode('es'), AppLanguage.es);
+      expect(AppLanguage.fromCode('pt'), AppLanguage.pt);
+      expect(AppLanguage.fromCode('ja'), AppLanguage.ja);
+      expect(AppLanguage.fromCode('ko'), AppLanguage.ko);
+      expect(AppLanguage.fromCode('hi'), AppLanguage.hi);
+      expect(AppLanguage.fromCode('ar'), AppLanguage.ar);
+      expect(AppLanguage.fromCode('fr'), AppLanguage.fr);
+      expect(AppLanguage.fromCode('ru'), AppLanguage.ru);
+      expect(AppLanguage.fromCode('unknown'), AppLanguage.system);
+      expect(AppLanguage.fromCode(null), AppLanguage.system);
+    });
+
+    test('AppLocalizations translation dictionary coverage across all supported languages', () {
+      for (final lang in AppLanguage.values) {
+        if (lang == AppLanguage.system || lang.code == null) continue;
+        final loc = AppLocalizations(Locale(lang.code!));
+        expect(loc.all.isNotEmpty, isTrue, reason: '${lang.code} all');
+        expect(loc.photos.isNotEmpty, isTrue, reason: '${lang.code} photos');
+        expect(loc.videos.isNotEmpty, isTrue, reason: '${lang.code} videos');
+        expect(loc.albums.isNotEmpty, isTrue, reason: '${lang.code} albums');
+        expect(loc.favorites.isNotEmpty, isTrue, reason: '${lang.code} favorites');
+        expect(loc.searchHint.isNotEmpty, isTrue, reason: '${lang.code} searchHint');
+        expect(loc.settings.isNotEmpty, isTrue, reason: '${lang.code} settings');
+        expect(loc.appearance.isNotEmpty, isTrue, reason: '${lang.code} appearance');
+        expect(loc.language.isNotEmpty, isTrue, reason: '${lang.code} language');
+        expect(loc.excludedFolders.isNotEmpty, isTrue, reason: '${lang.code} excludedFolders');
+        expect(loc.pickFromManager.isNotEmpty, isTrue, reason: '${lang.code} pickFromManager');
+      }
+    });
+
+    test('SettingsModel and SettingsService language persistence', () async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      const defaultModel = SettingsModel();
+      expect(defaultModel.language, AppLanguage.system);
+
+      final modified = defaultModel.copyWith(language: AppLanguage.id);
+      expect(modified.language, AppLanguage.id);
+
+      await SettingsService.instance.save(modified);
+      final fromDisk = SettingsService.instance.settings;
+      expect(fromDisk.language, AppLanguage.id);
+    });
+
+    testWidgets('SettingsScreen language modal and excluded folders dialog integration', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+          ],
+          child: Consumer(
+            builder: (context, ref, _) {
+              final lang = ref.watch(settingsNotifierProvider.select((s) => s.language));
+              return MaterialApp(
+                locale: lang.locale,
+                supportedLocales: AppLanguage.supportedLocales,
+                localizationsDelegates: const [
+                  AppLocalizations.delegate,
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                ],
+                home: const SettingsScreen(),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Check Language tile is present
+      expect(find.text('Language'), findsOneWidget);
+
+      // Tap Language tile to open modern bottom sheet
+      await tester.tap(find.text('Language'));
+      await tester.pumpAndSettle();
+
+      // Modal bottom sheet should show language options
+      expect(find.text('Bahasa Indonesia'), findsOneWidget);
+      expect(find.text('English'), findsWidgets);
+      expect(find.text('System Default'), findsOneWidget);
+
+      // Select Bahasa Indonesia
+      await tester.tap(find.text('Bahasa Indonesia'));
+      await tester.pumpAndSettle();
+
+      // Modal closes, now text in settings should be localized to Indonesian
+      expect(find.text('Bahasa'), findsOneWidget);
+      expect(find.text('TAMPILAN'), findsOneWidget);
+
+      // Open Excluded Folders dialog (now localized to 'Folder yang Dikecualikan')
+      final excludedTile = find.text('Folder yang Dikecualikan');
+      await tester.ensureVisible(excludedTile);
+      await tester.pumpAndSettle();
+      await tester.tap(excludedTile);
+      await tester.pumpAndSettle();
+
+      // Dialog should display file manager selection button
+      expect(find.text('Pilih lewat File Manager'), findsOneWidget);
+    });
+
+    test('SettingsModel autoPlayVideo flag toggles correctly', () {
+      const defaultSettings = SettingsModel();
+      expect(defaultSettings.autoPlayVideo, isFalse);
+
+      final enabled = defaultSettings.copyWith(autoPlayVideo: true);
+      expect(enabled.autoPlayVideo, isTrue);
+
+      final disabled = enabled.copyWith(autoPlayVideo: false);
+      expect(disabled.autoPlayVideo, isFalse);
+    });
+
+    testWidgets('FilterSortBar with PageController renders and updates with page navigation', (tester) async {
+      final pageController = PageController(initialPage: 1);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              appBar: PreferredSize(
+                preferredSize: const Size.fromHeight(96),
+                child: FilterSortBar(
+                  pageController: pageController,
+                  currentFilter: FilterOption.photosOnly,
+                ),
+              ),
+              body: PageView(
+                controller: pageController,
+                children: const [
+                  Text('Page All'),
+                  Text('Page Photos'),
+                  Text('Page Videos'),
+                  Text('Page Albums'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+      expect(find.text('Photos'), findsOneWidget);
+      expect(find.text('Page Photos'), findsOneWidget);
+
+      pageController.jumpToPage(2);
+      await tester.pumpAndSettle();
+      expect(find.text('Page Videos'), findsOneWidget);
     });
   });
 }

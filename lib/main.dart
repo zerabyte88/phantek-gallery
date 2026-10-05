@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'core/localization/app_language.dart';
+import 'core/localization/app_localizations.dart';
 import 'core/models/settings_model.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/services/media_kit_setup.dart';
@@ -96,6 +99,9 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
     final themeMode = ref.watch(
       settingsNotifierProvider.select((s) => s.themeMode),
     );
+    final language = ref.watch(
+      settingsNotifierProvider.select((s) => s.language),
+    );
 
     final darkTheme = switch (themeMode) {
       AppThemeMode.amoled => AppTheme.amoled,
@@ -116,6 +122,14 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
       navigatorKey: rootNavigatorKey,
       title: 'Phantek Gallery',
       debugShowCheckedModeBanner: false,
+      locale: language.locale,
+      supportedLocales: AppLanguage.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: AppTheme.light,
       darkTheme: darkTheme,
       themeMode: flutterThemeMode,

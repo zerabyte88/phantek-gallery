@@ -49,12 +49,12 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
   ];
 
   static const _lightColors = [
-    Color(0xFFF59E0B), // Warm Amber
-    Color(0xFFFB923C), // Solar Orange
-    Color(0xFFFBBF24), // Golden Sun
-    Color(0xFFEA580C), // Deep Ochre
-    Color(0xFFF97316), // Bright Tangerine
-    Color(0xFFF59E0B),
+    Color(0xFF0284C7), // Sky Azure
+    Color(0xFF8B5CF6), // Prismatic Violet
+    Color(0xFFF43F5E), // Rose Quartz
+    Color(0xFF06B6D4), // Arctic Cyan
+    Color(0xFF38BDF8), // Light Cyan
+    Color(0xFF0284C7),
   ];
 
   @override
@@ -107,8 +107,8 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
       AppThemeMode.light => (
           _lightColors,
           Icons.wb_sunny_rounded,
-          const Color(0xFFF59E0B),
-          const Color(0xFFFBBF24),
+          const Color(0xFF0284C7),
+          const Color(0xFF8B5CF6),
         ),
       AppThemeMode.system => (
           _darkCyberColors,

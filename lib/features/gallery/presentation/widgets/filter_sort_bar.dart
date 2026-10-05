@@ -16,6 +16,7 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
     this.onFilterChanged,
     this.currentSort,
     this.onSortChanged,
+    this.pageController,
   });
 
   final bool isAlbumDetail;
@@ -23,6 +24,7 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
   final ValueChanged<FilterOption>? onFilterChanged;
   final SortOption? currentSort;
   final ValueChanged<SortOption>? onSortChanged;
+  final PageController? pageController;
 
   @override
   Size get preferredSize => const Size.fromHeight(96);
@@ -49,6 +51,24 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
         ? -1.0 + (2.0 * selectedIndex / (options.length - 1))
         : 0.0;
 
+    final capsuleIndicator = FractionallySizedBox(
+      widthFactor: 1.0 / options.length,
+      heightFactor: 1.0,
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.primary,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: cs.primary.withValues(alpha: 0.25),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
       child: Column(
@@ -69,33 +89,88 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
             child: Stack(
               children: [
                 // ── Sliding Capsule Indicator ────────────────────────────
-                AnimatedAlign(
-                  duration: const Duration(milliseconds: 280),
-                  curve: Curves.easeOutCubic,
-                  alignment: Alignment(alignmentX, 0.0),
-                  child: FractionallySizedBox(
-                    widthFactor: 1.0 / options.length,
-                    heightFactor: 1.0,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: cs.primary.withValues(alpha: 0.25),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                    ),
+                if (pageController != null)
+                  AnimatedBuilder(
+                    animation: pageController!,
+                    builder: (context, _) {
+                      final page = pageController!.hasClients &&
+                              pageController!.page != null
+                          ? pageController!.page!
+                          : selectedIndex.toDouble();
+                      final continuousAlignX = options.length > 1
+                          ? -1.0 + (2.0 * page / (options.length - 1))
+                          : 0.0;
+                      return Align(
+                        alignment:
+                            Alignment(continuousAlignX.clamp(-1.0, 1.0), 0.0),
+                        child: capsuleIndicator,
+                      );
+                    },
+                  )
+                else
+                  AnimatedAlign(
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment(alignmentX, 0.0),
+                    child: capsuleIndicator,
                   ),
-                ),
 
                 // ── Tab Labels and Tap Interactions ───────────────────────
                 Row(
-                  children: options.map((f) {
-                    final selected = activeFilter == f;
+                  children: options.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final f = entry.value;
+
+                    Widget labelChild;
+                    if (pageController != null) {
+                      labelChild = AnimatedBuilder(
+                        animation: pageController!,
+                        builder: (context, _) {
+                          final page = pageController!.hasClients &&
+                                  pageController!.page != null
+                              ? pageController!.page!
+                              : selectedIndex.toDouble();
+                          final selected = page.round() == index;
+                          return Text(
+                            f.localizedLabel(context),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: selected
+                                  ? cs.onPrimary
+                                  : cs.onSurfaceVariant,
+                              fontSize: 13,
+                              fontWeight: selected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                          );
+                        },
+                      );
+                    } else {
+                      final selected = activeFilter == f;
+                      labelChild = AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 280),
+                        curve: Curves.easeOutCubic,
+                        style: TextStyle(
+                          color: selected
+                              ? cs.onPrimary
+                              : cs.onSurfaceVariant,
+                          fontSize: 13,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                        ),
+                        child: Text(
+                          f.localizedLabel(context),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      );
+                    }
+
                     return Expanded(
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
@@ -109,25 +184,7 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                           }
                         },
                         child: Center(
-                          child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 280),
-                            curve: Curves.easeOutCubic,
-                            style: TextStyle(
-                              color: selected
-                                  ? cs.onPrimary
-                                  : cs.onSurfaceVariant,
-                              fontSize: 13,
-                              fontWeight: selected
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                            ),
-                            child: Text(
-                              f.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
+                          child: labelChild,
                         ),
                       ),
                     );

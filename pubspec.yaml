@@ -1,13 +1,15 @@
 name: phantek_gallery
 description: "Phantek Gallery – offline-first photo & video gallery for Android."
 publish_to: 'none'
-version: 2.6.19+27
+version: 2.7.20+28
 
 environment:
   sdk: ^3.5.0
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
 
   # ── State management ──────────────────────────────────────────────────────
@@ -33,7 +35,7 @@ dependencies:
 
   # ── Utilities ────────────────────────────────────────────────────────────
   path: ^1.9.0
-  intl: ^0.19.0
+  intl: ^0.20.3
   equatable: ^2.0.5
 
   url_launcher: ^6.3.3
