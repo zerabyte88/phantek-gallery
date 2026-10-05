@@ -130,10 +130,6 @@ The compiled release APK will be generated at:
   - **Video Technical Metadata:** Live display of video **Frame Rate (FPS)** and **Video Codec** in the Details sheet.
   - **Perfected Swipe-to-Dismiss:** Seamless Hero return transition with contain-to-cover crossfade and hard-edge cell clipping.
   - **Enhanced Trash & Footers:** Dedicated bottom action bar for trash viewer (Restore, Details, Delete), streamlined photo/video action bars, and smooth bottom sheet menus.
-- **v1.3.13 (Build 19):**
-  - Redesigned modern Settings screen with clean cards, theme-coordinated icon badges, and bouncy tap feedback.
-  - Centered video play buttons, natural gesture pull-down dismissal, and unified overlay controls.
-  - Reduced memory footprint and streamlined OTA update checks.
 
 ---
 
