@@ -14,6 +14,7 @@ class SettingsModel extends Equatable {
     this.enableTrash = true,
     this.hardwareAcceleration = true,
     this.autoPlayVideo = false,
+    this.keepScreenOn = false,
     this.excludedFolders = const [],
     this.autoCheckUpdate = true,
     this.defaultSort = SortOption.newest,
@@ -33,6 +34,9 @@ class SettingsModel extends Equatable {
 
   /// Show video/photo count badges on album thumbnails.
   final bool showBadges;
+
+  /// Keep the screen on while viewing photos or videos.
+  final bool keepScreenOn;
 
   /// When true, deleting moves items to .trash instead of permanently deleting.
   final bool enableTrash;
@@ -64,6 +68,7 @@ class SettingsModel extends Equatable {
     int? gridColumns,
     int? albumGridColumns,
     bool? showBadges,
+    bool? keepScreenOn,
     bool? enableTrash,
     bool? hardwareAcceleration,
     bool? autoPlayVideo,
@@ -80,6 +85,7 @@ class SettingsModel extends Equatable {
       gridColumns: gridColumns ?? this.gridColumns,
       albumGridColumns: albumGridColumns ?? this.albumGridColumns,
       showBadges: showBadges ?? this.showBadges,
+      keepScreenOn: keepScreenOn ?? this.keepScreenOn,
       enableTrash: enableTrash ?? this.enableTrash,
       hardwareAcceleration: hardwareAcceleration ?? this.hardwareAcceleration,
       autoPlayVideo: autoPlayVideo ?? this.autoPlayVideo,
@@ -99,6 +105,7 @@ class SettingsModel extends Equatable {
         gridColumns,
         albumGridColumns,
         showBadges,
+        keepScreenOn,
         enableTrash,
         hardwareAcceleration,
         autoPlayVideo,

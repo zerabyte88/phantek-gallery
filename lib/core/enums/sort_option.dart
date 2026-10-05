@@ -1,3 +1,6 @@
+import 'package:flutter/widgets.dart';
+import '../localization/app_localizations.dart';
+
 /// Defines criteria for sorting media items and albums.
 enum SortCriterion {
   shootingTime,
@@ -10,6 +13,13 @@ enum SortCriterion {
         SortCriterion.timeAdded => 'By time added',
         SortCriterion.name => 'By name',
         SortCriterion.size => 'By size',
+      };
+
+  String localizedLabel(BuildContext context) => switch (this) {
+        SortCriterion.shootingTime => context.tr.sortByShootingTime,
+        SortCriterion.timeAdded => context.tr.sortByTimeAdded,
+        SortCriterion.name => context.tr.sortByName,
+        SortCriterion.size => context.tr.sortBySize,
       };
 
   SortDirection get defaultDirection => switch (this) {
@@ -30,6 +40,20 @@ enum SortCriterion {
           direction == SortDirection.ascending
               ? 'Smallest to largest'
               : 'Largest to smallest',
+      };
+
+  String localizedDirectionLabel(BuildContext context, SortDirection direction) =>
+      switch (this) {
+        SortCriterion.shootingTime || SortCriterion.timeAdded =>
+          direction == SortDirection.ascending
+              ? context.tr.oldestToNewest
+              : context.tr.newestToOldest,
+        SortCriterion.name =>
+          direction == SortDirection.ascending ? context.tr.aToZ : context.tr.zToA,
+        SortCriterion.size =>
+          direction == SortDirection.ascending
+              ? context.tr.smallestToLargest
+              : context.tr.largestToSmallest,
       };
 }
 
@@ -92,6 +116,9 @@ enum SortOption {
 
   String get barLabel =>
       '${criterion.label}: ${criterion.directionLabel(direction)}';
+
+  String localizedBarLabel(BuildContext context) =>
+      '${criterion.localizedLabel(context)}: ${criterion.localizedDirectionLabel(context, direction)}';
 
   static SortOption fromCriterionAndDirection(
     SortCriterion criterion,

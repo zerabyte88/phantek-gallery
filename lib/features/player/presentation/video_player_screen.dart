@@ -8,11 +8,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:photo_manager/photo_manager.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/media_item.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
+import '../../../core/services/screen_keeper_service.dart';
 import '../../../core/services/share_service.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../../core/utils/media_utils.dart';
@@ -100,6 +102,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         }
       });
     _initPlayer();
+    if (ref.read(settingsNotifierProvider).keepScreenOn) {
+      ScreenKeeperService.setKeepScreenOn(true);
+    }
     _precacheAdjacentVideos(_current);
   }
 
@@ -411,6 +416,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   @override
   void dispose() {
+    ScreenKeeperService.setKeepScreenOn(false);
     WidgetsBinding.instance.removeObserver(this);
     _zoomAnimController?.dispose();
     _settle.dispose();
@@ -575,9 +581,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'Playback Speed',
-                  style: TextStyle(
+                Text(
+                  context.tr.playbackSpeedTitle,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -589,7 +595,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   return ListTile(
                     dense: true,
                     title: Text(
-                      speed == 1.0 ? '1.0x (Normal)' : '${speed}x',
+                      speed == 1.0 ? '1.0x (${context.tr.normal})' : '${speed}x',
                       style: TextStyle(
                         color: isSelected ? cs.primary : Colors.white,
                         fontWeight:
@@ -628,7 +634,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 1),
-        content: Text(next ? 'Loop enabled' : 'Loop disabled'),
+        content: Text(next ? context.tr.loopEnabled : context.tr.loopDisabled),
       ),
     );
   }
@@ -652,7 +658,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"${item.name}" restored')),
+        SnackBar(content: Text(context.tr.itemRestored(item.name))),
       );
       if (_videos.length <= 1) {
         Navigator.of(context).pop();
@@ -674,20 +680,20 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       final ok = await showDialog<bool>(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('Delete Permanently?'),
+          title: Text(context.tr.deletePermanentlyTitle),
           content: Text(
-            '"${item.name}" will be permanently deleted. This action cannot be undone.',
+            context.tr.deletePermanentlyConfirm(item.name),
           ),
           actionsOverflowButtonSpacing: 8,
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(context.tr.cancel),
             ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete'),
+              child: Text(context.tr.delete),
             ),
           ],
         ),
@@ -717,24 +723,24 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(isTrash ? 'Move to Trash?' : 'Delete Permanently?'),
+        title: Text(isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle),
         content: Text(
           isTrash
-              ? '"${item.name}" will be moved to trash.'
-              : '"${item.name}" will be permanently deleted. This action cannot be undone.',
+              ? context.tr.moveToTrashConfirm(item.name)
+              : context.tr.deletePermanentlyConfirm(item.name),
         ),
         actionsOverflowButtonSpacing: 8,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr.cancel),
           ),
           FilledButton(
             style: isTrash
                 ? null
                 : FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
-            child: Text(isTrash ? 'Move to Trash' : 'Delete'),
+            child: Text(isTrash ? context.tr.moveToTrash : context.tr.delete),
           ),
         ],
       ),
@@ -745,9 +751,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (!hasPerm) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Manage All Files permission is required to delete or move items to trash.'),
+          SnackBar(
+            content: Text(context.tr.manageFilesPermissionRequired),
           ),
         );
       }
@@ -777,7 +782,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete video: $e')),
+          SnackBar(content: Text(context.tr.failedToDelete(e.toString()))),
         );
       }
       return;
@@ -1453,7 +1458,7 @@ class _TopBar extends StatelessWidget {
             IconButton(
               icon:
                   const Icon(Icons.info_outline, color: Colors.white, size: 22),
-              tooltip: 'Details',
+              tooltip: context.tr.details,
               onPressed: onInfo,
             ),
         ],
@@ -1518,7 +1523,7 @@ class _BottomBarState extends State<_BottomBar> {
               ListTile(
                 leading: const Icon(Icons.speed, color: Colors.white),
                 title: Text(
-                  'Speed (${widget.playbackSpeed == 1.0 ? 'Normal' : '${widget.playbackSpeed}x'})',
+                  '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
                   style: const TextStyle(color: Colors.white, fontSize: 15),
                 ),
                 onTap: () {
@@ -1534,7 +1539,7 @@ class _BottomBarState extends State<_BottomBar> {
                       : Colors.white,
                 ),
                 title: Text(
-                  widget.isLooping ? 'Loop: On' : 'Loop: Off',
+                  widget.isLooping ? context.tr.loopOn : context.tr.loopOff,
                   style: TextStyle(
                     color: widget.isLooping
                         ? Theme.of(context).colorScheme.primary
@@ -1555,7 +1560,7 @@ class _BottomBarState extends State<_BottomBar> {
                   color: Colors.white,
                 ),
                 title: Text(
-                  widget.isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
+                  widget.isFullscreen ? context.tr.exitFullscreen : context.tr.fullscreen,
                   style: const TextStyle(color: Colors.white, fontSize: 15),
                 ),
                 onTap: () {
@@ -1567,8 +1572,8 @@ class _BottomBarState extends State<_BottomBar> {
                 ListTile(
                   leading:
                       const Icon(Icons.edit_outlined, color: Colors.white),
-                  title: const Text('Rename',
-                      style: TextStyle(color: Colors.white, fontSize: 15)),
+                  title: Text(context.tr.rename,
+                      style: const TextStyle(color: Colors.white, fontSize: 15)),
                   onTap: () {
                     Navigator.pop(sheetContext);
                     widget.onRename?.call();
@@ -1700,20 +1705,20 @@ class _BottomBarState extends State<_BottomBar> {
                     _ViewerActionButton(
                       icon: const Icon(Icons.restore,
                           color: Colors.white, size: 22),
-                      label: 'Restore',
+                      label: context.tr.restore,
                       onTap: widget.onRestore ?? () {},
                     ),
                     _ViewerActionButton(
                       icon: const Icon(Icons.info_outline,
                           color: Colors.white, size: 22),
-                      label: 'Details',
+                      label: context.tr.details,
                       onTap: () =>
                           showMediaInfoSheet(context, widget.item, player: widget.player),
                     ),
                     _ViewerActionButton(
                       icon: const Icon(Icons.delete_forever,
                           color: Colors.white, size: 22),
-                      label: 'Delete',
+                      label: context.tr.delete,
                       onTap: widget.onDelete,
                     ),
                   ],
@@ -1725,7 +1730,7 @@ class _BottomBarState extends State<_BottomBar> {
                     _ViewerActionButton(
                       icon: const Icon(Icons.share_outlined,
                           color: Colors.white, size: 22),
-                      label: 'Share',
+                      label: context.tr.share,
                       onTap: () => ShareService.shareSingle(widget.item.path,
                           isVideo: true),
                     ),
@@ -1743,7 +1748,7 @@ class _BottomBarState extends State<_BottomBar> {
                             color: isFav ? Colors.redAccent : Colors.white,
                             size: 22,
                           ),
-                          label: 'Favorite',
+                          label: context.tr.favorite,
                           onTap: () {
                             HapticFeedback.lightImpact();
                             final currentFavs = Set<String>.from(
@@ -1775,7 +1780,7 @@ class _BottomBarState extends State<_BottomBar> {
                             color: Colors.white,
                             size: 24,
                           ),
-                          label: playing ? 'Pause' : 'Play',
+                          label: playing ? context.tr.pause : context.tr.play,
                           onTap: widget.player.playOrPause,
                         );
                       },
@@ -1784,14 +1789,14 @@ class _BottomBarState extends State<_BottomBar> {
                     _ViewerActionButton(
                       icon: const Icon(Icons.delete_outline,
                           color: Colors.white, size: 22),
-                      label: 'Delete',
+                      label: context.tr.delete,
                       onTap: widget.onDelete,
                     ),
                     // 5. More (Bottom sheet)
                     _ViewerActionButton(
                       icon: const Icon(Icons.more_vert,
                           color: Colors.white, size: 22),
-                      label: 'More',
+                      label: context.tr.more,
                       onTap: () => _showMoreOptions(context),
                     ),
                   ],

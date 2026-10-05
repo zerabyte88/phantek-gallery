@@ -248,7 +248,7 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            activeSort.barLabel,
+                            activeSort.localizedBarLabel(context),
                             style: TextStyle(
                               fontSize: 12,
                               color: cs.onSurface,

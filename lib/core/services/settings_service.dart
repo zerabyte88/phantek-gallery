@@ -15,6 +15,7 @@ class _K {
   static const enableTrash        = 'enableTrash';
   static const hardwareAccel      = 'hardwareAcceleration';
   static const autoPlayVideo      = 'autoPlayVideo';
+  static const keepScreenOn       = 'keepScreenOn';
   static const excludedFolders    = 'excludedFolders';
   static const autoCheckUpdate    = 'autoCheckUpdate';
   static const defaultSort        = 'defaultSort';
@@ -51,6 +52,7 @@ class SettingsService {
         gridColumns:         _prefs.getInt(_K.gridColumns) ?? 3,
         albumGridColumns:    _prefs.getInt(_K.albumGridColumns) ?? 3,
         showBadges:          _prefs.getBool(_K.showBadges) ?? true,
+        keepScreenOn:        _prefs.getBool(_K.keepScreenOn) ?? false,
         enableTrash:         _prefs.getBool(_K.enableTrash) ?? true,
         hardwareAcceleration: _prefs.getBool(_K.hardwareAccel) ?? true,
         autoPlayVideo:       _prefs.getBool(_K.autoPlayVideo) ?? false,
@@ -71,6 +73,7 @@ class SettingsService {
       _prefs.setInt   (_K.gridColumns,     model.gridColumns),
       _prefs.setInt   (_K.albumGridColumns, model.albumGridColumns),
       _prefs.setBool  (_K.showBadges,      model.showBadges),
+      _prefs.setBool  (_K.keepScreenOn,    model.keepScreenOn),
       _prefs.setBool  (_K.enableTrash,     model.enableTrash),
       _prefs.setBool  (_K.hardwareAccel,   model.hardwareAcceleration),
       _prefs.setBool  (_K.autoPlayVideo,   model.autoPlayVideo),

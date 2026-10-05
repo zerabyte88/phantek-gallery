@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/utils/easter_egg_handler.dart';
 import '../../../../core/widgets/bouncy_tap.dart';
 
@@ -27,8 +28,8 @@ class DeveloperAboutCard extends ConsumerWidget {
     return FutureBuilder<PackageInfo>(
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
-        final version = snapshot.data?.version ?? '2.6.19';
-        final buildNumber = snapshot.data?.buildNumber ?? '27';
+        final version = snapshot.data?.version ?? '2.6.21';
+        final buildNumber = snapshot.data?.buildNumber ?? '29';
 
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -54,9 +55,9 @@ class DeveloperAboutCard extends ConsumerWidget {
                     size: 22,
                   ),
                   const SizedBox(width: 10),
-                  const Text(
-                    'About Phantek',
-                    style: TextStyle(
+                  Text(
+                    context.tr.aboutPhantek,
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -92,7 +93,7 @@ class DeveloperAboutCard extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Offline Gallery & Media Player',
+                context.tr.offlineGalleryDesc,
                 style: TextStyle(
                   color: Colors.grey.shade400,
                   fontSize: 13,
@@ -101,13 +102,13 @@ class DeveloperAboutCard extends ConsumerWidget {
               const SizedBox(height: 20),
 
               // ── Key-Value Information Rows ──────────────────────────
-              _buildInfoRow('App Version', 'v$version'),
+              _buildInfoRow(context.tr.appVersion, 'v$version'),
               const SizedBox(height: 10),
-              _buildInfoRow('Build', '$buildNumber (Release APK)'),
+              _buildInfoRow(context.tr.buildNumberLabel, '$buildNumber (Release APK)'),
               const SizedBox(height: 10),
-              _buildInfoRow('Architecture', 'ARM64-v8a (MediaKit)'),
+              _buildInfoRow(context.tr.architecture, 'ARM64-v8a (MediaKit)'),
               const SizedBox(height: 10),
-              _buildInfoRow('License', 'GPLv3'),
+              _buildInfoRow(context.tr.license, 'GPLv3'),
               const SizedBox(height: 22),
 
               // ── Developer Profile Row ───────────────────────────────
@@ -145,9 +146,9 @@ class DeveloperAboutCard extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Developer: zerabyte88',
-                          style: TextStyle(
+                        Text(
+                          context.tr.developerLabel,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -155,7 +156,7 @@ class DeveloperAboutCard extends ConsumerWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Creator & Maintainer',
+                          context.tr.creatorMaintainer,
                           style: TextStyle(
                             color: Colors.grey.shade400,
                             fontSize: 13,
@@ -181,15 +182,15 @@ class DeveloperAboutCard extends ConsumerWidget {
                       width: 1,
                     ),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.open_in_new, color: _cyan, size: 18),
-                      SizedBox(width: 8),
+                      const Icon(Icons.open_in_new, color: _cyan, size: 18),
+                      const SizedBox(width: 8),
                       Text(
-                        'Open GitHub Profile',
+                        context.tr.openGitHubProfile,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: _cyan,
                           fontSize: 14,
                           fontWeight: FontWeight.bold,

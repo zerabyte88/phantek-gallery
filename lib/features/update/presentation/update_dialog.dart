@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/router.dart' show rootNavigatorKey;
+import '../../../core/localization/app_localizations.dart';
 import '../data/update_provider.dart';
 import '../data/update_service.dart';
 
@@ -23,10 +24,10 @@ class UpdateListener extends ConsumerWidget {
       }
       // Show snackbar for error / already up-to-date.
       if (next.hasError) {
-        final msg = next.error == 'already_up_to_date'
-            ? 'Already up to date'
-            : 'Update check failed: ${next.error}';
         final targetContext = rootNavigatorKey.currentContext ?? context;
+        final msg = next.error == 'already_up_to_date'
+            ? targetContext.tr.alreadyUpToDate
+            : targetContext.tr.updateCheckFailed('${next.error}');
         final messenger = ScaffoldMessenger.maybeOf(targetContext) ??
             ScaffoldMessenger.of(context);
         messenger
@@ -90,7 +91,7 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
       setState(() => _downloading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Download failed. Please try again.')),
+          SnackBar(content: Text(context.tr.downloadFailed)),
         );
       }
     }
@@ -106,7 +107,7 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Install failed: $e')),
+          SnackBar(content: Text(context.tr.installFailed('$e'))),
         );
       }
     }
@@ -126,19 +127,19 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
         children: [
           const Icon(Icons.system_update_alt, color: Colors.green),
           const SizedBox(width: 8),
-          Text('Update v${widget.info.version}'),
+          Text(context.tr.updateAvailableVersion(widget.info.version)),
         ],
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('A new version of Phantek Gallery is available.',
+          Text(context.tr.newVersionAvailable,
               style: const TextStyle(fontWeight: FontWeight.w500)),
           const SizedBox(height: 12),
           if (widget.info.releaseNotes.isNotEmpty) ...[
-            const Text('What\u2019s new:',
-                style: TextStyle(fontSize: 13, color: Colors.grey)),
+            Text(context.tr.whatsNew,
+                style: const TextStyle(fontSize: 13, color: Colors.grey)),
             const SizedBox(height: 4),
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 150),
@@ -155,7 +156,7 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
             LinearProgressIndicator(value: _progress),
             const SizedBox(height: 8),
             Text(
-              '${(_progress * 100).toStringAsFixed(0)}% downloaded',
+              context.tr.downloadingPercent((_progress * 100).round()),
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
@@ -165,17 +166,17 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
         if (!_downloading) ...[
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Later'),
+            child: Text(context.tr.later),
           ),
           FilledButton.icon(
             onPressed: _startDownload,
             icon: const Icon(Icons.download),
-            label: const Text('Download & Install'),
+            label: Text(context.tr.downloadAndInstall),
           ),
         ] else
-          const TextButton(
+          TextButton(
             onPressed: null,
-            child: Text('Downloading…'),
+            child: Text(context.tr.downloading),
           ),
       ],
     );

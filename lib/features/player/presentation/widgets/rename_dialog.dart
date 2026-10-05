@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/models/media_item.dart';
 import '../../../../core/providers/media_provider.dart';
 import '../../../../core/services/permission_service.dart';
@@ -28,7 +29,7 @@ Future<MediaItem?> showRenameMediaDialog(
       return StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Rename File'),
+            title: Text(context.tr.renameFile),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -37,7 +38,7 @@ Future<MediaItem?> showRenameMediaDialog(
                   controller: controller,
                   autofocus: true,
                   decoration: InputDecoration(
-                    labelText: 'File Name',
+                    labelText: context.tr.fileName,
                     suffixText: ext,
                     errorText: errorMessage,
                     border: const OutlineInputBorder(),
@@ -53,13 +54,13 @@ Future<MediaItem?> showRenameMediaDialog(
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogCtx, false),
-                child: const Text('Cancel'),
+                child: Text(context.tr.cancel),
               ),
               FilledButton(
                 onPressed: () async {
                   final newBaseName = controller.text.trim();
                   if (newBaseName.isEmpty) {
-                    setDialogState(() => errorMessage = 'Name cannot be empty');
+                    setDialogState(() => errorMessage = context.tr.nameCannotBeEmpty);
                     return;
                   }
                   if (newBaseName == initialName) {
@@ -69,7 +70,7 @@ Future<MediaItem?> showRenameMediaDialog(
                   final invalidChars = RegExp(r'[\\/:*?"<>|]');
                   if (invalidChars.hasMatch(newBaseName)) {
                     setDialogState(
-                        () => errorMessage = 'Contains invalid characters');
+                        () => errorMessage = context.tr.containsInvalidCharacters);
                     return;
                   }
 
@@ -77,7 +78,7 @@ Future<MediaItem?> showRenameMediaDialog(
                   final newPath = p.join(parentDir, '$newBaseName$ext');
                   if (await File(newPath).exists()) {
                     setDialogState(
-                        () => errorMessage = 'A file with this name already exists');
+                        () => errorMessage = context.tr.fileAlreadyExists);
                     return;
                   }
 
@@ -85,7 +86,7 @@ Future<MediaItem?> showRenameMediaDialog(
                     Navigator.pop(dialogCtx, true);
                   }
                 },
-                child: const Text('Rename'),
+                child: Text(context.tr.rename),
               ),
             ],
           );
@@ -100,9 +101,8 @@ Future<MediaItem?> showRenameMediaDialog(
   if (!hasPerm) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Manage All Files permission is required to rename files.'),
+        SnackBar(
+          content: Text(context.tr.manageFilesPermissionRequired),
         ),
       );
     }
@@ -131,7 +131,7 @@ Future<MediaItem?> showRenameMediaDialog(
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Renamed to "${newItem.name}"')),
+        SnackBar(content: Text(context.tr.renamedTo(newItem.name))),
       );
     }
 
@@ -139,7 +139,7 @@ Future<MediaItem?> showRenameMediaDialog(
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to rename: $e')),
+        SnackBar(content: Text(context.tr.failedToRename(e.toString()))),
       );
     }
     return null;

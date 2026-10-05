@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/enums/sort_option.dart';
+import '../../../../core/localization/app_localizations.dart';
 
 /// Modal bottom sheet for selecting media sorting criteria and direction.
 /// Matches Image 2 layout with radio indicators, custom direction pills on ALL options,
@@ -81,11 +82,11 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
               child: Row(
                 children: [
                   const SizedBox(width: 36),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Sort',
+                      context.tr.sort,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
                       ),
@@ -143,7 +144,7 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              c.label,
+                              c.localizedLabel(context),
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: isSelected
@@ -153,7 +154,7 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              c.directionLabel(currentDirection),
+                              c.localizedDirectionLabel(context, currentDirection),
                               style: TextStyle(
                                 fontSize: 13,
                                 color: isSelected
@@ -261,7 +262,7 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                     _update(SortCriterion.timeAdded, SortDirection.descending);
                   },
                   child: Text(
-                    'Restore defaults',
+                    context.tr.restoreDefaults,
                     style: TextStyle(
                       color: accentColor,
                       fontSize: 16,

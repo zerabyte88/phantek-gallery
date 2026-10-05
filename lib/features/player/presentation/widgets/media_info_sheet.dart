@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/models/media_item.dart';
 import '../../../../core/utils/media_utils.dart';
 
@@ -54,34 +55,34 @@ void showMediaInfoSheet(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Details',
+                context.tr.details,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
               ),
               const SizedBox(height: 16),
-              _InfoRow(icon: Icons.title, label: 'Name', value: item.name),
+              _InfoRow(icon: Icons.title, label: context.tr.name, value: item.name),
               _InfoRow(
                 icon: Icons.calendar_today_outlined,
-                label: 'Date',
+                label: context.tr.date,
                 value:
                     '${MediaUtils.formatViewerDate(item.date)}, ${MediaUtils.formatViewerTime(item.date)}',
               ),
               _InfoRow(
                 icon: Icons.sd_storage_outlined,
-                label: 'Size',
+                label: context.tr.size,
                 value: MediaUtils.formatSize(item.size),
               ),
               if (item.resolution.isNotEmpty)
                 _InfoRow(
                   icon: Icons.aspect_ratio_outlined,
-                  label: 'Resolution',
+                  label: context.tr.resolution,
                   value: item.resolution,
                 ),
               if (item.isVideo && effectiveFps != null && effectiveFps > 0)
                 _InfoRow(
                   icon: Icons.speed_outlined,
-                  label: 'Frame Rate',
+                  label: context.tr.frameRate,
                   value: MediaUtils.formatFps(effectiveFps),
                 ),
               if (item.isVideo &&
@@ -89,28 +90,28 @@ void showMediaInfoSheet(
                   effectiveCodec.trim().isNotEmpty)
                 _InfoRow(
                   icon: Icons.video_settings_outlined,
-                  label: 'Codec',
+                  label: context.tr.codec,
                   value: MediaUtils.formatCodec(effectiveCodec),
                 ),
               if (item.isVideo && item.duration != null)
                 _InfoRow(
                   icon: Icons.timer_outlined,
-                  label: 'Duration',
+                  label: context.tr.duration,
                   value: MediaUtils.formatDuration(item.duration!),
                 ),
               _InfoRow(
                 icon: Icons.folder_outlined,
-                label: 'Path',
+                label: context.tr.path,
                 value: item.path,
                 trailing: IconButton(
                   icon: const Icon(Icons.copy_outlined, size: 18),
-                  tooltip: 'Copy path',
+                  tooltip: context.tr.copyPath,
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: item.path));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Path copied to clipboard'),
-                        duration: Duration(seconds: 2),
+                      SnackBar(
+                        content: Text(context.tr.pathCopied),
+                        duration: const Duration(seconds: 2),
                       ),
                     );
                   },
@@ -118,9 +119,9 @@ void showMediaInfoSheet(
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: item.path));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Path copied to clipboard'),
-                      duration: Duration(seconds: 2),
+                    SnackBar(
+                      content: Text(context.tr.pathCopied),
+                      duration: const Duration(seconds: 2),
                     ),
                   );
                 },

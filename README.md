@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.20&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.6.21&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -127,6 +127,12 @@ The compiled release APK will be generated at:
 ---
 
 ## Version History
+
+- **v2.6.21 (Build 29):**
+  - **Keep Screen On While Viewing:** Added configurable native window flag toggle (`FLAG_KEEP_SCREEN_ON`) in Settings (Appearance) to keep screen illuminated during photo viewing and video playback without external dependencies.
+  - **Full 11-Language Localization Overhaul:** Complete dictionary coverage and translations across all supported languages (ID, EN, ZH, ES, PT, JA, KO, HI, AR, FR, RU), eliminating all remaining hardcoded English text.
+  - **Auto-Playback & Performance Tuning:** Configurable instant video auto-playback on view/swipe, plus butter-smooth 120 FPS tab swiping optimizations with zero black frame flashes.
+  - **Elevated Controls & Visual Enhancements:** Refined AMOLED falling meteors trajectory, enhanced Dark aurora ribbon animations, and redesigned Clean Light daytime theme.
 
 - **v2.6.19 (Build 27):**
   - **Header Search Bar & Filter Bar Collision Fix:** Constrained the search capsule strictly within the 56dp toolbar height (`topPadding + kToolbarHeight`), cleanly separating it from category filter chips (`All`, `Photos`, `Videos`, `Albums`) with zero overlapping.
