@@ -53,6 +53,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   // Drag-to-dismiss offset lives in a notifier so pointer-move never rebuilds
   // the PageView / InteractiveViewer hierarchy.
   final ValueNotifier<Offset> _dragNotifier = ValueNotifier(Offset.zero);
+  final ValueNotifier<bool> _isDraggingDown = ValueNotifier(false);
+  bool _isSwipingHorizontal = false;
   late final AnimationController _settle;
   Offset _settleFrom = Offset.zero;
   VelocityTracker _vt = VelocityTracker.withKind(PointerDeviceKind.touch);
@@ -90,9 +92,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _transformationController = TransformationController();
     _settle = AnimationController.unbounded(vsync: this)
       ..addListener(() {
-        _setDrag(_settleFrom * _settle.value);
+        final current = _settleFrom * _settle.value;
+        _setDrag(current);
         if (!_settle.isAnimating && _activePointers.isEmpty) {
           _setDrag(Offset.zero);
+          _isDraggingDown.value = false;
         }
       });
     _initPlayer();
@@ -101,16 +105,24 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   void _setDrag(Offset o) {
     _dragNotifier.value = o;
+    final isDown = o != Offset.zero;
+    if (_isDraggingDown.value != isDown) {
+      _isDraggingDown.value = isDown;
+    }
   }
 
   /// Spring the dragged video back to center, carrying release velocity.
   void _springBack(double vy) {
     _settleFrom = _dragNotifier.value;
+    if (_settleFrom == Offset.zero) {
+      _isDraggingDown.value = false;
+      return;
+    }
     final v = _settleFrom.dy.abs() > 1 ? vy / _settleFrom.dy : 0.0;
     _settle.value = 1.0;
     _settle.animateWith(SpringSimulation(
       SpringDescription.withDampingRatio(
-          mass: 1, stiffness: 350, ratio: 0.95),
+          mass: 1.0, stiffness: 320, ratio: 0.82),
       1.0,
       0.0,
       v.clamp(-8.0, 8.0),
@@ -400,6 +412,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     WidgetsBinding.instance.removeObserver(this);
     _zoomAnimController?.dispose();
     _settle.dispose();
+    _isDraggingDown.dispose();
     _swipeNotifier.dispose();
     _dragNotifier.dispose();
     _transformationController.dispose();
@@ -737,7 +750,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 valueListenable: _dragNotifier,
                 builder: (_, d, __) => ColoredBox(
                   color: Colors.black.withValues(
-                      alpha: (1.0 - (d.dy / 300)).clamp(0.0, 1.0)),
+                      alpha: (1.0 - (d.dy / 320.0)).clamp(0.0, 1.0)),
                 ),
               ),
             ),
@@ -750,6 +763,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   _activePointers.add(e.pointer);
                   _settle.stop(); // grab a returning video mid-flight
                   _zoomAnimController?.stop();
+                  _isSwipingHorizontal = false;
                   if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
                     // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
                     _isMultiTouch = true;
@@ -776,8 +790,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       _startDragY != null) {
                     final adx = (e.position.dx - _startDragX!).abs();
                     final ady = (e.position.dy - _startDragY!).abs();
-                    if (adx > 12 && adx > ady * 1.5) _swipeNotifier.value = true;
+                    if (adx > 10 && adx > ady * 1.3) {
+                      _swipeNotifier.value = true;
+                      _isSwipingHorizontal = true;
+                      return;
+                    }
                   }
+
+                  if (_isSwipingHorizontal) return;
 
                   // Keep pull-to-dismiss and page swiping completely locked whenever
                   // the video is zoomed above 1.0x, pinching, or multi-touching.
@@ -797,8 +817,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   final dx = e.position.dx - _startDragX!;
                   // Responsive vertical swipe deadzone: natural downward drag (dy > 6 and dy > dx.abs() * 0.75)
                   if (_dragNotifier.value != Offset.zero || (dy > 6 && dy > dx.abs() * 0.75)) {
-                    final dampedDx = dx * 0.4;
-                    final dragY = (dy - 6).clamp(0.0, 600.0);
+                    final dampedDx = dx * 0.45;
+                    final dragY = (dy - 6).clamp(0.0, 650.0);
                     _setDrag(Offset(dampedDx, dragY));
                     if (_player.state.playing && dy > 12) {
                       _player.pause();
@@ -812,6 +832,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     final wasMultiTouch = _isMultiTouch;
                     _isMultiTouch = false;
                     _isPinching = false;
+                    _isSwipingHorizontal = false;
                     _startDragY = null;
                     _startDragX = null;
                     // No page scroll in progress: this was a tap / non-swipe gesture.
@@ -823,7 +844,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     if (!wasMultiTouch &&
                         !_isCurrentlyVideoZoomed &&
                         d.dy > 0 &&
-                        (d.dy > 80 || (vy > 500 && d.dy > 20))) {
+                        (d.dy > 85 || (vy > 550 && d.dy > 20))) {
                       _player.pause();
                       Navigator.of(context).pop();
                     } else if (d != Offset.zero) {
@@ -837,6 +858,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     if (!_isSwiping) _swipeNotifier.value = false;
                     _isMultiTouch = false;
                     _isPinching = false;
+                    _isSwipingHorizontal = false;
                     _startDragY = null;
                     _startDragX = null;
                     if (_dragNotifier.value != Offset.zero) _springBack(0);
@@ -856,16 +878,22 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // ── Video PageView with translation + proportional scale-down ──
+                      // ── Video PageView with translation + proportional scale-down + smooth corner radius ──
                       ValueListenableBuilder<Offset>(
                         valueListenable: _dragNotifier,
                         builder: (context, d, child) {
-                          final s = (1.0 - (d.dy / 800) * 0.25).clamp(0.75, 1.0);
+                          final s = (1.0 - (d.dy / 1000.0) * 0.28).clamp(0.72, 1.0);
+                          final radius = (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
                           return Transform(
                             alignment: Alignment.center,
                             transform: Matrix4.translationValues(d.dx, d.dy, 0)
                               ..scaleByDouble(s, s, 1.0, 1.0),
-                            child: child,
+                            child: radius > 0
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(radius),
+                                    child: child,
+                                  )
+                                : child,
                           );
                         },
                         child: RepaintBoundary(
@@ -907,17 +935,21 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         }
                         return false;
                       },
-                      child: PageView.builder(
-                        controller: _pageController,
-                        itemCount: _videos.length,
-                        onPageChanged: _onPageChanged,
-                        physics: (_isCurrentlyVideoZoomed ||
-                                _isPinching ||
-                                _isMultiTouch ||
-                                _activePointers.length >= 2)
-                            ? const NeverScrollableScrollPhysics()
-                            : const BouncingScrollPhysics(),
-                        itemBuilder: (context, index) {
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: _isDraggingDown,
+                        builder: (context, isDraggingDown, _) {
+                          return PageView.builder(
+                            controller: _pageController,
+                            itemCount: _videos.length,
+                            onPageChanged: _onPageChanged,
+                            physics: (_isCurrentlyVideoZoomed ||
+                                    _isPinching ||
+                                    _isMultiTouch ||
+                                    _activePointers.length >= 2 ||
+                                    isDraggingDown)
+                                ? const NeverScrollableScrollPhysics()
+                                : const BouncingScrollPhysics(),
+                            itemBuilder: (context, index) {
                           if (index == _current) {
                             return Center(
                               child: ClipRect(
@@ -1014,10 +1046,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                           }
                           return _VideoThumbnailPage(item: _videos[index]);
                         },
-                      ),
-                    ),
+                      );
+                    },
                   ),
-                    ),
+                ),
+              ),
+            ),
                   
 
 
@@ -1085,16 +1119,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   // ── Controls overlay ───────────────────────────────
                   ValueListenableBuilder<Offset>(
                     valueListenable: _dragNotifier,
-                    builder: (context, drag, child) => AnimatedOpacity(
-                      opacity: (_showControls && drag.dy < 20 && !_isPinching)
-                          ? 1.0
-                          : 0.0,
-                      duration: const Duration(milliseconds: 200),
-                      child: IgnorePointer(
-                        ignoring: !_showControls || drag.dy >= 20 || _isPinching,
-                        child: child,
-                      ),
-                    ),
+                    builder: (context, drag, child) {
+                      final dragFade = (1.0 - (drag.dy / 35.0)).clamp(0.0, 1.0);
+                      final effectiveOpacity = (_showControls && !_isPinching) ? dragFade : 0.0;
+                      return Opacity(
+                        opacity: effectiveOpacity,
+                        child: IgnorePointer(
+                          ignoring: !_showControls || drag.dy > 4 || _isPinching,
+                          child: child,
+                        ),
+                      );
+                    },
                     child: Stack(
                       children: [
                         // Center play button when paused (exact center of the screen)

@@ -1,8 +1,11 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/settings_model.dart';
+import '../providers/settings_provider.dart';
 
-/// A sleek AppBar title widget wrapped in a dynamic, fiery animated border.
-class AnimatedFlameTitle extends StatefulWidget {
+/// A sleek AppBar title widget wrapped in a dynamic, theme-reactive animated border.
+class AnimatedFlameTitle extends ConsumerStatefulWidget {
   final String title;
 
   const AnimatedFlameTitle({
@@ -11,20 +14,47 @@ class AnimatedFlameTitle extends StatefulWidget {
   });
 
   @override
-  State<AnimatedFlameTitle> createState() => _AnimatedFlameTitleState();
+  ConsumerState<AnimatedFlameTitle> createState() => _AnimatedFlameTitleState();
 }
 
-class _AnimatedFlameTitleState extends State<AnimatedFlameTitle>
+class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  static const _flameColors = [
+  static const _darkFlameColors = [
     Color(0xFFFF1E00), // Deep Crimson Red
     Color(0xFFFF6A00), // Hot Blaze Orange
     Color(0xFFFFD000), // Fiery Gold
     Color(0xFFFF3B30), // Electric Coral
     Color(0xFFFF9500), // Bright Amber
     Color(0xFFFF1E00), // Back to Crimson
+  ];
+
+  static const _amoledColors = [
+    Color(0xFF6366F1), // Indigo
+    Color(0xFF8B5CF6), // Purple
+    Color(0xFF38BDF8), // Celestial Cyan
+    Color(0xFFE2E8F0), // Starlight Silver
+    Color(0xFF818CF8), // Soft Violet
+    Color(0xFF6366F1),
+  ];
+
+  static const _sakuraColors = [
+    Color(0xFFFF7597), // Rose Pink
+    Color(0xFFFFB7C5), // Cherry Blossom
+    Color(0xFFFF4081), // Vivid Blossom
+    Color(0xFFFF8DA1), // Pastel Pink
+    Color(0xFFFFC0CB), // Light Pink
+    Color(0xFFFF7597),
+  ];
+
+  static const _lightColors = [
+    Color(0xFFF59E0B), // Warm Amber
+    Color(0xFFFB923C), // Solar Orange
+    Color(0xFFFBBF24), // Golden Sun
+    Color(0xFFEA580C), // Deep Ochre
+    Color(0xFFF97316), // Bright Tangerine
+    Color(0xFFF59E0B),
   ];
 
   @override
@@ -45,14 +75,56 @@ class _AnimatedFlameTitleState extends State<AnimatedFlameTitle>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final themeMode = ref.watch(
+      settingsNotifierProvider.select((s) => s.themeMode),
+    );
+
+    final effectiveMode = switch (themeMode) {
+      AppThemeMode.system =>
+        theme.brightness == Brightness.dark ? AppThemeMode.dark : AppThemeMode.light,
+      _ => themeMode,
+    };
+
+    final (colors, icon, iconStartColor, iconEndColor) = switch (effectiveMode) {
+      AppThemeMode.amoled => (
+          _amoledColors,
+          Icons.nights_stay_rounded,
+          const Color(0xFF818CF8),
+          const Color(0xFF38BDF8),
+        ),
+      AppThemeMode.amoledSakura => (
+          _sakuraColors,
+          Icons.local_florist_rounded,
+          const Color(0xFFFF7597),
+          const Color(0xFFFFB7C5),
+        ),
+      AppThemeMode.dark => (
+          _darkFlameColors,
+          Icons.local_fire_department_rounded,
+          const Color(0xFFFF3D00),
+          const Color(0xFFFFC107),
+        ),
+      AppThemeMode.light => (
+          _lightColors,
+          Icons.wb_sunny_rounded,
+          const Color(0xFFF59E0B),
+          const Color(0xFFFBBF24),
+        ),
+      AppThemeMode.system => (
+          _darkFlameColors,
+          Icons.local_fire_department_rounded,
+          const Color(0xFFFF3D00),
+          const Color(0xFFFFC107),
+        ),
+    };
 
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
         final progress = _controller.value;
-        final flameIconColor = Color.lerp(
-          const Color(0xFFFF3D00),
-          const Color(0xFFFFC107),
+        final iconColor = Color.lerp(
+          iconStartColor,
+          iconEndColor,
           (math.sin(progress * 2 * math.pi) + 1) / 2,
         );
 
@@ -61,21 +133,21 @@ class _AnimatedFlameTitleState extends State<AnimatedFlameTitle>
           child: CustomPaint(
             painter: _FlameBorderPainter(
               progress: progress,
-              colors: _flameColors,
+              colors: colors,
             ),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                color: theme.colorScheme.surface.withValues(alpha: 0.82),
+                color: theme.colorScheme.surface.withValues(alpha: 0.85),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.local_fire_department_rounded,
+                    icon,
                     size: 17,
-                    color: flameIconColor,
+                    color: iconColor,
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -111,7 +183,7 @@ class _FlameBorderPainter extends CustomPainter {
     final rect = Offset.zero & size;
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(18));
 
-    // 1. Fiery outer glow
+    // 1. Vibrant outer glow
     final glowPaint = Paint()
       ..shader = SweepGradient(
         colors: colors.map((c) => c.withValues(alpha: 0.48)).toList(),
@@ -123,7 +195,7 @@ class _FlameBorderPainter extends CustomPainter {
 
     canvas.drawRRect(rrect, glowPaint);
 
-    // 2. Sharp vibrant fiery core border
+    // 2. Sharp vibrant core border
     final borderPaint = Paint()
       ..shader = SweepGradient(
         colors: colors,

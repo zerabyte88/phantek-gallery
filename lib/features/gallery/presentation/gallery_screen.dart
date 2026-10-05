@@ -17,6 +17,7 @@ import '../../../app/router.dart';
 import '../../../core/utils/easter_egg_handler.dart';
 import '../../../core/widgets/animated_flame_title.dart';
 import '../../../core/widgets/bouncy_tap.dart';
+import '../../../core/widgets/theme_header_background.dart';
 import 'widgets/album_grid_item.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
@@ -411,6 +412,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       },
       child: Scaffold(
         appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          flexibleSpace: const ThemeHeaderBackground(),
           leading: _isSearching
               ? IconButton(
                   icon: const Icon(Icons.arrow_back),
@@ -523,6 +527,20 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               ),
             ] else if (_selecting && !isAlbums) ...[
               IconButton(
+                icon: const Icon(Icons.share_outlined),
+                tooltip: 'Share selected',
+                onPressed: () {
+                  final all = mediaAsync.value ?? [];
+                  final paths = all
+                      .where((e) => _selected.contains(e.id))
+                      .map((e) => e.path)
+                      .toList();
+                  if (paths.isNotEmpty) {
+                    ShareService.shareFiles(paths);
+                  }
+                },
+              ),
+              IconButton(
                 icon: const Icon(Icons.select_all),
                 tooltip: 'Select all',
                 onPressed: () {
@@ -538,38 +556,6 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                       _selected.addAll(all.map((e) => e.id));
                     }
                   });
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.share_outlined),
-                tooltip: 'Share selected',
-                onPressed: () {
-                  final all = mediaAsync.value ?? [];
-                  final paths = all
-                      .where((e) => _selected.contains(e.id))
-                      .map((e) => e.path)
-                      .toList();
-                  if (paths.isNotEmpty) {
-                    ShareService.shareFiles(paths);
-                  }
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.favorite_border),
-                tooltip: 'Toggle favorite',
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  final currentFavs = Set<String>.from(settings.favoriteIds);
-                  final allSelectedFav = _selected.every(currentFavs.contains);
-                  if (allSelectedFav) {
-                    currentFavs.removeAll(_selected);
-                  } else {
-                    currentFavs.addAll(_selected);
-                  }
-                  ref.read(settingsNotifierProvider.notifier).update(
-                        (s) => s.copyWith(favoriteIds: currentFavs.toList()),
-                      );
-                  _clearSelection();
                 },
               ),
               IconButton(

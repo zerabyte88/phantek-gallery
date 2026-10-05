@@ -40,6 +40,12 @@ class FilterSortBar extends ConsumerWidget {
           ]
         : FilterOption.values;
 
+    final selectedIndex =
+        options.indexOf(activeFilter).clamp(0, options.length - 1);
+    final alignmentX = options.length > 1
+        ? -1.0 + (2.0 * selectedIndex / (options.length - 1))
+        : 0.0;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
       child: Column(
@@ -57,58 +63,77 @@ class FilterSortBar extends ConsumerWidget {
                 width: 1,
               ),
             ),
-            child: Row(
-              children: options.map((f) {
-                final selected = activeFilter == f;
-                return Expanded(
-                  child: BouncyTap(
-                    scaleDown: 0.96,
-                    child: GestureDetector(
-                      onTap: () {
-                        if (onFilterChanged != null) {
-                          onFilterChanged!(f);
-                        } else {
-                          ref
-                              .read(settingsNotifierProvider.notifier)
-                              .update((s) => s.copyWith(defaultFilter: f));
-                        }
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOutCubic,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? cs.primary
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: selected
-                              ? [
-                                  BoxShadow(
-                                    color: cs.primary.withValues(alpha: 0.25),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Text(
-                          f.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: selected ? cs.onPrimary : cs.onSurfaceVariant,
-                            fontSize: 13,
-                            fontWeight:
-                                selected ? FontWeight.w600 : FontWeight.w500,
+            child: Stack(
+              children: [
+                // ── Sliding Capsule Indicator ────────────────────────────
+                AnimatedAlign(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment(alignmentX, 0.0),
+                  child: FractionallySizedBox(
+                    widthFactor: 1.0 / options.length,
+                    heightFactor: 1.0,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: cs.primary,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: cs.primary.withValues(alpha: 0.25),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
-                );
-              }).toList(),
+                ),
+
+                // ── Tab Labels and Tap Interactions ───────────────────────
+                Row(
+                  children: options.map((f) {
+                    final selected = activeFilter == f;
+                    return Expanded(
+                      child: BouncyTap(
+                        scaleDown: 0.96,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            if (onFilterChanged != null) {
+                              onFilterChanged!(f);
+                            } else {
+                              ref
+                                  .read(settingsNotifierProvider.notifier)
+                                  .update((s) => s.copyWith(defaultFilter: f));
+                            }
+                          },
+                          child: Center(
+                            child: AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOutCubic,
+                              style: TextStyle(
+                                color: selected
+                                    ? cs.onPrimary
+                                    : cs.onSurfaceVariant,
+                                fontSize: 13,
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                              ),
+                              child: Text(
+                                f.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
             ),
           ),
 
