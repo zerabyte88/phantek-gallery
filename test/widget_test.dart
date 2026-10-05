@@ -16,6 +16,7 @@ import 'package:phantek_gallery/core/services/trash_service.dart';
 import 'package:phantek_gallery/core/models/trash_item.dart';
 import 'package:phantek_gallery/core/utils/media_utils.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/album_grid_item.dart';
+import 'package:phantek_gallery/features/gallery/presentation/widgets/media_grid_item.dart';
 import 'package:phantek_gallery/features/gallery/presentation/album_detail_screen.dart';
 import 'package:phantek_gallery/features/gallery/presentation/gallery_screen.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/filter_sort_bar.dart';
@@ -41,6 +42,18 @@ void main() {
       final dt = DateTime(DateTime.now().year, 9, 15, 15, 40);
       expect(MediaUtils.formatViewerDate(dt), 'September 15');
       expect(MediaUtils.formatViewerTime(dt), '3:40 PM');
+
+      expect(MediaUtils.formatFps(60.0), '60 fps');
+      expect(MediaUtils.formatFps(29.97), '29.97 fps');
+      expect(MediaUtils.formatFps(23.976), '23.98 fps');
+      expect(MediaUtils.formatFps(0), '');
+
+      expect(MediaUtils.formatCodec('h264'), 'H.264 (AVC)');
+      expect(MediaUtils.formatCodec('avc1'), 'H.264 (AVC)');
+      expect(MediaUtils.formatCodec('hevc'), 'H.265 (HEVC)');
+      expect(MediaUtils.formatCodec('hvc1'), 'H.265 (HEVC)');
+      expect(MediaUtils.formatCodec('vp9'), 'VP9');
+      expect(MediaUtils.formatCodec('av01'), 'AV1');
     });
 
     test('MediaItem model properties and albumName inference', () {
@@ -304,6 +317,43 @@ void main() {
 
       await tester.tap(find.text('DCIM'));
       expect(tapped, isTrue);
+    });
+
+    testWidgets('AlbumGridItem shows checkmark avatar when isSelecting and isSelected', (tester) async {
+      final item = MediaItem(
+        id: '1',
+        path: '/storage/emulated/0/DCIM/photo.jpg',
+        name: 'photo.jpg',
+        date: DateTime(2026, 1, 1),
+        size: 100,
+        isVideo: false,
+      );
+      final album = Album(
+        name: 'DCIM',
+        items: [item],
+        coverItem: item,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 120,
+                height: 160,
+                child: AlbumGridItem(
+                  album: album,
+                  isSelecting: true,
+                  isSelected: true,
+                  onTap: () {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byKey(const ValueKey('checked')), findsOneWidget);
     });
 
     testWidgets('AlbumDetailScreen renders album title and empty state', (tester) async {
@@ -588,6 +638,51 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Path copied to clipboard'), findsOneWidget);
+    });
+
+    testWidgets('MediaInfoSheet displays video FPS, Codec and duration', (tester) async {
+      final videoItem = MediaItem(
+        id: 'vid_1',
+        path: '/storage/emulated/0/DCIM/sample.mp4',
+        name: 'sample.mp4',
+        date: DateTime(2025, 5, 4, 7, 32),
+        size: 15900000,
+        isVideo: true,
+        width: 1920,
+        height: 1080,
+        duration: const Duration(seconds: 14),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => showMediaInfoSheet(
+                  context,
+                  videoItem,
+                  fps: 60.0,
+                  codec: 'h264',
+                ),
+                child: const Text('Open Video Info'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Video Info'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('sample.mp4'), findsOneWidget);
+      expect(find.text('1920x1080'), findsOneWidget);
+      expect(find.text('Frame Rate'), findsOneWidget);
+      expect(find.text('60 fps'), findsOneWidget);
+      expect(find.text('Codec'), findsOneWidget);
+      expect(find.text('H.264 (AVC)'), findsOneWidget);
+      expect(find.text('Duration'), findsOneWidget);
+      expect(find.text('00:14'), findsOneWidget);
     });
 
     test('groupMediaIntoAlbums creates Favorites album at index 0 when favoriteIds are present', () {
@@ -988,6 +1083,58 @@ void main() {
       const scale = 4096 / 11656;
       final bytes = (8742 * scale).round() * 4096 * 4;
       expect(bytes * 3, lessThan(256 * 1024 * 1024));
+    });
+
+    test('Hero morphing flight shuttle interpolates cover and contain opacities correctly', () {
+      double computeCoverOpacity(double progress) => (progress * 1.5 - 0.2).clamp(0.0, 1.0);
+      double computeContainOpacity(double coverOpacity) => (1.0 - coverOpacity).clamp(0.0, 1.0);
+
+      // In viewer (progress = 0.0) -> contain is 1.0, cover is 0.0
+      expect(computeCoverOpacity(0.0), 0.0);
+      expect(computeContainOpacity(computeCoverOpacity(0.0)), 1.0);
+
+      // Halfway (progress = 0.5) -> smooth transition
+      final halfCover = computeCoverOpacity(0.5);
+      expect(halfCover, closeTo(0.55, 0.01));
+      expect(computeContainOpacity(halfCover), closeTo(0.45, 0.01));
+
+      // Landing on grid tile (progress = 1.0) -> cover is 1.0, contain is 0.0
+      expect(computeCoverOpacity(1.0), 1.0);
+      expect(computeContainOpacity(computeCoverOpacity(1.0)), 0.0);
+    });
+
+    testWidgets('MediaGridItem renders Hero thumbnail inside a ClipRect', (tester) async {
+      final testItem = MediaItem(
+        id: 'test_grid_item_1',
+        path: '/dcim/test.jpg',
+        name: 'test.jpg',
+        date: DateTime.now(),
+        size: 1024,
+        isVideo: false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MediaGridItem(
+              item: testItem,
+              isSelected: false,
+              isSelecting: false,
+              showBadges: true,
+              onTap: () {},
+              onLongPress: () {},
+            ),
+          ),
+        ),
+      );
+
+      final clipRectFinder = find.byType(ClipRect);
+      expect(clipRectFinder, findsWidgets);
+
+      final heroFinder = find.byType(Hero);
+      expect(heroFinder, findsOneWidget);
+      final hero = tester.widget<Hero>(heroFinder);
+      expect(hero.tag, 'test_grid_item_1');
     });
   });
 }

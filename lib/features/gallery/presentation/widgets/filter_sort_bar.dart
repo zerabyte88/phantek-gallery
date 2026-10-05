@@ -6,9 +6,8 @@ import '../../../../core/providers/settings_provider.dart';
 import '../../../../core/widgets/bouncy_tap.dart';
 import 'sort_bottom_sheet.dart';
 
-/// Clean, responsive filter bar with fixed chips + sort bar from screenshot.
-/// Fully visible without scrolling or clipping on any screen width.
-/// Can be used in main gallery (with Albums tab) or inside an album (without Albums tab).
+/// Modern, responsive unified filter and sort bar.
+/// Features an elegant segmented capsule controller for tabs and a compact sort chip.
 class FilterSortBar extends ConsumerWidget {
   const FilterSortBar({
     super.key,
@@ -41,73 +40,68 @@ class FilterSortBar extends ConsumerWidget {
           ]
         : FilterOption.values;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // ── 1. Filter Chips Row (Cleanly Centered) ──────────────────────────
-        Container(
-          height: 46,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          alignment: Alignment.center,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.center,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── 1. Modern Segmented Filter Bar ──────────────────────────────
+          Container(
+            height: 42,
+            padding: const EdgeInsets.all(3.5),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: 0.2),
+                width: 1,
+              ),
+            ),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: options.map((f) {
                 final selected = activeFilter == f;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                return Expanded(
                   child: BouncyTap(
-                    scaleDown: 0.94,
-                    child: Material(
-                      color: selected
-                          ? cs.primaryContainer
-                          : cs.surfaceContainerHighest.withValues(alpha: 0.35),
-                      shape: const StadiumBorder(),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        customBorder: const StadiumBorder(),
-                        onTap: () {
-                          if (onFilterChanged != null) {
-                            onFilterChanged!(f);
-                          } else {
-                            ref
-                                .read(settingsNotifierProvider.notifier)
-                                .update((s) => s.copyWith(defaultFilter: f));
-                          }
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          constraints: const BoxConstraints(minWidth: 72),
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 7,
-                          ),
-                          decoration: ShapeDecoration(
-                            shape: StadiumBorder(
-                              side: BorderSide(
-                                color: selected
-                                    ? cs.primary.withValues(alpha: 0.3)
-                                    : cs.outline.withValues(alpha: 0.2),
-                                width: 1,
-                              ),
-                            ),
-                          ),
-                          child: Text(
-                            f.label,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: selected
-                                  ? cs.onPrimaryContainer
-                                  : cs.onSurface,
-                              fontSize: 13,
-                              fontWeight: selected
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                            ),
+                    scaleDown: 0.96,
+                    child: GestureDetector(
+                      onTap: () {
+                        if (onFilterChanged != null) {
+                          onFilterChanged!(f);
+                        } else {
+                          ref
+                              .read(settingsNotifierProvider.notifier)
+                              .update((s) => s.copyWith(defaultFilter: f));
+                        }
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? cs.primary
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: selected
+                              ? [
+                                  BoxShadow(
+                                    color: cs.primary.withValues(alpha: 0.25),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Text(
+                          f.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+                            fontSize: 13,
+                            fontWeight:
+                                selected ? FontWeight.w600 : FontWeight.w500,
                           ),
                         ),
                       ),
@@ -117,59 +111,84 @@ class FilterSortBar extends ConsumerWidget {
               }).toList(),
             ),
           ),
-        ),
 
-        // ── 2. Sort Bar Row (matching screenshot layout) ────────────────────
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              showSortBottomSheet(
-                context,
-                currentSort: activeSort,
-                onSortChanged: (s) {
-                  if (onSortChanged != null) {
-                    onSortChanged!(s);
-                  } else {
-                    ref
-                        .read(settingsNotifierProvider.notifier)
-                        .update((st) => st.copyWith(defaultSort: s));
-                  }
-                },
-              );
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(
-                    activeSort.direction == SortDirection.ascending
-                        ? Icons.arrow_upward
-                        : Icons.arrow_downward,
-                    size: 16,
-                    color: cs.onSurface,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    activeSort.barLabel,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w400,
+          const SizedBox(height: 8),
+
+          // ── 2. Compact Modern Sort Pill ─────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // Modern clickable sort chip
+              BouncyTap(
+                scaleDown: 0.94,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      showSortBottomSheet(
+                        context,
+                        currentSort: activeSort,
+                        onSortChanged: (s) {
+                          if (onSortChanged != null) {
+                            onSortChanged!(s);
+                          } else {
+                            ref
+                                .read(settingsNotifierProvider.notifier)
+                                .update((st) => st.copyWith(defaultSort: s));
+                          }
+                        },
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color:
+                            cs.surfaceContainerHighest.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: cs.outlineVariant.withValues(alpha: 0.18),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            activeSort.direction == SortDirection.ascending
+                                ? Icons.arrow_upward
+                                : Icons.arrow_downward,
+                            size: 14,
+                            color: cs.primary,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            activeSort.barLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 3),
+                          Icon(
+                            Icons.keyboard_arrow_down,
+                            size: 16,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const Spacer(),
-                  Icon(
-                    Icons.keyboard_arrow_down,
-                    size: 20,
-                    color: cs.onSurfaceVariant,
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

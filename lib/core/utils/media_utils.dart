@@ -40,4 +40,31 @@ class MediaUtils {
 
   /// Formats time for media viewer top bar: "3:40 PM".
   static String formatViewerTime(DateTime dt) => DateFormat('h:mm a').format(dt);
+
+  /// Formats frame rate into clean string, e.g. "60 fps", "29.97 fps", "24 fps".
+  static String formatFps(double fps) {
+    if (fps <= 0) return '';
+    if (fps == fps.roundToDouble()) {
+      return '${fps.toInt()} fps';
+    }
+    final str = fps.toStringAsFixed(2);
+    final trimmed = str.endsWith('0') ? str.substring(0, str.length - 1) : str;
+    return '$trimmed fps';
+  }
+
+  /// Formats raw video codec string into human-friendly name.
+  static String formatCodec(String codec) {
+    final c = codec.trim().toLowerCase();
+    if (c.isEmpty) return '';
+    if (c.contains('264') || c.contains('avc')) return 'H.264 (AVC)';
+    if (c.contains('265') || c.contains('hevc') || c.contains('hvc1')) {
+      return 'H.265 (HEVC)';
+    }
+    if (c.contains('av01') || c == 'av1') return 'AV1';
+    if (c == 'vp9') return 'VP9';
+    if (c == 'vp8') return 'VP8';
+    if (c.contains('mpeg4') || c.contains('mp4v')) return 'MPEG-4';
+    if (c.contains('mjpeg')) return 'Motion JPEG';
+    return codec.trim().toUpperCase();
+  }
 }

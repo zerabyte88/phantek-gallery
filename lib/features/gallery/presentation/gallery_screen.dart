@@ -285,6 +285,111 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     return result ?? false;
   }
 
+  Future<void> _deleteSelectedAlbums(
+    List<MediaItem> allItems,
+    List<Album> allAlbums,
+  ) async {
+    final settings = ref.read(settingsNotifierProvider);
+    final selectedAlbums =
+        allAlbums.where((a) => _selected.contains(a.name)).toList();
+    if (selectedAlbums.isEmpty) return;
+
+    final toDelete = allItems.where((item) {
+      if (_selected.contains(item.albumName)) return true;
+      if (_selected.contains('Favorites') &&
+          settings.favoriteIds.contains(item.id)) {
+        return true;
+      }
+      return false;
+    }).toList();
+
+    final albumCount = selectedAlbums.length;
+    final albumText = albumCount == 1 ? '1 album' : '$albumCount albums';
+    final mediaText =
+        toDelete.length == 1 ? '1 item' : '${toDelete.length} items';
+
+    final isTrash = settings.enableTrash;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(isTrash
+            ? 'Move $albumText to Trash?'
+            : 'Delete $albumText Permanently?'),
+        content: Text(
+          isTrash
+              ? 'All $mediaText inside $albumText will be moved to trash.'
+              : 'All $mediaText inside $albumText will be permanently deleted. This action cannot be undone.',
+        ),
+        actionsOverflowButtonSpacing: 8,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: isTrash
+                ? null
+                : FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(isTrash ? 'Move to Trash' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    final hasPerm = await PermissionService.instance.ensureManageStorage();
+    if (!hasPerm) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Manage All Files permission is required to delete or move items to trash.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    final toDeleteIds = toDelete.map((e) => e.id).toSet();
+    ref.read(mediaListProvider.notifier).removeItems(toDeleteIds);
+    _clearSelection();
+
+    var successCount = 0;
+    for (final item in toDelete) {
+      try {
+        if (settings.enableTrash) {
+          await ref.read(trashProvider.notifier).moveToTrash(
+                id: item.id,
+                path: item.path,
+                isVideo: item.isVideo,
+              );
+        } else {
+          final f = File(item.path);
+          if (await f.exists()) await f.delete();
+          try {
+            await PhotoManager.editor.deleteWithIds([item.id]);
+          } catch (_) {}
+        }
+        successCount++;
+      } catch (e) {
+        debugPrint('Delete/trash error on ${item.path}: $e');
+      }
+    }
+    if (mounted) {
+      ref.read(mediaListProvider.notifier).refresh();
+      if (successCount < toDelete.length) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Processed $successCount of ${toDelete.length} items.'),
+          ),
+        );
+      }
+    }
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────
 
   @override
@@ -294,7 +399,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     final isAlbums   = _tabs[_currentPage] == FilterOption.albums;
 
     return PopScope(
-      canPop: (!_selecting || isAlbums) && !_isSearching,
+      canPop: !_selecting && !_isSearching,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
           if (_isSearching) {
@@ -315,20 +420,50 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               : null,
           centerTitle: !_isSearching,
           title: _isSearching
-              ? TextField(
-                  controller: _searchController,
-                  autofocus: true,
-                  style: const TextStyle(fontSize: 16),
-                  decoration: InputDecoration(
-                    hintText: 'Search media or albums...',
-                    border: InputBorder.none,
-                    hintStyle: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+              ? Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  onChanged: (q) => setState(() => _searchQuery = q.trim()),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.search_rounded,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          style: const TextStyle(fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: 'Search media or albums...',
+                            isDense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 8),
+                            border: InputBorder.none,
+                            hintStyle: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                          onChanged: (q) =>
+                              setState(() => _searchQuery = q.trim()),
+                        ),
+                      ),
+                    ],
+                  ),
                 )
-              : (_selecting && !isAlbums
+              : (_selecting
                   ? Text('${_selected.length} selected')
                   : BouncyTap(
                       key: const ValueKey('appbar_badge_easter_egg'),
@@ -347,6 +482,45 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                     setState(() => _searchQuery = '');
                   },
                 ),
+            ] else if (_selecting && isAlbums) ...[
+              IconButton(
+                icon: const Icon(Icons.select_all),
+                tooltip: 'Select all',
+                onPressed: () {
+                  final allAlbums = _filterAlbumsBySearch(
+                    groupMediaIntoAlbums(
+                      mediaAsync.value ?? [],
+                      sort: settings.defaultSort,
+                      favoriteIds: settings.favoriteIds,
+                    ),
+                  );
+                  setState(() {
+                    if (_selected.length == allAlbums.length) {
+                      _selected.clear();
+                    } else {
+                      _selected.addAll(allAlbums.map((a) => a.name));
+                    }
+                  });
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: 'Delete selected albums',
+                onPressed: () {
+                  final allAlbums = _filterAlbumsBySearch(
+                    groupMediaIntoAlbums(
+                      mediaAsync.value ?? [],
+                      sort: settings.defaultSort,
+                      favoriteIds: settings.favoriteIds,
+                    ),
+                  );
+                  _deleteSelectedAlbums(mediaAsync.value ?? [], allAlbums);
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _clearSelection,
+              ),
             ] else if (_selecting && !isAlbums) ...[
               IconButton(
                 icon: const Icon(Icons.select_all),
@@ -421,23 +595,66 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                   },
                 ),
               ),
-              BouncyTap(
-                scaleDown: 0.88,
-                child: IconButton(
-                  icon: const Icon(Icons.delete_sweep_outlined),
-                  tooltip: 'Trash',
-                  onPressed: () =>
-                      Navigator.of(context).openTrash(),
+              PopupMenuButton<String>(
+                tooltip: 'More options',
+                color: const Color(0xFF222222),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
-              ),
-              BouncyTap(
-                scaleDown: 0.88,
-                child: IconButton(
-                  icon: const Icon(Icons.settings_outlined),
-                  tooltip: 'Settings',
-                  onPressed: () =>
-                      Navigator.of(context).openSettings(),
-                ),
+                offset: const Offset(0, 48),
+                onSelected: (value) {
+                  if (value == 'select') {
+                    setState(() {
+                      _selecting = true;
+                    });
+                  } else if (value == 'trash') {
+                    Navigator.of(context).openTrash();
+                  } else if (value == 'settings') {
+                    Navigator.of(context).openSettings();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'select',
+                    child: Row(
+                      children: [
+                        Icon(Icons.checklist_rounded,
+                            size: 20, color: Colors.white),
+                        SizedBox(width: 12),
+                        Text('Select',
+                            style:
+                                TextStyle(color: Colors.white, fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'trash',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_sweep_outlined,
+                            size: 20, color: Colors.white),
+                        SizedBox(width: 12),
+                        Text('Trash bin',
+                            style:
+                                TextStyle(color: Colors.white, fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'settings',
+                    child: Row(
+                      children: [
+                        Icon(Icons.settings_outlined,
+                            size: 20, color: Colors.white),
+                        SizedBox(width: 12),
+                        Text('Settings',
+                            style:
+                                TextStyle(color: Colors.white, fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                ],
+                icon: const Icon(Icons.more_vert),
               ),
             ],
           ],
@@ -448,7 +665,6 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               currentFilter: _tabs[_currentPage],
               onFilterChanged: _onTabSelected,
             ),
-            const Divider(height: 1),
             Expanded(
               child: Builder(
                 builder: (context) {
@@ -594,11 +810,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             ref.read(mediaListProvider.notifier).refresh(),
         child: GridView.builder(
           key: PageStorageKey(storageKey),
-          padding: const EdgeInsets.all(2),
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: settings.gridColumns,
-            crossAxisSpacing: 2,
-            mainAxisSpacing: 2,
+            crossAxisSpacing: 3,
+            mainAxisSpacing: 3,
           ),
           itemCount: items.length,
           itemBuilder: (_, i) {
@@ -692,11 +908,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           ref.read(mediaListProvider.notifier).refresh(),
       child: GridView.builder(
         key: PageStorageKey(storageKey),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: settings.albumGridColumns,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 14,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 16,
           childAspectRatio: 0.74,
         ),
         itemCount: albums.length,
@@ -705,8 +921,22 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           return AlbumGridItem(
             key: ValueKey(album.name),
             album: album,
-            onTap: () =>
-                Navigator.of(context).openAlbum(album.name),
+            isSelected: _selected.contains(album.name),
+            isSelecting: _selecting,
+            onTap: () {
+              if (_selecting) {
+                _toggleSelect(album.name);
+                return;
+              }
+              Navigator.of(context).openAlbum(album.name);
+            },
+            onLongPress: () {
+              if (!_selecting) {
+                _startSelect(album.name);
+              } else {
+                _toggleSelect(album.name);
+              }
+            },
           );
         },
       ),

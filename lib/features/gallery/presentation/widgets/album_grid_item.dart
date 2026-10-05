@@ -11,10 +11,16 @@ class AlbumGridItem extends StatefulWidget {
     super.key,
     required this.album,
     required this.onTap,
+    this.isSelected = false,
+    this.isSelecting = false,
+    this.onLongPress,
   });
 
   final Album album;
   final VoidCallback onTap;
+  final bool isSelected;
+  final bool isSelecting;
+  final VoidCallback? onLongPress;
 
   @override
   State<AlbumGridItem> createState() => _AlbumGridItemState();
@@ -157,40 +163,85 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
 
     return InkWell(
       onTap: widget.onTap,
-      borderRadius: BorderRadius.circular(10),
+      onLongPress: widget.onLongPress,
+      borderRadius: BorderRadius.circular(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Cover Thumbnail ──────────────────────────────
           Expanded(
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(14),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   _buildCover(cs),
                   if (widget.album.name == 'Favorites')
                     Positioned(
-                      top: 6,
-                      right: 6,
+                      top: 8,
+                      right: 8,
                       child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 3.5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            width: 0.8,
+                          ),
                         ),
                         child: const Icon(
-                          Icons.favorite,
-                          size: 14,
-                          color: Colors.redAccent,
+                          Icons.favorite_rounded,
+                          size: 13,
+                          color: Color(0xFFFF5277),
                         ),
+                      ),
+                    ),
+
+                  // ── Selection overlay ───────────────────────────
+                  if (widget.isSelecting)
+                    Positioned.fill(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
+                        decoration: BoxDecoration(
+                          color: widget.isSelected
+                              ? cs.primary.withValues(alpha: 0.35)
+                              : Colors.transparent,
+                          border: widget.isSelected
+                              ? Border.all(color: cs.primary, width: 3)
+                              : null,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+
+                  if (widget.isSelecting)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 120),
+                        child: widget.isSelected
+                            ? CircleAvatar(
+                                key: const ValueKey('checked'),
+                                radius: 11,
+                                backgroundColor: cs.primary,
+                                child: const Icon(Icons.check,
+                                    size: 14, color: Colors.white),
+                              )
+                            : CircleAvatar(
+                                key: const ValueKey('unchecked'),
+                                radius: 11,
+                                backgroundColor: Colors.black38,
+                              ),
                       ),
                     ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 7),
 
           // ── Album Name ──────────────────────────────────────────
           Text(
@@ -198,11 +249,12 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 13,
+              fontSize: 13.5,
               fontWeight: FontWeight.w600,
+              letterSpacing: 0.1,
             ),
           ),
-          const SizedBox(height: 1),
+          const SizedBox(height: 2),
 
           // ── Item Count ──────────────────────────────────────────
           Text(
@@ -210,8 +262,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 11,
-              color: cs.onSurfaceVariant,
+              fontSize: 11.5,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.85),
             ),
           ),
         ],
