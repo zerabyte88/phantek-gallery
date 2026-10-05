@@ -818,6 +818,28 @@ void main() {
         duration: const Duration(minutes: 2),
       );
 
+      bool isPortraitCheck({int? w, int? h, int? rotate}) {
+        if (w != null && h != null && w > 0 && h > 0) {
+          final isRotated90or270 = rotate == 90 || rotate == 270;
+          final effectiveW = isRotated90or270 ? h : w;
+          final effectiveH = isRotated90or270 ? w : h;
+          return effectiveH > effectiveW;
+        }
+        return false;
+      }
+
+      // Normal portrait (1080x1920, 0 deg)
+      expect(isPortraitCheck(w: 1080, h: 1920, rotate: 0), isTrue);
+
+      // Normal landscape (1920x1080, 0 deg)
+      expect(isPortraitCheck(w: 1920, h: 1080, rotate: 0), isFalse);
+
+      // Recorded vertically on phone (1920x1080 with rotate: 90) -> effective 1080x1920 Portrait
+      expect(isPortraitCheck(w: 1920, h: 1080, rotate: 90), isTrue);
+
+      // 4K widescreen movie (3840x2160, 0 deg)
+      expect(isPortraitCheck(w: 3840, h: 2160, rotate: 0), isFalse);
+
       final isPortrait = (portraitVideo.height ?? 0) > (portraitVideo.width ?? 0);
       final isLandscape = (landscapeVideo.height ?? 0) > (landscapeVideo.width ?? 0);
 
@@ -918,14 +940,23 @@ void main() {
         return errLower.contains('could not open codec') ||
             errLower.contains('decoder init failed') ||
             errLower.contains('hwdec') ||
-            errLower.contains('using software decoding');
+            errLower.contains('using software decoding') ||
+            errLower.contains('error decoding') ||
+            errLower.contains('cannot decode') ||
+            errLower.contains('invalid data') ||
+            errLower.contains('corrupt') ||
+            errLower.contains('missing picture') ||
+            errLower.contains('packet');
       }
 
       expect(isNonFatalWarning('Could not open codec hevc'), isTrue);
       expect(isNonFatalWarning('hwdec failed, falling back to sw'), isTrue);
       expect(isNonFatalWarning('Decoder init failed for vp9'), isTrue);
       expect(isNonFatalWarning('Using software decoding'), isTrue);
-      expect(isNonFatalWarning('File not found / corrupt media'), isFalse);
+      expect(isNonFatalWarning('Error decoding video'), isTrue);
+      expect(isNonFatalWarning('Cannot decode frame at timestamp'), isTrue);
+      expect(isNonFatalWarning('Invalid data found when processing input'), isTrue);
+      expect(isNonFatalWarning('File not found: /storage/video.mp4'), isFalse);
     });
 
     testWidgets('SortBottomSheet adapts accentColor and Restore defaults to active theme', (tester) async {

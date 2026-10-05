@@ -66,9 +66,10 @@ Widget _buildHeroShuttle({
   return AnimatedBuilder(
     animation: animation,
     builder: (context, _) {
-      final double gridProgress = flightDirection == HeroFlightDirection.pop
-          ? animation.value
-          : (1.0 - animation.value);
+      // In Flutter Hero flight, animation.value goes 0.0 (Grid) -> 1.0 (Viewer) on push,
+      // and 1.0 (Viewer) -> 0.0 (Grid) on pop.
+      // Progress toward the Grid state (1.0 at Grid, 0.0 at Viewer) is always (1.0 - animation.value).
+      final double gridProgress = (1.0 - animation.value).clamp(0.0, 1.0);
 
       final double coverOpacity = (gridProgress * 1.5 - 0.2).clamp(0.0, 1.0);
       final double containOpacity = (1.0 - coverOpacity).clamp(0.0, 1.0);
@@ -78,22 +79,22 @@ Widget _buildHeroShuttle({
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (coverOpacity > 0.001)
-              Opacity(
-                opacity: coverOpacity,
-                child: Image(
-                  image: p,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.medium,
-                ),
-              ),
             if (containOpacity > 0.001)
               Opacity(
                 opacity: containOpacity,
                 child: Image(
                   image: p,
                   fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                ),
+              ),
+            if (coverOpacity > 0.001)
+              Opacity(
+                opacity: coverOpacity,
+                child: Image(
+                  image: p,
+                  fit: BoxFit.cover,
                   gaplessPlayback: true,
                   filterQuality: FilterQuality.medium,
                 ),
@@ -563,10 +564,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           _vt.addPosition(e.timeStamp, e.position);
           final dy = e.position.dy - _startDragY!;
           final dx = e.position.dx - _startDragX!;
-          // Responsive vertical swipe deadzone: natural downward drag (dy > 8 and dy > dx.abs() * 1.1)
-          if (_drag.value != Offset.zero || (dy > 8 && dy > dx.abs() * 1.1)) {
-            final dampedDx = dx * 0.35;
-            final dragY = (dy - 8).clamp(0.0, 600.0);
+          // Responsive vertical swipe deadzone: natural downward drag (dy > 6 and dy > dx.abs() * 0.75)
+          if (_drag.value != Offset.zero || (dy > 6 && dy > dx.abs() * 0.75)) {
+            final dampedDx = dx * 0.4;
+            final dragY = (dy - 6).clamp(0.0, 600.0);
             _setDrag(Offset(dampedDx, dragY));
           }
         },
@@ -586,7 +587,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             if (!wasMultiTouch &&
                 !_isCurrentlyZoomed &&
                 d.dy > 0 &&
-                (d.dy > 100 || (vy > 600 && d.dy > 25))) {
+                (d.dy > 80 || (vy > 500 && d.dy > 20))) {
               // Hero flies from the image's current (dragged/scaled) rect to the
               // grid tile whose Hero tag == the current item's id.
               Navigator.of(context).pop();
@@ -626,7 +627,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   valueListenable: _drag,
                   builder: (_, d, __) => ColoredBox(
                     color: Colors.black.withValues(
-                        alpha: (1.0 - (d.dy / 350)).clamp(0.0, 1.0)),
+                        alpha: (1.0 - (d.dy / 300)).clamp(0.0, 1.0)),
                   ),
                 ),
               ),

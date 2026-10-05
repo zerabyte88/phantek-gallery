@@ -32,24 +32,31 @@ Route<dynamic> generateRoute(RouteSettings s) {
     case AppRoutes.image:
       final args = s.arguments as _ViewerArgs;
       return _slide(
-          ImageViewerScreen(
-            items: args.items,
-            initialIndex: args.initialIndex,
-            isTrash: args.isTrash,
-          ),
-          duration: const Duration(milliseconds: 300));
+        ImageViewerScreen(
+          items: args.items,
+          initialIndex: args.initialIndex,
+          isTrash: args.isTrash,
+        ),
+        duration: const Duration(milliseconds: 280),
+      );
 
     case AppRoutes.video:
       if (s.arguments is _ViewerArgs) {
         final args = s.arguments as _ViewerArgs;
-        return _slide(VideoPlayerScreen(
-          items: args.items,
-          initialIndex: args.initialIndex,
-          isTrash: args.isTrash,
-        ));
+        return _slide(
+          VideoPlayerScreen(
+            items: args.items,
+            initialIndex: args.initialIndex,
+            isTrash: args.isTrash,
+          ),
+          duration: const Duration(milliseconds: 280),
+        );
       } else if (s.arguments is MediaItem) {
         final item = s.arguments as MediaItem;
-        return _slide(VideoPlayerScreen(item: item));
+        return _slide(
+          VideoPlayerScreen(item: item),
+          duration: const Duration(milliseconds: 280),
+        );
       }
       return _slide(const GalleryScreen());
 
@@ -64,12 +71,18 @@ Route<dynamic> generateRoute(RouteSettings s) {
   }
 }
 
-PageRoute<T> _slide<T>(Widget page,
-        {Duration duration = const Duration(milliseconds: 180)}) =>
+PageRoute<T> _slide<T>(
+  Widget page, {
+  Duration duration = const Duration(milliseconds: 280),
+}) =>
     PageRouteBuilder<T>(
       pageBuilder: (_, __, ___) => page,
       transitionsBuilder: (_, anim, __, child) => FadeTransition(
-        opacity: anim,
+        opacity: CurvedAnimation(
+          parent: anim,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeOutCubic,
+        ),
         child: child,
       ),
       transitionDuration: duration,
