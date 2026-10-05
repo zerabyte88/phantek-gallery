@@ -6,8 +6,6 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:photo_view/photo_view.dart';
-import 'package:photo_view/photo_view_gallery.dart';
 import '../../../core/models/media_item.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
@@ -78,26 +76,23 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   VelocityTracker _vt = VelocityTracker.withKind(PointerDeviceKind.touch);
   double? _startDragY;
   double? _startDragX;
-  bool _isZoomed = false;
+  late final TransformationController _transformationController;
+  AnimationController? _zoomAnimController;
+  TapDownDetails? _doubleTapDetails;
+  bool _isPhotoZoomed = false;
   bool _isPinching = false;
   bool _isMultiTouch = false;
   final Set<int> _activePointers = {};
-  final Map<int, PhotoViewController> _photoControllers = {};
-  AnimationController? _photoZoomAnim;
-  int? _lastTapDownTimeMs;
-  Offset? _lastTapDownPosition;
-  int? _lastTapUpTimeMs;
-  Offset? _lastTapUpPosition;
 
-  PhotoViewController _getPhotoController(int index) {
-    return _photoControllers.putIfAbsent(index, () => PhotoViewController());
-  }
+  bool get _isCurrentlyZoomed =>
+      _isPhotoZoomed || _transformationController.value.getMaxScaleOnAxis() > 1.05;
 
   @override
   void initState() {
     super.initState();
     _current = widget.initialIndex;
     _page = PageController(initialPage: _current);
+    _transformationController = TransformationController();
     _settle = AnimationController.unbounded(vsync: this)
       ..addListener(() {
         _setDrag(_settleFrom * _settle.value);
@@ -122,11 +117,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   @override
   void dispose() {
-    for (final c in _photoControllers.values) {
-      c.dispose();
-    }
-    _photoControllers.clear();
-    _photoZoomAnim?.dispose();
+    _transformationController.dispose();
+    _zoomAnimController?.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _settle.dispose();
     _drag.dispose();
@@ -157,66 +149,122 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   }
 
   void _toggleBars() {
-    if (!_isZoomed && !_isPinching) {
+    if (!_isCurrentlyZoomed && !_isPinching) {
       setState(() => _barsVisible = !_barsVisible);
     }
   }
 
-  void _handlePhotoDoubleTap(Offset tapPos) {
-    final controller = _getPhotoController(_current);
-    final currentScale = controller.scale ?? 1.0;
-    final isZoomed = _isZoomed || currentScale > 1.05;
+  void _resetPhotoZoom() {
+    if (!_isPhotoZoomed && _transformationController.value.isIdentity()) return;
+    _zoomAnimController?.stop();
+    _zoomAnimController?.dispose();
 
-    _photoZoomAnim?.stop();
-    _photoZoomAnim?.dispose();
-
-    final size = MediaQuery.of(context).size;
-    final center = Offset(size.width / 2, size.height / 2);
-    final delta = tapPos - center;
-
-    const targetScale = 2.5;
-    final startScale = currentScale;
-    final startPosition = controller.position;
-
-    final endScale = isZoomed ? 1.0 : targetScale;
-    final endPosition = isZoomed ? Offset.zero : -delta * (targetScale - 1.0);
-
-    _photoZoomAnim = AnimationController(
+    _zoomAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
     );
-
-    final curve = CurvedAnimation(
-      parent: _photoZoomAnim!,
+    final animation = Matrix4Tween(
+      begin: _transformationController.value,
+      end: Matrix4.identity(),
+    ).animate(CurvedAnimation(
+      parent: _zoomAnimController!,
       curve: Curves.easeOutCubic,
-    );
+    ));
 
-    _photoZoomAnim!.addListener(() {
-      final t = curve.value;
-      final s = startScale + (endScale - startScale) * t;
-      final p = Offset(
-        startPosition.dx + (endPosition.dx - startPosition.dx) * t,
-        startPosition.dy + (endPosition.dy - startPosition.dy) * t,
-      );
-
-      controller.value = PhotoViewControllerValue(
-        position: p,
-        scale: (isZoomed && t >= 0.99) ? null : s,
-        rotation: 0,
-        rotationFocusPoint: null,
-      );
+    animation.addListener(() {
+      _transformationController.value = animation.value;
     });
 
-    _photoZoomAnim!.addStatusListener((status) {
+    _zoomAnimController!.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _transformationController.value = Matrix4.identity();
+        if (mounted) {
+          setState(() {
+            _isPhotoZoomed = false;
+          });
+        }
+      }
+    });
+
+    _zoomAnimController!.forward();
+  }
+
+  void _zoomToPosition(Offset tapPos) {
+    _zoomAnimController?.stop();
+    _zoomAnimController?.dispose();
+
+    final currentScale = _transformationController.value.getMaxScaleOnAxis();
+    final bool isZoomed = currentScale > 1.05 || _isPhotoZoomed;
+
+    final Matrix4 endMatrix;
+    if (isZoomed) {
+      endMatrix = Matrix4.identity();
+    } else {
+      const double targetScale = 2.5;
+      endMatrix = Matrix4.identity()
+        ..translateByDouble(tapPos.dx, tapPos.dy, 0.0, 1.0)
+        ..scaleByDouble(targetScale, targetScale, 1.0, 1.0)
+        ..translateByDouble(-tapPos.dx, -tapPos.dy, 0.0, 1.0);
+    }
+
+    _zoomAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+
+    final animation = Matrix4Tween(
+      begin: _transformationController.value,
+      end: endMatrix,
+    ).animate(CurvedAnimation(
+      parent: _zoomAnimController!,
+      curve: Curves.easeOutCubic,
+    ));
+
+    animation.addListener(() {
+      _transformationController.value = animation.value;
+    });
+
+    _zoomAnimController!.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
+        if (isZoomed) {
+          _transformationController.value = Matrix4.identity();
+        }
         setState(() {
-          _isZoomed = !isZoomed;
+          _isPhotoZoomed = !isZoomed;
         });
       }
     });
 
     HapticFeedback.lightImpact();
-    _photoZoomAnim!.forward();
+    _zoomAnimController!.forward();
+  }
+
+  void _handleDoubleTap() {
+    if (_doubleTapDetails == null) return;
+    _zoomToPosition(_doubleTapDetails!.localPosition);
+  }
+
+  Widget _buildPhotoPage(MediaItem it) {
+    return Center(
+      child: Stack(
+        fit: StackFit.passthrough,
+        alignment: Alignment.center,
+        children: [
+          _thumb(it.id, BoxFit.contain),
+          Image(
+            image: displayImage(it.path),
+            fit: BoxFit.contain,
+            width: double.infinity,
+            height: double.infinity,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (_, __, ___) => const Center(
+              child: Icon(Icons.broken_image, size: 80, color: Colors.white38),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _restoreCurrentItem() async {
@@ -235,6 +283,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         widget.items.removeAt(_current);
         setState(() {
           _current = _current.clamp(0, widget.items.length - 1);
+          _transformationController.value = Matrix4.identity();
+          _isPhotoZoomed = false;
         });
         _page.jumpToPage(_current);
       }
@@ -276,6 +326,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           widget.items.removeAt(_current);
           setState(() {
             _current = _current.clamp(0, widget.items.length - 1);
+            _transformationController.value = Matrix4.identity();
+            _isPhotoZoomed = false;
           });
           _page.jumpToPage(_current);
         }
@@ -361,6 +413,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       widget.items.removeAt(_current);
       setState(() {
         _current = _current.clamp(0, widget.items.length - 1);
+        _transformationController.value = Matrix4.identity();
+        _isPhotoZoomed = false;
       });
       _page.jumpToPage(_current);
     }
@@ -369,17 +423,17 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   @override
   Widget build(BuildContext context) {
     final item = _currentItem;
-    final showBars = _barsVisible && !_dragHidesBars && !_isZoomed && !_isPinching;
+    final showBars =
+        _barsVisible && !_dragHidesBars && !_isCurrentlyZoomed && !_isPinching;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Listener(
         onPointerDown: (e) {
           _activePointers.add(e.pointer);
-          _lastTapDownTimeMs = DateTime.now().millisecondsSinceEpoch;
-          _lastTapDownPosition = e.position;
           _settle.stop(); // grab a returning image mid-flight
-          if (_activePointers.length >= 2 || _isZoomed) {
+          _zoomAnimController?.stop();
+          if (_activePointers.length >= 2 || _isCurrentlyZoomed) {
             // Multi-touch, pinch, or zoomed: abort any drag-to-dismiss immediately.
             _isMultiTouch = true;
             _isPinching = true;
@@ -396,7 +450,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           // While zoomed in, pinching, or multi-touching, NEVER pull-to-dismiss
           if (_startDragY == null ||
               _startDragX == null ||
-              _isZoomed ||
+              _isCurrentlyZoomed ||
               _isPinching ||
               _isMultiTouch ||
               _activePointers.length >= 2) {
@@ -415,37 +469,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           _vt.addPosition(e.timeStamp, e.position);
           _activePointers.remove(e.pointer);
 
-          final now = DateTime.now().millisecondsSinceEpoch;
-          bool isDoubleTap = false;
-          if (_drag.value == Offset.zero &&
-              _lastTapDownTimeMs != null &&
-              _lastTapDownPosition != null) {
-            final downDuration = now - _lastTapDownTimeMs!;
-            final moveDist = (e.position - _lastTapDownPosition!).distance;
-            if (downDuration < 300 && moveDist < 25.0) {
-              if (_lastTapUpTimeMs != null && _lastTapUpPosition != null) {
-                final interval = now - _lastTapUpTimeMs!;
-                final doubleTapDist =
-                    (e.position - _lastTapUpPosition!).distance;
-                if (interval < 350 && doubleTapDist < 45.0) {
-                  isDoubleTap = true;
-                  _lastTapUpTimeMs = null;
-                  _lastTapUpPosition = null;
-                  _lastTapDownTimeMs = null;
-                  _lastTapDownPosition = null;
-                  _handlePhotoDoubleTap(e.position);
-                }
-              }
-              if (!isDoubleTap) {
-                _lastTapUpTimeMs = now;
-                _lastTapUpPosition = e.position;
-              }
-            } else {
-              _lastTapUpTimeMs = null;
-              _lastTapUpPosition = null;
-            }
-          }
-
           if (_activePointers.isEmpty) {
             final wasMultiTouch = _isMultiTouch;
             _isMultiTouch = false;
@@ -456,7 +479,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             final vy = _vt.getVelocity().pixelsPerSecond.dy;
 
             if (!wasMultiTouch &&
-                !_isZoomed &&
+                !_isCurrentlyZoomed &&
                 d.dy > 0 &&
                 (d.dy > 90 || (vy > 900 && d.dy > 20))) {
               // Hero flies from the image's current (dragged/scaled) rect to the
@@ -471,10 +494,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         },
         onPointerCancel: (e) {
           _activePointers.remove(e.pointer);
-          _lastTapDownTimeMs = null;
-          _lastTapDownPosition = null;
-          _lastTapUpTimeMs = null;
-          _lastTapUpPosition = null;
           if (_activePointers.isEmpty) {
             _isMultiTouch = false;
             _isPinching = false;
@@ -483,111 +502,122 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             if (_drag.value != Offset.zero) _springBack(0);
           }
         },
-        child: Stack(
-          children: [
-            // ── Background scrim: opacity follows drag distance ──
-            Positioned.fill(
-              child: ValueListenableBuilder<Offset>(
-                valueListenable: _drag,
-                builder: (_, d, __) => ColoredBox(
-                  color: Colors.black.withValues(
-                      alpha: (1.0 - d.dy / 300).clamp(0.0, 1.0)),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (_drag.value.dy < 10) {
+              _toggleBars();
+            }
+          },
+          onDoubleTapDown: (details) {
+            _doubleTapDetails = details;
+          },
+          onDoubleTap: _handleDoubleTap,
+          child: Stack(
+            children: [
+              // ── Background scrim: opacity follows drag distance ──
+              Positioned.fill(
+                child: ValueListenableBuilder<Offset>(
+                  valueListenable: _drag,
+                  builder: (_, d, __) => ColoredBox(
+                    color: Colors.black.withValues(
+                        alpha: (1.0 - d.dy / 300).clamp(0.0, 1.0)),
+                  ),
                 ),
               ),
-            ),
-            // ── Gallery: translate + proportional scale-down ─────
-            ValueListenableBuilder<Offset>(
-              valueListenable: _drag,
-              builder: (_, d, child) {
-                final s = (1.0 - d.dy / 900).clamp(0.6, 1.0);
-                return Transform(
-                  alignment: Alignment.center,
-                  transform: Matrix4.translationValues(d.dx, d.dy, 0)
-                    ..scaleByDouble(s, s, 1.0, 1.0),
-                  child: child,
-                );
-              },
-              child: PhotoViewGallery.builder(
-                pageController: _page,
-                itemCount: widget.items.length,
-                onPageChanged: (i) {
-                  setState(() {
-                    _current = i;
-                    _isZoomed = false;
-                    _isPinching = false;
-                  });
-                  _lastTapUpTimeMs = null;
-                  _lastTapUpPosition = null;
-                  _precacheAdjacent(i);
-                },
-                scaleStateChangedCallback: (state) {
-                  final zoomed = state != PhotoViewScaleState.initial;
-                  if (_isZoomed != zoomed) {
-                    setState(() {
-                      _isZoomed = zoomed;
-                      if (zoomed) {
-                        _drag.value = Offset.zero;
-                        _dragHidesBars = false;
-                        _startDragY = null;
-                        _startDragX = null;
-                      }
-                    });
-                  }
-                },
-                scrollPhysics: (_isZoomed ||
-                        _isPinching ||
-                        _isMultiTouch ||
-                        _activePointers.length >= 2)
-                    ? const NeverScrollableScrollPhysics()
-                    : const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
-                backgroundDecoration:
-                    const BoxDecoration(color: Colors.transparent),
-                // Gallery-level builder has no index: resolve the page's item
-                // from the enclosing PhotoView's provider.
-                loadingBuilder: (ctx, _) {
-                  final p = ctx
-                      .findAncestorWidgetOfExactType<PhotoView>()
-                      ?.imageProvider;
-                  final inner = p is ResizeImage ? p.imageProvider : p;
-                  if (inner is! FileImage) return const SizedBox.shrink();
-                  final i = widget.items
-                      .indexWhere((m) => m.path == inner.file.path);
-                  return i < 0
-                      ? const SizedBox.shrink()
-                      : _thumb(widget.items[i].id, BoxFit.contain);
-                },
-                builder: (_, i) {
-                  final it = widget.items[i];
-                  return PhotoViewGalleryPageOptions(
-                    controller: _getPhotoController(i),
-                    scaleStateCycle: (actual) => actual,
-                    imageProvider: displayImage(it.path),
-                    // Only the current page carries the tag, so the fly-back always
-                    // targets the grid tile of the photo currently shown.
-                    heroAttributes: i == _current
-                        ? PhotoViewHeroAttributes(
-                            tag: it.id,
-                            transitionOnUserGestures: true,
-                            flightShuttleBuilder: (_, __, ___, ____, _____) =>
-                                _thumb(it.id, BoxFit.cover),
-                          )
-                        : null,
-                    minScale: PhotoViewComputedScale.contained,
-                    maxScale: PhotoViewComputedScale.covered * 6.0,
-                    initialScale: PhotoViewComputedScale.contained,
-                    filterQuality: FilterQuality.high,
-                    basePosition: Alignment.center,
-                    onTapUp: (_, __, ___) => _toggleBars(),
-                    errorBuilder: (_, __, ___) => const Center(
-                      child: Icon(Icons.broken_image,
-                          size: 80, color: Colors.white38),
-                    ),
+              // ── Gallery: translate + proportional scale-down ─────
+              ValueListenableBuilder<Offset>(
+                valueListenable: _drag,
+                builder: (_, d, child) {
+                  final s = (1.0 - d.dy / 900).clamp(0.6, 1.0);
+                  return Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.translationValues(d.dx, d.dy, 0)
+                      ..scaleByDouble(s, s, 1.0, 1.0),
+                    child: child,
                   );
                 },
+                child: PageView.builder(
+                  controller: _page,
+                  itemCount: widget.items.length,
+                  onPageChanged: (i) {
+                    setState(() {
+                      _current = i;
+                      _isPhotoZoomed = false;
+                      _isPinching = false;
+                      _transformationController.value = Matrix4.identity();
+                    });
+                    _precacheAdjacent(i);
+                  },
+                  physics: (_isCurrentlyZoomed ||
+                          _isPinching ||
+                          _isMultiTouch ||
+                          _activePointers.length >= 2)
+                      ? const NeverScrollableScrollPhysics()
+                      : const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                  itemBuilder: (context, index) {
+                    final it = widget.items[index];
+                    if (index == _current) {
+                      return Center(
+                        child: ClipRect(
+                          child: InteractiveViewer(
+                            transformationController: _transformationController,
+                            minScale: 1.0,
+                            maxScale: 6.0,
+                            panEnabled: true,
+                            scaleEnabled: true,
+                            clipBehavior: Clip.hardEdge,
+                            onInteractionStart: (details) {
+                              _zoomAnimController?.stop();
+                              if (details.pointerCount >= 2) {
+                                _isPinching = true;
+                              }
+                            },
+                            onInteractionUpdate: (details) {
+                              final scale = _transformationController
+                                  .value
+                                  .getMaxScaleOnAxis();
+                              final isZoomed = scale > 1.05;
+                              if (isZoomed != _isPhotoZoomed) {
+                                setState(() {
+                                  _isPhotoZoomed = isZoomed;
+                                });
+                              }
+                            },
+                            onInteractionEnd: (details) {
+                              _isPinching = false;
+                              final scale = _transformationController
+                                  .value
+                                  .getMaxScaleOnAxis();
+                              if (scale <= 1.02) {
+                                _resetPhotoZoom();
+                              } else {
+                                if (!_isPhotoZoomed && mounted) {
+                                  setState(() {
+                                    _isPhotoZoomed = true;
+                                  });
+                                }
+                              }
+                            },
+                            child: Center(
+                              child: Hero(
+                                tag: it.id,
+                                transitionOnUserGestures: true,
+                                flightShuttleBuilder: (_, __, ___, ____, _____) =>
+                                    _thumb(it.id, BoxFit.cover),
+                                child: _buildPhotoPage(it),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    return _buildPhotoPage(it);
+                  },
+                ),
               ),
-            ),
 
             // ── Top bar ────────────────────────────────────────
               Positioned(
@@ -823,6 +853,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             ],
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
 }
