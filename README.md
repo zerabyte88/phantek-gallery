@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.6.21&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.6.4&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -128,41 +128,46 @@ The compiled release APK will be generated at:
 
 ## Version History
 
-- **v2.6.21 (Build 29):**
-  - **Keep Screen On While Viewing:** Added configurable native window flag toggle (`FLAG_KEEP_SCREEN_ON`) in Settings (Appearance) to keep screen illuminated during photo viewing and video playback without external dependencies.
-  - **Full 11-Language Localization Overhaul:** Complete dictionary coverage and translations across all supported languages (ID, EN, ZH, ES, PT, JA, KO, HI, AR, FR, RU), eliminating all remaining hardcoded English text.
-  - **Auto-Playback & Performance Tuning:** Configurable instant video auto-playback on view/swipe, plus butter-smooth 120 FPS tab swiping optimizations with zero black frame flashes.
-  - **Elevated Controls & Visual Enhancements:** Refined AMOLED falling meteors trajectory, enhanced Dark aurora ribbon animations, and redesigned Clean Light daytime theme.
+### v2.6.4 (Build 29)
+* **Landscape Player Bottom Controls Redesign:** Compacted the bottom control bar and seekbar closer to the screen edge in horizontal orientation. Replaced bottom action buttons with dedicated icon-only controls for Playback Speed, Loop, Fullscreen, Screen Rotation, and More (⋮).
+* **Vertical Video Display & Fullscreen Button Removal:** Vertical (portrait) videos now expand to fill the screen (`BoxFit.cover`) within `SafeArea` without letterbox zoom-out artifacts, both before and during playback. The fullscreen button is automatically hidden for vertical videos across all toolbars and the More menu, while remaining fully accessible for horizontal videos.
+* **Non-Obstructive Portrait Play Button:** Center play button in portrait mode now only appears initially prior to the first playback and stays hidden when paused, preventing obstruction during video zooming/pinching.
 
-- **v2.6.19 (Build 27):**
-  - **Header Search Bar & Filter Bar Collision Fix:** Constrained the search capsule strictly within the 56dp toolbar height (`topPadding + kToolbarHeight`), cleanly separating it from category filter chips (`All`, `Photos`, `Videos`, `Albums`) with zero overlapping.
-  - **Landscape Video Fullscreen Boundary & Inset Fix:** Reconfigured `SafeArea` insets for fullscreen landscape playback, implemented dynamic orientation keys on `InteractiveViewer`, and synchronized window metric resets to expand landscape videos edge-to-edge without shrinking or excessive black bars.
-  - **Large Video Aspect Ratio & Frame 0 Precision:** Introduced direct JPEG SOF0/SOF2 header parsing in `ThumbnailService` to resolve visual orientation on frame 0, eliminating momentary zoom-in snaps for large (>200MB, $\ge 720\times 1280$) and rotated videos.
+### v2.6.3 (Build 28)
+* **Keep Screen On While Viewing:** Added configurable native window flag toggle (`FLAG_KEEP_SCREEN_ON`) in Settings (Appearance) to keep screen illuminated during photo viewing and video playback without external dependencies.
+* **Full 11-Language Localization Overhaul:** Complete dictionary coverage and translations across all supported languages (ID, EN, ZH, ES, PT, JA, KO, HI, AR, FR, RU), eliminating all remaining hardcoded English text.
+* **Auto-Playback & Performance Tuning:** Configurable instant video auto-playback on view/swipe, plus butter-smooth 120 FPS tab swiping optimizations with zero black frame flashes.
+* **Elevated Controls & Visual Enhancements:** Refined AMOLED falling meteors trajectory, enhanced Dark aurora ribbon animations, and redesigned Clean Light daytime theme.
 
-- **v2.6.18 (Build 26):**
-  - **Centered Phantek Header Title:** Restored clean dead-center alignment for "Phantek" in the AppBar with responsive action alignment.
-  - **Smooth Unified Search Overlay:** Re-engineered search bar into a single-row flex overlay in `flexibleSpace` with cubic easing, eliminating boundary overlaps and rightward bleed into the Cancel button.
-  - **Video Orientation & Large Video Zoom Fix:** Corrected width/height swaps for $90^\circ / 270^\circ$ rotated videos and resolved frame 0 aspect ratio fallback for unindexed large video files (>100MB).
-  - **Instant Cold-Start Hero Animations & Gesture Reliability:** Added display fallback for cold start image transitions and refined gesture tracking to prevent stuck swipe-to-dismiss.
+### v2.6.2 (Build 27)
+* **Header Search Bar & Filter Bar Collision Fix:** Constrained the search capsule strictly within the 56dp toolbar height (`topPadding + kToolbarHeight`), cleanly separating it from category filter chips (All, Photos, Videos, Albums) with zero overlapping.
+* **Landscape Video Fullscreen Boundary & Inset Fix:** Reconfigured `SafeArea` insets for fullscreen landscape playback, implemented dynamic orientation keys on `InteractiveViewer`, and synchronized window metric resets to expand landscape videos edge-to-edge without shrinking or excessive black bars.
+* **Large Video Aspect Ratio & Frame 0 Precision:** Introduced direct JPEG `SOF0`/`SOF2` header parsing in `ThumbnailService` to resolve visual orientation on frame 0, eliminating momentary zoom-in snaps for large (>200MB, ≥ 720×1280) and rotated videos.
 
-- **v2.6.17 (Build 25):**
-  - **Zero-Delay Video Transitions & Black Screen Elimination:** Eliminated momentary black screen flashes upon tapping videos or swiping horizontally between videos by retaining instant 0ms cached thumbnails until video frames render.
-  - **Aspect Ratio Preserved Hero Transitions:** Fixed vertical stretch distortion on landscape/non-square photos and videos during tap-to-open and swipe-to-dismiss Hero animations.
-  - **Animated Search Bar & Theme-Adaptive Cancel:** Redesigned the gallery search bar to expand smoothly from left to right across the AppBar with title fade-out and a theme-adaptive Cancel button.
+### v2.6.1 (Build 26)
+* **Centered Phantek Header Title:** Restored clean dead-center alignment for "Phantek" in the `AppBar` with responsive action alignment.
+* **Smooth Unified Search Overlay:** Re-engineered search bar into a single-row flex overlay in `flexibleSpace` with cubic easing, eliminating boundary overlaps and rightward bleed into the Cancel button.
+* **Video Orientation & Large Video Zoom Fix:** Corrected width/height swaps for 90° / 270° rotated videos and resolved frame 0 aspect ratio fallback for unindexed large video files (>100MB).
+* **Instant Cold-Start Hero Animations & Gesture Reliability:** Added display fallback for cold start image transitions and refined gesture tracking to prevent stuck swipe-to-dismiss.
 
-- **v2.5.17 (Build 24):**
-  - **Seamless Continuous Header Animations:** Synchronized all harmonic frequencies and movement cycles to integer multiples, eliminating loop stutter across all themes.
-  - **Extended Header Canvas:** Header animation spans continuously across both AppBar and Filter/Sort Bar, eliminating empty spaces.
-  - **Enriched Sakura Tree Visuals:** Multi-tier natural branching, fresh green sakura leaves, and clustered radiant blossoms with buds.
-  - **Dark Theme Cyber Aurora Badge:** Synchronized border gradient and shimmer spark badge icon for Dark Mode.
-  - **Direct Tab Jump & Butter-Smooth Capsule Glides:** Direct navigation between tabs without intermediate page scrolling, paired with 60/120 FPS jitter-free capsule transitions via lazy page evaluation.
+### v2.6.0 (Build 25)
+* **Zero-Delay Video Transitions & Black Screen Elimination:** Eliminated momentary black screen flashes upon tapping videos or swiping horizontally between videos by retaining instant 0ms cached thumbnails until video frames render.
+* **Aspect Ratio Preserved Hero Transitions:** Fixed vertical stretch distortion on landscape/non-square photos and videos during tap-to-open and swipe-to-dismiss Hero animations.
+* **Animated Search Bar & Theme-Adaptive Cancel:** Redesigned the gallery search bar to expand smoothly from left to right across the `AppBar` with title fade-out and a theme-adaptive Cancel button.
 
-- **v2.5.16 (Build 23):**
-  - **Theme-Adaptive Animated Headers:** Procedural lightweight 60fps animations for AMOLED (moon, stars & meteors), AMOLED Sakura (falling sakura petals & branch), Dark (cyber plasma aurora waves & embers), and Light (radiant sunburst & sparkles).
-  - **Theme-Harmonized Title Badge:** Dynamic gradient borders and icons in `AnimatedFlameTitle` matching active theme mode while preserving the 10-tap Easter Egg.
-  - **Glitch-Free Tab Bar Animations:** Replaced separated tab backgrounds with a single sliding capsule indicator and synchronized typography to eliminate momentary white flashes.
-  - **Refined Swipe-to-Dismiss:** Proportionate drag scaling, corner radius morphing, instant overlay fading, and organic damping spring simulation.
-  - **Optimized Selection UI:** Replaced the favorite button with Select All in the multi-select bar for faster bulk management.
+### v2.5.17 (Build 24)
+* **Seamless Continuous Header Animations:** Synchronized all harmonic frequencies and movement cycles to integer multiples, eliminating loop stutter across all themes.
+* **Extended Header Canvas:** Header animation spans continuously across both `AppBar` and Filter/Sort Bar, eliminating empty spaces.
+* **Enriched Sakura Tree Visuals:** Multi-tier natural branching, fresh green sakura leaves, and clustered radiant blossoms with buds.
+* **Dark Theme Cyber Aurora Badge:** Synchronized border gradient and shimmer spark badge icon for Dark Mode.
+* **Direct Tab Jump & Butter-Smooth Capsule Glides:** Direct navigation between tabs without intermediate page scrolling, paired with 60/120 FPS jitter-free capsule transitions via lazy page evaluation.
+
+### v2.5.16 (Build 23)
+* **Theme-Adaptive Animated Headers:** Procedural lightweight 60fps animations for AMOLED (moon, stars & meteors), AMOLED Sakura (falling sakura petals & branch), Dark (cyber plasma aurora waves & embers), and Light (radiant sunburst & sparkles).
+* **Theme-Harmonized Title Badge:** Dynamic gradient borders and icons in `AnimatedFlameTitle` matching active theme mode while preserving the 10-tap Easter Egg.
+* **Glitch-Free Tab Bar Animations:** Replaced separated tab backgrounds with a single sliding capsule indicator and synchronized typography to eliminate momentary white flashes.
+* **Refined Swipe-to-Dismiss:** Proportionate drag scaling, corner radius morphing, instant overlay fading, and organic damping spring simulation.
+* **Optimized Selection UI:** Replaced the favorite button with Select All in the multi-select bar for faster bulk management.
   
 ---
 

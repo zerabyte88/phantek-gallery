@@ -28,7 +28,7 @@ class DeveloperAboutCard extends ConsumerWidget {
     return FutureBuilder<PackageInfo>(
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
-        final version = snapshot.data?.version ?? '2.6.21';
+        final version = snapshot.data?.version ?? '2.6.4';
         final buildNumber = snapshot.data?.buildNumber ?? '29';
 
         return Container(
