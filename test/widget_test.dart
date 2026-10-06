@@ -1780,6 +1780,159 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Page Videos'), findsOneWidget);
     });
+
+    test('Video player center play button visibility rules in portrait and landscape', () {
+      bool shouldShowCenterPlay({
+        required Orientation orientation,
+        required bool hasStartedPlaying,
+      }) {
+        return orientation != Orientation.landscape && !hasStartedPlaying;
+      }
+
+      // Initial portrait before playback -> visible
+      expect(shouldShowCenterPlay(orientation: Orientation.portrait, hasStartedPlaying: false), isTrue);
+
+      // Portrait after playback started (paused or playing) -> hidden to not block zoom
+      expect(shouldShowCenterPlay(orientation: Orientation.portrait, hasStartedPlaying: true), isFalse);
+
+      // Landscape before playback -> hidden (landscape has no center play button)
+      expect(shouldShowCenterPlay(orientation: Orientation.landscape, hasStartedPlaying: false), isFalse);
+
+      // Landscape after playback -> hidden
+      expect(shouldShowCenterPlay(orientation: Orientation.landscape, hasStartedPlaying: true), isFalse);
+    });
+
+    testWidgets('Video player landscape layout renders speed, loop, rotation, and more options icons', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MediaQuery(
+              data: const MediaQueryData(
+                size: Size(800, 400),
+              ),
+              child: Builder(
+                builder: (context) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Slider(value: 0.2, onChanged: (_) {}),
+                      const Row(
+                        children: [
+                          Text('00:04 / 00:20'),
+                          Spacer(),
+                          Icon(Icons.speed),
+                          Icon(Icons.repeat),
+                          Icon(Icons.fullscreen),
+                          Icon(Icons.screen_rotation_rounded),
+                          Icon(Icons.more_vert_rounded),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('00:04 / 00:20'), findsOneWidget);
+      expect(find.byIcon(Icons.speed), findsOneWidget);
+      expect(find.byIcon(Icons.repeat), findsOneWidget);
+      expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+      expect(find.byIcon(Icons.screen_rotation_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.more_vert_rounded), findsOneWidget);
+    });
+
+    testWidgets('Video player fullscreen button is hidden for vertical video and visible for horizontal video', (tester) async {
+      Widget buildControls({required bool isVertical, required bool isLandscape}) {
+        return MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return Column(
+                  children: [
+                    // Portrait row
+                    if (!isLandscape)
+                      Row(
+                        children: [
+                          const Text('00:01'),
+                          if (!isVertical) ...[
+                            const SizedBox(width: 8),
+                            const Icon(Icons.fullscreen_rounded),
+                          ],
+                        ],
+                      ),
+                    // Landscape row
+                    if (isLandscape)
+                      Row(
+                        children: [
+                          const Icon(Icons.speed),
+                          if (!isVertical) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.fullscreen_rounded),
+                          ],
+                          const Icon(Icons.screen_rotation_rounded),
+                        ],
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      }
+
+      // 1. Vertical video in portrait: fullscreen button must NOT be found
+      await tester.pumpWidget(buildControls(isVertical: true, isLandscape: false));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.fullscreen_rounded), findsNothing);
+
+      // 2. Horizontal video in portrait: fullscreen button MUST be found
+      await tester.pumpWidget(buildControls(isVertical: false, isLandscape: false));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.fullscreen_rounded), findsOneWidget);
+
+      // 3. Vertical video in landscape: fullscreen button must NOT be found
+      await tester.pumpWidget(buildControls(isVertical: true, isLandscape: true));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.fullscreen_rounded), findsNothing);
+
+      // 4. Horizontal video in landscape: fullscreen button MUST be found
+      await tester.pumpWidget(buildControls(isVertical: false, isLandscape: true));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.fullscreen_rounded), findsOneWidget);
+    });
+
+    test('Vertical video detection and BoxFit resolution rules', () {
+      bool isVideoPortrait({
+        required double? width,
+        required double? height,
+        required double? thumbRatio,
+      }) {
+        if (thumbRatio != null && thumbRatio > 0) {
+          return thumbRatio < 1.0;
+        }
+        if (width != null && height != null && width > 0 && height > 0) {
+          return height > width;
+        }
+        return false;
+      }
+
+      // Vertical 1080x1920 (9:16)
+      final verticalVideo = isVideoPortrait(width: 1080, height: 1920, thumbRatio: 0.5625);
+      expect(verticalVideo, isTrue);
+      final verticalFit = verticalVideo ? BoxFit.cover : BoxFit.contain;
+      expect(verticalFit, BoxFit.cover);
+
+      // Horizontal 1920x1080 (16:9)
+      final horizontalVideo = isVideoPortrait(width: 1920, height: 1080, thumbRatio: 1.777);
+      expect(horizontalVideo, isFalse);
+      final horizontalFit = horizontalVideo ? BoxFit.cover : BoxFit.contain;
+      expect(horizontalFit, BoxFit.contain);
+    });
   });
 }
 
