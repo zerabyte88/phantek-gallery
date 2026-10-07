@@ -696,7 +696,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 key: ValueKey('iv_${it.id}_${MediaQuery.orientationOf(context)}'),
                                 transformationController: _transformationController,
                                 minScale: 1.0,
-                                maxScale: 6.0,
+                                maxScale: 10.0,
                                 panEnabled: _isCurrentlyZoomed,
                                 scaleEnabled: true,
                                 clipBehavior: Clip.hardEdge,

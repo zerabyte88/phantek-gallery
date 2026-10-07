@@ -76,7 +76,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   final Set<int> _activePointers = {};
   AnimationController? _zoomAnimController;
   bool _hasStartedPlaying = false;
-  bool _cropToFit = true;
+  bool _cropToFit = false;
 
   void _toggleCropToFit() {
     HapticFeedback.lightImpact();
@@ -458,12 +458,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         return effectiveH > effectiveW;
       }
     }
+    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
+      return item.height! > item.width!;
+    }
     final thumbRatio = ThumbnailService.instance.getThumbnailAspectRatio(item.id);
     if (thumbRatio != null && thumbRatio > 0) {
       return thumbRatio < 1.0;
-    }
-    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
-      return item.height! > item.width!;
     }
     return false;
   }
@@ -533,14 +533,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   double _resolveAspectRatio(MediaItem item, int index) {
-    // 1. Prioritize visual thumbnail aspect ratio on frame 0
-    // This perfectly matches the thumbnail already rendered in memory/disk with zero stretch or snap
-    final thumbRatio = ThumbnailService.instance.getThumbnailAspectRatio(item.id);
-    if (thumbRatio != null && thumbRatio > 0) {
-      return thumbRatio;
-    }
-
-    // 2. Active player videoParams (includes native rotation matrix)
+    // 1. Active player videoParams (includes native rotation matrix)
     if (index == _current) {
       final vParams = _player.state.videoParams;
       if (vParams.w != null && vParams.h != null && vParams.w! > 0 && vParams.h! > 0) {
@@ -552,9 +545,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       }
     }
 
-    // 3. Fallback to MediaItem metadata
+    // 2. Fallback to MediaItem metadata (already corrected for orientation)
     if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
       return item.width! / item.height!;
+    }
+
+    // 3. Fallback to visual thumbnail aspect ratio on frame 0
+    final thumbRatio = ThumbnailService.instance.getThumbnailAspectRatio(item.id);
+    if (thumbRatio != null && thumbRatio > 0) {
+      return thumbRatio;
     }
 
     return 16.0 / 9.0;
@@ -568,6 +567,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     final shouldCrop = !isVertical && isDeviceLandscape && _cropToFit;
 
     final content = Stack(
+      fit: StackFit.expand,
       alignment: Alignment.center,
       children: [
         _VideoThumbnailPage(
@@ -1162,7 +1162,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                   transformationController:
                                       _transformationController,
                                   minScale: 1.0,
-                                  maxScale: 6.0,
+                                  maxScale: 10.0,
                                   panEnabled: _isCurrentlyVideoZoomed,
                                   scaleEnabled: true,
                                   clipBehavior: Clip.hardEdge,
@@ -1476,21 +1476,25 @@ class _VideoThumbnailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final cached = ThumbnailService.instance.getMemoryThumbnail(item.id);
     if (cached != null) {
-      return Image.memory(
-        cached,
-        fit: fit,
-        gaplessPlayback: true,
-        filterQuality: FilterQuality.high,
+      return SizedBox.expand(
+        child: Image.memory(
+          cached,
+          fit: fit,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.high,
+        ),
       );
     }
 
     final diskFile = ThumbnailService.instance.getCachedFile(item.id);
     if (diskFile != null) {
-      return Image.file(
-        diskFile,
-        fit: fit,
-        gaplessPlayback: true,
-        filterQuality: FilterQuality.high,
+      return SizedBox.expand(
+        child: Image.file(
+          diskFile,
+          fit: fit,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.high,
+        ),
       );
     }
 
@@ -1499,11 +1503,13 @@ class _VideoThumbnailPage extends StatelessWidget {
           .getThumbnail(item.id, filePath: item.path, isVideo: true),
       builder: (context, snapshot) {
         if (snapshot.data != null) {
-          return Image.memory(
-            snapshot.data!,
-            fit: fit,
-            gaplessPlayback: true,
-            filterQuality: FilterQuality.high,
+          return SizedBox.expand(
+            child: Image.memory(
+              snapshot.data!,
+              fit: fit,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.high,
+            ),
           );
         }
         return const Center(
@@ -1611,7 +1617,7 @@ class _BottomBar extends StatefulWidget {
     required this.onSelectSpeed,
     required this.onDelete,
     required this.onToggleOrientation,
-    this.cropToFit = true,
+    this.cropToFit = false,
     this.onToggleCropToFit,
     this.isTrash = false,
     this.onRestore,
@@ -2101,8 +2107,8 @@ class _BottomBarState extends State<_BottomBar> {
                         padding: const EdgeInsets.all(6),
                         child: Icon(
                           widget.cropToFit
-                              ? Icons.crop_free_rounded
-                              : Icons.fit_screen_rounded,
+                              ? Icons.fit_screen_rounded
+                              : Icons.crop_free_rounded,
                           color: Colors.white,
                           size: 22,
                         ),
