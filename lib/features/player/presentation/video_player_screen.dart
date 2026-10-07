@@ -77,6 +77,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   AnimationController? _zoomAnimController;
   bool _hasStartedPlaying = false;
   bool _cropToFit = false;
+  String? _lastSize;
+  bool _highRes = false;
 
   void _toggleCropToFit() {
     HapticFeedback.lightImpact();
@@ -97,6 +99,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     } else {
       _videos = [widget.item!];
       _current = 0;
+    }
+    final initialItem = _videos[_current];
+    if (initialItem.width != null && initialItem.height != null && initialItem.width! > 0 && initialItem.height! > 0) {
+      _highRes = math.max(initialItem.width!, initialItem.height!) > 1920;
     }
     _pageController = PageController(initialPage: _current);
     _transformationController = TransformationController();
@@ -255,7 +261,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     });
   }
 
-  void _initPlayer() {
+  Future<void> _initPlayer() async {
     final settings = ref.read(settingsNotifierProvider);
     _player = Player(
       configuration: const PlayerConfiguration(
@@ -277,13 +283,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     // 2. Allow Opus/Vorbis audio demuxing and decoding within WebM containers.
     if (_player.platform is NativePlayer) {
       final native = _player.platform as NativePlayer;
-      native.setProperty('hwdec-codecs', 'h264,hevc,mpeg4,vc1');
-      native.setProperty('demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
-      native.setProperty('demuxer-max-bytes', '33554432'); // 32 MB read-ahead
-      native.setProperty('demuxer-max-back-bytes', '33554432'); // 32 MB backward seek buffer
-      native.setProperty('demuxer-readahead-secs', '10');
-      native.setProperty('demuxer-lavf-probesize', '2097152');
-      native.setProperty('hr-seek-framedrop', 'yes');
+      await native.setProperty('cscale', 'spline36');
+      await native.setProperty('hwdec-codecs', 'h264,hevc,mpeg4,vc1');
+      await native.setProperty('demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
+      await native.setProperty('demuxer-max-bytes', '33554432'); // 32 MB read-ahead
+      await native.setProperty('demuxer-max-back-bytes', '33554432'); // 32 MB backward seek buffer
+      await native.setProperty('demuxer-readahead-secs', '10');
+      await native.setProperty('demuxer-lavf-probesize', '2097152');
+      await native.setProperty('hr-seek-framedrop', 'yes');
     }
 
     _player.stream.error.listen((err) {
@@ -324,9 +331,33 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       }
     });
 
-    _player.stream.videoParams.listen((params) {
-      if (mounted && params.w != null && params.h != null && params.w! > 0 && params.h! > 0) {
-        setState(() {});
+    _player.stream.videoParams.listen((vp) async {
+      final w = vp.w ?? 0, h = vp.h ?? 0;
+      if (w <= 0 || h <= 0 || _lastSize == '${w}x$h') return;
+      _lastSize = '${w}x$h';
+      final highRes = math.max(w, h) > 1920;
+      if (_player.platform is NativePlayer) {
+        final native = _player.platform as NativePlayer;
+        try {
+          final hw = await native.getProperty('hwdec-current');
+          debugPrint('[VideoPlayer] Active hwdec: $hw');
+        } catch (_) {}
+        try {
+          await native.setProperty('sharpen', highRes ? '0.15' : '0.3');
+          assert(() {
+            native.getProperty('sharpen').then((val) {
+              debugPrint('[VideoPlayer] Verified sharpen: $val');
+            }).catchError((e) {
+              debugPrint('[VideoPlayer] getProperty sharpen failed: $e');
+            });
+            return true;
+          }());
+        } catch (e) {
+          debugPrint('[VideoPlayer] sharpen failed: $e');
+        }
+      }
+      if (mounted && _highRes != highRes) {
+        setState(() => _highRes = highRes);
       }
     });
 
@@ -335,15 +366,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (_player.platform is NativePlayer) {
       final native = _player.platform as NativePlayer;
       if (isWebM) {
-        native.setProperty('hwdec', 'no');
+        await native.setProperty('hwdec', 'no');
       } else {
-        native.setProperty(
+        await native.setProperty(
             'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
       }
     }
 
     _videoSurfaceVisible.value = false;
-    _player.open(
+    await _player.open(
       Media(currentPath),
       play: settings.autoPlayVideo,
     );
@@ -357,6 +388,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _zoomAnimController = null;
       _transformationController.value = Matrix4.identity();
       _isVideoZoomed = false;
+    }
+    _lastSize = null;
+    final nextItem = _videos[index];
+    if (nextItem.width != null && nextItem.height != null && nextItem.width! > 0 && nextItem.height! > 0) {
+      _highRes = math.max(nextItem.width!, nextItem.height!) > 1920;
     }
     setState(() {
       _current = index;
@@ -375,9 +411,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         if (_player.platform is NativePlayer) {
           final native = _player.platform as NativePlayer;
           if (isWebM) {
-            native.setProperty('hwdec', 'no');
+            await native.setProperty('hwdec', 'no');
           } else {
-            native.setProperty(
+            await native.setProperty(
                 'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
           }
         }
@@ -588,6 +624,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   controller: _controller,
                   controls: NoVideoControls,
                   fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
+                  filterQuality: _highRes ? FilterQuality.medium : FilterQuality.high,
                   fill: Colors.transparent,
                 ),
               ),

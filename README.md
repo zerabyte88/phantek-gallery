@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.6.6&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.0&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -127,6 +127,13 @@ The compiled release APK will be generated at:
 ---
 
 ## Version History
+
+### v2.7.0 (Build 32)
+* **MediaKit & MPV Engine Rendering Upgrades:** Overhauled video pipeline clarity and sharpness to eliminate soft texture sampling blurriness compared to system gallery players.
+* **Adaptive Bicubic Texture Sampling:** Dynamically applies `FilterQuality.high` (bicubic interpolation) on Flutter's texture surface for ≤ 1080p videos to preserve edge crispness, and `FilterQuality.medium` for > 1080p / 4K content to prevent aliasing and moiré shimmering.
+* **Resolution-Aware Dynamic Sharpening:** Integrated native MPV sharpen filter adjusting dynamically per-video (`0.3` for standard / HD video and `0.15` for high-resolution 4K video) once stream geometry is verified.
+* **Chroma Upsampling Optimization (`cscale=spline36`):** Configured spline36 chroma scaler for software and copy decoding pipelines, with fully synchronized asynchronous player initialization.
+* **Robust Stream Guards & Zero-Copy Decoupling:** Debounced `videoParams` dimensions stream listeners with dimension change checks, one-time hardware decoder logging, and non-blocking state updates.
 
 ### v2.6.6 (Build 31)
 * **10x Pinch-to-Zoom Expansion:** Upgraded maximum zoom scale from 6x to 10x across both Photo Viewer and Video Player for deeper detail inspection.
