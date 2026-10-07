@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.6.5&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.6.6&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -128,8 +128,10 @@ The compiled release APK will be generated at:
 
 ## Version History
 
-### v2.6.5 (Build 30)
-* **Crop to Fit & Fit to Screen Aspect Ratio Toggle:** Replaced the legacy fullscreen button in landscape orientation with an aspect ratio toggle (*Crop to Fit* vs *Fit to Screen*) featuring dynamic corner bracket indicators.
+### v2.6.6 (Build 31)
+* **10x Pinch-to-Zoom Expansion:** Upgraded maximum zoom scale from 6x to 10x across both Photo Viewer and Video Player for deeper detail inspection.
+* **Aspect Ratio Toggle & Default Fit to Screen:** Landscape horizontal videos now default to *Fit to Screen* (`BoxFit.contain`) to present entire uncropped frames out of the box, with one-tap toggle to *Crop to Fit* (`BoxFit.cover`).
+* **Vertical Video Pre-Playback Thumbnail Fix:** Fixed pre-playback portrait video thumbnails appearing shrunken/zoomed-out in a loose container, ensuring the preview image immediately spans the screen between header and footer identically to active playback.
 * **Modern Rotate Icon & Portrait Controls:** Replaced the rotate button with a sleek vector `DeviceRotateIcon` matching Samsung Gallery / modern media players. In portrait mode, horizontal videos now feature a direct rotate button next to the duration timestamp to switch to landscape.
 * **Cleaned Portrait More Menu:** Removed the redundant Fullscreen option from the portrait More (⋮) sheet.
 * **Expanded Playback Speed Range:** Added `0.25x` slow-motion playback speed option to the compact floating speed selector (`0.25x`, `0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `2.0x`).
