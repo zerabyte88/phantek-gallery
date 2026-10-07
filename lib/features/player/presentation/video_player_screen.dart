@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
@@ -75,6 +76,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   final Set<int> _activePointers = {};
   AnimationController? _zoomAnimController;
   bool _hasStartedPlaying = false;
+  bool _cropToFit = true;
+
+  void _toggleCropToFit() {
+    HapticFeedback.lightImpact();
+    setState(() => _cropToFit = !_cropToFit);
+  }
 
   bool get _isCurrentlyVideoZoomed {
     return _transformationController.value.getMaxScaleOnAxis() > 1.05;
@@ -556,12 +563,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   Widget _buildVideoPage(int index) {
     final item = _videos[index];
     final isVertical = _isVideoPortrait(item, index);
+    final isDeviceLandscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final shouldCrop = !isVertical && isDeviceLandscape && _cropToFit;
+
     final content = Stack(
       alignment: Alignment.center,
       children: [
         _VideoThumbnailPage(
           item: item,
-          fit: isVertical ? BoxFit.cover : BoxFit.contain,
+          fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
         ),
         if (index == _current)
           ValueListenableBuilder<bool>(
@@ -576,7 +587,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   key: const ValueKey('active_video_surface'),
                   controller: _controller,
                   controls: NoVideoControls,
-                  fit: isVertical ? BoxFit.cover : BoxFit.contain,
+                  fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
                   fill: Colors.transparent,
                 ),
               ),
@@ -585,11 +596,30 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       ],
     );
 
-    if (isVertical) {
+    final ratio = _resolveAspectRatio(item, index);
+
+    if (isVertical && !isDeviceLandscape) {
+      final mediaQuery = MediaQuery.of(context);
+      final topPadding = mediaQuery.padding.top + 56.0;
+      final bottomPadding = mediaQuery.padding.bottom + 72.0;
+      return Padding(
+        padding: EdgeInsets.only(
+          top: topPadding,
+          bottom: bottomPadding,
+        ),
+        child: Center(
+          child: AspectRatio(
+            aspectRatio: ratio,
+            child: content,
+          ),
+        ),
+      );
+    }
+
+    if (shouldCrop) {
       return SizedBox.expand(child: content);
     }
 
-    final ratio = _resolveAspectRatio(item, index);
     return AspectRatio(
       aspectRatio: ratio,
       child: content,
@@ -605,57 +635,99 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   void _showPlaybackSpeedSheet() {
-    final speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
-    showModalBottomSheet<void>(
+    final speeds = [2.0, 1.5, 1.25, 1.0, 0.75, 0.5, 0.25];
+    showGeneralDialog<void>(
       context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        final cs = Theme.of(context).colorScheme;
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black.withValues(alpha: 0.25),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (dialogCtx, anim1, anim2) {
+        final isLandscape =
+            MediaQuery.orientationOf(dialogCtx) == Orientation.landscape;
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  context.tr.playbackSpeedTitle,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+          child: Align(
+            alignment:
+                isLandscape ? Alignment.bottomRight : Alignment.bottomCenter,
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: isLandscape ? 40.0 : 0.0,
+                bottom: isLandscape ? 56.0 : 80.0,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 124,
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(dialogCtx).height * 0.65,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E).withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      width: 1,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black54,
+                        blurRadius: 16,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: speeds.map((speed) {
+                        final isSelected = _playbackSpeed == speed;
+                        return InkWell(
+                          onTap: () {
+                            Navigator.pop(dialogCtx);
+                            setState(() {
+                              _playbackSpeed = speed;
+                            });
+                            _player.setRate(speed);
+                            HapticFeedback.lightImpact();
+                          },
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            color: isSelected
+                                ? const Color(0xFF2F80ED)
+                                : Colors.transparent,
+                            alignment: Alignment.center,
+                            child: Text(
+                              '${speed}x',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                ...speeds.map((speed) {
-                  final isSelected = _playbackSpeed == speed;
-                  return ListTile(
-                    dense: true,
-                    title: Text(
-                      speed == 1.0 ? '1.0x (${context.tr.normal})' : '${speed}x',
-                      style: TextStyle(
-                        color: isSelected ? cs.primary : Colors.white,
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                    trailing: isSelected
-                        ? Icon(Icons.check, color: cs.primary)
-                        : null,
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      setState(() {
-                        _playbackSpeed = speed;
-                      });
-                      _player.setRate(speed);
-                      HapticFeedback.lightImpact();
-                    },
-                  );
-                }),
-              ],
+              ),
             ),
+          ),
+        );
+      },
+      transitionBuilder: (ctx, anim, _, child) {
+        return FadeTransition(
+          opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.9, end: 1.0).animate(
+              CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+            ),
+            child: child,
           ),
         );
       },
@@ -1255,9 +1327,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                 );
                               },
                               child: StreamBuilder<bool>(
+                                initialData: _player.state.playing,
                                 stream: _player.stream.playing,
                                 builder: (_, snap) {
-                                  final playing = snap.data ?? false;
+                                  final playing = snap.data ?? _player.state.playing;
                                   if (playing) return const SizedBox.shrink();
                                   return BouncyTap(
                                     onTap: () {
@@ -1336,6 +1409,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               isFullscreen: _isFullscreen,
                               isLooping: _isLooping,
                               playbackSpeed: _playbackSpeed,
+                              cropToFit: _cropToFit,
+                              onToggleCropToFit: _toggleCropToFit,
                               onToggleFullscreen: _toggleFullscreen,
                               onToggleLoop: _toggleLoop,
                               onSelectSpeed: _showPlaybackSpeedSheet,
@@ -1536,6 +1611,8 @@ class _BottomBar extends StatefulWidget {
     required this.onSelectSpeed,
     required this.onDelete,
     required this.onToggleOrientation,
+    this.cropToFit = true,
+    this.onToggleCropToFit,
     this.isTrash = false,
     this.onRestore,
     this.onRename,
@@ -1547,6 +1624,8 @@ class _BottomBar extends StatefulWidget {
   final bool isFullscreen;
   final bool isLooping;
   final double playbackSpeed;
+  final bool cropToFit;
+  final VoidCallback? onToggleCropToFit;
   final VoidCallback onToggleFullscreen;
   final VoidCallback onToggleLoop;
   final VoidCallback onSelectSpeed;
@@ -1563,82 +1642,150 @@ class _BottomBar extends StatefulWidget {
 class _BottomBarState extends State<_BottomBar> {
   bool _isDragging = false;
   double? _dragFraction;
+  bool _showPillBadge = false;
+  Timer? _pillFadeTimer;
+  StreamSubscription<bool>? _playingSub;
+  StreamSubscription<bool>? _completedSub;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.player.state.playing) {
+      _showPillBadge = true;
+      _pillFadeTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted && !_isDragging) {
+          setState(() {
+            _showPillBadge = false;
+          });
+        }
+      });
+    }
+    _subscribePlayer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BottomBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.player != widget.player) {
+      _unsubscribePlayer();
+      _subscribePlayer();
+    }
+  }
+
+  void _subscribePlayer() {
+    _playingSub = widget.player.stream.playing.listen((playing) {
+      if (!mounted) return;
+      if (playing) {
+        _pillFadeTimer?.cancel();
+        setState(() {
+          _showPillBadge = true;
+        });
+        _pillFadeTimer = Timer(const Duration(seconds: 2), () {
+          if (mounted && !_isDragging) {
+            setState(() {
+              _showPillBadge = false;
+            });
+          }
+        });
+      } else {
+        if (!_isDragging && !widget.player.state.completed) {
+          _pillFadeTimer?.cancel();
+          setState(() {
+            _showPillBadge = false;
+          });
+        }
+      }
+    });
+
+    _completedSub = widget.player.stream.completed.listen((completed) {
+      if (!mounted) return;
+      if (completed) {
+        _pillFadeTimer?.cancel();
+        setState(() {
+          _showPillBadge = true;
+        });
+      }
+    });
+  }
+
+  void _unsubscribePlayer() {
+    _pillFadeTimer?.cancel();
+    _playingSub?.cancel();
+    _completedSub?.cancel();
+  }
+
+  @override
+  void dispose() {
+    _unsubscribePlayer();
+    super.dispose();
+  }
 
   void _showMoreOptions(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF1E1E1E),
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.speed, color: Colors.white),
-                title: Text(
-                  '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onSelectSpeed();
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  widget.isLooping ? Icons.repeat_one : Icons.repeat,
-                  color: widget.isLooping
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.white,
-                ),
-                title: Text(
-                  widget.isLooping ? context.tr.loopOn : context.tr.loopOff,
-                  style: TextStyle(
-                    color: widget.isLooping
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.white,
-                    fontSize: 15,
-                  ),
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onToggleLoop();
-                },
-              ),
-              if (!widget.isVertical)
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
+          ),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 ListTile(
-                  leading: Icon(
-                    widget.isFullscreen
-                        ? Icons.fullscreen_exit
-                        : Icons.fullscreen,
-                    color: Colors.white,
-                  ),
+                  leading: const Icon(Icons.speed, color: Colors.white),
                   title: Text(
-                    widget.isFullscreen ? context.tr.exitFullscreen : context.tr.fullscreen,
+                    '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
                     style: const TextStyle(color: Colors.white, fontSize: 15),
                   ),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    widget.onToggleFullscreen();
+                    widget.onSelectSpeed();
                   },
                 ),
-              if (widget.onRename != null)
                 ListTile(
-                  leading:
-                      const Icon(Icons.edit_outlined, color: Colors.white),
-                  title: Text(context.tr.rename,
-                      style: const TextStyle(color: Colors.white, fontSize: 15)),
+                  leading: Icon(
+                    widget.isLooping ? Icons.repeat_one : Icons.repeat,
+                    color: widget.isLooping
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.white,
+                  ),
+                  title: Text(
+                    widget.isLooping ? context.tr.loopOn : context.tr.loopOff,
+                    style: TextStyle(
+                      color: widget.isLooping
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.white,
+                      fontSize: 15,
+                    ),
+                  ),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    widget.onRename?.call();
+                    widget.onToggleLoop();
                   },
                 ),
-            ],
+
+                if (widget.onRename != null)
+                  ListTile(
+                    leading:
+                        const Icon(Icons.edit_outlined, color: Colors.white),
+                    title: Text(context.tr.rename,
+                        style: const TextStyle(color: Colors.white, fontSize: 15)),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      widget.onRename?.call();
+                    },
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1649,103 +1796,110 @@ class _BottomBarState extends State<_BottomBar> {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF1E1E1E),
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.isTrash) ...[
-                ListTile(
-                  leading: const Icon(Icons.restore, color: Colors.white),
-                  title: Text(context.tr.restore,
-                      style: const TextStyle(color: Colors.white, fontSize: 15)),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    widget.onRestore?.call();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
-                  title: Text(context.tr.delete,
-                      style: const TextStyle(color: Colors.redAccent, fontSize: 15)),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    widget.onDelete();
-                  },
-                ),
-              ] else ...[
-                Consumer(
-                  builder: (context, ref, _) {
-                    final isFav = ref.watch(
-                      settingsNotifierProvider.select(
-                        (s) => s.favoriteIds.contains(widget.item.id),
-                      ),
-                    );
-                    return ListTile(
-                      leading: Icon(
-                        isFav ? Icons.favorite : Icons.favorite_border,
-                        color: isFav ? Colors.redAccent : Colors.white,
-                      ),
-                      title: Text(
-                        context.tr.favorite,
-                        style: TextStyle(
-                          color: isFav ? Colors.redAccent : Colors.white,
-                          fontSize: 15,
-                        ),
-                      ),
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        final currentFavs = Set<String>.from(
-                          ref.read(settingsNotifierProvider).favoriteIds,
-                        );
-                        if (currentFavs.contains(widget.item.id)) {
-                          currentFavs.remove(widget.item.id);
-                        } else {
-                          currentFavs.add(widget.item.id);
-                        }
-                        ref.read(settingsNotifierProvider.notifier).update(
-                              (s) => s.copyWith(favoriteIds: currentFavs.toList()),
-                            );
-                        Navigator.pop(sheetContext);
-                      },
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.share_outlined, color: Colors.white),
-                  title: Text(context.tr.share,
-                      style: const TextStyle(color: Colors.white, fontSize: 15)),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    ShareService.shareSingle(widget.item.path, isVideo: true);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.delete_outline, color: Colors.white),
-                  title: Text(context.tr.delete,
-                      style: const TextStyle(color: Colors.white, fontSize: 15)),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    widget.onDelete();
-                  },
-                ),
-                if (widget.onRename != null)
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
+          ),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.isTrash) ...[
                   ListTile(
-                    leading: const Icon(Icons.edit_outlined, color: Colors.white),
-                    title: Text(context.tr.rename,
+                    leading: const Icon(Icons.restore, color: Colors.white),
+                    title: Text(context.tr.restore,
                         style: const TextStyle(color: Colors.white, fontSize: 15)),
                     onTap: () {
                       Navigator.pop(sheetContext);
-                      widget.onRename!();
+                      widget.onRestore?.call();
                     },
                   ),
+                  ListTile(
+                    leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
+                    title: Text(context.tr.delete,
+                        style: const TextStyle(color: Colors.redAccent, fontSize: 15)),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      widget.onDelete();
+                    },
+                  ),
+                ] else ...[
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final isFav = ref.watch(
+                        settingsNotifierProvider.select(
+                          (s) => s.favoriteIds.contains(widget.item.id),
+                        ),
+                      );
+                      return ListTile(
+                        leading: Icon(
+                          isFav ? Icons.favorite : Icons.favorite_border,
+                          color: isFav ? Colors.redAccent : Colors.white,
+                        ),
+                        title: Text(
+                          context.tr.favorite,
+                          style: TextStyle(
+                            color: isFav ? Colors.redAccent : Colors.white,
+                            fontSize: 15,
+                          ),
+                        ),
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          final currentFavs = Set<String>.from(
+                            ref.read(settingsNotifierProvider).favoriteIds,
+                          );
+                          if (currentFavs.contains(widget.item.id)) {
+                            currentFavs.remove(widget.item.id);
+                          } else {
+                            currentFavs.add(widget.item.id);
+                          }
+                          ref.read(settingsNotifierProvider.notifier).update(
+                                (s) => s.copyWith(favoriteIds: currentFavs.toList()),
+                              );
+                          Navigator.pop(sheetContext);
+                        },
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.share_outlined, color: Colors.white),
+                    title: Text(context.tr.share,
+                        style: const TextStyle(color: Colors.white, fontSize: 15)),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      ShareService.shareSingle(widget.item.path, isVideo: true);
+                    },
+                  ),
+                  if (widget.onRename != null)
+                    ListTile(
+                      leading: const Icon(Icons.edit_outlined, color: Colors.white),
+                      title: Text(context.tr.rename,
+                          style: const TextStyle(color: Colors.white, fontSize: 15)),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        widget.onRename!();
+                      },
+                    ),
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline, color: Colors.white),
+                    title: Text(context.tr.delete,
+                        style: const TextStyle(color: Colors.white, fontSize: 15)),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      widget.onDelete();
+                    },
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -1872,9 +2026,10 @@ class _BottomBarState extends State<_BottomBar> {
             children: [
               // Play / Pause button
               StreamBuilder<bool>(
+                initialData: widget.player.state.playing,
                 stream: widget.player.stream.playing,
                 builder: (_, snap) {
-                  final playing = snap.data ?? false;
+                  final playing = snap.data ?? widget.player.state.playing;
                   return BouncyTap(
                     onTap: widget.player.playOrPause,
                     child: Padding(
@@ -1939,15 +2094,15 @@ class _BottomBarState extends State<_BottomBar> {
                   ),
                   if (!widget.isVertical) ...[
                     const SizedBox(width: 4),
-                    // Fullscreen / Exit Fullscreen
+                    // Crop to fit / Fit to screen toggle (Photo 3)
                     BouncyTap(
-                      onTap: widget.onToggleFullscreen,
+                      onTap: widget.onToggleCropToFit,
                       child: Padding(
                         padding: const EdgeInsets.all(6),
                         child: Icon(
-                          widget.isFullscreen
-                              ? Icons.fullscreen_exit_rounded
-                              : Icons.fullscreen_rounded,
+                          widget.cropToFit
+                              ? Icons.crop_free_rounded
+                              : Icons.fit_screen_rounded,
                           color: Colors.white,
                           size: 22,
                         ),
@@ -1955,15 +2110,14 @@ class _BottomBarState extends State<_BottomBar> {
                     ),
                   ],
                   const SizedBox(width: 4),
-                  // Rotate
+                  // Rotate (Photo 3 reference)
                   BouncyTap(
                     onTap: widget.onToggleOrientation,
                     child: const Padding(
                       padding: EdgeInsets.all(6),
-                      child: Icon(
-                        Icons.screen_rotation_rounded,
-                        color: Colors.white,
+                      child: DeviceRotateIcon(
                         size: 22,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -1998,6 +2152,40 @@ class _BottomBarState extends State<_BottomBar> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (widget.isVertical) ...[
+          SizedBox(
+            height: 28,
+            child: Center(
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                opacity: _showPillBadge ? 1.0 : 0.0,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Text(
+                    '${MediaUtils.formatDuration(displayPos)}/${MediaUtils.formatDuration(dur)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+        ],
         // Seek bar
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
@@ -2008,13 +2196,17 @@ class _BottomBarState extends State<_BottomBar> {
           child: Slider(
             value: frac.clamp(0.0, 1.0),
             onChangeStart: (_) {
+              _pillFadeTimer?.cancel();
               setState(() {
                 _isDragging = true;
+                _showPillBadge = true;
               });
             },
             onChanged: (v) {
+              _pillFadeTimer?.cancel();
               setState(() {
                 _dragFraction = v;
+                _showPillBadge = true;
               });
             },
             onChangeEnd: (v) {
@@ -2026,47 +2218,54 @@ class _BottomBarState extends State<_BottomBar> {
                 _isDragging = false;
                 _dragFraction = null;
               });
+              _pillFadeTimer?.cancel();
+              _pillFadeTimer = Timer(const Duration(seconds: 2), () {
+                if (mounted && !_isDragging) {
+                  setState(() {
+                    _showPillBadge = false;
+                  });
+                }
+              });
             },
             activeColor: Colors.white,
             inactiveColor: Colors.white30,
             thumbColor: Colors.white,
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(MediaUtils.formatDuration(displayPos),
-                  style: const TextStyle(color: Colors.white, fontSize: 12)),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(MediaUtils.formatDuration(dur),
-                      style:
-                          const TextStyle(color: Colors.white70, fontSize: 12)),
-                  if (!widget.isVertical) ...[
+        if (!widget.isVertical) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(MediaUtils.formatDuration(displayPos),
+                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(MediaUtils.formatDuration(dur),
+                        style:
+                            const TextStyle(color: Colors.white70, fontSize: 12)),
                     const SizedBox(width: 8),
                     BouncyTap(
-                      onTap: widget.onToggleFullscreen,
-                      child: Padding(
-                        padding: const EdgeInsets.all(2),
-                        child: Icon(
-                          widget.isFullscreen
-                              ? Icons.fullscreen_exit_rounded
-                              : Icons.fullscreen_rounded,
-                          color: Colors.white,
+                      onTap: widget.onToggleOrientation,
+                      child: const Padding(
+                        padding: EdgeInsets.all(2),
+                        child: DeviceRotateIcon(
                           size: 20,
+                          color: Colors.white,
                         ),
                       ),
                     ),
                   ],
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 32),
+          const SizedBox(height: 32),
+        ] else ...[
+          const SizedBox(height: 8),
+        ],
         widget.isTrash
             ? Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -2138,9 +2337,10 @@ class _BottomBarState extends State<_BottomBar> {
                   ),
                   // 3. Play / Pause
                   StreamBuilder<bool>(
+                    initialData: widget.player.state.playing,
                     stream: widget.player.stream.playing,
                     builder: (_, snap) {
-                      final playing = snap.data ?? false;
+                      final playing = snap.data ?? widget.player.state.playing;
                       return _ViewerActionButton(
                         icon: Icon(
                           playing
@@ -2210,4 +2410,135 @@ class _ViewerActionButton extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Device Rotate Icon (Photo 3 reference) ───────────────────────────────────
+
+class DeviceRotateIcon extends StatelessWidget {
+  const DeviceRotateIcon({
+    super.key,
+    this.size = 22,
+    this.color = Colors.white,
+  });
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size(size, size),
+      painter: _DeviceRotatePainter(color: color),
+    );
+  }
+}
+
+class _DeviceRotatePainter extends CustomPainter {
+  const _DeviceRotatePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.7
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final center = Offset(size.width / 2, size.height / 2);
+
+    // 1. Draw tilted smartphone outline in center (~ -33 degrees)
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(-0.58);
+
+    final phoneWidth = size.width * 0.44;
+    final phoneHeight = size.height * 0.68;
+    final phoneRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: phoneWidth,
+        height: phoneHeight,
+      ),
+      Radius.circular(size.width * 0.10),
+    );
+    canvas.drawRRect(phoneRect, paint);
+    canvas.restore();
+
+    // 2. Draw curved arrows on opposite corners
+    final arcPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+
+    final arrowPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final arcRadius = size.width * 0.44;
+    final arcRect = Rect.fromCircle(center: center, radius: arcRadius);
+
+    // Top-right arc (clockwise)
+    const sweepAngle = 0.70;
+    const startAngle1 = -0.85;
+    canvas.drawArc(arcRect, startAngle1, sweepAngle, false, arcPaint);
+
+    // Arrowhead at end of arc 1
+    final endAngle1 = startAngle1 + sweepAngle;
+    final arrowTip1 = Offset(
+      center.dx + arcRadius * math.cos(endAngle1),
+      center.dy + arcRadius * math.sin(endAngle1),
+    );
+    final tan1 = endAngle1 + math.pi / 2;
+    const wingLen = 3.5;
+    const wingAngle = 0.65;
+    final w1a = Offset(
+      arrowTip1.dx + wingLen * math.cos(tan1 + math.pi - wingAngle),
+      arrowTip1.dy + wingLen * math.sin(tan1 + math.pi - wingAngle),
+    );
+    final w1b = Offset(
+      arrowTip1.dx + wingLen * math.cos(tan1 + math.pi + wingAngle),
+      arrowTip1.dy + wingLen * math.sin(tan1 + math.pi + wingAngle),
+    );
+    final path1 = Path()
+      ..moveTo(w1a.dx, w1a.dy)
+      ..lineTo(arrowTip1.dx, arrowTip1.dy)
+      ..lineTo(w1b.dx, w1b.dy);
+    canvas.drawPath(path1, arrowPaint);
+
+    // Bottom-left arc (clockwise)
+    const startAngle2 = startAngle1 + math.pi;
+    canvas.drawArc(arcRect, startAngle2, sweepAngle, false, arcPaint);
+
+    // Arrowhead at end of arc 2
+    final endAngle2 = startAngle2 + sweepAngle;
+    final arrowTip2 = Offset(
+      center.dx + arcRadius * math.cos(endAngle2),
+      center.dy + arcRadius * math.sin(endAngle2),
+    );
+    final tan2 = endAngle2 + math.pi / 2;
+    final w2a = Offset(
+      arrowTip2.dx + wingLen * math.cos(tan2 + math.pi - wingAngle),
+      arrowTip2.dy + wingLen * math.sin(tan2 + math.pi - wingAngle),
+    );
+    final w2b = Offset(
+      arrowTip2.dx + wingLen * math.cos(tan2 + math.pi + wingAngle),
+      arrowTip2.dy + wingLen * math.sin(tan2 + math.pi + wingAngle),
+    );
+    final path2 = Path()
+      ..moveTo(w2a.dx, w2a.dy)
+      ..lineTo(arrowTip2.dx, arrowTip2.dy)
+      ..lineTo(w2b.dx, w2b.dy);
+    canvas.drawPath(path2, arrowPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DeviceRotatePainter oldDelegate) =>
+      oldDelegate.color != color;
 }
