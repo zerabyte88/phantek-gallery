@@ -47,6 +47,58 @@ enum AppLanguage {
     return Locale(code!);
   }
 
+  /// Official national flag emoji, or null for system default.
+  String? get flagEmoji {
+    switch (this) {
+      case AppLanguage.system:
+        return null;
+      case AppLanguage.ar:
+        return '🇸🇦';
+      case AppLanguage.zh:
+        return '🇨🇳';
+      case AppLanguage.zhTw:
+        return '🇹🇼';
+      case AppLanguage.da:
+        return '🇩🇰';
+      case AppLanguage.nl:
+        return '🇳🇱';
+      case AppLanguage.en:
+        return '🇺🇸';
+      case AppLanguage.fi:
+        return '🇫🇮';
+      case AppLanguage.fr:
+        return '🇫🇷';
+      case AppLanguage.de:
+        return '🇩🇪';
+      case AppLanguage.hi:
+        return '🇮🇳';
+      case AppLanguage.id:
+        return '🇮🇩';
+      case AppLanguage.it:
+        return '🇮🇹';
+      case AppLanguage.ja:
+        return '🇯🇵';
+      case AppLanguage.ko:
+        return '🇰🇷';
+      case AppLanguage.ms:
+        return '🇲🇾';
+      case AppLanguage.no:
+        return '🇳🇴';
+      case AppLanguage.pt:
+        return '🇧🇷';
+      case AppLanguage.ru:
+        return '🇷🇺';
+      case AppLanguage.es:
+        return '🇪🇸';
+      case AppLanguage.sv:
+        return '🇸🇪';
+      case AppLanguage.th:
+        return '🇹🇭';
+      case AppLanguage.vi:
+        return '🇻🇳';
+    }
+  }
+
   /// Look up [AppLanguage] from language code.
   static AppLanguage fromCode(String? code) {
     if (code == null) return AppLanguage.system;

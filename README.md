@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.2&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.3&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -42,7 +42,7 @@
 - **Technical Video Inspector:** Live extraction and display of video **Frame Rate (FPS)** and **Video Codec** directly inside the media Details sheet.
 - **Interactive 5x Video Zoom:** Pinch-to-zoom and pan during live playback, paused state, or preview poster, complete with animated floating scale indicator and instant one-tap reset.
 - **Proactive Texture Optimization:** Instant GPU texture detaching on horizontal swipe to free decoder pipelines and enable fluid 60/120 FPS swiping with zero black flashes.
-- **Elevated Controls & Floating Seekbar Preview:** Centered play button with automatic fade-out during swipe navigation, elevated seekbar (+32dp) with real-time adaptive thumbnail scrubber preview and fullscreen controls.
+- **Elevated Controls & Floating Seekbar Preview:** Centered play button with automatic fade-out during swipe navigation, custom gesture-captured scrubber bar with seek-on-release precision, gapless frame transitions, elevated seekbar (+32dp) with real-time adaptive thumbnail tooltip preview (+44-50dp with pointer caret), and fullscreen controls.
 
 ### 4. High-Fidelity Photo Viewer & Gesture Dismissal
 - **Spring-Damped Drag-to-Dismiss:** Natural pull-down gesture physics with velocity tracking and proportional scaling.
@@ -57,7 +57,7 @@
 - **Batch Selection Mode:** Multi-select photos, videos, or albums for bulk deletion or restoration.
 
 ### 6. Multi-Language Internationalization & Theming
-- **22 Supported Languages:** English (default), Indonesian (Bahasa Indonesia), Arabic (العربية), Chinese Simplified (简体中文), Chinese Traditional (繁體中文), Danish (Dansk), Dutch (Nederlands), Finnish (Suomi), French (Français), German (Deutsch), Hindi (हिन्दी), Italian (Italiano), Japanese (日本語), Korean (한국어), Malay (Bahasa Melayu), Norwegian (Norsk), Portuguese (Português), Russian (Русский), Spanish (Español), Swedish (Svenska), Thai (ไทย), and Vietnamese (Tiếng Việt). Sorted alphabetically (A-Z) with System Default pinned at top.
+- **22 Supported Languages:** English (default), Indonesian (Bahasa Indonesia), Arabic (العربية), Chinese Simplified (简体中文), Chinese Traditional (繁體中文), Danish (Dansk), Dutch (Nederlands), Finnish (Suomi), French (Français), German (Deutsch), Hindi (हिन्दी), Italian (Italiano), Japanese (日本語), Korean (한국어), Malay (Bahasa Melayu), Norwegian (Norsk), Portuguese (Português), Russian (Русский), Spanish (Español), Swedish (Svenska), Thai (ไทย), and Vietnamese (Tiếng Việt). Sorted alphabetically (A-Z) with System Default pinned at top, featuring native country flag emojis inside modern selection cards.
 - **Material 3 Themes:** System Default, Clean Light, and Slate Dark.
 - **Pure AMOLED Pitch-Black:** Deep true black (`#000000`) surfaces for maximum OLED battery savings.
 - **Secret AMOLED Sakura Theme 🌸:** Exclusive Japanese Sakura pink accent theme over pure black.
@@ -127,6 +127,14 @@ The compiled release APK will be generated at:
 ---
 
 ## Version History
+
+### v2.7.3 (Build 35)
+* **Custom Gesture-Locked Video Scrubber Bar:** Replaced Flutter's stock Slider with a purpose-built `_VideoScrubberBar` featuring full vertical hit-test tolerance (`HitTestBehavior.opaque`), pointer locking, and drag capture. Sliding fingers vertically while scrubbing will never cancel gestures or dismiss the player.
+* **Seek-on-Release & Responsive Tap-to-Seek:** Scrubbing now pauses video playback cleanly and updates only the preview thumbnail, performing the actual player seek upon release to eliminate audio/video stuttering. Tap-to-seek instantly jumps to the selected timestamp with an animated flash preview.
+* **Accurate Frame Extraction & Headless MPV Fallback:** Hardened native Android frame decoding with `OPTION_CLOSEST` targeting exact requested seconds in `MainActivity.kt`. Added a headless background MPV frame extractor fallback for high-bitrate, 10-bit HEVC, and MKV video containers.
+* **Gapless Thumbnail Transitions & 250ms Bucket Caching:** Scrubbing tooltips now retain the previously rendered frame while fetching new timestamps with in-memory 250ms quantized caching, eradicating blank loading spinner flickers during scrubbing.
+* **Elevated Scrubber Tooltip & Caret Pointer:** Repositioned the floating preview thumbnail higher above the seekbar (+44-50dp) with a downward pointing triangle caret, ensuring the preview image and timestamp badge are never obscured by the user's thumb.
+* **National Flag Emojis in Language Selection:** Integrated official Unicode national flag emojis (e.g. 🇮🇩, 🇺🇸, 🇸🇦, 🇧🇷, 🇨🇳, 🇯🇵, etc.) inside modern 44x44 dp selection boxes in the language modal dialog. Cleanly removed technical 2-letter language code abbreviations (`ID`, `EN`, `SYS`) in favor of clear country flags and an adaptive `Icons.language_rounded` icon for System Default.
 
 ### v2.7.2 (Build 34)
 * **Expanded 22 Supported Languages & Alphabetical Sorting:** Integrated all 22 languages matching `phantek-video-toolkit` with English as default fallback and System Default pinned at the top. The language selector now sorts all languages alphabetically (A-Z) by English display name for effortless discovery.

@@ -620,9 +620,11 @@ class MainActivity : FlutterActivity() {
                 Pair(targetWidth, targetHeight)
             }
 
+            // Prioritize OPTION_CLOSEST for accurate frame at requested timestamp,
+            // followed by OPTION_CLOSEST_SYNC and OPTION_PREVIOUS_SYNC as fallbacks.
             val options = intArrayOf(
-                android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                 android.media.MediaMetadataRetriever.OPTION_CLOSEST,
+                android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                 android.media.MediaMetadataRetriever.OPTION_PREVIOUS_SYNC
             )
 
@@ -650,20 +652,6 @@ class MainActivity : FlutterActivity() {
                             } else {
                                 bitmap = rawBitmap
                             }
-                        }
-                    } catch (_: Throwable) {}
-                }
-            }
-
-            // Fallback to start of video if random access seek returned null
-            if (bitmap == null && timeUs > 0L) {
-                for (opt in options) {
-                    if (bitmap != null) break
-                    try {
-                        bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                            retriever.getScaledFrameAtTime(0L, opt, dstW, dstH)
-                        } else {
-                            retriever.getFrameAtTime(0L, opt)
                         }
                     } catch (_: Throwable) {}
                 }
