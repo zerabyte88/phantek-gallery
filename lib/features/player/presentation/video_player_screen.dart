@@ -622,32 +622,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     final ratio = _resolveAspectRatio(item, index);
 
-    if (isVertical && !isDeviceLandscape) {
-      final mediaQuery = MediaQuery.of(context);
-      final topPadding = mediaQuery.padding.top + 56.0;
-      final bottomPadding = mediaQuery.padding.bottom + 116.0;
-      return Padding(
-        padding: EdgeInsets.only(
-          top: topPadding,
-          bottom: bottomPadding,
-        ),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: AspectRatio(
-            aspectRatio: ratio,
-            child: content,
-          ),
-        ),
-      );
-    }
-
     if (shouldCrop) {
       return SizedBox.expand(child: content);
     }
 
-    return AspectRatio(
-      aspectRatio: ratio,
-      child: content,
+    return Center(
+      child: AspectRatio(
+        aspectRatio: ratio,
+        child: content,
+      ),
     );
   }
 
@@ -1197,7 +1180,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                   transformationController:
                                       _transformationController,
                                   minScale: 1.0,
-                                  maxScale: 10.0,
+                                  maxScale: 88.0,
                                   panEnabled: _isCurrentlyVideoZoomed,
                                   scaleEnabled: true,
                                   clipBehavior: Clip.hardEdge,
@@ -1834,6 +1817,8 @@ class _BottomBarState extends State<_BottomBar> {
   bool _showPreview = false;
   bool _previewMounted = false;
   bool _wasPlayingBeforeDrag = false;
+  bool _isFetchingFrame = false;
+  Duration? _pendingTargetPos;
 
   Uint8List? _resolveInitialThumbnail() {
     final mem = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
@@ -1875,6 +1860,8 @@ class _BottomBarState extends State<_BottomBar> {
       _lastFrameBytes = _resolveInitialThumbnail();
       _showPreview = false;
       _previewMounted = false;
+      _isFetchingFrame = false;
+      _pendingTargetPos = null;
     }
     if (oldWidget.player != widget.player) {
       _unsubscribePlayer();
@@ -1930,11 +1917,13 @@ class _BottomBarState extends State<_BottomBar> {
     _debounceTimer?.cancel();
     _previewFadeTimer?.cancel();
     _frameCache.clear();
+    _isFetchingFrame = false;
+    _pendingTargetPos = null;
     _unsubscribePlayer();
     super.dispose();
   }
 
-  void _fetchPreviewFrame(Duration targetPos) {
+  void _fetchPreviewFrame(Duration targetPos, {bool immediate = false}) {
     if (widget.item.path.isEmpty) return;
     final bucketKey = targetPos.inMilliseconds ~/ 250;
     if (_frameCache.containsKey(bucketKey)) {
@@ -1947,9 +1936,43 @@ class _BottomBarState extends State<_BottomBar> {
       return;
     }
 
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 50), () async {
-      if (!mounted || (!_isDragging && !_showPreview)) return;
+    _pendingTargetPos = targetPos;
+    if (_isFetchingFrame) return;
+
+    if (immediate) {
+      _debounceTimer?.cancel();
+      _executeNextFetch();
+    } else {
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(const Duration(milliseconds: 35), () {
+        _executeNextFetch();
+      });
+    }
+  }
+
+  Future<void> _executeNextFetch() async {
+    if (_isFetchingFrame || _pendingTargetPos == null) return;
+    if (!mounted || (!_isDragging && !_showPreview)) return;
+
+    final targetPos = _pendingTargetPos!;
+    _pendingTargetPos = null;
+    final bucketKey = targetPos.inMilliseconds ~/ 250;
+
+    if (_frameCache.containsKey(bucketKey)) {
+      final cached = _frameCache[bucketKey];
+      if (_lastFrameBytes != cached && mounted) {
+        setState(() {
+          _lastFrameBytes = cached;
+        });
+      }
+      if (_pendingTargetPos != null) {
+        _executeNextFetch();
+      }
+      return;
+    }
+
+    _isFetchingFrame = true;
+    try {
       final isVert = widget.isVertical ||
           (widget.item.height != null &&
               widget.item.width != null &&
@@ -1964,17 +1987,23 @@ class _BottomBarState extends State<_BottomBar> {
         height: reqH,
       );
 
-      if (!mounted || (!_isDragging && !_showPreview)) return;
-      if (bytes != null && bytes.isNotEmpty) {
-        if (_frameCache.length >= 60) {
+      if (mounted && bytes != null && bytes.isNotEmpty) {
+        if (_frameCache.length >= 80) {
           _frameCache.remove(_frameCache.keys.first);
         }
         _frameCache[bucketKey] = bytes;
-        setState(() {
-          _lastFrameBytes = bytes;
-        });
+        if (_isDragging || _showPreview) {
+          setState(() {
+            _lastFrameBytes = bytes;
+          });
+        }
       }
-    });
+    } finally {
+      _isFetchingFrame = false;
+      if (mounted && _pendingTargetPos != null && (_isDragging || _showPreview)) {
+        _executeNextFetch();
+      }
+    }
   }
 
   void _onScrubStart(double v, Duration dur) {
@@ -1996,7 +2025,7 @@ class _BottomBarState extends State<_BottomBar> {
       _showPreview = true;
       _previewMounted = true;
     });
-    _fetchPreviewFrame(target);
+    _fetchPreviewFrame(target, immediate: true);
   }
 
   void _onScrubUpdate(double v, Duration dur) {
@@ -2012,7 +2041,7 @@ class _BottomBarState extends State<_BottomBar> {
     final target = Duration(
       milliseconds: (v * dur.inMilliseconds).round(),
     );
-    _fetchPreviewFrame(target);
+    _fetchPreviewFrame(target, immediate: false);
   }
 
   void _onScrubEnd(double v, Duration dur) {
@@ -2025,59 +2054,27 @@ class _BottomBarState extends State<_BottomBar> {
     }
     widget.onScrubbingChanged?.call(false);
     _debounceTimer?.cancel();
+    _pendingTargetPos = null;
     setState(() {
       _isDragging = false;
       _dragFraction = null;
-      _showPreview = false;
     });
     _previewFadeTimer?.cancel();
-    _previewFadeTimer = Timer(const Duration(milliseconds: 250), () {
-      if (mounted && !_isDragging) {
-        setState(() {
-          _previewMounted = false;
-        });
-      }
-    });
-    _pillFadeTimer?.cancel();
-    _pillFadeTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted && !_isDragging) {
-        setState(() {
-          _showPillBadge = false;
-        });
-      }
-    });
-  }
-
-  void _onTapSeek(double v, Duration dur) {
-    final target = Duration(
-      milliseconds: (v * dur.inMilliseconds).round(),
-    );
-    widget.player.seek(target);
-    _lastFrameBytes ??= _resolveInitialThumbnail();
-    _pillFadeTimer?.cancel();
-    _previewFadeTimer?.cancel();
-    setState(() {
-      _dragFraction = v;
-      _showPillBadge = true;
-      _showPreview = true;
-      _previewMounted = true;
-    });
-    _fetchPreviewFrame(target);
-    _previewFadeTimer = Timer(const Duration(milliseconds: 1200), () {
+    _previewFadeTimer = Timer(const Duration(milliseconds: 350), () {
       if (mounted && !_isDragging) {
         setState(() {
           _showPreview = false;
         });
-        _previewFadeTimer = Timer(const Duration(milliseconds: 250), () {
+        _previewFadeTimer = Timer(const Duration(milliseconds: 200), () {
           if (mounted && !_isDragging) {
             setState(() {
               _previewMounted = false;
-              _dragFraction = null;
             });
           }
         });
       }
     });
+    _pillFadeTimer?.cancel();
     _pillFadeTimer = Timer(const Duration(seconds: 2), () {
       if (mounted && !_isDragging) {
         setState(() {
@@ -2110,7 +2107,6 @@ class _BottomBarState extends State<_BottomBar> {
           onScrubStart: (v) => _onScrubStart(v, dur),
           onScrubUpdate: (v) => _onScrubUpdate(v, dur),
           onScrubEnd: (v) => _onScrubEnd(v, dur),
-          onTapSeek: (v) => _onTapSeek(v, dur),
         );
 
         if (!_previewMounted) {
@@ -2915,7 +2911,7 @@ class _DeviceRotatePainter extends CustomPainter {
 
 // ── Video Scrubber Bar ────────────────────────────────────────────────────────
 
-class _VideoScrubberBar extends StatelessWidget {
+class _VideoScrubberBar extends StatefulWidget {
   const _VideoScrubberBar({
     required this.value,
     required this.isLandscape,
@@ -2923,7 +2919,6 @@ class _VideoScrubberBar extends StatelessWidget {
     required this.onScrubStart,
     required this.onScrubUpdate,
     required this.onScrubEnd,
-    required this.onTapSeek,
   });
 
   final double value;
@@ -2932,11 +2927,17 @@ class _VideoScrubberBar extends StatelessWidget {
   final ValueChanged<double> onScrubStart;
   final ValueChanged<double> onScrubUpdate;
   final ValueChanged<double> onScrubEnd;
-  final ValueChanged<double> onTapSeek;
+
+  @override
+  State<_VideoScrubberBar> createState() => _VideoScrubberBarState();
+}
+
+class _VideoScrubberBarState extends State<_VideoScrubberBar> {
+  double? _lastFrac;
 
   @override
   Widget build(BuildContext context) {
-    final barHeight = isLandscape ? 36.0 : 44.0;
+    final barHeight = widget.isLandscape ? 36.0 : 44.0;
     const trackPadding = 16.0;
 
     return LayoutBuilder(
@@ -2944,28 +2945,30 @@ class _VideoScrubberBar extends StatelessWidget {
         final trackWidth =
             (constraints.maxWidth - trackPadding * 2).clamp(1.0, double.infinity);
 
-        return GestureDetector(
+        return Listener(
           behavior: HitTestBehavior.opaque,
-          onTapDown: (details) {
-            final x = details.localPosition.dx;
+          onPointerDown: (e) {
+            final x = e.localPosition.dx;
             final frac = ((x - trackPadding) / trackWidth).clamp(0.0, 1.0);
-            onTapSeek(frac);
+            _lastFrac = frac;
+            widget.onScrubStart(frac);
           },
-          onHorizontalDragStart: (details) {
-            final x = details.localPosition.dx;
+          onPointerMove: (e) {
+            final x = e.localPosition.dx;
             final frac = ((x - trackPadding) / trackWidth).clamp(0.0, 1.0);
-            onScrubStart(frac);
+            _lastFrac = frac;
+            widget.onScrubUpdate(frac);
           },
-          onHorizontalDragUpdate: (details) {
-            final x = details.localPosition.dx;
+          onPointerUp: (e) {
+            final x = e.localPosition.dx;
             final frac = ((x - trackPadding) / trackWidth).clamp(0.0, 1.0);
-            onScrubUpdate(frac);
+            _lastFrac = null;
+            widget.onScrubEnd(frac);
           },
-          onHorizontalDragEnd: (_) {
-            onScrubEnd(value);
-          },
-          onHorizontalDragCancel: () {
-            onScrubEnd(value);
+          onPointerCancel: (e) {
+            final endFrac = _lastFrac ?? widget.value;
+            _lastFrac = null;
+            widget.onScrubEnd(endFrac);
           },
           child: SizedBox(
             height: barHeight,
@@ -2973,9 +2976,9 @@ class _VideoScrubberBar extends StatelessWidget {
             child: CustomPaint(
               size: Size(constraints.maxWidth, barHeight),
               painter: _ScrubberTrackPainter(
-                value: value,
-                isDragging: isDragging,
-                isLandscape: isLandscape,
+                value: widget.value,
+                isDragging: widget.isDragging,
+                isLandscape: widget.isLandscape,
                 trackPadding: trackPadding,
               ),
             ),

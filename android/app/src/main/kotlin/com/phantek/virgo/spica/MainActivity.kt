@@ -526,19 +526,24 @@ class MainActivity : FlutterActivity() {
         try {
             var dataSourceSet = false
 
-            // 1. Try direct file descriptor if file is accessible
+            // 1. Direct path / file descriptor if file is accessible
             if (file.exists() && file.canRead()) {
                 try {
-                    fis = java.io.FileInputStream(file)
-                    retriever.setDataSource(fis.fd, 0, file.length())
+                    retriever.setDataSource(file.absolutePath)
                     dataSourceSet = true
                 } catch (_: Throwable) {
                     try {
-                        fis?.close()
                         fis = java.io.FileInputStream(file)
-                        retriever.setDataSource(fis.fd)
+                        retriever.setDataSource(fis.fd, 0, file.length())
                         dataSourceSet = true
-                    } catch (_: Throwable) {}
+                    } catch (_: Throwable) {
+                        try {
+                            fis?.close()
+                            fis = java.io.FileInputStream(file)
+                            retriever.setDataSource(fis.fd)
+                            dataSourceSet = true
+                        } catch (_: Throwable) {}
+                    }
                 }
             }
 
@@ -628,12 +633,13 @@ class MainActivity : FlutterActivity() {
                 android.media.MediaMetadataRetriever.OPTION_PREVIOUS_SYNC
             )
 
+            val safeTimeUs = timeUs.coerceAtLeast(0L)
             var bitmap: android.graphics.Bitmap? = null
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                 for (opt in options) {
                     if (bitmap != null) break
                     try {
-                        bitmap = retriever.getScaledFrameAtTime(timeUs, opt, dstW, dstH)
+                        bitmap = retriever.getScaledFrameAtTime(safeTimeUs, opt, dstW, dstH)
                     } catch (_: Throwable) {}
                 }
             }
@@ -642,7 +648,7 @@ class MainActivity : FlutterActivity() {
                 for (opt in options) {
                     if (bitmap != null) break
                     try {
-                        val rawBitmap = retriever.getFrameAtTime(timeUs, opt)
+                        val rawBitmap = retriever.getFrameAtTime(safeTimeUs, opt)
                         if (rawBitmap != null) {
                             if (rawBitmap.width > dstW || rawBitmap.height > dstH) {
                                 bitmap = android.graphics.Bitmap.createScaledBitmap(rawBitmap, dstW, dstH, true)

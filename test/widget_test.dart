@@ -971,6 +971,12 @@ void main() {
       final isZoomed = matrix.getMaxScaleOnAxis() > 1.05;
       expect(isZoomed, isTrue);
 
+      // Simulate 88x max pinch-to-zoom
+      matrix.setIdentity();
+      matrix.scaleByDouble(88.0, 88.0, 1.0, 1.0);
+      expect(matrix.getMaxScaleOnAxis(), 88.0);
+      expect(matrix.getMaxScaleOnAxis() > 1.05, isTrue);
+
       // Reset zoom
       matrix.setIdentity();
       expect(matrix.getMaxScaleOnAxis(), 1.0);
