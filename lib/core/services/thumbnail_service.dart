@@ -232,11 +232,12 @@ class ThumbnailService {
       );
 
       await player.open(Media(filePath), play: false);
+      await controller.waitUntilFirstFrameRendered
+          .timeout(const Duration(milliseconds: 800), onTimeout: () => null);
       if (time > Duration.zero) {
         await player.seek(time);
+        await Future<void>.delayed(const Duration(milliseconds: 120));
       }
-      await controller.waitUntilFirstFrameRendered
-          .timeout(const Duration(milliseconds: 1000), onTimeout: () => null);
 
       final bytes = await player.screenshot(format: 'image/jpeg');
       return (bytes != null && bytes.isNotEmpty) ? bytes : null;
