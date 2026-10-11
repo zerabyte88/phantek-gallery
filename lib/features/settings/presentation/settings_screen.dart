@@ -1000,14 +1000,18 @@ class _ModernLanguageOptionCard extends StatelessWidget {
                   ),
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  language.code?.toUpperCase() ?? 'SYS',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: selected ? cs.primary : cs.onSurfaceVariant,
-                  ),
-                ),
+                child: language.flagEmoji != null
+                    ? Text(
+                        language.flagEmoji!,
+                        style: const TextStyle(
+                          fontSize: 22,
+                        ),
+                      )
+                    : Icon(
+                        Icons.language_rounded,
+                        size: 22,
+                        color: selected ? cs.primary : cs.onSurfaceVariant,
+                      ),
               ),
               const SizedBox(width: 14),
               Expanded(

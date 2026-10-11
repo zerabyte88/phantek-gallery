@@ -43,6 +43,7 @@ class ThumbnailService {
 
   final Map<String, Uint8List> _memoryCache = {};
   final Map<String, double> _thumbnailAspectRatioCache = {};
+  final Map<String, Uint8List> _videoFrameCache = {};
   final Map<String, Completer<Uint8List?>> _inFlight = {};
   final Map<String, AssetEntity> _entityCache = {};
   final Queue<_ThumbnailRequest> _queue = Queue();
@@ -163,13 +164,21 @@ class ThumbnailService {
   }
 
   /// Extracts a video frame at a specific timestamp for seekbar preview.
-  /// Uses native Android MediaMetadataRetriever running on background executor.
+  /// Uses native Android MediaMetadataRetriever running on background executor,
+  /// with automatic fallback to MPV engine for exotic formats, and an LRU bucket cache.
   Future<Uint8List?> getVideoFrame({
     required String filePath,
     required Duration time,
     int width = 256,
     int height = 256,
   }) async {
+    final bucket = time.inMilliseconds ~/ 250;
+    final cacheKey = '$filePath:$bucket:${width}x$height';
+    final cached = _videoFrameCache[cacheKey];
+    if (cached != null) return cached;
+
+    Uint8List? result;
+    // 1. Primary: Native MediaMetadataRetriever
     try {
       final bytes = await _nativeChannel.invokeMethod<Uint8List>(
         'getVideoFrame',
@@ -180,10 +189,61 @@ class ThumbnailService {
           'height': height,
         },
       );
-      return (bytes != null && bytes.isNotEmpty) ? bytes : null;
+      if (bytes != null && bytes.isNotEmpty) {
+        result = bytes;
+      }
     } catch (e) {
       debugPrint('[ThumbnailService] Native getVideoFrame failed for $filePath: $e');
+    }
+
+    // 2. Fallback: MPV frame extraction if native returned null (e.g. MKV/AV1/HEVC 10-bit)
+    if (result == null || result.isEmpty) {
+      try {
+        result = await _extractFrameAtTimeViaMpv(filePath, time);
+      } catch (e) {
+        debugPrint('[ThumbnailService] MPV fallback getVideoFrame failed for $filePath: $e');
+      }
+    }
+
+    if (result != null && result.isNotEmpty) {
+      if (_videoFrameCache.length >= 80) {
+        _videoFrameCache.remove(_videoFrameCache.keys.first);
+      }
+      _videoFrameCache[cacheKey] = result;
+      return result;
+    }
+    return null;
+  }
+
+  /// Extracts a video frame at a specific timestamp using headless MPV engine when native fails.
+  Future<Uint8List?> _extractFrameAtTimeViaMpv(String filePath, Duration time) async {
+    final player = Player(
+      configuration: const PlayerConfiguration(
+        logLevel: MPVLogLevel.error,
+      ),
+    );
+    try {
+      final controller = VideoController(
+        player,
+        configuration: const VideoControllerConfiguration(
+          enableHardwareAcceleration: false,
+          hwdec: 'no', // Software decode (FFmpeg)
+        ),
+      );
+
+      await player.open(Media(filePath), play: false);
+      if (time > Duration.zero) {
+        await player.seek(time);
+      }
+      await controller.waitUntilFirstFrameRendered
+          .timeout(const Duration(milliseconds: 1000), onTimeout: () => null);
+
+      final bytes = await player.screenshot(format: 'image/jpeg');
+      return (bytes != null && bytes.isNotEmpty) ? bytes : null;
+    } catch (_) {
       return null;
+    } finally {
+      await player.dispose();
     }
   }
 
@@ -597,12 +657,14 @@ class ThumbnailService {
   void trimMemory() {
     _memoryCache.clear();
     _thumbnailAspectRatioCache.clear();
+    _videoFrameCache.clear();
   }
 
   /// Wipes both in-memory cache and persistent disk cache.
   Future<void> clearAll() async {
     _memoryCache.clear();
     _thumbnailAspectRatioCache.clear();
+    _videoFrameCache.clear();
     _inFlight.clear();
     _entityCache.clear();
     try {

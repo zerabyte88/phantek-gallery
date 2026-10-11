@@ -1659,73 +1659,119 @@ class _SeekPreviewTooltip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: const Color(0xFF161616),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.3),
-          width: 1.2,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black87,
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (frameBytes != null && frameBytes!.isNotEmpty)
-            Image.memory(
-              frameBytes!,
-              fit: BoxFit.cover,
-              gaplessPlayback: true,
-              filterQuality: FilterQuality.medium,
-            )
-          else
-            const Center(
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
-                ),
-              ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: const Color(0xFF141414),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.35),
+              width: 1.2,
             ),
-          Positioned(
-            bottom: 4,
-            left: 4,
-            right: 4,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.75),
-                  borderRadius: BorderRadius.circular(4),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black87,
+                blurRadius: 14,
+                spreadRadius: 1,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (frameBytes != null && frameBytes!.isNotEmpty)
+                Image.memory(
+                  frameBytes!,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                )
+              else
+                const Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                    ),
+                  ),
                 ),
-                child: Text(
-                  MediaUtils.formatDuration(displayTime),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.3,
+              Positioned(
+                bottom: 4,
+                left: 4,
+                right: 4,
+                child: Center(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.75),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      MediaUtils.formatDuration(displayTime),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+        // Downward pointing arrow caret toward seekbar thumb
+        CustomPaint(
+          size: const Size(12, 6),
+          painter: _TooltipCaretPainter(
+            color: Colors.white.withValues(alpha: 0.35),
+            fillColor: const Color(0xFF141414),
+          ),
+        ),
+      ],
     );
   }
+}
+
+class _TooltipCaretPainter extends CustomPainter {
+  const _TooltipCaretPainter({required this.color, required this.fillColor});
+  final Color color;
+  final Color fillColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..lineTo(size.width, 0)
+      ..close();
+
+    final fillPaint = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, fillPaint);
+
+    final strokePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawPath(path, strokePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TooltipCaretPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.fillColor != fillColor;
 }
 
 // ── Bottom bar (Photo 2 reference) ────────────────────────────────────────
@@ -1902,8 +1948,8 @@ class _BottomBarState extends State<_BottomBar> {
     }
 
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 60), () async {
-      if (!mounted || !_isDragging) return;
+    _debounceTimer = Timer(const Duration(milliseconds: 50), () async {
+      if (!mounted || (!_isDragging && !_showPreview)) return;
       final isVert = widget.isVertical ||
           (widget.item.height != null &&
               widget.item.width != null &&
@@ -1918,9 +1964,9 @@ class _BottomBarState extends State<_BottomBar> {
         height: reqH,
       );
 
-      if (!mounted || !_isDragging) return;
+      if (!mounted || (!_isDragging && !_showPreview)) return;
       if (bytes != null && bytes.isNotEmpty) {
-        if (_frameCache.length >= 30) {
+        if (_frameCache.length >= 60) {
           _frameCache.remove(_frameCache.keys.first);
         }
         _frameCache[bucketKey] = bytes;
@@ -1931,7 +1977,7 @@ class _BottomBarState extends State<_BottomBar> {
     });
   }
 
-  void _onSliderChangeStart(double v, Duration dur) {
+  void _onScrubStart(double v, Duration dur) {
     widget.onScrubbingChanged?.call(true);
     _pillFadeTimer?.cancel();
     _previewFadeTimer?.cancel();
@@ -1953,12 +1999,15 @@ class _BottomBarState extends State<_BottomBar> {
     _fetchPreviewFrame(target);
   }
 
-  void _onSliderChanged(double v, Duration dur) {
+  void _onScrubUpdate(double v, Duration dur) {
     _pillFadeTimer?.cancel();
+    _previewFadeTimer?.cancel();
     setState(() {
+      _isDragging = true;
       _dragFraction = v;
       _showPillBadge = true;
       _showPreview = true;
+      _previewMounted = true;
     });
     final target = Duration(
       milliseconds: (v * dur.inMilliseconds).round(),
@@ -1966,7 +2015,7 @@ class _BottomBarState extends State<_BottomBar> {
     _fetchPreviewFrame(target);
   }
 
-  void _onSliderChangeEnd(double v, Duration dur) {
+  void _onScrubEnd(double v, Duration dur) {
     final target = Duration(
       milliseconds: (v * dur.inMilliseconds).round(),
     );
@@ -1982,7 +2031,7 @@ class _BottomBarState extends State<_BottomBar> {
       _showPreview = false;
     });
     _previewFadeTimer?.cancel();
-    _previewFadeTimer = Timer(const Duration(milliseconds: 220), () {
+    _previewFadeTimer = Timer(const Duration(milliseconds: 250), () {
       if (mounted && !_isDragging) {
         setState(() {
           _previewMounted = false;
@@ -1990,6 +2039,45 @@ class _BottomBarState extends State<_BottomBar> {
       }
     });
     _pillFadeTimer?.cancel();
+    _pillFadeTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted && !_isDragging) {
+        setState(() {
+          _showPillBadge = false;
+        });
+      }
+    });
+  }
+
+  void _onTapSeek(double v, Duration dur) {
+    final target = Duration(
+      milliseconds: (v * dur.inMilliseconds).round(),
+    );
+    widget.player.seek(target);
+    _lastFrameBytes ??= _resolveInitialThumbnail();
+    _pillFadeTimer?.cancel();
+    _previewFadeTimer?.cancel();
+    setState(() {
+      _dragFraction = v;
+      _showPillBadge = true;
+      _showPreview = true;
+      _previewMounted = true;
+    });
+    _fetchPreviewFrame(target);
+    _previewFadeTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (mounted && !_isDragging) {
+        setState(() {
+          _showPreview = false;
+        });
+        _previewFadeTimer = Timer(const Duration(milliseconds: 250), () {
+          if (mounted && !_isDragging) {
+            setState(() {
+              _previewMounted = false;
+              _dragFraction = null;
+            });
+          }
+        });
+      }
+    });
     _pillFadeTimer = Timer(const Duration(seconds: 2), () {
       if (mounted && !_isDragging) {
         setState(() {
@@ -2010,58 +2098,36 @@ class _BottomBarState extends State<_BottomBar> {
         (widget.item.height != null &&
             widget.item.width != null &&
             widget.item.height! > widget.item.width!);
-    final previewW = isVert ? 68.0 : 136.0;
-    final previewH = isVert ? 120.0 : 76.0;
+    final previewW = isVert ? 74.0 : 144.0;
+    final previewH = isVert ? 128.0 : 82.0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final sliderWidget = Listener(
-          behavior: HitTestBehavior.opaque,
-          onPointerDown: (_) {
-            widget.onScrubbingChanged?.call(true);
-          },
-          onPointerCancel: (_) {
-            if (!_isDragging) {
-              widget.onScrubbingChanged?.call(false);
-            }
-          },
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: isLandscape ? 2.0 : 2.5,
-              thumbShape: RoundSliderThumbShape(
-                enabledThumbRadius: isLandscape ? 5.5 : 6.0,
-              ),
-              overlayShape: RoundSliderOverlayShape(
-                overlayRadius: isLandscape ? 12.0 : 14.0,
-              ),
-            ),
-            child: Slider(
-              value: frac.clamp(0.0, 1.0),
-              onChangeStart: (v) => _onSliderChangeStart(v, dur),
-              onChanged: (v) => _onSliderChanged(v, dur),
-              onChangeEnd: (v) => _onSliderChangeEnd(v, dur),
-              activeColor: Colors.white,
-              inactiveColor: Colors.white30,
-              thumbColor: Colors.white,
-            ),
-          ),
+        final scrubberWidget = _VideoScrubberBar(
+          value: frac.clamp(0.0, 1.0),
+          isLandscape: isLandscape,
+          isDragging: _isDragging,
+          onScrubStart: (v) => _onScrubStart(v, dur),
+          onScrubUpdate: (v) => _onScrubUpdate(v, dur),
+          onScrubEnd: (v) => _onScrubEnd(v, dur),
+          onTapSeek: (v) => _onTapSeek(v, dur),
         );
 
         if (!_previewMounted) {
-          return sliderWidget;
+          return scrubberWidget;
         }
 
         final trackWidth = constraints.maxWidth - 32.0;
         final thumbX = 16.0 + frac.clamp(0.0, 1.0) * trackWidth;
         final leftOffset =
-            (thumbX - previewW / 2).clamp(4.0, constraints.maxWidth - previewW - 4.0);
+            (thumbX - previewW / 2).clamp(8.0, constraints.maxWidth - previewW - 8.0);
 
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            sliderWidget,
+            scrubberWidget,
             Positioned(
-              bottom: isLandscape ? 30.0 : 36.0,
+              bottom: isLandscape ? 44.0 : 50.0,
               left: leftOffset,
               child: IgnorePointer(
                 child: AnimatedOpacity(
@@ -2071,7 +2137,7 @@ class _BottomBarState extends State<_BottomBar> {
                   child: AnimatedScale(
                     duration: const Duration(milliseconds: 180),
                     curve: Curves.easeOutBack,
-                    scale: _showPreview ? 1.0 : 0.9,
+                    scale: _showPreview ? 1.0 : 0.88,
                     child: _SeekPreviewTooltip(
                       width: previewW,
                       height: previewH,
@@ -2846,3 +2912,165 @@ class _DeviceRotatePainter extends CustomPainter {
   bool shouldRepaint(covariant _DeviceRotatePainter oldDelegate) =>
       oldDelegate.color != color;
 }
+
+// ── Video Scrubber Bar ────────────────────────────────────────────────────────
+
+class _VideoScrubberBar extends StatelessWidget {
+  const _VideoScrubberBar({
+    required this.value,
+    required this.isLandscape,
+    required this.isDragging,
+    required this.onScrubStart,
+    required this.onScrubUpdate,
+    required this.onScrubEnd,
+    required this.onTapSeek,
+  });
+
+  final double value;
+  final bool isLandscape;
+  final bool isDragging;
+  final ValueChanged<double> onScrubStart;
+  final ValueChanged<double> onScrubUpdate;
+  final ValueChanged<double> onScrubEnd;
+  final ValueChanged<double> onTapSeek;
+
+  @override
+  Widget build(BuildContext context) {
+    final barHeight = isLandscape ? 36.0 : 44.0;
+    const trackPadding = 16.0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final trackWidth =
+            (constraints.maxWidth - trackPadding * 2).clamp(1.0, double.infinity);
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (details) {
+            final x = details.localPosition.dx;
+            final frac = ((x - trackPadding) / trackWidth).clamp(0.0, 1.0);
+            onTapSeek(frac);
+          },
+          onHorizontalDragStart: (details) {
+            final x = details.localPosition.dx;
+            final frac = ((x - trackPadding) / trackWidth).clamp(0.0, 1.0);
+            onScrubStart(frac);
+          },
+          onHorizontalDragUpdate: (details) {
+            final x = details.localPosition.dx;
+            final frac = ((x - trackPadding) / trackWidth).clamp(0.0, 1.0);
+            onScrubUpdate(frac);
+          },
+          onHorizontalDragEnd: (_) {
+            onScrubEnd(value);
+          },
+          onHorizontalDragCancel: () {
+            onScrubEnd(value);
+          },
+          child: SizedBox(
+            height: barHeight,
+            width: double.infinity,
+            child: CustomPaint(
+              size: Size(constraints.maxWidth, barHeight),
+              painter: _ScrubberTrackPainter(
+                value: value,
+                isDragging: isDragging,
+                isLandscape: isLandscape,
+                trackPadding: trackPadding,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ScrubberTrackPainter extends CustomPainter {
+  const _ScrubberTrackPainter({
+    required this.value,
+    required this.isDragging,
+    required this.isLandscape,
+    required this.trackPadding,
+  });
+
+  final double value;
+  final bool isDragging;
+  final bool isLandscape;
+  final double trackPadding;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centerY = size.height / 2;
+    final trackWidth = size.width - trackPadding * 2;
+    final startX = trackPadding;
+    final endX = size.width - trackPadding;
+    final clampedFrac = value.clamp(0.0, 1.0);
+    final thumbX = startX + clampedFrac * trackWidth;
+
+    final trackHeight =
+        isDragging ? (isLandscape ? 3.5 : 4.0) : (isLandscape ? 2.2 : 2.8);
+    final rradius = Radius.circular(trackHeight / 2);
+
+    // 1. Inactive track (right / background)
+    final inactivePaint = Paint()
+      ..color = Colors.white30
+      ..style = PaintingStyle.fill;
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(startX, centerY - trackHeight / 2, endX,
+            centerY + trackHeight / 2),
+        rradius,
+      ),
+      inactivePaint,
+    );
+
+    // 2. Active track (left / progress)
+    if (thumbX > startX) {
+      final activePaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(startX, centerY - trackHeight / 2, thumbX,
+              centerY + trackHeight / 2),
+          rradius,
+        ),
+        activePaint,
+      );
+    }
+
+    // 3. Thumb circle with subtle shadow & glow halo
+    final thumbRadius =
+        isDragging ? (isLandscape ? 7.5 : 8.5) : (isLandscape ? 5.5 : 6.5);
+
+    if (isDragging) {
+      // Glow ripple halo when dragging
+      final haloPaint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.22)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(thumbX, centerY), thumbRadius + 5.0, haloPaint);
+    }
+
+    // Shadow under thumb
+    final shadowPaint = Paint()
+      ..color = Colors.black45
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+    canvas.drawCircle(Offset(thumbX, centerY + 1.0), thumbRadius, shadowPaint);
+
+    // Solid white thumb
+    final thumbPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(thumbX, centerY), thumbRadius, thumbPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScrubberTrackPainter oldDelegate) =>
+      oldDelegate.value != value ||
+      oldDelegate.isDragging != isDragging ||
+      oldDelegate.isLandscape != isLandscape;
+}
+

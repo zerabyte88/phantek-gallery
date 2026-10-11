@@ -1591,6 +1591,26 @@ void main() {
       expect(AppLanguage.fromCode('ru'), AppLanguage.ru);
       expect(AppLanguage.fromCode('unknown'), AppLanguage.system);
       expect(AppLanguage.fromCode(null), AppLanguage.system);
+
+      // Test flagEmoji
+      expect(AppLanguage.system.flagEmoji, isNull);
+      expect(AppLanguage.id.flagEmoji, '🇮🇩');
+      expect(AppLanguage.en.flagEmoji, '🇺🇸');
+      expect(AppLanguage.zh.flagEmoji, '🇨🇳');
+      expect(AppLanguage.zhTw.flagEmoji, '🇹🇼');
+      expect(AppLanguage.ja.flagEmoji, '🇯🇵');
+      expect(AppLanguage.pt.flagEmoji, '🇧🇷');
+      expect(AppLanguage.es.flagEmoji, '🇪🇸');
+      expect(AppLanguage.ar.flagEmoji, '🇸🇦');
+
+      for (final lang in AppLanguage.values) {
+        if (lang == AppLanguage.system) {
+          expect(lang.flagEmoji, isNull);
+        } else {
+          expect(lang.flagEmoji, isNotNull, reason: '${lang.name} flagEmoji should not be null');
+          expect(lang.flagEmoji!.isNotEmpty, isTrue, reason: '${lang.name} flagEmoji should not be empty');
+        }
+      }
     });
 
     test('AppLocalizations translation dictionary coverage across all supported languages', () {
@@ -1666,6 +1686,8 @@ void main() {
       expect(find.text('Bahasa Indonesia'), findsOneWidget);
       expect(find.text('English'), findsWidgets);
       expect(find.text('System Default'), findsOneWidget);
+      expect(find.byIcon(Icons.language_rounded), findsWidgets);
+      expect(find.text('SYS'), findsNothing);
 
       // Select Bahasa Indonesia
       final idFinder = find.text('Bahasa Indonesia');
@@ -1959,6 +1981,80 @@ void main() {
       expect(horizontalVideo, isFalse);
       final horizontalFit = horizontalVideo ? BoxFit.cover : BoxFit.contain;
       expect(horizontalFit, BoxFit.contain);
+    });
+
+    test('Video scrubber fraction clamping and thumb position math', () {
+      const trackPadding = 16.0;
+      const totalWidth = 360.0;
+      const trackWidth = totalWidth - trackPadding * 2; // 328.0
+
+      double computeFraction(double touchX) {
+        return ((touchX - trackPadding) / trackWidth).clamp(0.0, 1.0);
+      }
+
+      double computeThumbX(double fraction) {
+        return trackPadding + fraction.clamp(0.0, 1.0) * trackWidth;
+      }
+
+      // Touch before start of track clamps to 0.0
+      expect(computeFraction(0.0), 0.0);
+      expect(computeFraction(10.0), 0.0);
+      expect(computeThumbX(computeFraction(0.0)), 16.0);
+
+      // Touch at start of track -> 0.0
+      expect(computeFraction(16.0), 0.0);
+      expect(computeThumbX(0.0), 16.0);
+
+      // Touch at exact center -> 0.5
+      expect(computeFraction(180.0), 0.5);
+      expect(computeThumbX(0.5), 180.0);
+
+      // Touch at end of track -> 1.0
+      expect(computeFraction(344.0), 1.0);
+      expect(computeThumbX(1.0), 344.0);
+
+      // Touch past end of track clamps to 1.0
+      expect(computeFraction(400.0), 1.0);
+      expect(computeThumbX(computeFraction(400.0)), 344.0);
+    });
+
+    test('Video seekbar tooltip offset clamping prevents screen edge overflow', () {
+      const maxWidth = 360.0;
+      const previewW = 144.0;
+      const trackWidth = maxWidth - 32.0; // 328.0
+
+      double computeTooltipLeft(double fraction) {
+        final thumbX = 16.0 + fraction.clamp(0.0, 1.0) * trackWidth;
+        return (thumbX - previewW / 2).clamp(8.0, maxWidth - previewW - 8.0);
+      }
+
+      // Start of seekbar (0.0): tooltip clamped to min left 8.0
+      expect(computeTooltipLeft(0.0), 8.0);
+
+      // End of seekbar (1.0): tooltip clamped to max right (360 - 144 - 8 = 208.0)
+      expect(computeTooltipLeft(1.0), 208.0);
+
+      // Center (0.5): thumbX = 180.0, left = 180 - 72 = 108.0 (well within bounds)
+      expect(computeTooltipLeft(0.5), 108.0);
+    });
+
+    test('Video seek frame cache 250ms bucket quantization', () {
+      int bucketFor(Duration time) => time.inMilliseconds ~/ 250;
+
+      // 0ms, 120ms, 240ms map to bucket 0
+      expect(bucketFor(Duration.zero), 0);
+      expect(bucketFor(const Duration(milliseconds: 120)), 0);
+      expect(bucketFor(const Duration(milliseconds: 249)), 0);
+
+      // 250ms, 400ms map to bucket 1
+      expect(bucketFor(const Duration(milliseconds: 250)), 1);
+      expect(bucketFor(const Duration(milliseconds: 499)), 1);
+
+      // 500ms maps to bucket 2
+      expect(bucketFor(const Duration(milliseconds: 500)), 2);
+
+      // 10 seconds maps to bucket 40
+      expect(bucketFor(const Duration(seconds: 10)), 40);
     });
   });
 }
