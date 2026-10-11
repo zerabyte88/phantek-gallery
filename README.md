@@ -61,7 +61,7 @@
 - **Material 3 Themes:** System Default, Clean Light, and Slate Dark.
 - **Pure AMOLED Pitch-Black:** Deep true black (`#000000`) surfaces for maximum OLED battery savings.
 - **Secret AMOLED Sakura Theme 🌸:** Exclusive Japanese Sakura pink accent theme over pure black.
-- **Developer Easter Egg:** Tap the maintainer avatar or Phantek title 10 times in Settings or Appbar to unlock the secret AMOLED Sakura mode!
+- **Developer Easter Egg:** Tap the Phantek title 10 times in Appbar to unlock the secret AMOLED Sakura mode!
 
 ### 7. Over-The-Air (OTA) Updates & 64-Bit Architecture
 - **Automated GitHub Releases Updater:** In-app version verification, background APK download with live progress bar, and automated installation dispatch via Android `FileProvider`.
