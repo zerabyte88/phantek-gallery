@@ -150,6 +150,27 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                 }
+            } else if (call.method == "getVideoFrame") {
+                val path = call.argument<String>("path")
+                val timeUs = (call.argument<Number>("timeUs"))?.toLong() ?: 0L
+                val width = call.argument<Int>("width") ?: 256
+                val height = call.argument<Int>("height") ?: 256
+                if (path == null) {
+                    result.error("INVALID_PATH", "Path is null", null)
+                    return@setMethodCallHandler
+                }
+                executor.execute {
+                    try {
+                        val bytes = extractVideoFrame(path, timeUs, width, height)
+                        runOnUiThread {
+                            result.success(bytes)
+                        }
+                    } catch (e: Throwable) {
+                        runOnUiThread {
+                            result.success(null)
+                        }
+                    }
+                }
             } else {
                 result.notImplemented()
             }
@@ -355,6 +376,109 @@ class MainActivity : FlutterActivity() {
         scaled.recycle()
         val resultBytes = bos.toByteArray()
         return if (resultBytes.isNotEmpty()) resultBytes else null
+    }
+
+    private fun extractVideoFrame(path: String, timeUs: Long, targetWidth: Int, targetHeight: Int): ByteArray? {
+        val file = File(path)
+        if (!file.exists() || !file.canRead()) return null
+
+        val retriever = android.media.MediaMetadataRetriever()
+        var fis: java.io.FileInputStream? = null
+        try {
+            try {
+                fis = java.io.FileInputStream(file)
+                retriever.setDataSource(fis.fd, 0, file.length())
+            } catch (_: Throwable) {
+                try {
+                    fis?.close()
+                    fis = java.io.FileInputStream(file)
+                    retriever.setDataSource(fis.fd)
+                } catch (_: Throwable) {
+                    retriever.setDataSource(path)
+                }
+            }
+
+            val widthStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+            val heightStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+            val rotationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+            val origW = widthStr?.toIntOrNull() ?: 0
+            val origH = heightStr?.toIntOrNull() ?: 0
+            val rotation = rotationStr?.toIntOrNull() ?: 0
+
+            val (dstW, dstH) = if (origW > 0 && origH > 0) {
+                val scaleW = targetWidth.toFloat() / origW.toFloat()
+                val scaleH = targetHeight.toFloat() / origH.toFloat()
+                val scale = scaleW.coerceAtMost(scaleH)
+                val w = (((origW * scale).toInt() / 2) * 2).coerceAtLeast(2)
+                val h = (((origH * scale).toInt() / 2) * 2).coerceAtLeast(2)
+                Pair(w, h)
+            } else {
+                Pair(targetWidth, targetHeight)
+            }
+
+            var bitmap: android.graphics.Bitmap? = null
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                try {
+                    bitmap = retriever.getScaledFrameAtTime(
+                        timeUs,
+                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                        dstW,
+                        dstH
+                    )
+                } catch (_: Throwable) {}
+            }
+
+            if (bitmap == null) {
+                try {
+                    val rawBitmap = retriever.getFrameAtTime(
+                        timeUs,
+                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                    )
+                    if (rawBitmap != null) {
+                        if (rawBitmap.width > dstW || rawBitmap.height > dstH) {
+                            bitmap = android.graphics.Bitmap.createScaledBitmap(rawBitmap, dstW, dstH, true)
+                            if (bitmap != rawBitmap) {
+                                rawBitmap.recycle()
+                            }
+                        } else {
+                            bitmap = rawBitmap
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            if (bitmap != null && rotation != 0) {
+                try {
+                    val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
+                    val rotated = android.graphics.Bitmap.createBitmap(
+                        bitmap!!,
+                        0,
+                        0,
+                        bitmap!!.width,
+                        bitmap!!.height,
+                        matrix,
+                        true
+                    )
+                    if (rotated != bitmap) {
+                        bitmap?.recycle()
+                        bitmap = rotated
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            if (bitmap != null) {
+                val bos = java.io.ByteArrayOutputStream()
+                bitmap!!.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, bos)
+                bitmap!!.recycle()
+                val resultBytes = bos.toByteArray()
+                return if (resultBytes.isNotEmpty()) resultBytes else null
+            }
+        } catch (_: Throwable) {
+        } finally {
+            try { retriever.release() } catch (_: Throwable) {}
+            try { fis?.close() } catch (_: Throwable) {}
+        }
+        return null
     }
 
     private fun installApk(apkPath: String) {
