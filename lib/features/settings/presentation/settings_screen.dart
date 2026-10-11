@@ -158,36 +158,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
 
-            // ══ Thumbnail Cache ══════════════════════════════════
-            _SectionHeader(context.tr.cache),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: _ModernActionButton(
-                icon: Icons.cleaning_services_rounded,
-                iconColor: const Color(0xFFF97316),
-                title: context.tr.clearThumbnailCache,
-                subtitle: context.tr.diskSize(_cacheSizeStr),
-                onTap: () async {
-                  await ThumbnailService.instance.clearAll();
-                  await _loadCacheSize();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          context.tr.clearThumbnailCache,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    );
-                  }
-                },
-              ),
-            ),
-
-            // ══ Storage ═════════════════════════════════════════
-            _SectionHeader(context.tr.storage),
+            // ══ Storage & Cache ══════════════════════════════════
+            _SectionHeader(context.tr.storageAndCache),
             _SettingsCard(
               children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: _ModernActionButton(
+                    icon: Icons.cleaning_services_rounded,
+                    iconColor: const Color(0xFFF97316),
+                    title: context.tr.clearThumbnailCache,
+                    subtitle: context.tr.diskSize(_cacheSizeStr),
+                    onTap: () async {
+                      await ThumbnailService.instance.clearAll();
+                      await _loadCacheSize();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              context.tr.clearThumbnailCache,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+                const _CardDivider(),
                 _ModernSwitchTile(
                   icon: Icons.delete_outline_rounded,
                   iconColor: const Color(0xFF14B8A6),
@@ -202,8 +200,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   iconColor: const Color(0xFF64748B),
                   title: context.tr.excludedFolders,
                   subtitle: settings.excludedFolders.isEmpty
-                      ? context.tr.none
-                      : settings.excludedFolders.join('\n'),
+                      ? context.tr.excludedFoldersDescription
+                      : '${context.tr.excludedFoldersDescription}\n\n${settings.excludedFolders.join('\n')}',
                   onTap: () =>
                       _showExcludedFoldersDialog(context, ref, settings),
                 ),
@@ -665,6 +663,16 @@ Future<void> _showExcludedFoldersDialog(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    context.tr.excludedFoldersDescription,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
                   // 1. Primary Button: Direct Native File Manager Picker
                   SizedBox(
                     width: double.infinity,
@@ -919,7 +927,7 @@ Future<AppLanguage?> _showModernLanguageDialog(
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: AppLanguage.values.map(
+                  children: AppLanguage.sortedLanguages.map(
                     (lang) => _ModernLanguageOptionCard(
                       language: lang,
                       selected: currentLanguage == lang,

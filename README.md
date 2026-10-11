@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.1&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.2&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -57,7 +57,7 @@
 - **Batch Selection Mode:** Multi-select photos, videos, or albums for bulk deletion or restoration.
 
 ### 6. Multi-Language Internationalization & Theming
-- **11 Supported Languages:** English, Indonesian (Bahasa Indonesia), Chinese Simplified (简体中文), Spanish (Español), Portuguese (Português), Japanese (日本語), Korean (한국어), Hindi (हिन्दी), Arabic (العربية), French (Français), and Russian (Русский).
+- **22 Supported Languages:** English (default), Indonesian (Bahasa Indonesia), Arabic (العربية), Chinese Simplified (简体中文), Chinese Traditional (繁體中文), Danish (Dansk), Dutch (Nederlands), Finnish (Suomi), French (Français), German (Deutsch), Hindi (हिन्दी), Italian (Italiano), Japanese (日本語), Korean (한국어), Malay (Bahasa Melayu), Norwegian (Norsk), Portuguese (Português), Russian (Русский), Spanish (Español), Swedish (Svenska), Thai (ไทย), and Vietnamese (Tiếng Việt). Sorted alphabetically (A-Z) with System Default pinned at top.
 - **Material 3 Themes:** System Default, Clean Light, and Slate Dark.
 - **Pure AMOLED Pitch-Black:** Deep true black (`#000000`) surfaces for maximum OLED battery savings.
 - **Secret AMOLED Sakura Theme 🌸:** Exclusive Japanese Sakura pink accent theme over pure black.
@@ -127,6 +127,11 @@ The compiled release APK will be generated at:
 ---
 
 ## Version History
+
+### v2.7.2 (Build 34)
+* **Expanded 22 Supported Languages & Alphabetical Sorting:** Integrated all 22 languages matching `phantek-video-toolkit` with English as default fallback and System Default pinned at the top. The language selector now sorts all languages alphabetically (A-Z) by English display name for effortless discovery.
+* **Unified Storage & Cache Settings:** Consolidated the separate Thumbnail Cache and Storage sections into a single cohesive "Storage & Cache" card, keeping cache cleanup, trash management, folder exclusion, and storage permissions neatly organized.
+* **Excluded Folders Inline Explanation:** Added concise explanatory guidance ("Abaikan folder tertentu dari pemindaian media.") directly on the settings tile and inside the folder exclusion dialog to clarify media scanner isolation.
 
 ### v2.7.1 (Build 33)
 * **Gallery Shimmer Skeleton Loading Animation:** Replaced static gray placeholder icons with smooth, theme-harmonized animated shimmer skeleton tiles across `MediaGridItem` and `AlbumGridItem`. Provides clear, polished visual feedback while thumbnails are decoding on first install or after clearing cache.

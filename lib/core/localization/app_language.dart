@@ -3,17 +3,28 @@ import 'package:flutter/material.dart';
 /// Supported application languages.
 enum AppLanguage {
   system(null, 'System Default', 'Default Sistem'),
-  id('id', 'Indonesian', 'Bahasa Indonesia'),
-  en('en', 'English', 'English'),
+  ar('ar', 'Arabic', 'العربية'),
   zh('zh', 'Chinese Simplified', '简体中文'),
-  es('es', 'Spanish', 'Español'),
-  pt('pt', 'Portuguese', 'Português'),
+  zhTw('zh_TW', 'Chinese Traditional', '繁體中文'),
+  da('da', 'Danish', 'Dansk'),
+  nl('nl', 'Dutch', 'Nederlands'),
+  en('en', 'English', 'English'),
+  fi('fi', 'Finnish', 'Suomi'),
+  fr('fr', 'French', 'Français'),
+  de('de', 'German', 'Deutsch'),
+  hi('hi', 'Hindi', 'हिन्दी'),
+  id('id', 'Indonesian', 'Bahasa Indonesia'),
+  it('it', 'Italian', 'Italiano'),
   ja('ja', 'Japanese', '日本語'),
   ko('ko', 'Korean', '한국어'),
-  hi('hi', 'Hindi', 'हिन्दी'),
-  ar('ar', 'Arabic', 'العربية'),
-  fr('fr', 'French', 'Français'),
-  ru('ru', 'Russian', 'Русский');
+  ms('ms', 'Malay', 'Bahasa Melayu'),
+  no('no', 'Norwegian', 'Norsk'),
+  pt('pt', 'Portuguese', 'Português'),
+  ru('ru', 'Russian', 'Русский'),
+  es('es', 'Spanish', 'Español'),
+  sv('sv', 'Swedish', 'Svenska'),
+  th('th', 'Thai', 'ไทย'),
+  vi('vi', 'Vietnamese', 'Tiếng Việt');
 
   const AppLanguage(this.code, this.englishName, this.nativeName);
 
@@ -27,7 +38,14 @@ enum AppLanguage {
   final String nativeName;
 
   /// Corresponding [Locale] or null for system default.
-  Locale? get locale => code != null ? Locale(code!) : null;
+  Locale? get locale {
+    if (code == null) return null;
+    if (code!.contains('_')) {
+      final parts = code!.split('_');
+      return Locale(parts[0], parts[1]);
+    }
+    return Locale(code!);
+  }
 
   /// Look up [AppLanguage] from language code.
   static AppLanguage fromCode(String? code) {
@@ -38,18 +56,36 @@ enum AppLanguage {
     );
   }
 
+  /// Languages sorted alphabetically (A-Z) by [englishName], with [system] pinned at the top.
+  static List<AppLanguage> get sortedLanguages {
+    final list = AppLanguage.values.where((l) => l != AppLanguage.system).toList()
+      ..sort((a, b) => a.englishName.compareTo(b.englishName));
+    return [AppLanguage.system, ...list];
+  }
+
   /// All supported [Locale]s for [MaterialApp].
   static List<Locale> get supportedLocales => const [
-        Locale('id'),
         Locale('en'),
+        Locale('id'),
+        Locale('ar'),
         Locale('zh'),
-        Locale('es'),
-        Locale('pt'),
+        Locale('zh', 'TW'),
+        Locale('da'),
+        Locale('nl'),
+        Locale('fi'),
+        Locale('fr'),
+        Locale('de'),
+        Locale('hi'),
+        Locale('it'),
         Locale('ja'),
         Locale('ko'),
-        Locale('hi'),
-        Locale('ar'),
-        Locale('fr'),
+        Locale('ms'),
+        Locale('no'),
+        Locale('pt'),
         Locale('ru'),
+        Locale('es'),
+        Locale('sv'),
+        Locale('th'),
+        Locale('vi'),
       ];
 }
