@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/localization/app_localizations.dart';
-import '../../../../core/utils/easter_egg_handler.dart';
-import '../../../../core/widgets/bouncy_tap.dart';
 
 /// Developer & About card placed at the bottom of the Settings screen.
 class DeveloperAboutCard extends ConsumerWidget {
@@ -12,7 +10,6 @@ class DeveloperAboutCard extends ConsumerWidget {
 
   static const _cyan = Color(0xFF00C7D7);
   static const _githubProfileUrl = 'https://github.com/zerabyte88';
-  static final _easterEggHandler = EasterEggTapHandler();
 
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
@@ -28,8 +25,8 @@ class DeveloperAboutCard extends ConsumerWidget {
     return FutureBuilder<PackageInfo>(
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
-        final version = snapshot.data?.version ?? '2.7.1';
-        final buildNumber = snapshot.data?.buildNumber ?? '33';
+        final version = snapshot.data?.version ?? '2.7.2';
+        final buildNumber = snapshot.data?.buildNumber ?? '34';
 
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -45,7 +42,7 @@ class DeveloperAboutCard extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Header: About Phantek + Version Badge ───────────────
+              // ── Header: About Phantek ───────────────────────────────
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -61,32 +58,6 @@ class DeveloperAboutCard extends ConsumerWidget {
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
-                    ),
-                  ),
-                  const Spacer(),
-                  BouncyTap(
-                    key: const ValueKey('settings_appbar_badge_easter_egg'),
-                    scaleDown: 0.92,
-                    onTap: () => _easterEggHandler.handleTap(context, ref),
-                    child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00382B),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: const Color(0xFF00E676).withValues(alpha: 0.6),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        'v$version',
-                        style: const TextStyle(
-                          color: Color(0xFF00E676),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
                     ),
                   ),
                 ],

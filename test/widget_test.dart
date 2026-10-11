@@ -497,9 +497,14 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
+      final overrides = [
+        mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+      ];
+
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: overrides,
+          child: const MaterialApp(
             home: SettingsScreen(),
           ),
         ),
@@ -520,39 +525,48 @@ void main() {
       await tester.tap(find.text('System').last);
       await tester.pumpAndSettle();
 
-      // Verify developer avatar does NOT trigger easter egg
-      final avatarFinder = find.byKey(const ValueKey('developer_avatar'));
-      await tester.scrollUntilVisible(avatarFinder, 200);
-      await tester.pumpAndSettle();
-      for (var i = 0; i < 10; i++) {
-        await tester.tap(avatarFinder);
-        await tester.pump(const Duration(milliseconds: 100));
-      }
-      await tester.pumpAndSettle();
+      // Verify SettingsScreen does not have easter egg on about card
+      expect(find.byKey(const ValueKey('settings_appbar_badge_easter_egg')), findsNothing);
       expect(SettingsService.instance.settings.isSakuraUnlocked, isFalse);
 
-      // Find version badge in DeveloperAboutCard
-      final badgeFinder = find.byKey(const ValueKey('settings_appbar_badge_easter_egg'));
-      await tester.scrollUntilVisible(badgeFinder, 200);
-      await tester.pumpAndSettle();
+      // Pump GalleryScreen where the Easter Egg lives on the AppBar badge
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: overrides,
+          child: const MaterialApp(
+            home: GalleryScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Find AppBar badge in GalleryScreen
+      final badgeFinder = find.byKey(const ValueKey('appbar_badge_easter_egg'));
       expect(badgeFinder, findsOneWidget);
 
-      // Tap version badge 10 times
+      // Tap AppBar badge 10 times
       for (var i = 0; i < 10; i++) {
         await tester.tap(badgeFinder);
         await tester.pump(const Duration(milliseconds: 100));
       }
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       // SnackBar shows Easter Egg Unlocked
       expect(find.textContaining('Easter Egg Unlocked!'), findsOneWidget);
       expect(SettingsService.instance.settings.isSakuraUnlocked, isTrue);
 
-      // Scroll back up to Theme tile
-      await tester.scrollUntilVisible(find.text('Theme'), -200);
-      await tester.pumpAndSettle();
+      // Pump SettingsScreen again to verify AMOLED Sakura is now available
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: overrides,
+          child: const MaterialApp(
+            home: SettingsScreen(),
+          ),
+        ),
+      );
 
-      // Open Theme dialog again
+      // Open Theme dialog
       await tester.tap(find.text('Theme'));
       await tester.pumpAndSettle();
 
@@ -1530,8 +1544,8 @@ void main() {
     });
 
     test('AppLanguage enum, codes, and locale mappings', () {
-      expect(AppLanguage.values.length, 12);
-      expect(AppLanguage.supportedLocales.length, 11);
+      expect(AppLanguage.values.length, 23);
+      expect(AppLanguage.supportedLocales.length, 22);
 
       expect(AppLanguage.system.code, isNull);
       expect(AppLanguage.system.locale, isNull);
@@ -1544,14 +1558,24 @@ void main() {
       expect(AppLanguage.en.nativeName, 'English');
 
       expect(AppLanguage.zh.code, 'zh');
-      expect(AppLanguage.es.code, 'es');
-      expect(AppLanguage.pt.code, 'pt');
+      expect(AppLanguage.zhTw.code, 'zh_TW');
+      expect(AppLanguage.da.code, 'da');
+      expect(AppLanguage.nl.code, 'nl');
+      expect(AppLanguage.fi.code, 'fi');
+      expect(AppLanguage.fr.code, 'fr');
+      expect(AppLanguage.de.code, 'de');
+      expect(AppLanguage.hi.code, 'hi');
+      expect(AppLanguage.it.code, 'it');
       expect(AppLanguage.ja.code, 'ja');
       expect(AppLanguage.ko.code, 'ko');
-      expect(AppLanguage.hi.code, 'hi');
-      expect(AppLanguage.ar.code, 'ar');
-      expect(AppLanguage.fr.code, 'fr');
+      expect(AppLanguage.ms.code, 'ms');
+      expect(AppLanguage.no.code, 'no');
+      expect(AppLanguage.pt.code, 'pt');
       expect(AppLanguage.ru.code, 'ru');
+      expect(AppLanguage.es.code, 'es');
+      expect(AppLanguage.sv.code, 'sv');
+      expect(AppLanguage.th.code, 'th');
+      expect(AppLanguage.vi.code, 'vi');
 
       // Test fromCode resolution
       expect(AppLanguage.fromCode('id'), AppLanguage.id);
@@ -1644,7 +1668,10 @@ void main() {
       expect(find.text('System Default'), findsOneWidget);
 
       // Select Bahasa Indonesia
-      await tester.tap(find.text('Bahasa Indonesia'));
+      final idFinder = find.text('Bahasa Indonesia');
+      await tester.scrollUntilVisible(idFinder, 100, scrollable: find.byType(Scrollable).last);
+      await tester.pumpAndSettle();
+      await tester.tap(idFinder);
       await tester.pumpAndSettle();
 
       // Modal closes, now text in settings should be localized to Indonesian

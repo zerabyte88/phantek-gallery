@@ -520,21 +520,85 @@ class MainActivity : FlutterActivity() {
 
     private fun extractVideoFrame(path: String, timeUs: Long, targetWidth: Int, targetHeight: Int): ByteArray? {
         val file = File(path)
-        if (!file.exists() || !file.canRead()) return null
-
         val retriever = android.media.MediaMetadataRetriever()
         var fis: java.io.FileInputStream? = null
+        var pfd: android.os.ParcelFileDescriptor? = null
         try {
-            try {
-                fis = java.io.FileInputStream(file)
-                retriever.setDataSource(fis.fd, 0, file.length())
-            } catch (_: Throwable) {
+            var dataSourceSet = false
+
+            // 1. Try direct file descriptor if file is accessible
+            if (file.exists() && file.canRead()) {
                 try {
-                    fis?.close()
                     fis = java.io.FileInputStream(file)
-                    retriever.setDataSource(fis.fd)
+                    retriever.setDataSource(fis.fd, 0, file.length())
+                    dataSourceSet = true
                 } catch (_: Throwable) {
+                    try {
+                        fis?.close()
+                        fis = java.io.FileInputStream(file)
+                        retriever.setDataSource(fis.fd)
+                        dataSourceSet = true
+                    } catch (_: Throwable) {}
+                }
+            }
+
+            // 2. Try MediaStore URI fallback for Android Q+ Scoped Storage
+            if (!dataSourceSet && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    val cleanPath = file.absolutePath
+                    val canonicalPath = try { file.canonicalPath } catch (_: Throwable) { cleanPath }
+                    val projection = arrayOf(android.provider.MediaStore.Video.Media._ID)
+                    var id: Long? = null
+                    val cursor = contentResolver.query(
+                        android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                        projection,
+                        "${android.provider.MediaStore.Video.Media.DATA} = ? OR ${android.provider.MediaStore.Video.Media.DATA} = ?",
+                        arrayOf(cleanPath, canonicalPath),
+                        null
+                    )
+                    cursor?.use {
+                        if (it.moveToFirst()) {
+                            id = it.getLong(it.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media._ID))
+                        }
+                    }
+                    if (id == null) {
+                        val nameCursor = contentResolver.query(
+                            android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                            projection,
+                            "${android.provider.MediaStore.Video.Media.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.Video.Media.SIZE} = ?",
+                            arrayOf(file.name, file.length().toString()),
+                            null
+                        )
+                        nameCursor?.use {
+                            if (it.moveToFirst()) {
+                                id = it.getLong(it.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media._ID))
+                            }
+                        }
+                    }
+                    if (id != null) {
+                        val uri = android.content.ContentUris.withAppendedId(
+                            android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                            id!!
+                        )
+                        pfd = contentResolver.openFileDescriptor(uri, "r")
+                        if (pfd != null) {
+                            retriever.setDataSource(pfd.fileDescriptor)
+                            dataSourceSet = true
+                        } else {
+                            retriever.setDataSource(applicationContext, uri)
+                            dataSourceSet = true
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            // 3. Fallback to raw string path
+            if (!dataSourceSet) {
+                try {
                     retriever.setDataSource(path)
+                    dataSourceSet = true
+                } catch (_: Throwable) {
+                    return null
                 }
             }
 
@@ -635,6 +699,7 @@ class MainActivity : FlutterActivity() {
         } finally {
             try { retriever.release() } catch (_: Throwable) {}
             try { fis?.close() } catch (_: Throwable) {}
+            try { pfd?.close() } catch (_: Throwable) {}
         }
         return null
     }

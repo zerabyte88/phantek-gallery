@@ -985,7 +985,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     }
                   }
                   final screenHeight = MediaQuery.sizeOf(context).height;
-                  final bottomThreshold = MediaQuery.orientationOf(context) == Orientation.landscape ? 95.0 : 150.0;
+                  final bottomThreshold = MediaQuery.orientationOf(context) == Orientation.landscape ? 140.0 : 280.0;
                   final inBottomControlsArea = _showControls && (e.position.dy > screenHeight - bottomThreshold);
                   if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
                     // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
@@ -1787,11 +1787,25 @@ class _BottomBarState extends State<_BottomBar> {
   Timer? _previewFadeTimer;
   bool _showPreview = false;
   bool _previewMounted = false;
+  bool _wasPlayingBeforeDrag = false;
+
+  Uint8List? _resolveInitialThumbnail() {
+    final mem = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
+    if (mem != null && mem.isNotEmpty) return mem;
+    final diskFile = ThumbnailService.instance.getCachedFile(widget.item.id);
+    if (diskFile != null && diskFile.existsSync()) {
+      try {
+        final b = diskFile.readAsBytesSync();
+        if (b.isNotEmpty) return b;
+      } catch (_) {}
+    }
+    return null;
+  }
 
   @override
   void initState() {
     super.initState();
-    _lastFrameBytes = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
+    _lastFrameBytes = _resolveInitialThumbnail();
     if (widget.player.state.playing) {
       _showPillBadge = true;
       _pillFadeTimer = Timer(const Duration(seconds: 2), () {
@@ -1812,7 +1826,7 @@ class _BottomBarState extends State<_BottomBar> {
       _debounceTimer?.cancel();
       _previewFadeTimer?.cancel();
       _frameCache.clear();
-      _lastFrameBytes = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
+      _lastFrameBytes = _resolveInitialThumbnail();
       _showPreview = false;
       _previewMounted = false;
     }
@@ -1921,10 +1935,14 @@ class _BottomBarState extends State<_BottomBar> {
     widget.onScrubbingChanged?.call(true);
     _pillFadeTimer?.cancel();
     _previewFadeTimer?.cancel();
+    _wasPlayingBeforeDrag = widget.player.state.playing;
+    if (_wasPlayingBeforeDrag) {
+      widget.player.pause();
+    }
     final target = Duration(
       milliseconds: (v * dur.inMilliseconds).round(),
     );
-    _lastFrameBytes ??= ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
+    _lastFrameBytes ??= _resolveInitialThumbnail();
     setState(() {
       _isDragging = true;
       _dragFraction = v;
@@ -1949,11 +1967,14 @@ class _BottomBarState extends State<_BottomBar> {
   }
 
   void _onSliderChangeEnd(double v, Duration dur) {
-    widget.onScrubbingChanged?.call(false);
     final target = Duration(
       milliseconds: (v * dur.inMilliseconds).round(),
     );
     widget.player.seek(target);
+    if (_wasPlayingBeforeDrag) {
+      widget.player.play();
+    }
+    widget.onScrubbingChanged?.call(false);
     _debounceTimer?.cancel();
     setState(() {
       _isDragging = false;
@@ -1994,24 +2015,35 @@ class _BottomBarState extends State<_BottomBar> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final sliderWidget = SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: isLandscape ? 2.0 : 2.5,
-            thumbShape: RoundSliderThumbShape(
-              enabledThumbRadius: isLandscape ? 5.5 : 6.0,
+        final sliderWidget = Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (_) {
+            widget.onScrubbingChanged?.call(true);
+          },
+          onPointerCancel: (_) {
+            if (!_isDragging) {
+              widget.onScrubbingChanged?.call(false);
+            }
+          },
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: isLandscape ? 2.0 : 2.5,
+              thumbShape: RoundSliderThumbShape(
+                enabledThumbRadius: isLandscape ? 5.5 : 6.0,
+              ),
+              overlayShape: RoundSliderOverlayShape(
+                overlayRadius: isLandscape ? 12.0 : 14.0,
+              ),
             ),
-            overlayShape: RoundSliderOverlayShape(
-              overlayRadius: isLandscape ? 12.0 : 14.0,
+            child: Slider(
+              value: frac.clamp(0.0, 1.0),
+              onChangeStart: (v) => _onSliderChangeStart(v, dur),
+              onChanged: (v) => _onSliderChanged(v, dur),
+              onChangeEnd: (v) => _onSliderChangeEnd(v, dur),
+              activeColor: Colors.white,
+              inactiveColor: Colors.white30,
+              thumbColor: Colors.white,
             ),
-          ),
-          child: Slider(
-            value: frac.clamp(0.0, 1.0),
-            onChangeStart: (v) => _onSliderChangeStart(v, dur),
-            onChanged: (v) => _onSliderChanged(v, dur),
-            onChangeEnd: (v) => _onSliderChangeEnd(v, dur),
-            activeColor: Colors.white,
-            inactiveColor: Colors.white30,
-            thumbColor: Colors.white,
           ),
         );
 

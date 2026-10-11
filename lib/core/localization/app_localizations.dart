@@ -371,6 +371,20 @@ class AppLocalizations {
         ru: 'Память',
       );
 
+  String get storageAndCache => _t(
+        en: 'Storage & Cache',
+        id: 'Penyimpanan & Cache',
+        zh: '存储与缓存',
+        es: 'Almacenamiento y caché',
+        pt: 'Armazenamento e cache',
+        ja: 'ストレージとキャッシュ',
+        ko: '스토리지 및 캐시',
+        hi: 'स्टोरेज और कैश',
+        ar: 'التخزين وذاكرة التخزين المؤقت',
+        fr: 'Stockage et cache',
+        ru: 'Память и кэш',
+      );
+
   String get trashBin => _t(
         en: 'Trash Bin',
         id: 'Tempat Sampah',
@@ -411,6 +425,20 @@ class AppLocalizations {
         ar: 'المجلدات المستبعدة',
         fr: 'Dossiers exclus',
         ru: 'Исключенные папки',
+      );
+
+  String get excludedFoldersDescription => _t(
+        en: 'Ignore specific folders from media scanning.',
+        id: 'Abaikan folder tertentu dari pemindaian media.',
+        zh: '在媒体扫描中忽略特定文件夹。',
+        es: 'Ignorar carpetas específicas del escaneo de medios.',
+        pt: 'Ignorar pastas específicas da verificação de mídia.',
+        ja: 'メディアスキャンから特定のフォルダーを除外します。',
+        ko: '미디어 검색에서 특정 폴더를 무시합니다.',
+        hi: 'मीडिया स्कैनिंग से विशिष्ट फ़ोल्डर को अनदेखा करें।',
+        ar: 'تجاهل مجلدات محددة من فحص الوسائط.',
+        fr: 'Ignorer des dossiers spécifiques de l\'analyse des médias.',
+        ru: 'Игнорировать определенные папки при сканировании медиа.',
       );
 
   String get none => _t(
@@ -1852,17 +1880,17 @@ class AppLocalizations {
       );
 
   String get supportedLanguagesCount => _t(
-        en: '11 languages supported',
-        id: '11 bahasa didukung',
-        zh: '支持 11 种语言',
-        es: '11 idiomas compatibles',
-        pt: '11 idiomas suportados',
-        ja: '11言語に対応',
-        ko: '11개 언어 지원',
-        hi: '11 भाषाएं समर्थित हैं',
-        ar: '11 لغة مدعومة',
-        fr: '11 langues prises en charge',
-        ru: 'Поддерживается 11 языков',
+        en: '22 languages supported',
+        id: '22 bahasa didukung',
+        zh: '支持 22 种语言',
+        es: '22 idiomas compatibles',
+        pt: '22 idiomas suportados',
+        ja: '22言語に対応',
+        ko: '22개 언어 지원',
+        hi: '22 भाषाएं समर्थित हैं',
+        ar: '22 لغة مدعومة',
+        fr: '22 langues prises en charge',
+        ru: 'Поддерживается 22 языка',
       );
 
   String get selectTheme => _t(
@@ -2445,17 +2473,27 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) => [
-        'id',
         'en',
+        'id',
+        'ar',
         'zh',
-        'es',
-        'pt',
+        'da',
+        'nl',
+        'fi',
+        'fr',
+        'de',
+        'hi',
+        'it',
         'ja',
         'ko',
-        'hi',
-        'ar',
-        'fr',
+        'ms',
+        'no',
+        'pt',
         'ru',
+        'es',
+        'sv',
+        'th',
+        'vi',
       ].contains(locale.languageCode);
 
   @override
