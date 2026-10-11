@@ -14,7 +14,7 @@
 
 <br/>
 
-**Phantek Gallery** is an offline-first, high-performance photo and video gallery application for Android. Built with Flutter and powered by the native MPV playback engine via MediaKit, it delivers fluid media rendering, responsive navigation, and complete data privacy without third-party tracking, analytics, or mandatory cloud dependencies. Fully compliant with modern Android standards, including Android 14+ / 16 partial media grants and edge-to-edge layouts.
+**Phantek Gallery** is an offline, photo and video gallery application for Android. Built with Flutter and powered by the native MPV playback engine via MediaKit, it delivers fluid media rendering, responsive navigation, and complete data privacy without third-party tracking, analytics, or mandatory cloud dependencies. Fully compliant with modern Android standards, including Android 14+ / 16 partial media grants and edge-to-edge layouts.
 
 ---
 
