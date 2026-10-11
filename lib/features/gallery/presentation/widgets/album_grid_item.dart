@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../../core/models/album.dart';
 import '../../../../core/services/thumbnail_service.dart';
+import 'shimmer_loading_tile.dart';
 
 /// Single cell in the albums grid (3 items per row).
 /// Shows album cover thumbnail, album folder name, and total item count.
@@ -152,7 +153,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
             }
           }
         }
-        return _buildPlaceholder(cs);
+        return const ShimmerLoadingTile(icon: Icons.photo_library_rounded);
       },
     );
   }
