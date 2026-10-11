@@ -37,7 +37,7 @@ class ThumbnailService {
   static const int _thumbnailSize = 512; // px — high-DPI physical pixels for ultra-sharp full-screen preview & crisp gallery grid
   static const int _thumbnailQuality = 90; // 90% quality (fast encode, zero pixelation / artifacts)
   static const int _maxMemoryEntries = 500;
-  static const int _maxConcurrent = 4;
+  static const int _maxConcurrent = 6;
   static const MethodChannel _nativeChannel =
       MethodChannel('com.phantek.gallery/thumbnail');
 
@@ -144,6 +144,20 @@ class ThumbnailService {
     } catch (e) {
       debugPrint(
           '[ThumbnailService] Native video thumbnail extraction failed for $filePath: $e');
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _extractNativeImageThumbnail(String filePath) async {
+    try {
+      final bytes = await _nativeChannel.invokeMethod<Uint8List>(
+        'getImageThumbnail',
+        {'path': filePath, 'size': _thumbnailSize},
+      );
+      return bytes;
+    } catch (e) {
+      debugPrint(
+          '[ThumbnailService] Native image thumbnail extraction failed for $filePath: $e');
       return null;
     }
   }
@@ -469,20 +483,31 @@ class ThumbnailService {
         }
       } else {
         // Photo / image:
-        // 1. Try photo_manager thumbnailDataWithSize (Glide-backed)
-        final entity = _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
-        if (entity != null) {
+        // 1. Fast native subsampling (BitmapFactory.inSampleSize + MediaStore loadThumbnail)
+        //    Decodes huge photos (24MP-108MP) in ~20-40ms instead of loading full MBs into Dart.
+        if (req.filePath != null && req.filePath!.isNotEmpty) {
           try {
-            bytes = await entity
-                .thumbnailDataWithSize(
-                  const ThumbnailSize.square(_thumbnailSize),
-                  quality: _thumbnailQuality,
-                )
+            bytes = await _extractNativeImageThumbnail(req.filePath!)
                 .timeout(const Duration(seconds: 4), onTimeout: () => null);
           } catch (_) {}
         }
 
-        // 2. Fallback: decode directly from local image file if photo_manager returned null or timed out
+        // 2. Try photo_manager thumbnailDataWithSize (Glide-backed) if native returned null
+        if (bytes == null || bytes.isEmpty) {
+          final entity = _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
+          if (entity != null) {
+            try {
+              bytes = await entity
+                  .thumbnailDataWithSize(
+                    const ThumbnailSize.square(_thumbnailSize),
+                    quality: _thumbnailQuality,
+                  )
+                  .timeout(const Duration(seconds: 4), onTimeout: () => null);
+            } catch (_) {}
+          }
+        }
+
+        // 3. Fallback: decode directly from local image file if photo_manager returned null or timed out
         if ((bytes == null || bytes.isEmpty) && req.filePath != null) {
           try {
             final file = File(req.filePath!);

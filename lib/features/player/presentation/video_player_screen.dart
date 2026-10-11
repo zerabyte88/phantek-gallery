@@ -58,6 +58,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   final ValueNotifier<Offset> _dragNotifier = ValueNotifier(Offset.zero);
   final ValueNotifier<bool> _isDraggingDown = ValueNotifier(false);
   bool _isSwipingHorizontal = false;
+  bool _isScrubbing = false;
   late final AnimationController _settle;
   Offset _settleFrom = Offset.zero;
   VelocityTracker _vt = VelocityTracker.withKind(PointerDeviceKind.touch);
@@ -624,13 +625,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (isVertical && !isDeviceLandscape) {
       final mediaQuery = MediaQuery.of(context);
       final topPadding = mediaQuery.padding.top + 56.0;
-      final bottomPadding = mediaQuery.padding.bottom + 72.0;
+      final bottomPadding = mediaQuery.padding.bottom + 116.0;
       return Padding(
         padding: EdgeInsets.only(
           top: topPadding,
           bottom: bottomPadding,
         ),
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: AspectRatio(
             aspectRatio: ratio,
             child: content,
@@ -982,6 +984,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       _isVideoZoomed = false;
                     }
                   }
+                  final screenHeight = MediaQuery.sizeOf(context).height;
+                  final bottomThreshold = MediaQuery.orientationOf(context) == Orientation.landscape ? 95.0 : 150.0;
+                  final inBottomControlsArea = _showControls && (e.position.dy > screenHeight - bottomThreshold);
                   if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
                     // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
                     _isMultiTouch = true;
@@ -989,6 +994,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     _startDragY = null;
                     _startDragX = null;
                     if (_dragNotifier.value != Offset.zero) _setDrag(Offset.zero);
+                    return;
+                  }
+                  if (inBottomControlsArea || _isScrubbing) {
+                    _startDragY = null;
+                    _startDragX = null;
                     return;
                   }
                   _startDragY = e.position.dy;
@@ -1003,6 +1013,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       !_isCurrentlyVideoZoomed &&
                       !_isMultiTouch &&
                       !_isPinching &&
+                      !_isScrubbing &&
                       _activePointers.length == 1 &&
                       _startDragX != null &&
                       _startDragY != null) {
@@ -1016,7 +1027,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     }
                   }
 
-                  if (_isSwipingHorizontal) return;
+                  if (_isSwipingHorizontal || _isScrubbing) return;
 
                   // Keep pull-to-dismiss and page swiping completely locked whenever
                   // the video is zoomed above 1.0x, pinching, or multi-touching.
@@ -1172,6 +1183,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                             physics: (_isCurrentlyVideoZoomed ||
                                     _isPinching ||
                                     _isMultiTouch ||
+                                    _isScrubbing ||
                                     _activePointers.length >= 2 ||
                                     isDraggingDown)
                                 ? const NeverScrollableScrollPhysics()
@@ -1440,6 +1452,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               onDelete: _deleteItem,
                               onRename: _renameCurrentItem,
                               onToggleOrientation: _toggleOrientation,
+                              onScrubbingChanged: (scrubbing) {
+                                if (_isScrubbing != scrubbing) {
+                                  setState(() => _isScrubbing = scrubbing);
+                                }
+                              },
                             ),
                           ),
                         ),
@@ -1731,6 +1748,7 @@ class _BottomBar extends StatefulWidget {
     this.isTrash = false,
     this.onRestore,
     this.onRename,
+    this.onScrubbingChanged,
   });
 
   final Player player;
@@ -1749,6 +1767,7 @@ class _BottomBar extends StatefulWidget {
   final bool isTrash;
   final VoidCallback? onRestore;
   final VoidCallback? onRename;
+  final ValueChanged<bool>? onScrubbingChanged;
 
   @override
   State<_BottomBar> createState() => _BottomBarState();
@@ -1772,6 +1791,7 @@ class _BottomBarState extends State<_BottomBar> {
   @override
   void initState() {
     super.initState();
+    _lastFrameBytes = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
     if (widget.player.state.playing) {
       _showPillBadge = true;
       _pillFadeTimer = Timer(const Duration(seconds: 2), () {
@@ -1792,7 +1812,7 @@ class _BottomBarState extends State<_BottomBar> {
       _debounceTimer?.cancel();
       _previewFadeTimer?.cancel();
       _frameCache.clear();
-      _lastFrameBytes = null;
+      _lastFrameBytes = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
       _showPreview = false;
       _previewMounted = false;
     }
@@ -1846,6 +1866,7 @@ class _BottomBarState extends State<_BottomBar> {
 
   @override
   void dispose() {
+    widget.onScrubbingChanged?.call(false);
     _debounceTimer?.cancel();
     _previewFadeTimer?.cancel();
     _frameCache.clear();
@@ -1897,11 +1918,13 @@ class _BottomBarState extends State<_BottomBar> {
   }
 
   void _onSliderChangeStart(double v, Duration dur) {
+    widget.onScrubbingChanged?.call(true);
     _pillFadeTimer?.cancel();
     _previewFadeTimer?.cancel();
     final target = Duration(
       milliseconds: (v * dur.inMilliseconds).round(),
     );
+    _lastFrameBytes ??= ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
     setState(() {
       _isDragging = true;
       _dragFraction = v;
@@ -1926,6 +1949,7 @@ class _BottomBarState extends State<_BottomBar> {
   }
 
   void _onSliderChangeEnd(double v, Duration dur) {
+    widget.onScrubbingChanged?.call(false);
     final target = Duration(
       milliseconds: (v * dur.inMilliseconds).round(),
     );

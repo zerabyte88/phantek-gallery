@@ -150,6 +150,25 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                 }
+            } else if (call.method == "getImageThumbnail") {
+                val path = call.argument<String>("path")
+                val size = call.argument<Int>("size") ?: 512
+                if (path == null) {
+                    result.error("INVALID_PATH", "Path is null", null)
+                    return@setMethodCallHandler
+                }
+                executor.execute {
+                    try {
+                        val bytes = extractImageThumbnail(path, size)
+                        runOnUiThread {
+                            result.success(bytes)
+                        }
+                    } catch (e: Throwable) {
+                        runOnUiThread {
+                            result.success(null)
+                        }
+                    }
+                }
             } else if (call.method == "getVideoFrame") {
                 val path = call.argument<String>("path")
                 val timeUs = (call.argument<Number>("timeUs"))?.toLong() ?: 0L
@@ -175,6 +194,127 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+    }
+
+    private fun extractImageThumbnail(path: String, targetSize: Int): ByteArray? {
+        val file = File(path)
+        if (!file.exists() || !file.canRead()) return null
+
+        var bitmap: android.graphics.Bitmap? = null
+        val cleanPath = file.absolutePath
+        val canonicalPath = try { file.canonicalPath } catch (_: Throwable) { cleanPath }
+
+        // 1. Android Q+ (API 29+) MediaStore contentResolver.loadThumbnail (Fastest system cache)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val projection = arrayOf(android.provider.MediaStore.Images.Media._ID)
+                var id: Long? = null
+                val cursor = contentResolver.query(
+                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    projection,
+                    "${android.provider.MediaStore.Images.Media.DATA} = ? OR ${android.provider.MediaStore.Images.Media.DATA} = ?",
+                    arrayOf(cleanPath, canonicalPath),
+                    null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        id = it.getLong(it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media._ID))
+                    }
+                }
+                if (id == null) {
+                    val nameCursor = contentResolver.query(
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        projection,
+                        "${android.provider.MediaStore.Images.Media.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.Images.Media.SIZE} = ?",
+                        arrayOf(file.name, file.length().toString()),
+                        null
+                    )
+                    nameCursor?.use {
+                        if (it.moveToFirst()) {
+                            id = it.getLong(it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media._ID))
+                        }
+                    }
+                }
+                if (id != null) {
+                    val uri = android.content.ContentUris.withAppendedId(
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        id!!
+                    )
+                    bitmap = contentResolver.loadThumbnail(uri, android.util.Size(targetSize, targetSize), null)
+                }
+            } catch (_: Throwable) {}
+        }
+
+        // 2. High-performance native downsampled decoding via BitmapFactory.Options.inSampleSize
+        if (bitmap == null) {
+            try {
+                val boundsOptions = android.graphics.BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
+                android.graphics.BitmapFactory.decodeFile(cleanPath, boundsOptions)
+
+                val origW = boundsOptions.outWidth
+                val origH = boundsOptions.outHeight
+                if (origW > 0 && origH > 0) {
+                    var sampleSize = 1
+                    val maxDim = Math.max(origW, origH)
+                    while ((maxDim / (sampleSize * 2)) >= targetSize) {
+                        sampleSize *= 2
+                    }
+
+                    val decodeOptions = android.graphics.BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+                    }
+                    val decoded = android.graphics.BitmapFactory.decodeFile(cleanPath, decodeOptions)
+                    if (decoded != null) {
+                        // Handle EXIF rotation
+                        var degrees = 0
+                        try {
+                            val exif = android.media.ExifInterface(cleanPath)
+                            val orientation = exif.getAttributeInt(
+                                android.media.ExifInterface.TAG_ORIENTATION,
+                                android.media.ExifInterface.ORIENTATION_NORMAL
+                            )
+                            degrees = when (orientation) {
+                                android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                                android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                                android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                                else -> 0
+                            }
+                        } catch (_: Throwable) {}
+
+                        val rotated = if (degrees != 0) {
+                            val matrix = android.graphics.Matrix().apply { postRotate(degrees.toFloat()) }
+                            android.graphics.Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+                        } else {
+                            decoded
+                        }
+
+                        // Scale to target size if still significantly larger
+                        val curMax = Math.max(rotated.width, rotated.height)
+                        bitmap = if (curMax > targetSize * 1.5) {
+                            val scale = targetSize.toFloat() / curMax.toFloat()
+                            val dstW = Math.max(2, (rotated.width * scale).toInt())
+                            val dstH = Math.max(2, (rotated.height * scale).toInt())
+                            android.graphics.Bitmap.createScaledBitmap(rotated, dstW, dstH, true)
+                        } else {
+                            rotated
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+        }
+
+        if (bitmap == null) return null
+
+        val stream = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, stream)
+        val bytes = stream.toByteArray()
+        if (!bitmap.isRecycled) {
+            bitmap.recycle()
+        }
+        return if (bytes.isNotEmpty()) bytes else null
     }
 
     private fun extractVideoThumbnail(path: String, targetSize: Int): ByteArray? {
@@ -416,35 +556,53 @@ class MainActivity : FlutterActivity() {
                 Pair(targetWidth, targetHeight)
             }
 
+            val options = intArrayOf(
+                android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                android.media.MediaMetadataRetriever.OPTION_CLOSEST,
+                android.media.MediaMetadataRetriever.OPTION_PREVIOUS_SYNC
+            )
+
             var bitmap: android.graphics.Bitmap? = null
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                try {
-                    bitmap = retriever.getScaledFrameAtTime(
-                        timeUs,
-                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        dstW,
-                        dstH
-                    )
-                } catch (_: Throwable) {}
+                for (opt in options) {
+                    if (bitmap != null) break
+                    try {
+                        bitmap = retriever.getScaledFrameAtTime(timeUs, opt, dstW, dstH)
+                    } catch (_: Throwable) {}
+                }
             }
 
             if (bitmap == null) {
-                try {
-                    val rawBitmap = retriever.getFrameAtTime(
-                        timeUs,
-                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-                    )
-                    if (rawBitmap != null) {
-                        if (rawBitmap.width > dstW || rawBitmap.height > dstH) {
-                            bitmap = android.graphics.Bitmap.createScaledBitmap(rawBitmap, dstW, dstH, true)
-                            if (bitmap != rawBitmap) {
-                                rawBitmap.recycle()
+                for (opt in options) {
+                    if (bitmap != null) break
+                    try {
+                        val rawBitmap = retriever.getFrameAtTime(timeUs, opt)
+                        if (rawBitmap != null) {
+                            if (rawBitmap.width > dstW || rawBitmap.height > dstH) {
+                                bitmap = android.graphics.Bitmap.createScaledBitmap(rawBitmap, dstW, dstH, true)
+                                if (bitmap != rawBitmap) {
+                                    rawBitmap.recycle()
+                                }
+                            } else {
+                                bitmap = rawBitmap
                             }
-                        } else {
-                            bitmap = rawBitmap
                         }
-                    }
-                } catch (_: Throwable) {}
+                    } catch (_: Throwable) {}
+                }
+            }
+
+            // Fallback to start of video if random access seek returned null
+            if (bitmap == null && timeUs > 0L) {
+                for (opt in options) {
+                    if (bitmap != null) break
+                    try {
+                        bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                            retriever.getScaledFrameAtTime(0L, opt, dstW, dstH)
+                        } else {
+                            retriever.getFrameAtTime(0L, opt)
+                        }
+                    } catch (_: Throwable) {}
+                }
             }
 
             if (bitmap != null && rotation != 0) {

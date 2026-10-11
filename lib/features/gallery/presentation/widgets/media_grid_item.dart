@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/media_item.dart';
 import '../../../../core/services/thumbnail_service.dart';
 import '../../../../core/utils/media_utils.dart';
+import 'shimmer_loading_tile.dart';
 
 /// Single cell in the gallery grid. Shows thumbnail + video badge if selected.
 class MediaGridItem extends ConsumerStatefulWidget {
@@ -153,7 +154,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
             }
           }
         }
-        return _buildPlaceholder(cs);
+        return ShimmerLoadingTile(isVideo: widget.item.isVideo);
       },
     );
   }
