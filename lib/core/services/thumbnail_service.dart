@@ -148,6 +148,31 @@ class ThumbnailService {
     }
   }
 
+  /// Extracts a video frame at a specific timestamp for seekbar preview.
+  /// Uses native Android MediaMetadataRetriever running on background executor.
+  Future<Uint8List?> getVideoFrame({
+    required String filePath,
+    required Duration time,
+    int width = 256,
+    int height = 256,
+  }) async {
+    try {
+      final bytes = await _nativeChannel.invokeMethod<Uint8List>(
+        'getVideoFrame',
+        {
+          'path': filePath,
+          'timeUs': time.inMicroseconds,
+          'width': width,
+          'height': height,
+        },
+      );
+      return (bytes != null && bytes.isNotEmpty) ? bytes : null;
+    } catch (e) {
+      debugPrint('[ThumbnailService] Native getVideoFrame failed for $filePath: $e');
+      return null;
+    }
+  }
+
   /// Extracts a single video frame via media_kit's MPV engine using software decoding.
   /// Handles exotic codecs and containers (VP9, HEVC 10-bit, AV1, MKV, WebM, AVI, FLV, TS).
   Future<Uint8List?> _extractFrameViaMpv(String filePath) async {

@@ -283,7 +283,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     // 2. Allow Opus/Vorbis audio demuxing and decoding within WebM containers.
     if (_player.platform is NativePlayer) {
       final native = _player.platform as NativePlayer;
-      await native.setProperty('cscale', 'spline36');
       await native.setProperty('hwdec-codecs', 'h264,hevc,mpeg4,vc1');
       await native.setProperty('demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
       await native.setProperty('demuxer-max-bytes', '33554432'); // 32 MB read-ahead
@@ -342,19 +341,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           final hw = await native.getProperty('hwdec-current');
           debugPrint('[VideoPlayer] Active hwdec: $hw');
         } catch (_) {}
-        try {
-          await native.setProperty('sharpen', highRes ? '0.15' : '0.3');
-          assert(() {
-            native.getProperty('sharpen').then((val) {
-              debugPrint('[VideoPlayer] Verified sharpen: $val');
-            }).catchError((e) {
-              debugPrint('[VideoPlayer] getProperty sharpen failed: $e');
-            });
-            return true;
-          }());
-        } catch (e) {
-          debugPrint('[VideoPlayer] sharpen failed: $e');
-        }
       }
       if (mounted && _highRes != highRes) {
         setState(() => _highRes = highRes);
@@ -624,7 +610,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   controller: _controller,
                   controls: NoVideoControls,
                   fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
-                  filterQuality: _highRes ? FilterQuality.medium : FilterQuality.high,
+                  filterQuality: FilterQuality.medium,
                   fill: Colors.transparent,
                 ),
               ),
@@ -1639,6 +1625,92 @@ class _TopBar extends StatelessWidget {
   }
 }
 
+// ── Seek preview tooltip ─────────────────────────────────────────────────────
+
+class _SeekPreviewTooltip extends StatelessWidget {
+  const _SeekPreviewTooltip({
+    required this.width,
+    required this.height,
+    required this.frameBytes,
+    required this.displayTime,
+  });
+
+  final double width;
+  final double height;
+  final Uint8List? frameBytes;
+  final Duration displayTime;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1.2,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black87,
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (frameBytes != null && frameBytes!.isNotEmpty)
+            Image.memory(
+              frameBytes!,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
+            )
+          else
+            const Center(
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                ),
+              ),
+            ),
+          Positioned(
+            bottom: 4,
+            left: 4,
+            right: 4,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.75),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  MediaUtils.formatDuration(displayTime),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Bottom bar (Photo 2 reference) ────────────────────────────────────────
 
 class _BottomBar extends StatefulWidget {
@@ -1690,6 +1762,13 @@ class _BottomBarState extends State<_BottomBar> {
   StreamSubscription<bool>? _playingSub;
   StreamSubscription<bool>? _completedSub;
 
+  final Map<int, Uint8List> _frameCache = {};
+  Uint8List? _lastFrameBytes;
+  Timer? _debounceTimer;
+  Timer? _previewFadeTimer;
+  bool _showPreview = false;
+  bool _previewMounted = false;
+
   @override
   void initState() {
     super.initState();
@@ -1709,6 +1788,14 @@ class _BottomBarState extends State<_BottomBar> {
   @override
   void didUpdateWidget(covariant _BottomBar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.id != widget.item.id) {
+      _debounceTimer?.cancel();
+      _previewFadeTimer?.cancel();
+      _frameCache.clear();
+      _lastFrameBytes = null;
+      _showPreview = false;
+      _previewMounted = false;
+    }
     if (oldWidget.player != widget.player) {
       _unsubscribePlayer();
       _subscribePlayer();
@@ -1759,8 +1846,190 @@ class _BottomBarState extends State<_BottomBar> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    _previewFadeTimer?.cancel();
+    _frameCache.clear();
     _unsubscribePlayer();
     super.dispose();
+  }
+
+  void _fetchPreviewFrame(Duration targetPos) {
+    if (widget.item.path.isEmpty) return;
+    final bucketKey = targetPos.inMilliseconds ~/ 250;
+    if (_frameCache.containsKey(bucketKey)) {
+      final cached = _frameCache[bucketKey];
+      if (_lastFrameBytes != cached) {
+        setState(() {
+          _lastFrameBytes = cached;
+        });
+      }
+      return;
+    }
+
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 60), () async {
+      if (!mounted || !_isDragging) return;
+      final isVert = widget.isVertical ||
+          (widget.item.height != null &&
+              widget.item.width != null &&
+              widget.item.height! > widget.item.width!);
+      final reqW = isVert ? 160 : 280;
+      final reqH = isVert ? 280 : 160;
+
+      final bytes = await ThumbnailService.instance.getVideoFrame(
+        filePath: widget.item.path,
+        time: targetPos,
+        width: reqW,
+        height: reqH,
+      );
+
+      if (!mounted || !_isDragging) return;
+      if (bytes != null && bytes.isNotEmpty) {
+        if (_frameCache.length >= 30) {
+          _frameCache.remove(_frameCache.keys.first);
+        }
+        _frameCache[bucketKey] = bytes;
+        setState(() {
+          _lastFrameBytes = bytes;
+        });
+      }
+    });
+  }
+
+  void _onSliderChangeStart(double v, Duration dur) {
+    _pillFadeTimer?.cancel();
+    _previewFadeTimer?.cancel();
+    final target = Duration(
+      milliseconds: (v * dur.inMilliseconds).round(),
+    );
+    setState(() {
+      _isDragging = true;
+      _dragFraction = v;
+      _showPillBadge = true;
+      _showPreview = true;
+      _previewMounted = true;
+    });
+    _fetchPreviewFrame(target);
+  }
+
+  void _onSliderChanged(double v, Duration dur) {
+    _pillFadeTimer?.cancel();
+    setState(() {
+      _dragFraction = v;
+      _showPillBadge = true;
+      _showPreview = true;
+    });
+    final target = Duration(
+      milliseconds: (v * dur.inMilliseconds).round(),
+    );
+    _fetchPreviewFrame(target);
+  }
+
+  void _onSliderChangeEnd(double v, Duration dur) {
+    final target = Duration(
+      milliseconds: (v * dur.inMilliseconds).round(),
+    );
+    widget.player.seek(target);
+    _debounceTimer?.cancel();
+    setState(() {
+      _isDragging = false;
+      _dragFraction = null;
+      _showPreview = false;
+    });
+    _previewFadeTimer?.cancel();
+    _previewFadeTimer = Timer(const Duration(milliseconds: 220), () {
+      if (mounted && !_isDragging) {
+        setState(() {
+          _previewMounted = false;
+        });
+      }
+    });
+    _pillFadeTimer?.cancel();
+    _pillFadeTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted && !_isDragging) {
+        setState(() {
+          _showPillBadge = false;
+        });
+      }
+    });
+  }
+
+  Widget _buildSeekbarWithPreview(
+    BuildContext context, {
+    required double frac,
+    required Duration displayPos,
+    required Duration dur,
+    required bool isLandscape,
+  }) {
+    final isVert = widget.isVertical ||
+        (widget.item.height != null &&
+            widget.item.width != null &&
+            widget.item.height! > widget.item.width!);
+    final previewW = isVert ? 68.0 : 136.0;
+    final previewH = isVert ? 120.0 : 76.0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final sliderWidget = SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: isLandscape ? 2.0 : 2.5,
+            thumbShape: RoundSliderThumbShape(
+              enabledThumbRadius: isLandscape ? 5.5 : 6.0,
+            ),
+            overlayShape: RoundSliderOverlayShape(
+              overlayRadius: isLandscape ? 12.0 : 14.0,
+            ),
+          ),
+          child: Slider(
+            value: frac.clamp(0.0, 1.0),
+            onChangeStart: (v) => _onSliderChangeStart(v, dur),
+            onChanged: (v) => _onSliderChanged(v, dur),
+            onChangeEnd: (v) => _onSliderChangeEnd(v, dur),
+            activeColor: Colors.white,
+            inactiveColor: Colors.white30,
+            thumbColor: Colors.white,
+          ),
+        );
+
+        if (!_previewMounted) {
+          return sliderWidget;
+        }
+
+        final trackWidth = constraints.maxWidth - 32.0;
+        final thumbX = 16.0 + frac.clamp(0.0, 1.0) * trackWidth;
+        final leftOffset =
+            (thumbX - previewW / 2).clamp(4.0, constraints.maxWidth - previewW - 4.0);
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            sliderWidget,
+            Positioned(
+              bottom: isLandscape ? 30.0 : 36.0,
+              left: leftOffset,
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  opacity: _showPreview ? 1.0 : 0.0,
+                  child: AnimatedScale(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutBack,
+                    scale: _showPreview ? 1.0 : 0.9,
+                    child: _SeekPreviewTooltip(
+                      width: previewW,
+                      height: previewH,
+                      frameBytes: _lastFrameBytes,
+                      displayTime: displayPos,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showMoreOptions(BuildContext context) {
@@ -2027,39 +2296,13 @@ class _BottomBarState extends State<_BottomBar> {
             ),
           ),
         ),
-        // 2. Compact seekbar slider
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: 2.0,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5.5),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-          ),
-          child: Slider(
-            value: frac.clamp(0.0, 1.0),
-            onChangeStart: (_) {
-              setState(() {
-                _isDragging = true;
-              });
-            },
-            onChanged: (v) {
-              setState(() {
-                _dragFraction = v;
-              });
-            },
-            onChangeEnd: (v) {
-              final target = Duration(
-                milliseconds: (v * dur.inMilliseconds).round(),
-              );
-              widget.player.seek(target);
-              setState(() {
-                _isDragging = false;
-                _dragFraction = null;
-              });
-            },
-            activeColor: Colors.white,
-            inactiveColor: Colors.white30,
-            thumbColor: Colors.white,
-          ),
+        // 2. Compact seekbar slider with preview
+        _buildSeekbarWithPreview(
+          context,
+          frac: frac,
+          displayPos: displayPos,
+          dur: dur,
+          isLandscape: true,
         ),
         // 3. Actions row: Play/Pause on the left, action icons on the right
         Padding(
@@ -2202,7 +2445,7 @@ class _BottomBarState extends State<_BottomBar> {
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeInOut,
-                opacity: _showPillBadge ? 1.0 : 0.0,
+                opacity: (_showPillBadge && !_showPreview) ? 1.0 : 0.0,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -2229,51 +2472,13 @@ class _BottomBarState extends State<_BottomBar> {
           ),
           const SizedBox(height: 2),
         ],
-        // Seek bar
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: 2.5,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-          ),
-          child: Slider(
-            value: frac.clamp(0.0, 1.0),
-            onChangeStart: (_) {
-              _pillFadeTimer?.cancel();
-              setState(() {
-                _isDragging = true;
-                _showPillBadge = true;
-              });
-            },
-            onChanged: (v) {
-              _pillFadeTimer?.cancel();
-              setState(() {
-                _dragFraction = v;
-                _showPillBadge = true;
-              });
-            },
-            onChangeEnd: (v) {
-              final target = Duration(
-                milliseconds: (v * dur.inMilliseconds).round(),
-              );
-              widget.player.seek(target);
-              setState(() {
-                _isDragging = false;
-                _dragFraction = null;
-              });
-              _pillFadeTimer?.cancel();
-              _pillFadeTimer = Timer(const Duration(seconds: 2), () {
-                if (mounted && !_isDragging) {
-                  setState(() {
-                    _showPillBadge = false;
-                  });
-                }
-              });
-            },
-            activeColor: Colors.white,
-            inactiveColor: Colors.white30,
-            thumbColor: Colors.white,
-          ),
+        // Seek bar with preview
+        _buildSeekbarWithPreview(
+          context,
+          frac: frac,
+          displayPos: displayPos,
+          dur: dur,
+          isLandscape: false,
         ),
         if (!widget.isVertical) ...[
           Padding(

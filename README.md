@@ -42,7 +42,7 @@
 - **Technical Video Inspector:** Live extraction and display of video **Frame Rate (FPS)** and **Video Codec** directly inside the media Details sheet.
 - **Interactive 5x Video Zoom:** Pinch-to-zoom and pan during live playback, paused state, or preview poster, complete with animated floating scale indicator and instant one-tap reset.
 - **Proactive Texture Optimization:** Instant GPU texture detaching on horizontal swipe to free decoder pipelines and enable fluid 60/120 FPS swiping with zero black flashes.
-- **Elevated Controls & Fading Playback Indicator:** Centered play button with automatic fade-out during swipe navigation, elevated seekbar (+32dp) with timestamps and fullscreen button.
+- **Elevated Controls & Floating Seekbar Preview:** Centered play button with automatic fade-out during swipe navigation, elevated seekbar (+32dp) with real-time adaptive thumbnail scrubber preview and fullscreen controls.
 
 ### 4. High-Fidelity Photo Viewer & Gesture Dismissal
 - **Spring-Damped Drag-to-Dismiss:** Natural pull-down gesture physics with velocity tracking and proportional scaling.
@@ -129,11 +129,11 @@ The compiled release APK will be generated at:
 ## Version History
 
 ### v2.7.0 (Build 32)
-* **MediaKit & MPV Engine Rendering Upgrades:** Overhauled video pipeline clarity and sharpness to eliminate soft texture sampling blurriness compared to system gallery players.
-* **Adaptive Bicubic Texture Sampling:** Dynamically applies `FilterQuality.high` (bicubic interpolation) on Flutter's texture surface for ≤ 1080p videos to preserve edge crispness, and `FilterQuality.medium` for > 1080p / 4K content to prevent aliasing and moiré shimmering.
-* **Resolution-Aware Dynamic Sharpening:** Integrated native MPV sharpen filter adjusting dynamically per-video (`0.3` for standard / HD video and `0.15` for high-resolution 4K video) once stream geometry is verified.
-* **Chroma Upsampling Optimization (`cscale=spline36`):** Configured spline36 chroma scaler for software and copy decoding pipelines, with fully synchronized asynchronous player initialization.
-* **Robust Stream Guards & Zero-Copy Decoupling:** Debounced `videoParams` dimensions stream listeners with dimension change checks, one-time hardware decoder logging, and non-blocking state updates.
+* **Interactive Seekbar Video Preview (Floating Scrubber Tooltip):** Added real-time floating video thumbnail preview tooltips while scrubbing the seekbar across both portrait and landscape player layouts. Powered by native Android `MediaMetadataRetriever` (keyframe sync) on a background thread pool, paired with a 60ms debounce window and an in-memory LRU frame cache (up to 30 frames) for zero-lag scrubbing.
+* **Aspect-Ratio Adaptive Preview Tooltip:** Tooltip dynamically adapts its bounding dimensions to match video geometry (136x76dp for 16:9 widescreen vs 68x120dp for 9:16 vertical reels) with rounded corners, drop shadows, timestamp badge, edge-clamping to prevent screen-edge clipping, and sticky-last-frame anti-flicker protection.
+* **Video Playback Stutter & CPU Overload Fix:** Completely resolved video stuttering and random frame pacing jitter across mid-range chipsets (Snapdragon 4xx/6xx) by eliminating heavy 36-tap chroma upscaling (`cscale=spline36`) and post-processing software sharpen filter passes.
+* **Optimized Texture Filtering:** Standardized Flutter video texture sampling on `FilterQuality.medium` (bilinear filtering), ensuring clean edge rendering without compositor bicubic overhead.
+* **Robust Stream Geometry Validation:** Maintained lightweight dimension listeners with active hardware decoder verification logging (`hwdec-current`) and zero-overhead player teardown.
 
 ### v2.6.6 (Build 31)
 * **10x Pinch-to-Zoom Expansion:** Upgraded maximum zoom scale from 6x to 10x across both Photo Viewer and Video Player for deeper detail inspection.
