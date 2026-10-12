@@ -146,6 +146,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   bool _highRes = false;
   String? _activePlayerPath;
   bool _routeTransitionComplete = false;
+  Animation<double>? _routeAnimation;
 
   void _toggleCropToFit() {
     HapticFeedback.lightImpact();
@@ -183,18 +184,53 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         }
       });
     _initPlayer();
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) {
-        _routeTransitionComplete = true;
-        if (_player.state.playing && !_videoSurfaceVisible.value) {
-          _videoSurfaceVisible.value = true;
-        }
-      }
-    });
     if (ref.read(settingsNotifierProvider).keepScreenOn) {
       ScreenKeeperService.setKeepScreenOn(true);
     }
     _precacheAdjacentVideos(_current);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final modalAnim = ModalRoute.of(context)?.animation;
+    if (_routeAnimation != modalAnim) {
+      _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
+      _routeAnimation = modalAnim;
+      _routeAnimation?.addStatusListener(_onRouteAnimationStatus);
+      if (_routeAnimation?.isCompleted == true) {
+        _routeTransitionComplete = true;
+        _startPlaybackAfterTransition();
+      }
+    }
+  }
+
+  void _onRouteAnimationStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) {
+      _routeTransitionComplete = true;
+      _startPlaybackAfterTransition();
+    } else if (status == AnimationStatus.reverse) {
+      // Pop started: immediately hide video texture surface and pause to avoid freezing / black flash mid-flight
+      _videoSurfaceVisible.value = false;
+      if (_player.state.playing) {
+        _player.pause();
+      }
+    }
+  }
+
+  void _startPlaybackAfterTransition() {
+    if (!mounted || !_videos[_current].isVideo) return;
+    final settings = ref.read(settingsNotifierProvider);
+    if (settings.autoPlayVideo) {
+      if (!_player.state.playing) {
+        _player.play();
+      }
+      _controller.waitUntilFirstFrameRendered.then((_) {
+        if (mounted && _routeTransitionComplete && !_videoSurfaceVisible.value) {
+          _videoSurfaceVisible.value = true;
+        }
+      });
+    }
   }
 
   void _setDrag(Offset o) {
@@ -416,7 +452,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _player.stream.playing.listen((playing) {
       if (playing && mounted && _videos[_current].isVideo) {
         if (_routeTransitionComplete && !_videoSurfaceVisible.value) {
-          _videoSurfaceVisible.value = true;
+          _controller.waitUntilFirstFrameRendered.then((_) {
+            if (mounted && _routeTransitionComplete && !_videoSurfaceVisible.value) {
+              _videoSurfaceVisible.value = true;
+            }
+          });
         }
         if (!_hasStartedPlaying) {
           setState(() {
@@ -460,10 +500,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
       await _player.open(
         Media(currentPath),
-        play: settings.autoPlayVideo,
+        play: false,
       );
       _activePlayerPath = currentPath;
-      if (settings.autoPlayVideo) {
+      if (_routeTransitionComplete && settings.autoPlayVideo) {
+        _player.play();
         _controller.waitUntilFirstFrameRendered.then((_) {
           if (mounted && _routeTransitionComplete && !_videoSurfaceVisible.value) {
             _videoSurfaceVisible.value = true;
@@ -572,6 +613,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   @override
   void dispose() {
+    _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
     _videoLoadDebounce?.cancel();
     ScreenKeeperService.setKeepScreenOn(false);
     WidgetsBinding.instance.removeObserver(this);
@@ -718,7 +760,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           child: content,
         );
       }
-      return Center(child: content);
+      return content;
     }
 
     final isVertical = _isVideoPortrait(item, index);
@@ -738,7 +780,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           ValueListenableBuilder<bool>(
             valueListenable: _videoSurfaceVisible,
             builder: (context, visible, _) => AnimatedOpacity(
-              duration: const Duration(milliseconds: 150),
+              duration: const Duration(milliseconds: 120),
               curve: Curves.easeOut,
               opacity: visible ? 1.0 : 0.0,
               child: IgnorePointer(
@@ -759,15 +801,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     final ar = _getVideoAspectRatio(item, index);
     if (ar != null && ar > 0 && !shouldCrop) {
-      return Center(
-        child: AspectRatio(
-          aspectRatio: ar,
-          child: content,
-        ),
+      return AspectRatio(
+        aspectRatio: ar,
+        child: content,
       );
     }
 
-    return SizedBox.expand(child: content);
+    return content;
   }
 
   void _handleDoubleTap() {
@@ -1080,14 +1120,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         backgroundColor: Colors.transparent,
         body: Stack(
           children: [
-            // ── Background scrim: opacity follows drag distance ──
+            // ── Background scrim: opacity follows route animation & drag distance ──
             Positioned.fill(
-              child: ValueListenableBuilder<Offset>(
-                valueListenable: _dragNotifier,
-                builder: (_, d, __) => ColoredBox(
-                  color: Colors.black.withValues(
-                      alpha: (1.0 - (d.dy / 320.0)).clamp(0.0, 1.0)),
-                ),
+              child: AnimatedBuilder(
+                animation: ModalRoute.of(context)?.animation ?? kAlwaysCompleteAnimation,
+                builder: (context, _) {
+                  final routeAnim = ModalRoute.of(context)?.animation?.value ?? 1.0;
+                  final curved = const Cubic(0.2, 0.0, 0.0, 1.0).transform(routeAnim.clamp(0.0, 1.0));
+                  return ValueListenableBuilder<Offset>(
+                    valueListenable: _dragNotifier,
+                    builder: (_, d, __) {
+                      final dragFade = (1.0 - (d.dy / 320.0)).clamp(0.0, 1.0);
+                      return ColoredBox(
+                        color: Colors.black.withValues(
+                          alpha: (curved * dragFade).clamp(0.0, 1.0),
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
             ),
             // ── Main Content inside SafeArea and Listener ──────────
@@ -1208,6 +1259,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         !_isCurrentlyVideoZoomed &&
                         d.dy > 0 &&
                         (d.dy > 85 || (vy > 550 && d.dy > 20))) {
+                      _videoSurfaceVisible.value = false;
                       _player.pause();
                       Navigator.of(context).pop();
                     } else if (d != Offset.zero) {
@@ -1556,6 +1608,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                 if (_isFullscreen) {
                                   _exitFullscreen();
                                 } else {
+                                  _videoSurfaceVisible.value = false;
+                                  _player.pause();
                                   Navigator.of(context).pop();
                                 }
                               },

@@ -28,7 +28,7 @@
 - **Tactile Bouncy Feedback:** Spring-scale micro-animations (`BouncyTap`) across all interactive cards, chips, dialogs, and controls.
 
 ### 2. High-Performance Media Organization & Search
-- **120 FPS Butter-Smooth Tab Swiping:** GPU `RepaintBoundary` texture layer isolation, instant `animateToPage` curve transitions, and O(1) tab list memoization to eliminate frame drops and raster jitter during category swipe.
+- **Butter-Smooth 60 FPS Tab Swiping:** GPU `RepaintBoundary` texture layer isolation, instant `animateToPage` curve transitions, and O(1) tab list memoization to eliminate frame drops and raster jitter during category swipe.
 - **Smart Timeline & Album Grouping:** Browse media chronologically or organized into native folders (Camera, DCIM, Screenshots, Downloads, etc.).
 - **Native Directory Picker for Excluded Folders:** Seamless folder exclusion selection directly via Android's native file manager / SAF folder picker without manual path typing.
 - **In-Album Filtering & Sorting:** Comprehensive filtering (`All`, `Photos`, `Videos`) and 4-way sorting (Newest, Oldest, Name A-Z, Name Z-A) inside individual album detail screens.
@@ -41,7 +41,7 @@
 - **Auto-Copy Hardware Decoding:** Seamless hardware-to-software fallback decoding (`hwdec: auto-copy`) across H.264, H.265/HEVC, and VP9 codecs.
 - **Technical Video Inspector:** Live extraction and display of video **Frame Rate (FPS)** and **Video Codec** directly inside the media Details sheet.
 - **Interactive 5x Video Zoom:** Pinch-to-zoom and pan during live playback, paused state, or preview poster, complete with animated floating scale indicator and instant one-tap reset.
-- **Proactive Texture Optimization:** Instant GPU texture detaching on horizontal swipe to free decoder pipelines and enable fluid 60/120 FPS swiping with zero black flashes.
+- **Proactive Texture Optimization:** Instant GPU texture detaching on horizontal swipe to free decoder pipelines and enable fluid 60 FPS swiping with zero black flashes.
 - **Elevated Controls & Floating Seekbar Preview:** Centered play button with automatic fade-out during swipe navigation, custom gesture-captured scrubber bar with seek-on-release precision, gapless frame transitions, elevated seekbar (+32dp) with real-time adaptive thumbnail tooltip preview (+44-50dp with pointer caret), and fullscreen controls.
 
 ### 4. High-Fidelity Photo Viewer & Gesture Dismissal
@@ -129,10 +129,11 @@ The compiled release APK will be generated at:
 ## Version History
 
 ### v2.7.5
-* **Fluid Morph Expansion Animation (Google Photos / Apple Photos Style):** Redesigned the opening and closing transitions for photos and videos with a unified geometry-preserving `_buildHeroShuttle` using a custom `Cubic(0.2, 0.0, 0.0, 1.0)` curve and a 300ms duration. The corners smoothly morph between the grid tile's 8dp rounded corner and the viewer's 0dp border.
-* **Precise Video Aspect Ratio Hero Bounds:** Solved the video opening jump and zoom-in glitch by wrapping destination video Hero instances in their exact natural aspect ratio (`Center(child: AspectRatio(aspectRatio: ar, child: ...))`) instead of expanding to full screen, guaranteeing a zero-jump, pixel-perfect landing for 16:9 and vertical videos alike.
-* **Staggered Controls Reveal:** The top app bar, bottom action controls, and center play button remain invisible during the initial 65% of the expansion flight, then smoothly fade in over the remaining 35% (105ms). On dismissal, controls immediately vanish so only clean media flies back into the grid tile.
-* **Seamless Video Surface Handoff:** Guarded the MPV video decoder surface behind the high-resolution preview frame until the 300ms route transition completes and the first frame renders, preventing GPU decoder resizing jitter during flight.
+* **Google Photos Style Morph Transition & Ghosting Elimination:** Replaced full-page route `FadeTransition` with a transparent `_mediaViewerRoute`, allowing `Hero` widgets to expand with 100% solid opacity without double-translucency ghosting. Background scrims and overlay controls independently fade in via Material 3 Emphasized curves (`Cubic(0.2, 0.0, 0.0, 1.0)`, 300ms).
+* **Precise Video Aspect Ratio Hero Bounds:** Unwrapped redundant `Center` constraints from `_buildVideoPage` so destination `Hero` instances adhere strictly to the natural `AspectRatio` of the video, eliminating post-flight dimension snapping and aspect ratio jumps on both 16:9 and 9:16 vertical videos.
+* **Zero Black Flash Video Surface Handoff:** Pre-opens video streams with `play: false` during the 300ms Hero flight, synchronizing active video texture visibility strictly with `_controller.waitUntilFirstFrameRendered` and a permanent underlying poster layer to eliminate black screen flashes.
+* **Deterministic Reverse Pop & Texture Teardown:** Hooked route status listener (`AnimationStatus.reverse`) on Back tap and swipe-to-dismiss gestures to instantly hide native video textures and pause playback, guaranteeing clean, freeze-free thumbnail return flights back to grid tiles.
+* **Instant Tap Precache & Solid 60 FPS Calibration:** Triggered background high-resolution video thumbnail extraction immediately on grid item tap, and standardized animation curves and documentation to a rock-solid, power-efficient 60 FPS target.
 
 ### v2.7.4
 * **Unified Photo & Video Hero Flight Transition:** Wrapped the active item in `VideoPlayerScreen` with dynamic `Hero` and `_buildHeroShuttle`, perfectly matching `ImageViewerScreen`. When swiping between videos and dismissing via swipe-to-dismiss or back button, the current video smoothly flies back to its corresponding grid tile without flashing or revealing the first video.
@@ -186,7 +187,7 @@ The compiled release APK will be generated at:
 ### v2.6.3
 * **Keep Screen On While Viewing:** Added configurable native window flag toggle (`FLAG_KEEP_SCREEN_ON`) in Settings (Appearance) to keep screen illuminated during photo viewing and video playback without external dependencies.
 * **Full 11-Language Localization Overhaul:** Complete dictionary coverage and translations across all supported languages (ID, EN, ZH, ES, PT, JA, KO, HI, AR, FR, RU), eliminating all remaining hardcoded English text.
-* **Auto-Playback & Performance Tuning:** Configurable instant video auto-playback on view/swipe, plus butter-smooth 120 FPS tab swiping optimizations with zero black frame flashes.
+* **Auto-Playback & Performance Tuning:** Configurable instant video auto-playback on view/swipe, plus butter-smooth 60 FPS tab swiping optimizations with zero black frame flashes.
 * **Elevated Controls & Visual Enhancements:** Refined AMOLED falling meteors trajectory, enhanced Dark aurora ribbon animations, and redesigned Clean Light daytime theme.
 
 ### v2.6.2
@@ -210,7 +211,7 @@ The compiled release APK will be generated at:
 * **Extended Header Canvas:** Header animation spans continuously across both `AppBar` and Filter/Sort Bar, eliminating empty spaces.
 * **Enriched Sakura Tree Visuals:** Multi-tier natural branching, fresh green sakura leaves, and clustered radiant blossoms with buds.
 * **Dark Theme Cyber Aurora Badge:** Synchronized border gradient and shimmer spark badge icon for Dark Mode.
-* **Direct Tab Jump & Butter-Smooth Capsule Glides:** Direct navigation between tabs without intermediate page scrolling, paired with 60/120 FPS jitter-free capsule transitions via lazy page evaluation.
+* **Direct Tab Jump & Butter-Smooth Capsule Glides:** Direct navigation between tabs without intermediate page scrolling, paired with butter-smooth 60 FPS jitter-free capsule transitions via lazy page evaluation.
 
 ### v2.5.1
 * **Theme-Adaptive Animated Headers:** Procedural lightweight 60fps animations for AMOLED (moon, stars & meteors), AMOLED Sakura (falling sakura petals & branch), Dark (cyber plasma aurora waves & embers), and Light (radiant sunburst & sparkles).

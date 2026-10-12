@@ -164,7 +164,15 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
     final cs = Theme.of(context).colorScheme;
 
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: () {
+        if (widget.item.isVideo) {
+          ThumbnailService.instance.getHighResVideoThumbnail(
+            widget.item.id,
+            filePath: widget.item.path,
+          );
+        }
+        widget.onTap();
+      },
       onLongPress: widget.onLongPress,
       child: Stack(
         fit: StackFit.expand,

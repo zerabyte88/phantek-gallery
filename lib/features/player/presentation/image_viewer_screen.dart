@@ -694,14 +694,25 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           onDoubleTap: _handleDoubleTap,
           child: Stack(
             children: [
-              // ── Background scrim: opacity follows drag distance ──
+              // ── Background scrim: opacity follows route animation & drag distance ──
               Positioned.fill(
-                child: ValueListenableBuilder<Offset>(
-                  valueListenable: _drag,
-                  builder: (_, d, __) => ColoredBox(
-                    color: Colors.black.withValues(
-                        alpha: (1.0 - (d.dy / 320.0)).clamp(0.0, 1.0)),
-                  ),
+                child: AnimatedBuilder(
+                  animation: ModalRoute.of(context)?.animation ?? kAlwaysCompleteAnimation,
+                  builder: (context, _) {
+                    final routeAnim = ModalRoute.of(context)?.animation?.value ?? 1.0;
+                    final curved = const Cubic(0.2, 0.0, 0.0, 1.0).transform(routeAnim.clamp(0.0, 1.0));
+                    return ValueListenableBuilder<Offset>(
+                      valueListenable: _drag,
+                      builder: (_, d, __) {
+                        final dragFade = (1.0 - (d.dy / 320.0)).clamp(0.0, 1.0);
+                        return ColoredBox(
+                          color: Colors.black.withValues(
+                            alpha: (curved * dragFade).clamp(0.0, 1.0),
+                          ),
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
               // ── Gallery: translate + proportional scale-down + subtle corner radius ─────
