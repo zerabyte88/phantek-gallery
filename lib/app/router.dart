@@ -31,7 +31,7 @@ Route<dynamic> generateRoute(RouteSettings s) {
 
     case AppRoutes.image:
       final args = s.arguments as _ViewerArgs;
-      return _slide(
+      return _mediaViewerRoute(
         ImageViewerScreen(
           items: args.items,
           initialIndex: args.initialIndex,
@@ -43,7 +43,7 @@ Route<dynamic> generateRoute(RouteSettings s) {
     case AppRoutes.video:
       if (s.arguments is _ViewerArgs) {
         final args = s.arguments as _ViewerArgs;
-        return _slide(
+        return _mediaViewerRoute(
           VideoPlayerScreen(
             items: args.items,
             initialIndex: args.initialIndex,
@@ -53,7 +53,7 @@ Route<dynamic> generateRoute(RouteSettings s) {
         );
       } else if (s.arguments is MediaItem) {
         final item = s.arguments as MediaItem;
-        return _slide(
+        return _mediaViewerRoute(
           VideoPlayerScreen(item: item),
           duration: const Duration(milliseconds: 300),
         );
@@ -85,6 +85,19 @@ PageRoute<T> _slide<T>(
         ),
         child: child,
       ),
+      transitionDuration: duration,
+      reverseTransitionDuration: duration,
+    );
+
+PageRoute<T> _mediaViewerRoute<T>(
+  Widget page, {
+  Duration duration = const Duration(milliseconds: 300),
+}) =>
+    PageRouteBuilder<T>(
+      opaque: false,
+      barrierColor: Colors.transparent,
+      pageBuilder: (_, __, ___) => page,
+      transitionsBuilder: (_, __, ___, child) => child,
       transitionDuration: duration,
       reverseTransitionDuration: duration,
     );
