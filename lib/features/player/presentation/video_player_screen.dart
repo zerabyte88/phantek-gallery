@@ -58,8 +58,25 @@ Widget _buildHeroShuttle({
 
   if (p == null) return const SizedBox.shrink();
 
-  return ClipRect(
-    clipBehavior: Clip.hardEdge,
+  final curved = CurvedAnimation(
+    parent: animation,
+    curve: const Cubic(0.2, 0.0, 0.0, 1.0),
+  );
+
+  return AnimatedBuilder(
+    animation: curved,
+    builder: (context, child) {
+      final t = curved.value;
+      final radius = flightDirection == HeroFlightDirection.push
+          ? (1.0 - t) * 8.0
+          : t * 8.0;
+
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(radius.clamp(0.0, 8.0)),
+        clipBehavior: Clip.antiAlias,
+        child: child,
+      );
+    },
     child: Image(
       image: p,
       fit: BoxFit.cover,
@@ -128,6 +145,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   String? _lastSize;
   bool _highRes = false;
   String? _activePlayerPath;
+  bool _routeTransitionComplete = false;
 
   void _toggleCropToFit() {
     HapticFeedback.lightImpact();
@@ -165,6 +183,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         }
       });
     _initPlayer();
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        _routeTransitionComplete = true;
+        if (_player.state.playing && !_videoSurfaceVisible.value) {
+          _videoSurfaceVisible.value = true;
+        }
+      }
+    });
     if (ref.read(settingsNotifierProvider).keepScreenOn) {
       ScreenKeeperService.setKeepScreenOn(true);
     }
@@ -389,7 +415,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     _player.stream.playing.listen((playing) {
       if (playing && mounted && _videos[_current].isVideo) {
-        if (!_videoSurfaceVisible.value) {
+        if (_routeTransitionComplete && !_videoSurfaceVisible.value) {
           _videoSurfaceVisible.value = true;
         }
         if (!_hasStartedPlaying) {
@@ -439,7 +465,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _activePlayerPath = currentPath;
       if (settings.autoPlayVideo) {
         _controller.waitUntilFirstFrameRendered.then((_) {
-          if (mounted && !_videoSurfaceVisible.value) {
+          if (mounted && _routeTransitionComplete && !_videoSurfaceVisible.value) {
             _videoSurfaceVisible.value = true;
           }
         });
@@ -589,6 +615,27 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     return _isVideoPortrait(_videos[_current], _current);
   }
 
+  double? _getVideoAspectRatio(MediaItem item, int index) {
+    if (index == _current && _activePlayerPath == item.path) {
+      final vParams = _player.state.videoParams;
+      if (vParams.w != null && vParams.h != null && vParams.w! > 0 && vParams.h! > 0) {
+        final rotate = vParams.rotate ?? 0;
+        final isRotated90or270 = rotate == 90 || rotate == 270;
+        final effectiveW = isRotated90or270 ? vParams.h! : vParams.w!;
+        final effectiveH = isRotated90or270 ? vParams.w! : vParams.h!;
+        return effectiveW / effectiveH;
+      }
+    }
+    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
+      return item.width! / item.height!;
+    }
+    final thumbRatio = ThumbnailService.instance.getThumbnailAspectRatio(item.id);
+    if (thumbRatio != null && thumbRatio > 0) {
+      return thumbRatio;
+    }
+    return null;
+  }
+
   void _enterFullscreen() {
     if (_isVideoZoomed || !_transformationController.value.isIdentity()) {
       _zoomAnimController?.stop();
@@ -652,21 +699,26 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   Widget _buildVideoPage(int index) {
     final item = _videos[index];
     if (!item.isVideo) {
-      return SizedBox.expand(
-        child: Stack(
-          fit: StackFit.expand,
-          alignment: Alignment.center,
-          children: [
-            _photoThumb(item.id, item.path),
-            Image(
-              image: displayImage(item.path),
-              fit: BoxFit.contain,
-              gaplessPlayback: true,
-              filterQuality: FilterQuality.high,
-            ),
-          ],
-        ),
+      Widget content = Stack(
+        fit: StackFit.expand,
+        alignment: Alignment.center,
+        children: [
+          _photoThumb(item.id, item.path),
+          Image(
+            image: displayImage(item.path),
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.high,
+          ),
+        ],
       );
+      if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
+        content = AspectRatio(
+          aspectRatio: item.width! / item.height!,
+          child: content,
+        );
+      }
+      return Center(child: content);
     }
 
     final isVertical = _isVideoPortrait(item, index);
@@ -674,38 +726,48 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         MediaQuery.orientationOf(context) == Orientation.landscape;
     final shouldCrop = !isVertical && isDeviceLandscape && _cropToFit;
 
-    return SizedBox.expand(
-      child: Stack(
-        fit: StackFit.expand,
-        alignment: Alignment.center,
-        children: [
-          _VideoThumbnailPage(
-            item: item,
-            fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
-          ),
-          if (index == _current)
-            ValueListenableBuilder<bool>(
-              valueListenable: _videoSurfaceVisible,
-              builder: (context, visible, _) => AnimatedOpacity(
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOut,
-                opacity: visible ? 1.0 : 0.0,
-                child: IgnorePointer(
-                  ignoring: !visible,
-                  child: Video(
-                    key: const ValueKey('active_video_surface'),
-                    controller: _controller,
-                    controls: NoVideoControls,
-                    fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
-                    filterQuality: FilterQuality.medium,
-                    fill: Colors.transparent,
-                  ),
+    Widget content = Stack(
+      fit: StackFit.expand,
+      alignment: Alignment.center,
+      children: [
+        _VideoThumbnailPage(
+          item: item,
+          fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
+        ),
+        if (index == _current)
+          ValueListenableBuilder<bool>(
+            valueListenable: _videoSurfaceVisible,
+            builder: (context, visible, _) => AnimatedOpacity(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              opacity: visible ? 1.0 : 0.0,
+              child: IgnorePointer(
+                ignoring: !visible,
+                child: Video(
+                  key: const ValueKey('active_video_surface'),
+                  controller: _controller,
+                  controls: NoVideoControls,
+                  fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
+                  filterQuality: FilterQuality.medium,
+                  fill: Colors.transparent,
                 ),
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
+
+    final ar = _getVideoAspectRatio(item, index);
+    if (ar != null && ar > 0 && !shouldCrop) {
+      return Center(
+        child: AspectRatio(
+          aspectRatio: ar,
+          child: content,
+        ),
+      );
+    }
+
+    return SizedBox.expand(child: content);
   }
 
   void _handleDoubleTap() {
@@ -1381,13 +1443,31 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     valueListenable: _dragNotifier,
                     builder: (context, drag, child) {
                       final dragFade = (1.0 - (drag.dy / 35.0)).clamp(0.0, 1.0);
-                      final effectiveOpacity = (_showControls && !_isPinching) ? dragFade : 0.0;
-                      return Opacity(
-                        opacity: effectiveOpacity,
-                        child: IgnorePointer(
-                          ignoring: !_showControls || drag.dy > 4 || _isPinching,
-                          child: child,
-                        ),
+                      final baseOpacity = (_showControls && !_isPinching) ? dragFade : 0.0;
+                      final anim = ModalRoute.of(context)?.animation;
+                      if (anim == null) {
+                        return Opacity(
+                          opacity: baseOpacity,
+                          child: IgnorePointer(
+                            ignoring: !_showControls || drag.dy > 4 || _isPinching,
+                            child: child,
+                          ),
+                        );
+                      }
+                      return AnimatedBuilder(
+                        animation: anim,
+                        builder: (context, _) {
+                          final entrance = const Interval(0.65, 1.0, curve: Curves.easeOut)
+                              .transform(anim.value);
+                          final opacity = (baseOpacity * entrance).clamp(0.0, 1.0);
+                          return Opacity(
+                            opacity: opacity,
+                            child: IgnorePointer(
+                              ignoring: !_showControls || drag.dy > 4 || _isPinching || opacity < 0.5,
+                              child: child,
+                            ),
+                          );
+                        },
                       );
                     },
                     child: Stack(
