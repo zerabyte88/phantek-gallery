@@ -42,9 +42,11 @@ class ThumbnailService {
       MethodChannel('com.phantek.gallery/thumbnail');
 
   final Map<String, Uint8List> _memoryCache = {};
+  final Map<String, Uint8List> _highResVideoCache = {};
   final Map<String, double> _thumbnailAspectRatioCache = {};
   final Map<String, Uint8List> _videoFrameCache = {};
   final Map<String, Completer<Uint8List?>> _inFlight = {};
+  final Map<String, Completer<Uint8List?>> _highResInFlight = {};
   final Map<String, AssetEntity> _entityCache = {};
   final Queue<_ThumbnailRequest> _queue = Queue();
   int _activeWorkers = 0;
@@ -65,6 +67,19 @@ class ThumbnailService {
     return file.existsSync() ? file : null;
   }
 
+  String _highResCacheFileName(String assetId) {
+    final safe = assetId.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+    return 'hr_${assetId.hashCode.abs()}_$safe.bin';
+  }
+
+  /// Synchronously returns the cached high-res video thumbnail File on disk if it exists.
+  File? getCachedHighResFile(String assetId) {
+    final dirPath = _cacheDirPath ?? _cacheDir?.path;
+    if (dirPath == null) return null;
+    final file = File(p.join(dirPath, _highResCacheFileName(assetId)));
+    return file.existsSync() ? file : null;
+  }
+
   /// Register pre-discovered AssetEntities to avoid IPC lookups.
   void registerEntities(Iterable<AssetEntity> entities) {
     for (final e in entities) {
@@ -75,13 +90,16 @@ class ThumbnailService {
   /// Fast synchronous lookup in the in-memory cache (0ms).
   Uint8List? getMemoryThumbnail(String assetId) => _memoryCache[assetId];
 
+  /// Fast synchronous lookup for high-res video thumbnail (0ms).
+  Uint8List? getMemoryHighResThumbnail(String assetId) => _highResVideoCache[assetId];
+
   /// Returns the visual aspect ratio (width / height) of the cached thumbnail.
   /// Reads directly from memory or extracts from cached JPEG bytes in <1µs.
   double? getThumbnailAspectRatio(String assetId) {
     if (_thumbnailAspectRatioCache.containsKey(assetId)) {
       return _thumbnailAspectRatioCache[assetId];
     }
-    final bytes = _memoryCache[assetId];
+    final bytes = _highResVideoCache[assetId] ?? _memoryCache[assetId];
     if (bytes != null && bytes.length >= 9) {
       final size = parseJpegDimensions(bytes);
       if (size != null && size.height > 0) {
@@ -107,6 +125,103 @@ class ThumbnailService {
         }
       } catch (_) {}
     }
+    return null;
+  }
+
+  /// Extracts an ultra-sharp high-resolution video thumbnail (1080p/1920p target)
+  /// for crystal-clear full-screen preview prior to playback.
+  Future<Uint8List?> getHighResVideoThumbnail(
+    String assetId, {
+    required String filePath,
+    int size = 1920,
+  }) async {
+    final cached = _highResVideoCache[assetId];
+    if (cached != null) return cached;
+
+    // 1. Check persistent disk cache first (instant 0ms)
+    final diskFile = getCachedHighResFile(assetId);
+    if (diskFile != null) {
+      try {
+        final diskBytes = await diskFile.readAsBytes();
+        if (diskBytes.isNotEmpty) {
+          while (_highResVideoCache.length >= 25) {
+            _highResVideoCache.remove(_highResVideoCache.keys.first);
+          }
+          _highResVideoCache[assetId] = diskBytes;
+          final dims = parseJpegDimensions(diskBytes);
+          if (dims != null && dims.height > 0) {
+            _thumbnailAspectRatioCache[assetId] = dims.width / dims.height;
+          }
+          return diskBytes;
+        }
+      } catch (_) {}
+    }
+
+    final inFlight = _highResInFlight[assetId];
+    if (inFlight != null) return inFlight.future;
+
+    final completer = Completer<Uint8List?>();
+    _highResInFlight[assetId] = completer;
+
+    try {
+      Uint8List? bytes;
+
+      // 1. Primary: Native hardware-accelerated MediaMetadataRetriever via MediaStore URI
+      try {
+        bytes = await _nativeChannel.invokeMethod<Uint8List>(
+          'getVideoThumbnail',
+          {'path': filePath, 'assetId': assetId, 'size': size},
+        );
+      } catch (e) {
+        debugPrint('[ThumbnailService] Native getHighResVideoThumbnail failed for $filePath: $e');
+      }
+
+      // 2. Fallback: photo_manager with proportional bounds
+      if (bytes == null || bytes.isEmpty) {
+        final entity = _entityCache[assetId] ?? await AssetEntity.fromId(assetId);
+        if (entity != null) {
+          try {
+            final w = entity.orientatedWidth > 0 ? entity.orientatedWidth : entity.width;
+            final h = entity.orientatedHeight > 0 ? entity.orientatedHeight : entity.height;
+            final maxDim = (w > 0 && h > 0) ? (w > h ? w : h) : size;
+            final scale = maxDim > size ? size / maxDim : 1.0;
+            final targetW = (w > 0) ? (w * scale).toInt().clamp(2, size) : size;
+            final targetH = (h > 0) ? (h * scale).toInt().clamp(2, size) : size;
+            bytes = await entity.thumbnailDataWithSize(
+              ThumbnailSize(targetW, targetH),
+              quality: 95,
+            );
+          } catch (_) {}
+        }
+      }
+
+      // 3. Fallback: media_kit (MPV) headless software frame extraction (handles exotic codecs/containers)
+      if (bytes == null || bytes.isEmpty) {
+        try {
+          bytes = await _extractFrameViaMpv(filePath);
+        } catch (_) {}
+      }
+
+      if (bytes != null && bytes.isNotEmpty) {
+        while (_highResVideoCache.length >= 25) {
+          _highResVideoCache.remove(_highResVideoCache.keys.first);
+        }
+        _highResVideoCache[assetId] = bytes;
+        _saveHighResToDisk(assetId, bytes);
+        final dims = parseJpegDimensions(bytes);
+        if (dims != null && dims.height > 0) {
+          _thumbnailAspectRatioCache[assetId] = dims.width / dims.height;
+        }
+        completer.complete(bytes);
+        return bytes;
+      }
+    } catch (e) {
+      debugPrint('[ThumbnailService] getHighResVideoThumbnail overall error: $e');
+    } finally {
+      _highResInFlight.remove(assetId);
+    }
+
+    completer.complete(null);
     return null;
   }
 
@@ -293,7 +408,7 @@ class ThumbnailService {
       final extDirs = await getExternalCacheDirectories();
       if (extDirs != null && extDirs.isNotEmpty) {
         final extPath = extDirs.first.path;
-        final testDir = Directory(p.join(extPath, 'thumbnails'));
+        final testDir = Directory(p.join(extPath, 'thumbnails_v3'));
         if (!await testDir.exists()) {
           await testDir.create(recursive: true);
         }
@@ -319,9 +434,16 @@ class ThumbnailService {
       }
     }
 
-    final dir = Directory(p.join(basePath, 'thumbnails'));
+    final dir = Directory(p.join(basePath, 'thumbnails_v3'));
     if (!await dir.exists()) {
       await dir.create(recursive: true);
+      // Clean up legacy distorted thumbnail cache
+      try {
+        final oldDir = Directory(p.join(basePath, 'thumbnails'));
+        if (await oldDir.exists()) {
+          await oldDir.delete(recursive: true);
+        }
+      } catch (_) {}
     }
     _cacheDir = dir;
     _cacheDirPath = dir.path;
@@ -522,9 +644,15 @@ class ThumbnailService {
               _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
           if (entity != null) {
             try {
+              final w = entity.orientatedWidth > 0 ? entity.orientatedWidth : entity.width;
+              final h = entity.orientatedHeight > 0 ? entity.orientatedHeight : entity.height;
+              final maxDim = (w > 0 && h > 0) ? (w > h ? w : h) : _thumbnailSize;
+              final scale = maxDim > _thumbnailSize ? _thumbnailSize / maxDim : 1.0;
+              final targetW = (w > 0) ? (w * scale).toInt().clamp(2, _thumbnailSize) : _thumbnailSize;
+              final targetH = (h > 0) ? (h * scale).toInt().clamp(2, _thumbnailSize) : _thumbnailSize;
               bytes = await entity
                   .thumbnailDataWithSize(
-                    const ThumbnailSize.square(_thumbnailSize),
+                    ThumbnailSize(targetW, targetH),
                     quality: _thumbnailQuality,
                   )
                   .timeout(const Duration(seconds: 3), onTimeout: () => null);
@@ -629,6 +757,30 @@ class ThumbnailService {
     }
   }
 
+  void _saveHighResToDisk(String assetId, Uint8List bytes) async {
+    try {
+      final dir = await _getCacheDirectory();
+      final targetPath = p.join(dir.path, _highResCacheFileName(assetId));
+      final targetFile = File(targetPath);
+      final tmpFile =
+          File('$targetPath.${DateTime.now().microsecondsSinceEpoch}.tmp');
+      await tmpFile.writeAsBytes(bytes, flush: true);
+      try {
+        if (await targetFile.exists()) {
+          await targetFile.delete();
+        }
+        await tmpFile.rename(targetPath);
+      } catch (_) {
+        await targetFile.writeAsBytes(bytes, flush: true);
+        try {
+          if (await tmpFile.exists()) await tmpFile.delete();
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('[ThumbnailService] Failed to persist high-res thumbnail $assetId: $e');
+    }
+  }
+
   void _putInMemory(String id, Uint8List bytes) {
     while (_memoryCache.length >= _maxMemoryEntries) {
       _memoryCache.remove(_memoryCache.keys.first);
@@ -643,8 +795,10 @@ class ThumbnailService {
   /// Remove a single entry from memory and disk (e.g., after deletion).
   Future<void> invalidate(String assetId) async {
     _memoryCache.remove(assetId);
+    _highResVideoCache.remove(assetId);
     _thumbnailAspectRatioCache.remove(assetId);
     _inFlight.remove(assetId);
+    _highResInFlight.remove(assetId);
     _entityCache.remove(assetId);
     try {
       final file = await _fileForAsset(assetId);
@@ -652,11 +806,18 @@ class ThumbnailService {
         await file.delete();
       }
     } catch (_) {}
+    try {
+      final hrFile = getCachedHighResFile(assetId);
+      if (hrFile != null && await hrFile.exists()) {
+        await hrFile.delete();
+      }
+    } catch (_) {}
   }
 
   /// Trims in-memory cache to free up RAM when the application is minimized or backgrounded.
   void trimMemory() {
     _memoryCache.clear();
+    _highResVideoCache.clear();
     _thumbnailAspectRatioCache.clear();
     _videoFrameCache.clear();
   }
@@ -664,6 +825,7 @@ class ThumbnailService {
   /// Wipes both in-memory cache and persistent disk cache.
   Future<void> clearAll() async {
     _memoryCache.clear();
+    _highResVideoCache.clear();
     _thumbnailAspectRatioCache.clear();
     _videoFrameCache.clear();
     _inFlight.clear();

@@ -22,6 +22,52 @@ import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
 import 'widgets/rename_dialog.dart';
+import 'image_viewer_screen.dart' show displayImage;
+
+Widget _photoThumb(String id, [String? path]) {
+  final mem = ThumbnailService.instance.getMemoryThumbnail(id);
+  final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
+  final ImageProvider? p = mem != null
+      ? MemoryImage(mem)
+      : (disk != null
+          ? FileImage(disk)
+          : (path != null ? displayImage(path) : null));
+  if (p == null) return const SizedBox.shrink();
+  return Image(
+    image: p,
+    fit: BoxFit.contain,
+    gaplessPlayback: true,
+    filterQuality: FilterQuality.high,
+  );
+}
+
+/// Morphing flight shuttle between grid (cover crop) and viewer (contain aspect ratio).
+Widget _buildHeroShuttle({
+  required Animation<double> animation,
+  required HeroFlightDirection flightDirection,
+  required MediaItem item,
+}) {
+  final hr = ThumbnailService.instance.getMemoryHighResThumbnail(item.id);
+  final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(item.id);
+  final disk = mem == null ? ThumbnailService.instance.getCachedFile(item.id) : null;
+  final ImageProvider? p = mem != null
+      ? MemoryImage(mem)
+      : (disk != null
+          ? FileImage(disk)
+          : (item.path.isNotEmpty && !item.isVideo ? displayImage(item.path) : null));
+
+  if (p == null) return const SizedBox.shrink();
+
+  return ClipRect(
+    clipBehavior: Clip.hardEdge,
+    child: Image(
+      image: p,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+    ),
+  );
+}
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
   const VideoPlayerScreen({
@@ -70,7 +116,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   final ValueNotifier<bool> _videoSurfaceVisible = ValueNotifier(false);
   // Controls the opacity of the center play button during horizontal page swipe.
   final ValueNotifier<bool> _isSwipingPage = ValueNotifier(false);
-  int? _pendingIndex;
+  int _videoLoadGeneration = 0;
+  Timer? _videoLoadDebounce;
   bool _isVideoZoomed = false;
   bool _isPinching = false;
   bool _isMultiTouch = false;
@@ -80,6 +127,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   bool _cropToFit = false;
   String? _lastSize;
   bool _highRes = false;
+  String? _activePlayerPath;
 
   void _toggleCropToFit() {
     HapticFeedback.lightImpact();
@@ -239,22 +287,43 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       for (final offset in const [-2, -1, 0, 1, 2]) {
         final target = index + offset;
         if (target >= 0 && target < _videos.length) {
-          final video = _videos[target];
-          final mem = ThumbnailService.instance.getMemoryThumbnail(video.id);
-          if (mem != null && mounted) {
-            precacheImage(MemoryImage(mem), context);
-          } else {
-            final file = ThumbnailService.instance.getCachedFile(video.id);
-            if (file != null && mounted) {
-              precacheImage(FileImage(file), context);
+          final item = _videos[target];
+          if (item.isVideo) {
+            // Pre-fetch high-res preview frame for instant crispness on swipe
+            ThumbnailService.instance
+                .getHighResVideoThumbnail(
+              item.id,
+              filePath: item.path,
+            )
+                .then((hrBytes) {
+              if (hrBytes != null && mounted) {
+                precacheImage(MemoryImage(hrBytes), context);
+              }
+            });
+            final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
+            if (mem != null && mounted) {
+              precacheImage(MemoryImage(mem), context);
             } else {
-              ThumbnailService.instance
-                  .getThumbnail(video.id, filePath: video.path, isVideo: true)
-                  .then((bytes) {
-                if (bytes != null && mounted) {
-                  precacheImage(MemoryImage(bytes), context);
-                }
-              });
+              final file = ThumbnailService.instance.getCachedFile(item.id);
+              if (file != null && mounted) {
+                precacheImage(FileImage(file), context);
+              } else {
+                ThumbnailService.instance
+                    .getThumbnail(item.id, filePath: item.path, isVideo: true)
+                    .then((bytes) {
+                  if (bytes != null && mounted) {
+                    precacheImage(MemoryImage(bytes), context);
+                  }
+                });
+              }
+            }
+          } else {
+            final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
+            if (mem != null && mounted) {
+              precacheImage(MemoryImage(mem), context);
+            }
+            if (item.path.isNotEmpty && mounted) {
+              precacheImage(displayImage(item.path), context);
             }
           }
         }
@@ -319,7 +388,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     });
 
     _player.stream.playing.listen((playing) {
-      if (playing && mounted) {
+      if (playing && mounted && _videos[_current].isVideo) {
         if (!_videoSurfaceVisible.value) {
           _videoSurfaceVisible.value = true;
         }
@@ -348,27 +417,42 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       }
     });
 
-    final currentPath = _videos[_current].path;
-    final isWebM = currentPath.toLowerCase().endsWith('.webm');
-    if (_player.platform is NativePlayer) {
-      final native = _player.platform as NativePlayer;
-      if (isWebM) {
-        await native.setProperty('hwdec', 'no');
-      } else {
-        await native.setProperty(
-            'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
+    final currentItem = _videos[_current];
+    _videoSurfaceVisible.value = false;
+    if (currentItem.isVideo) {
+      final currentPath = currentItem.path;
+      final isWebM = currentPath.toLowerCase().endsWith('.webm');
+      if (_player.platform is NativePlayer) {
+        final native = _player.platform as NativePlayer;
+        if (isWebM) {
+          await native.setProperty('hwdec', 'no');
+        } else {
+          await native.setProperty(
+              'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
+        }
+      }
+
+      await _player.open(
+        Media(currentPath),
+        play: settings.autoPlayVideo,
+      );
+      _activePlayerPath = currentPath;
+      if (settings.autoPlayVideo) {
+        _controller.waitUntilFirstFrameRendered.then((_) {
+          if (mounted && !_videoSurfaceVisible.value) {
+            _videoSurfaceVisible.value = true;
+          }
+        });
       }
     }
-
-    _videoSurfaceVisible.value = false;
-    await _player.open(
-      Media(currentPath),
-      play: settings.autoPlayVideo,
-    );
   }
 
   void _changeToVideo(int index) {
     if (index == _current) return;
+    _videoLoadDebounce?.cancel();
+    _activePlayerPath = null;
+    final thisGen = ++_videoLoadGeneration;
+
     if (_isVideoZoomed || !_transformationController.value.isIdentity()) {
       _zoomAnimController?.stop();
       _zoomAnimController?.dispose();
@@ -387,28 +471,43 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     });
 
     _videoSurfaceVisible.value = false;
+    if (_player.state.playing) {
+      _player.pause();
+    }
 
-    // Open after the frame is built so the native call never lands mid-gesture.
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted || _current != index) return;
-      try {
-        final settings = ref.read(settingsNotifierProvider);
-        final path = _videos[index].path;
-        final isWebM = path.toLowerCase().endsWith('.webm');
-        if (_player.platform is NativePlayer) {
-          final native = _player.platform as NativePlayer;
-          if (isWebM) {
-            await native.setProperty('hwdec', 'no');
-          } else {
-            await native.setProperty(
-                'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
+    if (nextItem.isVideo) {
+      // Debounce loading native player so fast swipes are 100% fluid and never stall the hardware codec pipeline
+      _videoLoadDebounce = Timer(const Duration(milliseconds: 250), () async {
+        if (!mounted || _current != index || thisGen != _videoLoadGeneration) return;
+        try {
+          final settings = ref.read(settingsNotifierProvider);
+          final path = _videos[index].path;
+          final isWebM = path.toLowerCase().endsWith('.webm');
+          if (_player.platform is NativePlayer) {
+            final native = _player.platform as NativePlayer;
+            if (isWebM) {
+              await native.setProperty('hwdec', 'no');
+            } else {
+              await native.setProperty(
+                  'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
+            }
           }
-        }
-        await _player.open(Media(path), play: settings.autoPlayVideo);
-        if (_isLooping) _player.setPlaylistMode(PlaylistMode.loop);
-        if (_playbackSpeed != 1.0) _player.setRate(_playbackSpeed);
-      } catch (_) {}
-    });
+          if (!mounted || _current != index || thisGen != _videoLoadGeneration) return;
+          await _player.open(Media(path), play: settings.autoPlayVideo);
+          _activePlayerPath = path;
+          if (_isLooping) _player.setPlaylistMode(PlaylistMode.loop);
+          if (_playbackSpeed != 1.0) _player.setRate(_playbackSpeed);
+          if (settings.autoPlayVideo) {
+            _controller.waitUntilFirstFrameRendered.then((_) {
+              if (mounted && _current == index && thisGen == _videoLoadGeneration) {
+                _videoSurfaceVisible.value = true;
+              }
+            });
+          }
+        } catch (_) {}
+      });
+    }
+
     if (_isFullscreen) {
       if (_isCurrentVideoPortrait()) {
         SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -423,15 +522,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   void _onPageChanged(int index) {
-    if (_isSwiping) {
-      // User is actively sliding/swiping between pages.
-      // We keep the transition at 60/120fps by deferring the heavy native player
-      // switch until the scroll animation has settled.
-      _pendingIndex = index;
-      _precacheAdjacentVideos(index);
-    } else {
-      _changeToVideo(index);
-    }
+    _changeToVideo(index);
   }
 
   @override
@@ -455,6 +546,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   @override
   void dispose() {
+    _videoLoadDebounce?.cancel();
     ScreenKeeperService.setKeepScreenOn(false);
     WidgetsBinding.instance.removeObserver(this);
     _zoomAnimController?.dispose();
@@ -471,7 +563,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   bool _isVideoPortrait(MediaItem item, int index) {
-    if (index == _current) {
+    if (index == _current && _activePlayerPath == item.path) {
       final vParams = _player.state.videoParams;
       if (vParams.w != null && vParams.h != null && vParams.w! > 0 && vParams.h! > 0) {
         final rotate = vParams.rotate ?? 0;
@@ -481,9 +573,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         return effectiveH > effectiveW;
       }
     }
+    // Item width and height from scanner already account for orientation
     if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
       return item.height! > item.width!;
     }
+    // Visual thumbnail aspect ratio fallback
     final thumbRatio = ThumbnailService.instance.getThumbnailAspectRatio(item.id);
     if (thumbRatio != null && thumbRatio > 0) {
       return thumbRatio < 1.0;
@@ -555,81 +649,61 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
   }
 
-  double _resolveAspectRatio(MediaItem item, int index) {
-    // 1. Active player videoParams (includes native rotation matrix)
-    if (index == _current) {
-      final vParams = _player.state.videoParams;
-      if (vParams.w != null && vParams.h != null && vParams.w! > 0 && vParams.h! > 0) {
-        final rotate = vParams.rotate ?? 0;
-        final isRot90or270 = rotate == 90 || rotate == 270;
-        final w = isRot90or270 ? vParams.h! : vParams.w!;
-        final h = isRot90or270 ? vParams.w! : vParams.h!;
-        return w / h;
-      }
-    }
-
-    // 2. Fallback to MediaItem metadata (already corrected for orientation)
-    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
-      return item.width! / item.height!;
-    }
-
-    // 3. Fallback to visual thumbnail aspect ratio on frame 0
-    final thumbRatio = ThumbnailService.instance.getThumbnailAspectRatio(item.id);
-    if (thumbRatio != null && thumbRatio > 0) {
-      return thumbRatio;
-    }
-
-    return 16.0 / 9.0;
-  }
-
   Widget _buildVideoPage(int index) {
     final item = _videos[index];
+    if (!item.isVideo) {
+      return SizedBox.expand(
+        child: Stack(
+          fit: StackFit.expand,
+          alignment: Alignment.center,
+          children: [
+            _photoThumb(item.id, item.path),
+            Image(
+              image: displayImage(item.path),
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.high,
+            ),
+          ],
+        ),
+      );
+    }
+
     final isVertical = _isVideoPortrait(item, index);
     final isDeviceLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
     final shouldCrop = !isVertical && isDeviceLandscape && _cropToFit;
 
-    final content = Stack(
-      fit: StackFit.expand,
-      alignment: Alignment.center,
-      children: [
-        _VideoThumbnailPage(
-          item: item,
-          fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
-        ),
-        if (index == _current)
-          ValueListenableBuilder<bool>(
-            valueListenable: _videoSurfaceVisible,
-            builder: (context, visible, _) => AnimatedOpacity(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOut,
-              opacity: visible ? 1.0 : 0.0,
-              child: IgnorePointer(
-                ignoring: !visible,
-                child: Video(
-                  key: const ValueKey('active_video_surface'),
-                  controller: _controller,
-                  controls: NoVideoControls,
-                  fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
-                  filterQuality: FilterQuality.medium,
-                  fill: Colors.transparent,
+    return SizedBox.expand(
+      child: Stack(
+        fit: StackFit.expand,
+        alignment: Alignment.center,
+        children: [
+          _VideoThumbnailPage(
+            item: item,
+            fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
+          ),
+          if (index == _current)
+            ValueListenableBuilder<bool>(
+              valueListenable: _videoSurfaceVisible,
+              builder: (context, visible, _) => AnimatedOpacity(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOut,
+                opacity: visible ? 1.0 : 0.0,
+                child: IgnorePointer(
+                  ignoring: !visible,
+                  child: Video(
+                    key: const ValueKey('active_video_surface'),
+                    controller: _controller,
+                    controls: NoVideoControls,
+                    fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
+                    filterQuality: FilterQuality.medium,
+                    fill: Colors.transparent,
+                  ),
                 ),
               ),
             ),
-          ),
-      ],
-    );
-
-    final ratio = _resolveAspectRatio(item, index);
-
-    if (shouldCrop) {
-      return SizedBox.expand(child: content);
-    }
-
-    return Center(
-      child: AspectRatio(
-        aspectRatio: ratio,
-        child: content,
+        ],
       ),
     );
   }
@@ -787,7 +861,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           _current = _current.clamp(0, _videos.length - 1);
         });
         _pageController.jumpToPage(_current);
-        _player.open(Media(_videos[_current].path), play: false);
+        if (_videos[_current].isVideo) {
+          _player.open(Media(_videos[_current].path), play: false);
+        }
       }
     }
   }
@@ -831,7 +907,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           _current = _current.clamp(0, _videos.length - 1);
         });
         _pageController.jumpToPage(_current);
-        _player.open(Media(_videos[_current].path), play: false);
+        if (_videos[_current].isVideo) {
+          _player.open(Media(_videos[_current].path), play: false);
+        }
       }
       return;
     }
@@ -888,7 +966,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         await ref.read(trashProvider.notifier).moveToTrash(
               id: item.id,
               path: item.path,
-              isVideo: true,
+              isVideo: item.isVideo,
             );
       } else {
         final f = File(item.path);
@@ -918,7 +996,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         _isVideoZoomed = false;
       });
       _pageController.jumpToPage(_current);
-      _player.open(Media(_videos[_current].path), play: false);
+      if (_videos[_current].isVideo) {
+        _player.open(Media(_videos[_current].path), play: false);
+      }
     }
   }
 
@@ -968,7 +1048,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     }
                   }
                   final screenHeight = MediaQuery.sizeOf(context).height;
-                  final bottomThreshold = MediaQuery.orientationOf(context) == Orientation.landscape ? 140.0 : 280.0;
+                  final isCurrentItemVideo = _videos[_current].isVideo;
+                  final bottomThreshold = isCurrentItemVideo
+                      ? (MediaQuery.orientationOf(context) == Orientation.landscape ? 140.0 : 280.0)
+                      : 90.0;
                   final inBottomControlsArea = _showControls && (e.position.dy > screenHeight - bottomThreshold);
                   if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
                     // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
@@ -1123,36 +1206,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                           if (notification.dragDetails != null) {
                             _isSwiping = true;
                             _isSwipingPage.value = true;
-                            _videoSurfaceVisible.value = false;
-                            // Immediately pause playback on swipe to free hardware decoder
-                            // and GPU pipeline for silky-smooth 60/120fps motion.
-                            if (_player.state.playing) {
-                              _player.pause();
-                            }
-                          }
-                        } else if (notification is ScrollUpdateNotification) {
-                          if (notification.dragDetails != null && !_isSwiping) {
-                            _isSwiping = true;
-                            _isSwipingPage.value = true;
-                            _videoSurfaceVisible.value = false;
                             if (_player.state.playing) {
                               _player.pause();
                             }
                           }
                         } else if (notification is ScrollEndNotification) {
-                          final settledPage = _pageController.page?.round();
-                          final target = _pendingIndex ?? settledPage;
-                          final changing = target != null &&
-                              target != _current &&
-                              target >= 0 &&
-                              target < _videos.length;
                           _isSwiping = false;
                           _isSwipingPage.value = false;
-                          _pendingIndex = null;
-                          if (changing) {
-                            // _changeToVideo re-mounts the texture once loaded.
-                            _changeToVideo(target);
-                          }
                         }
                         return false;
                       },
@@ -1172,75 +1232,82 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                 ? const NeverScrollableScrollPhysics()
                                 : const BouncingScrollPhysics(),
                             itemBuilder: (context, index) {
-                          if (index == _current) {
-                            return Center(
-                              child: ClipRect(
-                                child: InteractiveViewer(
-                                  key: ValueKey('iv_${_videos[index].id}_${_isFullscreen}_${MediaQuery.orientationOf(context)}'),
-                                  transformationController:
-                                      _transformationController,
-                                  minScale: 1.0,
-                                  maxScale: 88.0,
-                                  panEnabled: _isCurrentlyVideoZoomed,
-                                  scaleEnabled: true,
-                                  clipBehavior: Clip.hardEdge,
-                                  onInteractionStart: (details) {
-                                    _zoomAnimController?.stop();
-                                    if (details.pointerCount >= 2) {
-                                      _isPinching = true;
-                                    }
-                                  },
-                                  onInteractionUpdate: (details) {
-                                    final scale = _transformationController
-                                        .value
-                                        .getMaxScaleOnAxis();
-                                    final isZoomed = scale > 1.05;
-                                    if (isZoomed != _isVideoZoomed) {
-                                      _isVideoZoomed = isZoomed;
-                                    }
-                                  },
-                                  onInteractionEnd: (details) {
-                                    _isPinching = false;
-                                    final scale = _transformationController
-                                        .value
-                                        .getMaxScaleOnAxis();
-                                    if (scale <= 1.02) {
-                                      _resetVideoZoom();
-                                    } else {
-                                      if (!_isVideoZoomed && mounted) {
-                                        setState(() {
-                                          _isVideoZoomed = true;
-                                        });
+                              return Center(
+                                child: ClipRect(
+                                  child: InteractiveViewer(
+                                    key: ValueKey('iv_${_videos[index].id}'),
+                                    transformationController: index == _current
+                                        ? _transformationController
+                                        : null,
+                                    minScale: 1.0,
+                                    maxScale: 8.0,
+                                    panEnabled: index == _current &&
+                                        _isCurrentlyVideoZoomed,
+                                    scaleEnabled: index == _current,
+                                    clipBehavior: Clip.hardEdge,
+                                    onInteractionStart: (details) {
+                                      if (index == _current) {
+                                        _zoomAnimController?.stop();
+                                        if (details.pointerCount >= 2) {
+                                          _isPinching = true;
+                                        }
                                       }
-                                    }
-                                  },
-                                  child: Center(
-                                    child: Hero(
-                                      tag: _videos[index].id,
-                                      transitionOnUserGestures: true,
-                                      flightShuttleBuilder: (
-                                        flightContext,
-                                        animation,
-                                        flightDirection,
-                                        fromHeroContext,
-                                        toHeroContext,
-                                      ) =>
-                                          _buildHeroShuttle(
-                                        animation: animation,
-                                        flightDirection: flightDirection,
-                                        item: _videos[index],
-                                      ),
-                                      child: _buildVideoPage(index),
+                                    },
+                                    onInteractionUpdate: (details) {
+                                      if (index == _current) {
+                                        final scale = _transformationController
+                                            .value
+                                            .getMaxScaleOnAxis();
+                                        final isZoomed = scale > 1.05;
+                                        if (isZoomed != _isVideoZoomed) {
+                                          _isVideoZoomed = isZoomed;
+                                        }
+                                      }
+                                    },
+                                    onInteractionEnd: (details) {
+                                      if (index == _current) {
+                                        _isPinching = false;
+                                        final scale = _transformationController
+                                            .value
+                                            .getMaxScaleOnAxis();
+                                        if (scale <= 1.02) {
+                                          _resetVideoZoom();
+                                        } else {
+                                          if (!_isVideoZoomed && mounted) {
+                                            setState(() {
+                                              _isVideoZoomed = true;
+                                            });
+                                          }
+                                        }
+                                      }
+                                    },
+                                    child: Center(
+                                      child: index == _current
+                                          ? Hero(
+                                              tag: _videos[index].id,
+                                              transitionOnUserGestures: true,
+                                              flightShuttleBuilder: (
+                                                flightContext,
+                                                animation,
+                                                flightDirection,
+                                                fromHeroContext,
+                                                toHeroContext,
+                                              ) =>
+                                                  _buildHeroShuttle(
+                                                animation: animation,
+                                                flightDirection: flightDirection,
+                                                item: _videos[index],
+                                              ),
+                                              child: _buildVideoPage(index),
+                                            )
+                                          : _buildVideoPage(index),
                                     ),
                                   ),
                                 ),
-                              ),
-                            );
-                          }
-                          return Center(child: _buildVideoPage(index));
+                              );
+                            },
+                          );
                         },
-                      );
-                    },
                   ),
                 ),
               ),
@@ -1329,7 +1396,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         // In landscape: completely removed.
                         // In portrait: only shown before the video has ever started playing.
                         if (MediaQuery.orientationOf(context) != Orientation.landscape &&
-                            !_hasStartedPlaying)
+                            !_hasStartedPlaying &&
+                            _videos[_current].isVideo)
                           Center(
                             child: ValueListenableBuilder<bool>(
                               valueListenable: _isSwipingPage,
@@ -1352,7 +1420,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                   if (playing) return const SizedBox.shrink();
                                   return BouncyTap(
                                     onTap: () {
-                                      _player.play();
+                                      if (_videoLoadDebounce?.isActive == true) {
+                                        _videoLoadDebounce?.cancel();
+                                        _player.open(Media(_videos[_current].path), play: true);
+                                      } else {
+                                        _player.play();
+                                      }
                                       if (!_hasStartedPlaying) {
                                         setState(() => _hasStartedPlaying = true);
                                       }
@@ -1438,6 +1511,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               onScrubbingChanged: (scrubbing) {
                                 if (_isScrubbing != scrubbing) {
                                   setState(() => _isScrubbing = scrubbing);
+                                  if (!scrubbing && !_videoSurfaceVisible.value) {
+                                    _videoSurfaceVisible.value = true;
+                                  }
                                 }
                               },
                             ),
@@ -1460,34 +1536,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
 // ── Video thumbnail placeholder ───────────────────────────────────────────
 
-/// Morphing flight shuttle between grid (cover crop) and viewer (contain aspect ratio).
-Widget _buildHeroShuttle({
-  required Animation<double> animation,
-  required HeroFlightDirection flightDirection,
-  required MediaItem item,
-}) {
-  final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
-  final disk =
-      mem == null ? ThumbnailService.instance.getCachedFile(item.id) : null;
-  final ImageProvider? p =
-      mem != null ? MemoryImage(mem) : (disk != null ? FileImage(disk) : null);
-
-  if (p == null) {
-    return _VideoThumbnailPage(item: item);
-  }
-
-  return ClipRect(
-    clipBehavior: Clip.hardEdge,
-    child: Image(
-      image: p,
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-      filterQuality: FilterQuality.medium,
-    ),
-  );
-}
-
-class _VideoThumbnailPage extends StatelessWidget {
+class _VideoThumbnailPage extends StatefulWidget {
   const _VideoThumbnailPage({
     required this.item,
     this.fit = BoxFit.contain,
@@ -1496,50 +1545,130 @@ class _VideoThumbnailPage extends StatelessWidget {
   final BoxFit fit;
 
   @override
-  Widget build(BuildContext context) {
-    final cached = ThumbnailService.instance.getMemoryThumbnail(item.id);
+  State<_VideoThumbnailPage> createState() => _VideoThumbnailPageState();
+}
+
+class _VideoThumbnailPageState extends State<_VideoThumbnailPage> {
+  Uint8List? _highResBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHighRes();
+  }
+
+  @override
+  void didUpdateWidget(covariant _VideoThumbnailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.id != widget.item.id) {
+      _highResBytes = null;
+      _loadHighRes();
+    }
+  }
+
+  void _loadHighRes() {
+    final cached =
+        ThumbnailService.instance.getMemoryHighResThumbnail(widget.item.id);
     if (cached != null) {
+      _highResBytes = cached;
+      return;
+    }
+    ThumbnailService.instance
+        .getHighResVideoThumbnail(widget.item.id, filePath: widget.item.path)
+        .then((bytes) {
+      if (mounted && bytes != null) {
+        setState(() {
+          _highResBytes = bytes;
+        });
+      }
+    });
+  }
+
+  Widget _buildBaseThumbnail() {
+    final highResMem =
+        ThumbnailService.instance.getMemoryHighResThumbnail(widget.item.id);
+    if (highResMem != null) {
       return SizedBox.expand(
         child: Image.memory(
-          cached,
-          fit: fit,
+          highResMem,
+          fit: widget.fit,
           gaplessPlayback: true,
           filterQuality: FilterQuality.high,
         ),
       );
     }
 
-    final diskFile = ThumbnailService.instance.getCachedFile(item.id);
+    final highResDisk =
+        ThumbnailService.instance.getCachedHighResFile(widget.item.id);
+    if (highResDisk != null) {
+      return SizedBox.expand(
+        child: Image.file(
+          highResDisk,
+          fit: widget.fit,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.high,
+        ),
+      );
+    }
+
+    final cached = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
+    if (cached != null) {
+      return SizedBox.expand(
+        child: Image.memory(
+          cached,
+          fit: widget.fit,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
+        ),
+      );
+    }
+
+    final diskFile = ThumbnailService.instance.getCachedFile(widget.item.id);
     if (diskFile != null) {
       return SizedBox.expand(
         child: Image.file(
           diskFile,
-          fit: fit,
+          fit: widget.fit,
           gaplessPlayback: true,
-          filterQuality: FilterQuality.high,
+          filterQuality: FilterQuality.medium,
         ),
       );
     }
 
     return FutureBuilder<Uint8List?>(
       future: ThumbnailService.instance
-          .getThumbnail(item.id, filePath: item.path, isVideo: true),
+          .getThumbnail(widget.item.id, filePath: widget.item.path, isVideo: true),
       builder: (context, snapshot) {
         if (snapshot.data != null) {
           return SizedBox.expand(
             child: Image.memory(
               snapshot.data!,
-              fit: fit,
+              fit: widget.fit,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.high,
+              filterQuality: FilterQuality.medium,
             ),
           );
         }
-        return const Center(
-          child: Icon(Icons.videocam_outlined, size: 64, color: Colors.white24),
-        );
+        return const SizedBox.shrink();
       },
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hr = _highResBytes ??
+        ThumbnailService.instance.getMemoryHighResThumbnail(widget.item.id);
+    if (hr != null) {
+      return SizedBox.expand(
+        child: Image.memory(
+          hr,
+          fit: widget.fit,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.high,
+        ),
+      );
+    }
+    return _buildBaseThumbnail();
   }
 }
 
@@ -2336,10 +2465,146 @@ class _BottomBarState extends State<_BottomBar> {
     );
   }
 
+  void _showPhotoMoreOptions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.onRename != null)
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined, color: Colors.white),
+                  title: Text(context.tr.rename,
+                      style: const TextStyle(color: Colors.white, fontSize: 15)),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    widget.onRename?.call();
+                  },
+                ),
+              ListTile(
+                leading:
+                    const Icon(Icons.wallpaper_outlined, color: Colors.white),
+                title: Text(context.tr.setAsWallpaper,
+                    style: const TextStyle(color: Colors.white, fontSize: 15)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  ShareService.setAsWallpaper(widget.item.path);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
+
+    if (!widget.item.isVideo) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [Colors.black87, Colors.transparent],
+          ),
+        ),
+        child: widget.isTrash
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _ViewerActionButton(
+                    icon: const Icon(Icons.restore,
+                        color: Colors.white, size: 22),
+                    label: context.tr.restore,
+                    onTap: widget.onRestore ?? () {},
+                  ),
+                  _ViewerActionButton(
+                    icon: const Icon(Icons.info_outline,
+                        color: Colors.white, size: 22),
+                    label: context.tr.details,
+                    onTap: () => showMediaInfoSheet(context, widget.item),
+                  ),
+                  _ViewerActionButton(
+                    icon: const Icon(Icons.delete_forever,
+                        color: Colors.white, size: 22),
+                    label: context.tr.delete,
+                    onTap: widget.onDelete,
+                  ),
+                ],
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _ViewerActionButton(
+                    icon: const Icon(Icons.share_outlined,
+                        color: Colors.white, size: 22),
+                    label: context.tr.share,
+                    onTap: () => ShareService.shareSingle(
+                        widget.item.path,
+                        isVideo: false),
+                  ),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final isFav = ref.watch(
+                        settingsNotifierProvider.select(
+                          (s) => s.favoriteIds.contains(widget.item.id),
+                        ),
+                      );
+                      return _ViewerActionButton(
+                        icon: Icon(
+                          isFav ? Icons.favorite : Icons.favorite_border,
+                          color: isFav ? Colors.redAccent : Colors.white,
+                          size: 22,
+                        ),
+                        label: context.tr.favorite,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          final currentFavs = Set<String>.from(
+                            ref.read(settingsNotifierProvider).favoriteIds,
+                          );
+                          if (currentFavs.contains(widget.item.id)) {
+                            currentFavs.remove(widget.item.id);
+                          } else {
+                            currentFavs.add(widget.item.id);
+                          }
+                          ref
+                              .read(settingsNotifierProvider.notifier)
+                              .update(
+                                (s) => s.copyWith(favoriteIds: currentFavs.toList()),
+                              );
+                        },
+                      );
+                    },
+                  ),
+                  _ViewerActionButton(
+                    icon: const Icon(Icons.delete_outline,
+                        color: Colors.white, size: 22),
+                    label: context.tr.delete,
+                    onTap: widget.onDelete,
+                  ),
+                  _ViewerActionButton(
+                    icon: const Icon(Icons.more_vert,
+                        color: Colors.white, size: 22),
+                    label: context.tr.more,
+                    onTap: () => _showPhotoMoreOptions(context),
+                  ),
+                ],
+              ),
+      );
+    }
 
     return Container(
       padding: EdgeInsets.fromLTRB(8, 0, 8, isLandscape ? 2 : 8),
