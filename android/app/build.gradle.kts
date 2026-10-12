@@ -58,13 +58,15 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
-            versionNameSuffix   = "-debug"
         }
         release {
             isMinifyEnabled   = false  // keep false – media paths must not be obfuscated
             isShrinkResources = false
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (keystorePropertiesFile.exists() || file("phantek.jks").exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

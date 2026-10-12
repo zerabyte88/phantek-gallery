@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.3&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.4&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -127,6 +127,12 @@ The compiled release APK will be generated at:
 ---
 
 ## Version History
+
+### v2.7.4 (Build 36)
+* **Unified Photo & Video Hero Flight Transition:** Wrapped the active item in `VideoPlayerScreen` with dynamic `Hero` and `_buildHeroShuttle`, perfectly matching `ImageViewerScreen`. When swiping between videos and dismissing via swipe-to-dismiss or back button, the current video smoothly flies back to its corresponding grid tile without flashing or revealing the first video.
+* **Eliminated MediaCodec Decoder Preroll Jitter on Video Launch:** Prevented native hardware decoder initial frame advancement when autoplay is disabled by keeping the video surface hidden behind the high-resolution thumbnail until the user explicitly initiates playback.
+* **Seamless Continuous Mixed Photo & Video Carousel:** Seamless swiping between photos and videos within the "All" and "Albums" tabs with unified navigation and high-fidelity aspect ratio preservation.
+* **Zero-Flicker Scrubber Resumption:** Restored active video surface visibility seamlessly when scrubbing completes without restarting or stalling playback.
 
 ### v2.7.3 (Build 35)
 * **Raw Pointer Listener Video Scrubber & Gesture Arena Immunity:** Replaced Flutter's `GestureDetector` with a low-level `Listener(onPointerDown, onPointerMove, onPointerUp, onPointerCancel)` in `_VideoScrubberBar`. Scrubbing and dragging are completely immune to gesture arena cancellation from vertical thumb displacement, preventing the scrubber and preview tooltip from prematurely disappearing.

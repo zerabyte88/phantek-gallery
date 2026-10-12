@@ -723,11 +723,14 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                     break;
                 }
                 return _KeepAlivePage(
-                  child: _buildMediaGrid(
-                    items: tabItems,
-                    tab: tab,
-                    settings: settings,
-                    storageKey: 'gallery_tab_${tab.name}',
+                  child: HeroMode(
+                    enabled: _currentPage == index,
+                    child: _buildMediaGrid(
+                      items: tabItems,
+                      tab: tab,
+                      settings: settings,
+                      storageKey: 'gallery_tab_${tab.name}',
+                    ),
                   ),
                 );
               },
@@ -964,6 +967,10 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               onTap: () {
                 if (_selecting) {
                   _toggleSelect(item.id);
+                  return;
+                }
+                if (tab == FilterOption.all) {
+                  Navigator.of(context).openVideo(items, i);
                   return;
                 }
                 if (item.isVideo) {
