@@ -31,9 +31,10 @@ ImageProvider displayImage(String path) => ResizeImage(
       policy: ResizeImagePolicy.fit,
     );
 
-/// Cached 512px grid thumbnail, shown instantly while the full image decodes.
+/// Cached thumbnail, shown instantly while the full image decodes.
 Widget _thumb(String id, [String? path]) {
-  final mem = ThumbnailService.instance.getMemoryThumbnail(id);
+  final hr = ThumbnailService.instance.getMemoryHighResThumbnail(id);
+  final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
   final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
   final ImageProvider? p = mem != null
       ? MemoryImage(mem)
@@ -56,7 +57,8 @@ Widget _buildHeroShuttle({
   required String id,
   String? path,
 }) {
-  final mem = ThumbnailService.instance.getMemoryThumbnail(id);
+  final hr = ThumbnailService.instance.getMemoryHighResThumbnail(id);
+  final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
   final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
   final ImageProvider? p = mem != null
       ? MemoryImage(mem)
@@ -66,8 +68,25 @@ Widget _buildHeroShuttle({
 
   if (p == null) return const SizedBox.shrink();
 
-  return ClipRect(
-    clipBehavior: Clip.hardEdge,
+  final curved = CurvedAnimation(
+    parent: animation,
+    curve: const Cubic(0.2, 0.0, 0.0, 1.0),
+  );
+
+  return AnimatedBuilder(
+    animation: curved,
+    builder: (context, child) {
+      final t = curved.value;
+      final radius = flightDirection == HeroFlightDirection.push
+          ? (1.0 - t) * 8.0
+          : t * 8.0;
+
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(radius.clamp(0.0, 8.0)),
+        clipBehavior: Clip.antiAlias,
+        child: child,
+      );
+    },
     child: Image(
       image: p,
       fit: BoxFit.cover,
@@ -515,10 +534,50 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     );
   }
 
+  Widget _buildStaggeredBar({
+    required BuildContext context,
+    required bool showBars,
+    required Widget child,
+  }) {
+    final anim = ModalRoute.of(context)?.animation;
+    return ValueListenableBuilder<Offset>(
+      valueListenable: _drag,
+      builder: (context, d, _) {
+        final dragFade = (1.0 - (d.dy / 35.0)).clamp(0.0, 1.0);
+        final baseOpacity = showBars ? dragFade : 0.0;
+        if (anim == null) {
+          return Opacity(
+            opacity: baseOpacity,
+            child: IgnorePointer(
+              ignoring: !showBars || d.dy > 4,
+              child: child,
+            ),
+          );
+        }
+        return AnimatedBuilder(
+          animation: anim,
+          builder: (context, _) {
+            final entrance = const Interval(0.65, 1.0, curve: Curves.easeOut)
+                .transform(anim.value);
+            final opacity = (baseOpacity * entrance).clamp(0.0, 1.0);
+            return Opacity(
+              opacity: opacity,
+              child: IgnorePointer(
+                ignoring: !showBars || d.dy > 4 || opacity < 0.5,
+                child: child,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = _currentItem;
-    final showBars = _barsVisible && !_isCurrentlyZoomed && !_isPinching;    return Scaffold(
+    final showBars = _barsVisible && !_isCurrentlyZoomed && !_isPinching;
+    return Scaffold(
       backgroundColor: Colors.transparent,
       body: Listener(
         onPointerDown: (e) {
@@ -768,19 +827,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 top: 0,
                 left: 0,
                 right: 0,
-                child: ValueListenableBuilder<Offset>(
-                  valueListenable: _drag,
-                  builder: (context, d, child) {
-                    final dragFade = (1.0 - (d.dy / 35.0)).clamp(0.0, 1.0);
-                    final effectiveOpacity = showBars ? dragFade : 0.0;
-                    return Opacity(
-                      opacity: effectiveOpacity,
-                      child: IgnorePointer(
-                        ignoring: !showBars || d.dy > 4,
-                        child: child,
-                      ),
-                    );
-                  },
+                child: _buildStaggeredBar(
+                  context: context,
+                  showBars: showBars,
                   child: SafeArea(
                     bottom: false,
                     child: Container(
@@ -849,19 +898,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 bottom: 0,
                 left: 0,
                 right: 0,
-                child: ValueListenableBuilder<Offset>(
-                  valueListenable: _drag,
-                  builder: (context, d, child) {
-                    final dragFade = (1.0 - (d.dy / 35.0)).clamp(0.0, 1.0);
-                    final effectiveOpacity = showBars ? dragFade : 0.0;
-                    return Opacity(
-                      opacity: effectiveOpacity,
-                      child: IgnorePointer(
-                        ignoring: !showBars || d.dy > 4,
-                        child: child,
-                      ),
-                    );
-                  },
+                child: _buildStaggeredBar(
+                  context: context,
+                  showBars: showBars,
                   child: SafeArea(
                     top: false,
                     child: Container(

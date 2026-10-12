@@ -37,7 +37,7 @@ Route<dynamic> generateRoute(RouteSettings s) {
           initialIndex: args.initialIndex,
           isTrash: args.isTrash,
         ),
-        duration: const Duration(milliseconds: 280),
+        duration: const Duration(milliseconds: 300),
       );
 
     case AppRoutes.video:
@@ -49,13 +49,13 @@ Route<dynamic> generateRoute(RouteSettings s) {
             initialIndex: args.initialIndex,
             isTrash: args.isTrash,
           ),
-          duration: const Duration(milliseconds: 280),
+          duration: const Duration(milliseconds: 300),
         );
       } else if (s.arguments is MediaItem) {
         final item = s.arguments as MediaItem;
         return _slide(
           VideoPlayerScreen(item: item),
-          duration: const Duration(milliseconds: 280),
+          duration: const Duration(milliseconds: 300),
         );
       }
       return _slide(const GalleryScreen());
@@ -73,15 +73,15 @@ Route<dynamic> generateRoute(RouteSettings s) {
 
 PageRoute<T> _slide<T>(
   Widget page, {
-  Duration duration = const Duration(milliseconds: 280),
+  Duration duration = const Duration(milliseconds: 300),
 }) =>
     PageRouteBuilder<T>(
       pageBuilder: (_, __, ___) => page,
       transitionsBuilder: (_, anim, __, child) => FadeTransition(
         opacity: CurvedAnimation(
           parent: anim,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeOutCubic,
+          curve: const Cubic(0.2, 0.0, 0.0, 1.0),
+          reverseCurve: const Cubic(0.2, 0.0, 0.0, 1.0),
         ),
         child: child,
       ),

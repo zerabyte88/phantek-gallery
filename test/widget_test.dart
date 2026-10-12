@@ -1231,7 +1231,7 @@ void main() {
       expect(widthAt(1.0), 412.0);
     });
 
-    testWidgets('MediaGridItem renders Hero thumbnail inside a ClipRect', (tester) async {
+    testWidgets('MediaGridItem renders Hero thumbnail inside a ClipRRect', (tester) async {
       final testItem = MediaItem(
         id: 'test_grid_item_1',
         path: '/dcim/test.jpg',
@@ -1256,8 +1256,8 @@ void main() {
         ),
       );
 
-      final clipRectFinder = find.byType(ClipRect);
-      expect(clipRectFinder, findsWidgets);
+      final clipRRectFinder = find.byType(ClipRRect);
+      expect(clipRRectFinder, findsWidgets);
 
       final heroFinder = find.byType(Hero);
       expect(heroFinder, findsOneWidget);
