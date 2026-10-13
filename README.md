@@ -84,9 +84,9 @@
 | Requirement | MINIMUM | RECOMMENDED |
 | :--- | :--- | :--- |
 | **OS** | Android 8.0 (API 26) or higher | Android 13+ (API 33+) / Android 14+ (API 34+) |
-| **Processor** | 64-bit Octa-Core 2.0 GHz (Snapdragon 685, Helio G99, Unisoc T820) | Qualcomm Snapdragon 7/8 series, MediaTek Dimensity 7000/8000+ series |
-| **Memory** | 3 GB RAM | 6 GB RAM or higher |
-| **Graphics** | Adreno 610 / Mali-G57 or equivalent (OpenGL ES 3.0 support) | Adreno 642L / Mali-G68 or higher (OpenGL ES 3.2 / Vulkan support) |
+| **Processor** | 64-bit Octa-Core 2.0 GHz | Qualcomm Snapdragon 7/8 Gen series, MediaTek Dimensity 7000/8000 series |
+| **Memory** | 4 GB RAM | 8 GB RAM or higher |
+| **Graphics** | Adreno 610 / Mali-G52 / Mali-G57 or equivalent (OpenGL ES 3.0 support) | Adreno 700 series / Mali-G610 or higher (OpenGL ES 3.2 / Vulkan support) |
 | **Storage** | 150 MB available space (eMMC 5.1) | 500 MB available space (UFS 2.2 / UFS 3.1+) |
 | **Additional Notes** | 64-bit ARM architecture (`arm64-v8a`) required. Disabling **Auto-Play Video** in Settings is recommended for entry-level storage. | Enables gapless hardware-accelerated 4K 60fps video playback, instant timeline scrolling, and smooth 100MP+ photo zoom. |
 
