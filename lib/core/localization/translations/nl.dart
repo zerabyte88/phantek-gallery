@@ -2,7 +2,8 @@
 const Map<String, String> nlTranslations = {
   'aToZ': 'A tot Z',
   'about': 'Over',
-  'aboutPhantek': 'Over Phantek',
+  'aboutPhantek': 'Over de app',
+  'aboutApp': 'Over de app',
   'add': 'Toevoegen',
   'albums': 'Albums',
   'albumsCount': '{count} albums',
@@ -31,6 +32,7 @@ const Map<String, String> nlTranslations = {
   'chooseThumbnailDensity': 'Miniatuurdichtheid kiezen',
   'chooseVisualMode': 'Kies visuele modus en contrast',
   'clearThumbnailCache': 'Miniaturencache wissen',
+  'clearAll': 'Alles wissen',
   'codec': 'Codec',
   'columnsCount': '{count} kolommen',
   'compactDetailedView': 'Compacte gedetailleerde weergave',

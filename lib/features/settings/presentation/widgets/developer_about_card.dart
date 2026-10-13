@@ -25,8 +25,8 @@ class DeveloperAboutCard extends ConsumerWidget {
     return FutureBuilder<PackageInfo>(
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
-        final version = snapshot.data?.version ?? '2.7.6';
-        final buildNumber = snapshot.data?.buildNumber ?? '38';
+        final version = snapshot.data?.version ?? '2.7.7';
+        final buildNumber = snapshot.data?.buildNumber ?? '39';
 
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -42,7 +42,7 @@ class DeveloperAboutCard extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Header: About Phantek ───────────────────────────────
+              // ── Header: About App ───────────────────────────────────
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -53,7 +53,7 @@ class DeveloperAboutCard extends ConsumerWidget {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    context.tr.aboutPhantek,
+                    context.tr.aboutApp,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

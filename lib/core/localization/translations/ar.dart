@@ -2,7 +2,8 @@
 const Map<String, String> arTranslations = {
   'aToZ': 'من أ إلى ي',
   'about': 'حول التطبيق',
-  'aboutPhantek': 'حول Phantek',
+  'aboutPhantek': 'حول التطبيق',
+  'aboutApp': 'حول التطبيق',
   'add': 'إضافة',
   'albums': 'الألبومات',
   'albumsCount': '{count} ألبوم',
@@ -30,6 +31,7 @@ const Map<String, String> arTranslations = {
   'chooseThumbnailDensity': 'اختر كثافة الصور المصغرة',
   'chooseVisualMode': 'اختر وضع العرض والتباين',
   'clearThumbnailCache': 'مسح ذاكرة التخزين المؤقت للصور المصغرة',
+  'clearAll': 'مسح الكل',
   'codec': 'برنامج الترميز',
   'columnsCount': '{count} أعمدة',
   'compactDetailedView': 'عرض مضغوط ومفصل',

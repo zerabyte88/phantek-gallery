@@ -2,7 +2,8 @@
 const Map<String, String> noTranslations = {
   'aToZ': 'A til Å',
   'about': 'Om',
-  'aboutPhantek': 'Om Phantek',
+  'aboutPhantek': 'Om appen',
+  'aboutApp': 'Om appen',
   'add': 'Legg til',
   'albums': 'Albumer',
   'albumsCount': '{count} albumer',
@@ -31,6 +32,7 @@ const Map<String, String> noTranslations = {
   'chooseThumbnailDensity': 'Velg miniatyrbildetetthet',
   'chooseVisualMode': 'Velg visuell modus og kontrast',
   'clearThumbnailCache': 'Tøm miniatyrbilde-buffer',
+  'clearAll': 'Tøm alle',
   'codec': 'Kodek',
   'columnsCount': '{count} kolonner',
   'compactDetailedView': 'Kompakt detaljert visning',

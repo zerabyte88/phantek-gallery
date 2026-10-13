@@ -2,7 +2,8 @@
 const Map<String, String> idTranslations = {
   'aToZ': 'A ke Z',
   'about': 'Tentang',
-  'aboutPhantek': 'Tentang Phantek',
+  'aboutPhantek': 'Tentang Aplikasi',
+  'aboutApp': 'Tentang Aplikasi',
   'add': 'Tambah',
   'albums': 'Album',
   'albumsCount': '{count} album',
@@ -30,6 +31,7 @@ const Map<String, String> idTranslations = {
   'chooseThumbnailDensity': 'Pilih kerapatan thumbnail media',
   'chooseVisualMode': 'Pilih mode visual dan kontras',
   'clearThumbnailCache': 'Hapus Cache Thumbnail',
+  'clearAll': 'Hapus Semua',
   'codec': 'Codec',
   'columnsCount': '{count} kolom',
   'compactDetailedView': 'Tampilan ringkas mendetail',

@@ -1339,19 +1339,23 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       },
                       child: ValueListenableBuilder<bool>(
                         valueListenable: _isDraggingDown,
-                        builder: (context, isDraggingDown, _) {
-                          return PageView.builder(
-                            controller: _pageController,
-                            itemCount: _videos.length,
-                            onPageChanged: _onPageChanged,
-                            physics: (_isCurrentlyVideoZoomed ||
-                                    _isPinching ||
-                                    _isMultiTouch ||
-                                    _isScrubbing ||
-                                    _activePointers.length >= 2 ||
-                                    isDraggingDown)
-                                ? const NeverScrollableScrollPhysics()
-                                : const BouncingScrollPhysics(),
+                        builder: (context, isDraggingDown, child) {
+                          return IgnorePointer(
+                            ignoring: isDraggingDown,
+                            child: child,
+                          );
+                        },
+                        child: PageView.builder(
+                          controller: _pageController,
+                          itemCount: _videos.length,
+                          onPageChanged: _onPageChanged,
+                          physics: (_isCurrentlyVideoZoomed ||
+                                  _isPinching ||
+                                  _isMultiTouch ||
+                                  _isScrubbing ||
+                                  _activePointers.length >= 2)
+                              ? const NeverScrollableScrollPhysics()
+                              : const BouncingScrollPhysics(),
                             itemBuilder: (context, index) {
                               return Center(
                                 child: ClipRect(
@@ -1427,12 +1431,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                 ),
                               );
                             },
-                          );
-                        },
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ),
                   
 
 

@@ -387,31 +387,96 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     final settings = ref.read(settingsNotifierProvider);
     final isTrash = settings.enableTrash;
     final itemText = context.tr.itemsCount(count);
+    final title = isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle;
+    final contentText = isTrash
+        ? context.tr.moveToTrashConfirm(itemText)
+        : context.tr.deletePermanentlyConfirm(itemText);
 
-    final result = await showDialog<bool>(
+    final result = await showModalBottomSheet<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle),
-        content: Text(
-          isTrash
-              ? context.tr.moveToTrashConfirm(itemText)
-              : context.tr.deletePermanentlyConfirm(itemText),
-        ),
-        actionsOverflowButtonSpacing: 8,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(context.tr.cancel),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          FilledButton(
-            style: isTrash
-                ? null
-                : FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(isTrash ? context.tr.moveToTrash : context.tr.delete),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                contentText,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: isTrash
+                        ? cs.primary
+                        : const Color(0xFFF03D3D),
+                    foregroundColor: isTrash ? cs.onPrimary : Colors.white,
+                    shape: const StadiumBorder(),
+                    elevation: 0,
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(
+                    isTrash ? context.tr.moveToTrash : context.tr.delete,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    shape: const StadiumBorder(),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(
+                    context.tr.cancel,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
     return result ?? false;
   }
@@ -440,32 +505,98 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         toDelete.length == 1 ? '1 item' : '${toDelete.length} items';
 
     final isTrash = settings.enableTrash;
-    final confirm = await showDialog<bool>(
+    final title = isTrash
+        ? 'Move $albumText to Trash?'
+        : 'Delete $albumText Permanently?';
+    final contentText = isTrash
+        ? 'All $mediaText inside $albumText will be moved to trash.'
+        : 'All $mediaText inside $albumText will be permanently deleted. This action cannot be undone.';
+
+    final confirm = await showModalBottomSheet<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(isTrash
-            ? 'Move $albumText to Trash?'
-            : 'Delete $albumText Permanently?'),
-        content: Text(
-          isTrash
-              ? 'All $mediaText inside $albumText will be moved to trash.'
-              : 'All $mediaText inside $albumText will be permanently deleted. This action cannot be undone.',
-        ),
-        actionsOverflowButtonSpacing: 8,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(context.tr.cancel),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          FilledButton(
-            style: isTrash
-                ? null
-                : FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(isTrash ? context.tr.moveToTrash : context.tr.delete),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                contentText,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: isTrash
+                        ? cs.primary
+                        : const Color(0xFFF03D3D),
+                    foregroundColor: isTrash ? cs.onPrimary : Colors.white,
+                    shape: const StadiumBorder(),
+                    elevation: 0,
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(
+                    isTrash ? context.tr.moveToTrash : context.tr.delete,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    shape: const StadiumBorder(),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(
+                    context.tr.cancel,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
 
     if (confirm != true || !mounted) return;
@@ -814,27 +945,36 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.select_all),
-              tooltip: context.tr.selectAll,
-              onPressed: () {
-                setState(() {
-                  if (_selected.length == allAlbums.length) {
-                    _selected.clear();
-                  } else {
-                    _selected.addAll(allAlbums.map((e) => e.name));
-                  }
-                });
-              },
+            BouncyTap(
+              scaleDown: 0.88,
+              child: IconButton(
+                icon: const Icon(Icons.select_all),
+                tooltip: context.tr.selectAll,
+                onPressed: () {
+                  setState(() {
+                    if (_selected.length == allAlbums.length) {
+                      _selected.clear();
+                    } else {
+                      _selected.addAll(allAlbums.map((e) => e.name));
+                    }
+                  });
+                },
+              ),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: context.tr.deleteSelectedAlbums,
-              onPressed: () => _deleteSelectedAlbums(allItems, allAlbums),
+            BouncyTap(
+              scaleDown: 0.88,
+              child: IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: context.tr.deleteSelectedAlbums,
+                onPressed: () => _deleteSelectedAlbums(allItems, allAlbums),
+              ),
             ),
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: _clearSelection,
+            BouncyTap(
+              scaleDown: 0.88,
+              child: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _clearSelection,
+              ),
             ),
           ],
         );
@@ -842,45 +982,57 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.share_outlined),
-              tooltip: context.tr.share,
-              onPressed: () {
-                final paths = (mediaAsync.value ?? [])
-                    .where((e) => _selected.contains(e.id))
-                    .map((e) => e.path)
-                    .toList();
-                if (paths.isNotEmpty) {
-                  ShareService.shareFiles(paths);
-                }
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.select_all),
-              tooltip: context.tr.selectAll,
-              onPressed: () {
-                final all = applyFiltersAndSort(
-                  mediaAsync.value ?? [],
-                  sort: settings.defaultSort,
-                  filter: _tabs[_currentPage],
-                );
-                setState(() {
-                  if (_selected.length == all.length) {
-                    _selected.clear();
-                  } else {
-                    _selected.addAll(all.map((e) => e.id));
+            BouncyTap(
+              scaleDown: 0.88,
+              child: IconButton(
+                icon: const Icon(Icons.share_outlined),
+                tooltip: context.tr.share,
+                onPressed: () {
+                  final paths = (mediaAsync.value ?? [])
+                      .where((e) => _selected.contains(e.id))
+                      .map((e) => e.path)
+                      .toList();
+                  if (paths.isNotEmpty) {
+                    ShareService.shareFiles(paths);
                   }
-                });
-              },
+                },
+              ),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: context.tr.deleteSelected,
-              onPressed: () => _deleteSelected(mediaAsync.value ?? []),
+            BouncyTap(
+              scaleDown: 0.88,
+              child: IconButton(
+                icon: const Icon(Icons.select_all),
+                tooltip: context.tr.selectAll,
+                onPressed: () {
+                  final all = applyFiltersAndSort(
+                    mediaAsync.value ?? [],
+                    sort: settings.defaultSort,
+                    filter: _tabs[_currentPage],
+                  );
+                  setState(() {
+                    if (_selected.length == all.length) {
+                      _selected.clear();
+                    } else {
+                      _selected.addAll(all.map((e) => e.id));
+                    }
+                  });
+                },
+              ),
             ),
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: _clearSelection,
+            BouncyTap(
+              scaleDown: 0.88,
+              child: IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: context.tr.deleteSelected,
+                onPressed: () => _deleteSelected(mediaAsync.value ?? []),
+              ),
+            ),
+            BouncyTap(
+              scaleDown: 0.88,
+              child: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _clearSelection,
+              ),
             ),
           ],
         );

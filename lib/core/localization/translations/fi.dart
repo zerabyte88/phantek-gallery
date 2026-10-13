@@ -2,7 +2,8 @@
 const Map<String, String> fiTranslations = {
   'aToZ': 'A–Ö',
   'about': 'Tietoja',
-  'aboutPhantek': 'Tietoja Phantekista',
+  'aboutPhantek': 'Tietoja sovelluksesta',
+  'aboutApp': 'Tietoja sovelluksesta',
   'add': 'Lisää',
   'albums': 'Albumit',
   'albumsCount': '{count} albumia',
@@ -31,6 +32,7 @@ const Map<String, String> fiTranslations = {
   'chooseThumbnailDensity': 'Valitse pikkukuvien tiheys',
   'chooseVisualMode': 'Valitse visuaalinen tila ja kontrasti',
   'clearThumbnailCache': 'Tyhjennä pikkukuvien välimuisti',
+  'clearAll': 'Tyhjennä kaikki',
   'codec': 'Koodekki',
   'columnsCount': '{count} saraketta',
   'compactDetailedView': 'Kompakti yksityiskohtainen näkymä',

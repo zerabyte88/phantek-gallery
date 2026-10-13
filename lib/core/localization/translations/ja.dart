@@ -2,7 +2,8 @@
 const Map<String, String> jaTranslations = {
   'aToZ': 'AからZ',
   'about': 'アプリ情報',
-  'aboutPhantek': 'Phantek について',
+  'aboutPhantek': 'アプリについて',
+  'aboutApp': 'アプリについて',
   'add': '追加',
   'albums': 'アルバム',
   'albumsCount': '{count} アルバム',
@@ -30,6 +31,7 @@ const Map<String, String> jaTranslations = {
   'chooseThumbnailDensity': 'メディアサムネイルの密度を選択',
   'chooseVisualMode': '表示モードとコントラストを選択',
   'clearThumbnailCache': 'サムネイルキャッシュを削除',
+  'clearAll': 'すべてクリア',
   'codec': 'コーデック',
   'columnsCount': '{count} 列',
   'compactDetailedView': 'コンパクトな一覧表示',

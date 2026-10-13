@@ -2,7 +2,8 @@
 const Map<String, String> koTranslations = {
   'aToZ': 'A에서 Z',
   'about': '정보',
-  'aboutPhantek': 'Phantek 정보',
+  'aboutPhantek': '앱 정보',
+  'aboutApp': '앱 정보',
   'add': '추가',
   'albums': '앨범',
   'albumsCount': '{count}개 앨범',
@@ -30,6 +31,7 @@ const Map<String, String> koTranslations = {
   'chooseThumbnailDensity': '미디어 썸네일 밀도 선택',
   'chooseVisualMode': '화면 모드 및 대비 선택',
   'clearThumbnailCache': '썸네일 캐시 지우기',
+  'clearAll': '모두 지우기',
   'codec': '코덱',
   'columnsCount': '{count}개 열',
   'compactDetailedView': '간결하고 상세한 화면',

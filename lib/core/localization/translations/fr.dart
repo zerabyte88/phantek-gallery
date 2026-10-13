@@ -2,7 +2,8 @@
 const Map<String, String> frTranslations = {
   'aToZ': 'De A à Z',
   'about': 'À propos',
-  'aboutPhantek': 'À propos de Phantek',
+  'aboutPhantek': 'À propos de l\'application',
+  'aboutApp': 'À propos de l\'application',
   'add': 'Ajouter',
   'albums': 'Albums',
   'albumsCount': '{count} albums',
@@ -31,6 +32,7 @@ const Map<String, String> frTranslations = {
   'chooseThumbnailDensity': 'Choisir la densité des miniatures',
   'chooseVisualMode': 'Choisir le mode visuel et le contraste',
   'clearThumbnailCache': 'Vider le cache des miniatures',
+  'clearAll': 'Tout effacer',
   'codec': 'Codec',
   'columnsCount': '{count} colonnes',
   'compactDetailedView': 'Vue compacte détaillée',

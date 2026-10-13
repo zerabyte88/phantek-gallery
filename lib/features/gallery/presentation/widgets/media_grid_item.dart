@@ -182,7 +182,11 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
           // back to this tile on pop, whichever photo it was swiped to.
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Hero(tag: widget.item.id, child: _buildThumbnail(cs)),
+            child: Hero(
+              tag: widget.item.id,
+              transitionOnUserGestures: true,
+              child: _buildThumbnail(cs),
+            ),
           ),
 
           // ── Video badge ─────────────────────────────────────

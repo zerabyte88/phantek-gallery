@@ -2,7 +2,8 @@
 const Map<String, String> zhTranslations = {
   'aToZ': 'A 到 Z',
   'about': '关于',
-  'aboutPhantek': '关于 Phantek',
+  'aboutPhantek': '关于应用',
+  'aboutApp': '关于应用',
   'add': '添加',
   'albums': '相册',
   'albumsCount': '{count} 个相册',
@@ -30,6 +31,7 @@ const Map<String, String> zhTranslations = {
   'chooseThumbnailDensity': '选择媒体缩略图密度',
   'chooseVisualMode': '选择视觉模式和对比度',
   'clearThumbnailCache': '清除缩略图缓存',
+  'clearAll': '全部清除',
   'codec': '编解码器',
   'columnsCount': '{count} 列',
   'compactDetailedView': '紧凑详细视图',

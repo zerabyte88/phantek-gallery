@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import '../../../core/localization/app_language.dart';
@@ -20,13 +21,39 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen>
+    with WidgetsBindingObserver {
   String _cacheSizeStr = 'Calculating...';
+  bool _hasManageStorage = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadCacheSize();
+    _checkManageStoragePermission();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkManageStoragePermission();
+      _loadCacheSize();
+    }
+  }
+
+  Future<void> _checkManageStoragePermission() async {
+    final granted =
+        await PermissionService.instance.hasManageStoragePermission();
+    if (mounted && _hasManageStorage != granted) {
+      setState(() => _hasManageStorage = granted);
+    }
   }
 
   Future<void> _loadCacheSize() async {
@@ -162,6 +189,72 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _SectionHeader(context.tr.storageAndCache),
             _SettingsCard(
               children: [
+                _ModernTile(
+                  icon: Icons.folder_off_rounded,
+                  iconColor: const Color(0xFF64748B),
+                  title: context.tr.excludedFolders,
+                  subtitle: settings.excludedFolders.isEmpty
+                      ? context.tr.excludedFoldersDescription
+                      : '${context.tr.excludedFoldersDescription}\n\n${settings.excludedFolders.join('\n')}',
+                  onTap: () =>
+                      _showExcludedFoldersDialog(context, ref, settings),
+                ),
+                const _CardDivider(),
+                _ModernSwitchTile(
+                  icon: Icons.delete_outline_rounded,
+                  iconColor: const Color(0xFF14B8A6),
+                  title: context.tr.trashBin,
+                  subtitle: context.tr.trashBinSubtitle,
+                  value: settings.enableTrash,
+                  onChanged: (v) => patch((s) => s.copyWith(enableTrash: v)),
+                ),
+                const _CardDivider(),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: _ModernActionButton(
+                    icon: _hasManageStorage
+                        ? Icons.verified_user_rounded
+                        : Icons.security_rounded,
+                    iconColor: _hasManageStorage
+                        ? const Color(0xFF10B981)
+                        : const Color(0xFFEF4444),
+                    title: context.tr.allFilesAccess,
+                    subtitle: _hasManageStorage
+                        ? context.tr.allFilesGranted
+                        : context.tr.allFilesAccessSubtitle,
+                    onTap: () async {
+                      if (_hasManageStorage) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                context.tr.allFilesGranted,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          );
+                        }
+                        return;
+                      }
+                      final granted = await PermissionService.instance
+                          .requestManageStorage();
+                      await _checkManageStoragePermission();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              granted
+                                  ? context.tr.allFilesGranted
+                                  : context.tr.allFilesNotGranted,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+                const _CardDivider(),
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: _ModernActionButton(
@@ -177,52 +270,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           SnackBar(
                             content: Text(
                               context.tr.clearThumbnailCache,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ),
-                const _CardDivider(),
-                _ModernSwitchTile(
-                  icon: Icons.delete_outline_rounded,
-                  iconColor: const Color(0xFF14B8A6),
-                  title: context.tr.trashBin,
-                  subtitle: context.tr.trashBinSubtitle,
-                  value: settings.enableTrash,
-                  onChanged: (v) => patch((s) => s.copyWith(enableTrash: v)),
-                ),
-                const _CardDivider(),
-                _ModernTile(
-                  icon: Icons.folder_off_rounded,
-                  iconColor: const Color(0xFF64748B),
-                  title: context.tr.excludedFolders,
-                  subtitle: settings.excludedFolders.isEmpty
-                      ? context.tr.excludedFoldersDescription
-                      : '${context.tr.excludedFoldersDescription}\n\n${settings.excludedFolders.join('\n')}',
-                  onTap: () =>
-                      _showExcludedFoldersDialog(context, ref, settings),
-                ),
-                const _CardDivider(),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: _ModernActionButton(
-                    icon: Icons.security_rounded,
-                    iconColor: const Color(0xFFEF4444),
-                    title: context.tr.allFilesAccess,
-                    subtitle: context.tr.allFilesAccessSubtitle,
-                    onTap: () async {
-                      final granted = await PermissionService.instance
-                          .requestManageStorage();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              granted
-                                  ? context.tr.allFilesGranted
-                                  : context.tr.allFilesNotGranted,
                               textAlign: TextAlign.center,
                             ),
                           ),
@@ -686,6 +733,7 @@ Future<void> _showExcludedFoldersDialog(
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         style: FilledButton.styleFrom(
+                          alignment: Alignment.center,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -794,8 +842,53 @@ Future<void> _showExcludedFoldersDialog(
 
                   // 4. Excluded folders list
                   if (current.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    const Divider(),
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${context.tr.excludedFolders} (${current.length})',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                        BouncyTap(
+                          scaleDown: 0.94,
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            setSt(() => current.clear());
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.delete_sweep_outlined,
+                                  size: 16,
+                                  color: Color(0xFFEF4444),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  context.tr.clearAll,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFEF4444),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Divider(height: 1),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 160),
                       child: ListView.builder(
@@ -826,40 +919,48 @@ Future<void> _showExcludedFoldersDialog(
               ),
             ),
           ),
-          actionsAlignment: MainAxisAlignment.end,
+          actionsAlignment: MainAxisAlignment.center,
           actions: [
-            BouncyTap(
-              scaleDown: 0.95,
-              child: TextButton(
-                style: TextButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: BouncyTap(
+                    scaleDown: 0.95,
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                      ),
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(context.tr.cancel, textAlign: TextAlign.center),
+                    ),
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 ),
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(context.tr.cancel, textAlign: TextAlign.center),
-              ),
-            ),
-            BouncyTap(
-              scaleDown: 0.95,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: BouncyTap(
+                    scaleDown: 0.95,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                      ),
+                      onPressed: () {
+                        ref
+                            .read(settingsNotifierProvider.notifier)
+                            .update((s) => s.copyWith(excludedFolders: current));
+                        Navigator.pop(ctx);
+                      },
+                      child: Text(context.tr.save, textAlign: TextAlign.center),
+                    ),
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 ),
-                onPressed: () {
-                  ref
-                      .read(settingsNotifierProvider.notifier)
-                      .update((s) => s.copyWith(excludedFolders: current));
-                  Navigator.pop(ctx);
-                },
-                child: Text(context.tr.save, textAlign: TextAlign.center),
-              ),
+              ],
             ),
           ],
         );

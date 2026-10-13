@@ -2,7 +2,8 @@
 const Map<String, String> hiTranslations = {
   'aToZ': 'A से Z',
   'about': 'के बारे में',
-  'aboutPhantek': 'Phantek के बारे में',
+  'aboutPhantek': 'ऐप के बारे में',
+  'aboutApp': 'ऐप के बारे में',
   'add': 'जोड़ें',
   'albums': 'एल्बम',
   'albumsCount': '{count} एल्बम',
@@ -30,6 +31,7 @@ const Map<String, String> hiTranslations = {
   'chooseThumbnailDensity': 'मीडिया थंबनेल घनत्व चुनें',
   'chooseVisualMode': 'दृश्य मोड और कंट्रास्ट चुनें',
   'clearThumbnailCache': 'थंबनेल कैश साफ़ करें',
+  'clearAll': 'सभी साफ़ करें',
   'codec': 'कोडेक',
   'columnsCount': '{count} कॉलम',
   'compactDetailedView': 'कॉम्पैक्ट विस्तृत दृश्य',

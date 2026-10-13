@@ -2,7 +2,8 @@
 const Map<String, String> svTranslations = {
   'aToZ': 'A till Ö',
   'about': 'Om',
-  'aboutPhantek': 'Om Phantek',
+  'aboutPhantek': 'Om appen',
+  'aboutApp': 'Om appen',
   'add': 'Lägg till',
   'albums': 'Album',
   'albumsCount': '{count} album',
@@ -31,6 +32,7 @@ const Map<String, String> svTranslations = {
   'chooseThumbnailDensity': 'Välj miniatyrtäthet',
   'chooseVisualMode': 'Välj visuellt läge och kontrast',
   'clearThumbnailCache': 'Rensa miniatyrcache',
+  'clearAll': 'Rensa alla',
   'codec': 'Kodek',
   'columnsCount': '{count} kolumner',
   'compactDetailedView': 'Kompakt detaljerad vy',

@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.6&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.7&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -127,6 +127,13 @@ The compiled release APK will be generated at:
 ---
 
 ## Version History
+
+### v2.7.7
+* **Active Media Swipe-to-Dismiss Synchronisation:** Fixed background grid tracking when horizontally browsing photos and videos in the media viewer, ensuring swipe-to-dismiss gestures accurately align and return the current item back to its corresponding grid tile instead of reverting to the first tapped media item.
+* **Selection Action Micro-Interactions & Floating Confirmation Sheet:** Wrapped selection toolbar actions with `BouncyTap` for tactile spring feedback, and replaced static alert dialogs with a modern animated floating modal bottom sheet matching the Recycle Bin style with smooth slide-up entrance and slide-down dismiss transitions.
+* **Storage & Cache Flow Reorganization:** Restructured the settings storage management hierarchy into a clean sequential order (Excluded Folders &rarr; Trash Bin &rarr; All Files Access &rarr; Clear Thumbnail Cache), adding dynamic green/red permission state indicators on the All Files Access action button.
+* **Batch Excluded Folders Clear All Action:** Added a centered "Clear All" action in the Excluded Folders settings dialog, allowing users to wipe all exclusions at once without manually deleting entries individually.
+* **About App Localized Typography:** Standardized the settings information card header to "About App" / "Tentang Aplikasi" across all 22 supported languages.
 
 ### v2.7.6
 * **Comprehensive Multi-Language Localization & Modular Architecture:** Added full native dictionaries for all 11 previously missing languages (Danish, Dutch, Finnish, German, Italian, Malay, Norwegian, Swedish, Thai, Vietnamese, and Traditional Chinese `zh_TW`), refactoring the localization architecture into clean, modular per-language translation files under `lib/core/localization/translations/`.
