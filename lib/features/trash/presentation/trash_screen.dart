@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/router.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/trash_item.dart';
+import '../../../core/models/settings_model.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
@@ -20,6 +21,50 @@ class TrashScreen extends ConsumerStatefulWidget {
 class _TrashScreenState extends ConsumerState<TrashScreen> {
   final Set<String> _selected = {};
   bool _selecting = false;
+  late final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToActiveMedia(
+    String mediaId,
+    List<TrashItem> items,
+    SettingsModel settings,
+  ) {
+    if (!mounted || !_scrollController.hasClients) return;
+    final index = items.indexWhere((e) => e.id == mediaId);
+    if (index < 0) return;
+
+    final cols = settings.gridColumns;
+    final row = index ~/ cols;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    const paddingHorizontal = 16.0;
+    const spacing = 8.0;
+    final availableWidth = screenWidth - paddingHorizontal - ((cols - 1) * spacing);
+    final tileWidth = availableWidth / cols;
+    final tileHeight = tileWidth / 0.82;
+    final rowHeight = tileHeight + spacing;
+    final rowTop = 2.0 + (row * rowHeight);
+
+    final viewportHeight = _scrollController.position.viewportDimension;
+    final currentScroll = _scrollController.offset;
+    final viewportTop = currentScroll;
+    final viewportBottom = currentScroll + viewportHeight;
+
+    if (rowTop >= viewportTop + 10.0 && (rowTop + tileHeight) <= viewportBottom - 10.0) {
+      return;
+    }
+
+    final ideal = (rowTop - (viewportHeight - tileHeight) / 2.0)
+        .clamp(0.0, _scrollController.position.maxScrollExtent);
+
+    if ((ideal - _scrollController.offset).abs() > 1.0) {
+      _scrollController.jumpTo(ideal);
+    }
+  }
 
   void _toggleSelect(String id) {
     setState(() {
@@ -213,6 +258,13 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
   Widget build(BuildContext context) {
     final trashAsync = ref.watch(trashProvider);
     final settings = ref.watch(settingsNotifierProvider);
+    final items = trashAsync.value ?? [];
+
+    ref.listen<String?>(activeViewerMediaIdProvider, (_, nextId) {
+      if (nextId != null) {
+        _scrollToActiveMedia(nextId, items, settings);
+      }
+    });
 
     return PopScope(
       canPop: !_selecting,
@@ -271,6 +323,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                   child: items.isEmpty
                       ? const _TrashEmptyState()
                       : GridView.builder(
+                          controller: _scrollController,
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: settings.gridColumns,

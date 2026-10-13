@@ -7,10 +7,12 @@ import '../../../core/enums/filter_option.dart';
 import '../../../core/enums/sort_option.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/media_item.dart';
+import '../../../core/models/settings_model.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
+import '../../../core/utils/media_utils.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
 
@@ -32,6 +34,39 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
   bool _selecting = false;
   FilterOption _filter = FilterOption.all;
   SortOption? _sort;
+  late final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToActiveMedia(
+    String mediaId,
+    List<MediaItem> sortedItems,
+    SettingsModel settings,
+  ) {
+    if (!mounted || !_scrollController.hasClients) return;
+    final index = sortedItems.indexWhere((e) => e.id == mediaId);
+    if (index < 0) return;
+
+    final targetOffset = MediaUtils.calculateGridScrollOffset(
+      index: index,
+      crossAxisCount: settings.gridColumns,
+      screenWidth: MediaQuery.sizeOf(context).width,
+      viewportHeight: _scrollController.position.viewportDimension,
+      currentScrollOffset: _scrollController.offset,
+      maxScrollExtent: _scrollController.position.maxScrollExtent,
+      paddingHorizontal: 4.0,
+      paddingTop: 2.0,
+      spacing: 2.0,
+    );
+
+    if ((targetOffset - _scrollController.offset).abs() > 1.0) {
+      _scrollController.jumpTo(targetOffset);
+    }
+  }
 
   void _toggleSelect(String id) {
     setState(() {
@@ -180,6 +215,12 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
       SortOption.sizeAsc => [...filteredItems]..sort((a, b) => a.size.compareTo(b.size)),
     };
 
+    ref.listen<String?>(activeViewerMediaIdProvider, (_, nextId) {
+      if (nextId != null) {
+        _scrollToActiveMedia(nextId, sortedItems, settings);
+      }
+    });
+
     return PopScope(
       canPop: !_selecting,
       onPopInvokedWithResult: (didPop, _) {
@@ -274,6 +315,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                           ),
                         )
                       : GridView.builder(
+                          controller: _scrollController,
                           padding: const EdgeInsets.all(2),
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(

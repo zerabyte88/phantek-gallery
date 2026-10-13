@@ -137,3 +137,8 @@ List<MediaItem> applyFiltersAndSort(
     SortOption.sizeAsc => [...result]..sort((a, b) => a.size.compareTo(b.size)),
   };
 }
+
+/// Tracks the media ID currently visible in the full-screen photo/video viewer.
+/// Gallery and Album screens listen to this to silently align their scroll viewports.
+final activeViewerMediaIdProvider = StateProvider<String?>((ref) => null);
+

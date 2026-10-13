@@ -67,4 +67,38 @@ class MediaUtils {
     if (c.contains('mjpeg')) return 'Motion JPEG';
     return codec.trim().toUpperCase();
   }
+
+  /// Computes the scroll offset required to ensure an item at [index] in a fixed-column
+  /// grid is visible in the viewport. If already fully visible, returns [currentScrollOffset].
+  static double calculateGridScrollOffset({
+    required int index,
+    required int crossAxisCount,
+    required double screenWidth,
+    required double viewportHeight,
+    required double currentScrollOffset,
+    required double maxScrollExtent,
+    double paddingHorizontal = 6.0,
+    double paddingTop = 2.0,
+    double spacing = 3.0,
+  }) {
+    if (crossAxisCount <= 0) return currentScrollOffset;
+    final row = index ~/ crossAxisCount;
+    final availableWidth = screenWidth - paddingHorizontal - ((crossAxisCount - 1) * spacing);
+    final tileSize = availableWidth / crossAxisCount;
+    final rowHeight = tileSize + spacing;
+    final rowTop = paddingTop + (row * rowHeight);
+    final rowBottom = rowTop + tileSize;
+
+    final viewportTop = currentScrollOffset;
+    final viewportBottom = currentScrollOffset + viewportHeight;
+
+    // Already comfortably visible in viewport? Keep existing offset.
+    if (rowTop >= viewportTop + 10.0 && rowBottom <= viewportBottom - 10.0) {
+      return currentScrollOffset;
+    }
+
+    final ideal = rowTop - (viewportHeight - tileSize) / 2.0;
+    return ideal.clamp(0.0, maxScrollExtent);
+  }
 }
+
