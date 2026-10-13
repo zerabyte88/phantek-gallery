@@ -81,21 +81,14 @@
 
 ## System Requirements
 
-### MINIMUM:
-* **OS:** Android 8.0 (Oreo, API 26) or higher
-* **Processor:** 64-bit Octa-Core 2.0 GHz (e.g. Qualcomm Snapdragon 680/685, MediaTek Helio G85/G99, Unisoc T606/T616)
-* **Memory:** 3 GB RAM
-* **Graphics:** Adreno 610 / Mali-G52 or equivalent (OpenGL ES 3.0 support)
-* **Storage:** 150 MB available space (eMMC 5.1)
-* **Additional Notes:** 64-bit ARM architecture (`arm64-v8a`) required. On entry-level devices with eMMC storage or narrow memory bandwidth, disabling **Auto-Play Video** in **Settings > Video Playback** is recommended for fluid gallery swiping.
-
-### RECOMMENDED:
-* **OS:** Android 13 (API 33) or Android 14+ (API 34+)
-* **Processor:** Qualcomm Snapdragon 7/8 series, MediaTek Dimensity 7000/8000+ series
-* **Memory:** 6 GB RAM or higher
-* **Graphics:** Adreno 642L / Mali-G68 or higher (OpenGL ES 3.2 / Vulkan support)
-* **Storage:** 500 MB available space (UFS 2.2 / UFS 3.1+)
-* **Additional Notes:** Enables gapless hardware-accelerated 4K 60fps video playback (H.264, HEVC, VP9), instant timeline scrolling, and smooth multi-touch zoom on 100MP+ photos.
+| Requirement | MINIMUM | RECOMMENDED |
+| :--- | :--- | :--- |
+| **OS** | Android 8.0 (Oreo, API 26) or higher | Android 13+ (API 33+) / Android 14+ (API 34+) |
+| **Processor** | 64-bit Octa-Core 2.0 GHz (Snapdragon 680/685, Helio G85/G99, Unisoc T606/T616) | Qualcomm Snapdragon 7/8 series, MediaTek Dimensity 7000/8000+ series |
+| **Memory** | 3 GB RAM | 6 GB RAM or higher |
+| **Graphics** | Adreno 610 / Mali-G52 or equivalent (OpenGL ES 3.0 support) | Adreno 642L / Mali-G68 or higher (OpenGL ES 3.2 / Vulkan support) |
+| **Storage** | 150 MB available space (eMMC 5.1) | 500 MB available space (UFS 2.2 / UFS 3.1+) |
+| **Additional Notes** | 64-bit ARM architecture (`arm64-v8a`) required. Disabling **Auto-Play Video** in Settings is recommended for entry-level storage. | Enables gapless hardware-accelerated 4K 60fps video playback, instant timeline scrolling, and smooth 100MP+ photo zoom. |
 
 ---
 
