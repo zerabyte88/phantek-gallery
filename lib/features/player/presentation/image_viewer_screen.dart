@@ -741,30 +741,34 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 },
                 child: ValueListenableBuilder<bool>(
                   valueListenable: _isDraggingDown,
-                  builder: (context, isDraggingDown, _) {
-                    return PageView.builder(
-                      controller: _page,
-                      itemCount: widget.items.length,
-                      onPageChanged: (i) {
-                        setState(() {
-                          _current = i;
-                          _isPhotoZoomed = false;
-                          _isPinching = false;
-                          _transformationController.value = Matrix4.identity();
-                        });
-                        ref.read(activeViewerMediaIdProvider.notifier).state = widget.items[i].id;
-                        _precacheAdjacent(i);
-                      },
-                      physics: (_isCurrentlyZoomed ||
-                              _isPinching ||
-                              _isMultiTouch ||
-                              _activePointers.length >= 2 ||
-                              isDraggingDown)
-                          ? const NeverScrollableScrollPhysics()
-                          : const BouncingScrollPhysics(
-                              parent: AlwaysScrollableScrollPhysics(),
-                            ),
-                      itemBuilder: (context, index) {
+                  builder: (context, isDraggingDown, child) {
+                    return IgnorePointer(
+                      ignoring: isDraggingDown,
+                      child: child,
+                    );
+                  },
+                  child: PageView.builder(
+                    controller: _page,
+                    itemCount: widget.items.length,
+                    onPageChanged: (i) {
+                      setState(() {
+                        _current = i;
+                        _isPhotoZoomed = false;
+                        _isPinching = false;
+                        _transformationController.value = Matrix4.identity();
+                      });
+                      ref.read(activeViewerMediaIdProvider.notifier).state = widget.items[i].id;
+                      _precacheAdjacent(i);
+                    },
+                    physics: (_isCurrentlyZoomed ||
+                            _isPinching ||
+                            _isMultiTouch ||
+                            _activePointers.length >= 2)
+                        ? const NeverScrollableScrollPhysics()
+                        : const BouncingScrollPhysics(
+                            parent: AlwaysScrollableScrollPhysics(),
+                          ),
+                    itemBuilder: (context, index) {
                         final it = widget.items[index];
                         if (index == _current) {
                           return Center(
@@ -835,10 +839,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                         }
                         return Center(child: _buildPhotoPage(it));
                       },
-                    );
-                  },
+                    ),
+                  ),
                 ),
-              ),
 
             // ── Top bar ────────────────────────────────────────
               Positioned(

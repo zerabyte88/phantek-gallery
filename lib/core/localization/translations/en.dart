@@ -2,7 +2,8 @@
 const Map<String, String> enTranslations = {
   'aToZ': 'A to Z',
   'about': 'About',
-  'aboutPhantek': 'About Phantek',
+  'aboutPhantek': 'About App',
+  'aboutApp': 'About App',
   'add': 'Add',
   'albums': 'Albums',
   'albumsCount': '{count} albums',
@@ -31,6 +32,7 @@ const Map<String, String> enTranslations = {
   'chooseThumbnailDensity': 'Choose media thumbnail density',
   'chooseVisualMode': 'Choose visual mode and contrast',
   'clearThumbnailCache': 'Clear Thumbnail Cache',
+  'clearAll': 'Clear All',
   'codec': 'Codec',
   'columnsCount': '{count} columns',
   'compactDetailedView': 'Compact detailed view',

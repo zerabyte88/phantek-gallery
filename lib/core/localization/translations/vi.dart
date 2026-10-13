@@ -2,7 +2,8 @@
 const Map<String, String> viTranslations = {
   'aToZ': 'A đến Z',
   'about': 'Giới thiệu',
-  'aboutPhantek': 'Giới thiệu về Phantek',
+  'aboutPhantek': 'Giới thiệu về ứng dụng',
+  'aboutApp': 'Giới thiệu về ứng dụng',
   'add': 'Thêm',
   'albums': 'Album',
   'albumsCount': '{count} album',
@@ -30,6 +31,7 @@ const Map<String, String> viTranslations = {
   'chooseThumbnailDensity': 'Chọn mật độ ảnh thu nhỏ',
   'chooseVisualMode': 'Chọn chế độ hiển thị và độ tương phản',
   'clearThumbnailCache': 'Xóa bộ nhớ đệm ảnh thu nhỏ',
+  'clearAll': 'Xóa tất cả',
   'codec': 'Bộ mã hóa',
   'columnsCount': '{count} cột',
   'compactDetailedView': 'Chế độ xem chi tiết nhỏ gọn',

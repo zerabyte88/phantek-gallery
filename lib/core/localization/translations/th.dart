@@ -2,7 +2,8 @@
 const Map<String, String> thTranslations = {
   'aToZ': 'ก ถึง ฮ',
   'about': 'เกี่ยวกับ',
-  'aboutPhantek': 'เกี่ยวกับ Phantek',
+  'aboutPhantek': 'เกี่ยวกับแอป',
+  'aboutApp': 'เกี่ยวกับแอป',
   'add': 'เพิ่ม',
   'albums': 'อัลบั้ม',
   'albumsCount': '{count} อัลบั้ม',
@@ -30,6 +31,7 @@ const Map<String, String> thTranslations = {
   'chooseThumbnailDensity': 'เลือกความหนาแน่นของภาพขนาดย่อ',
   'chooseVisualMode': 'เลือกโหมดการแสดงผลและความเปรียบต่าง',
   'clearThumbnailCache': 'ล้างแคชภาพขนาดย่อ',
+  'clearAll': 'ล้างทั้งหมด',
   'codec': 'ตัวแปลงสัญญาณ',
   'columnsCount': '{count} คอลัมน์',
   'compactDetailedView': 'มุมมองกะทัดรัดแบบละเอียด',

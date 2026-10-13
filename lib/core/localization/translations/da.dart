@@ -2,7 +2,8 @@
 const Map<String, String> daTranslations = {
   'aToZ': 'A til Å',
   'about': 'Om',
-  'aboutPhantek': 'Om Phantek',
+  'aboutPhantek': 'Om appen',
+  'aboutApp': 'Om appen',
   'add': 'Tilføj',
   'albums': 'Albummer',
   'albumsCount': '{count} albummer',
@@ -31,6 +32,7 @@ const Map<String, String> daTranslations = {
   'chooseThumbnailDensity': 'Vælg miniaturetæthed',
   'chooseVisualMode': 'Vælg visningstilstand og kontrast',
   'clearThumbnailCache': 'Ryd miniature-cache',
+  'clearAll': 'Ryd alle',
   'codec': 'Codec',
   'columnsCount': '{count} kolonner',
   'compactDetailedView': 'Kompakt detaljeret visning',

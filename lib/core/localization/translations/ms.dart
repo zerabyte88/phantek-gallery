@@ -2,7 +2,8 @@
 const Map<String, String> msTranslations = {
   'aToZ': 'A ke Z',
   'about': 'Perihal',
-  'aboutPhantek': 'Perihal Phantek',
+  'aboutPhantek': 'Perihal Aplikasi',
+  'aboutApp': 'Perihal Aplikasi',
   'add': 'Tambah',
   'albums': 'Album',
   'albumsCount': '{count} album',
@@ -30,6 +31,7 @@ const Map<String, String> msTranslations = {
   'chooseThumbnailDensity': 'Pilih ketumpatan gambar kenit media',
   'chooseVisualMode': 'Pilih mod visual dan kontras',
   'clearThumbnailCache': 'Kosongkan Cache Gambar Kenit',
+  'clearAll': 'Kosongkan Semua',
   'codec': 'Kodek',
   'columnsCount': '{count} lajur',
   'compactDetailedView': 'Paparan padat terperinci',

@@ -57,6 +57,7 @@ class AppLocalizations {
   String get showDurationBadgesSubtitle => _t('showDurationBadgesSubtitle');
   String get cache => _t('cache');
   String get clearThumbnailCache => _t('clearThumbnailCache');
+  String get clearAll => _t('clearAll');
   String get playback => _t('playback');
   String get hardwareAcceleration => _t('hardwareAcceleration');
   String get hardwareAccelerationSubtitle => _t('hardwareAccelerationSubtitle');
@@ -169,7 +170,8 @@ class AppLocalizations {
   String get standardBalanced => _t('standardBalanced');
   String get compactDetailedView => _t('compactDetailedView');
   String get denseHighCapacity => _t('denseHighCapacity');
-  String get aboutPhantek => _t('aboutPhantek');
+  String get aboutApp => _t('aboutApp');
+  String get aboutPhantek => _t('aboutApp');
   String get offlineGalleryDesc => _t('offlineGalleryDesc');
   String get appVersion => _t('appVersion');
   String get buildNumberLabel => _t('buildNumberLabel');

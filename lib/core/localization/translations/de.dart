@@ -2,7 +2,8 @@
 const Map<String, String> deTranslations = {
   'aToZ': 'A bis Z',
   'about': 'Über',
-  'aboutPhantek': 'Über Phantek',
+  'aboutPhantek': 'Über die App',
+  'aboutApp': 'Über die App',
   'add': 'Hinzufügen',
   'albums': 'Alben',
   'albumsCount': '{count} Alben',
@@ -31,6 +32,7 @@ const Map<String, String> deTranslations = {
   'chooseThumbnailDensity': 'Miniaturbild-Dichte wählen',
   'chooseVisualMode': 'Farbmodus und Kontrast wählen',
   'clearThumbnailCache': 'Thumbnail-Cache leeren',
+  'clearAll': 'Alle löschen',
   'codec': 'Codec',
   'columnsCount': '{count} Spalten',
   'compactDetailedView': 'Kompakte Detailansicht',

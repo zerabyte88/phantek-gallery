@@ -1634,6 +1634,7 @@ void main() {
         expect(loc.language.isNotEmpty, isTrue, reason: '${lang.code} language');
         expect(loc.excludedFolders.isNotEmpty, isTrue, reason: '${lang.code} excludedFolders');
         expect(loc.pickFromManager.isNotEmpty, isTrue, reason: '${lang.code} pickFromManager');
+        expect(loc.clearAll.isNotEmpty, isTrue, reason: '${lang.code} clearAll');
       }
     });
 
@@ -1780,6 +1781,7 @@ void main() {
         expect(loc.themeDarkDesc.isNotEmpty, isTrue, reason: '${lang.code} themeDarkDesc');
         expect(loc.themeAmoledDesc.isNotEmpty, isTrue, reason: '${lang.code} themeAmoledDesc');
         expect(loc.themeSakuraDesc.isNotEmpty, isTrue, reason: '${lang.code} themeSakuraDesc');
+        expect(loc.aboutApp.isNotEmpty, isTrue, reason: '${lang.code} aboutApp');
         expect(loc.aboutPhantek.isNotEmpty, isTrue, reason: '${lang.code} aboutPhantek');
         expect(loc.offlineGalleryDesc.isNotEmpty, isTrue, reason: '${lang.code} offlineGalleryDesc');
         expect(loc.appVersion.isNotEmpty, isTrue, reason: '${lang.code} appVersion');

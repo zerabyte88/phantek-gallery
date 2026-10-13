@@ -2,7 +2,8 @@
 const Map<String, String> ruTranslations = {
   'aToZ': 'От А до Я',
   'about': 'О приложении',
-  'aboutPhantek': 'О Phantek',
+  'aboutPhantek': 'О приложении',
+  'aboutApp': 'О приложении',
   'add': 'Добавить',
   'albums': 'Альбомы',
   'albumsCount': '{count} альбом(ов)',
@@ -30,6 +31,7 @@ const Map<String, String> ruTranslations = {
   'chooseThumbnailDensity': 'Выберите плотность миниатюр',
   'chooseVisualMode': 'Выберите визуальный режим и контраст',
   'clearThumbnailCache': 'Очистить кэш миниатюр',
+  'clearAll': 'Очистить все',
   'codec': 'Кодек',
   'columnsCount': '{count} столбца(ов)',
   'compactDetailedView': 'Компактный детальный вид',
