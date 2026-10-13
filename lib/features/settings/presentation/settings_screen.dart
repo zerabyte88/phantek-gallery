@@ -193,9 +193,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   icon: Icons.folder_off_rounded,
                   iconColor: const Color(0xFF64748B),
                   title: context.tr.excludedFolders,
-                  subtitle: settings.excludedFolders.isEmpty
-                      ? context.tr.excludedFoldersDescription
-                      : '${context.tr.excludedFoldersDescription}\n\n${settings.excludedFolders.join('\n')}',
+                  subtitle: context.tr.excludedFoldersDescription,
                   onTap: () =>
                       _showExcludedFoldersDialog(context, ref, settings),
                 ),
