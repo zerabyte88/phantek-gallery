@@ -2105,6 +2105,45 @@ void main() {
       // 10 seconds maps to bucket 40
       expect(bucketFor(const Duration(seconds: 10)), 40);
     });
+
+    test('MediaUtils.calculateGridScrollOffset correctly aligns off-screen media and keeps visible items undisturbed', () {
+      // 3 columns, screenWidth = 360, viewportHeight = 600, currentScrollOffset = 0
+      // Item 1 (row 0): comfortably inside viewport -> returns currentScrollOffset (0.0)
+      final offsetVisible = MediaUtils.calculateGridScrollOffset(
+        index: 1,
+        crossAxisCount: 3,
+        screenWidth: 360.0,
+        viewportHeight: 600.0,
+        currentScrollOffset: 0.0,
+        maxScrollExtent: 3000.0,
+      );
+      expect(offsetVisible, 0.0);
+
+      // Item 30 (row 10): far off-screen below viewport -> returns aligned offset > 0
+      final offsetOffscreen = MediaUtils.calculateGridScrollOffset(
+        index: 30,
+        crossAxisCount: 3,
+        screenWidth: 360.0,
+        viewportHeight: 600.0,
+        currentScrollOffset: 0.0,
+        maxScrollExtent: 3000.0,
+      );
+      expect(offsetOffscreen, greaterThan(0.0));
+      expect(offsetOffscreen, lessThanOrEqualTo(3000.0));
+
+      // crossAxisCount <= 0 returns currentScrollOffset safely
+      expect(
+        MediaUtils.calculateGridScrollOffset(
+          index: 5,
+          crossAxisCount: 0,
+          screenWidth: 360.0,
+          viewportHeight: 600.0,
+          currentScrollOffset: 150.0,
+          maxScrollExtent: 3000.0,
+        ),
+        150.0,
+      );
+    });
   });
 }
 

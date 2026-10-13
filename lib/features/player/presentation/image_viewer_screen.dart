@@ -158,7 +158,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     if (ref.read(settingsNotifierProvider).keepScreenOn) {
       ScreenKeeperService.setKeepScreenOn(true);
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _precacheAdjacent(_current));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(activeViewerMediaIdProvider.notifier).state = _currentItem.id;
+      }
+      _precacheAdjacent(_current);
+    });
   }
 
   void _precacheAdjacent(int index) {
@@ -174,6 +179,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   @override
   void dispose() {
+    ref.read(activeViewerMediaIdProvider.notifier).state = null;
     ScreenKeeperService.setKeepScreenOn(false);
     _transformationController.dispose();
     _zoomAnimController?.dispose();
@@ -746,6 +752,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           _isPinching = false;
                           _transformationController.value = Matrix4.identity();
                         });
+                        ref.read(activeViewerMediaIdProvider.notifier).state = widget.items[i].id;
                         _precacheAdjacent(i);
                       },
                       physics: (_isCurrentlyZoomed ||

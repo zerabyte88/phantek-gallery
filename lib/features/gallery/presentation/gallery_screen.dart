@@ -17,6 +17,7 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../core/services/share_service.dart';
 import '../../../app/router.dart';
 import '../../../core/utils/easter_egg_handler.dart';
+import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/animated_flame_title.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import '../../../core/widgets/theme_header_background.dart';
@@ -52,6 +53,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   final _easterEggHandler = EasterEggTapHandler();
   StreamSubscription<bool>? _mediaChangeSub;
   DateTime _lastAutoRefresh = DateTime.fromMillisecondsSinceEpoch(0);
+
+  final Map<FilterOption, ScrollController> _scrollControllers = {
+    FilterOption.all: ScrollController(),
+    FilterOption.photosOnly: ScrollController(),
+    FilterOption.videosOnly: ScrollController(),
+  };
 
   // Memoized lists per tab to guarantee zero-rebuild / zero-re-sort jitter during tab swipes
   List<MediaItem>? _cachedAllItemsRef;
@@ -159,7 +166,50 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     _searchFocusNode.dispose();
     _searchController.dispose();
     _pageController.dispose();
+    for (final c in _scrollControllers.values) {
+      c.dispose();
+    }
     super.dispose();
+  }
+
+  void _scrollToActiveMedia(String mediaId) {
+    if (!mounted) return;
+    final currentTab = _tabs[_currentPage];
+    final controller = _scrollControllers[currentTab];
+    if (controller == null || !controller.hasClients) return;
+
+    final List<MediaItem> currentItems;
+    switch (currentTab) {
+      case FilterOption.photosOnly:
+        currentItems = _memoizedPhotos;
+        break;
+      case FilterOption.videosOnly:
+        currentItems = _memoizedVideos;
+        break;
+      default:
+        currentItems = _memoizedAll;
+        break;
+    }
+
+    final index = currentItems.indexWhere((e) => e.id == mediaId);
+    if (index < 0) return;
+
+    final settings = ref.read(settingsNotifierProvider);
+    final targetOffset = MediaUtils.calculateGridScrollOffset(
+      index: index,
+      crossAxisCount: settings.gridColumns,
+      screenWidth: MediaQuery.sizeOf(context).width,
+      viewportHeight: controller.position.viewportDimension,
+      currentScrollOffset: controller.offset,
+      maxScrollExtent: controller.position.maxScrollExtent,
+      paddingHorizontal: 6.0,
+      paddingTop: 2.0,
+      spacing: 3.0,
+    );
+
+    if ((targetOffset - controller.offset).abs() > 1.0) {
+      controller.jumpTo(targetOffset);
+    }
   }
 
   void _openSearch() {
@@ -474,6 +524,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<String?>(activeViewerMediaIdProvider, (_, nextId) {
+      if (nextId != null) {
+        _scrollToActiveMedia(nextId);
+      }
+    });
+
     final mediaAsync = ref.watch(mediaListProvider);
     final settings   = ref.watch(settingsNotifierProvider);
     final isAlbums   = _tabs[_currentPage] == FilterOption.albums;
@@ -943,12 +999,15 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       );
     }
 
+    final controller = _scrollControllers[tab];
+
     return _PinchZoomGridListener(
       child: RefreshIndicator(
         onRefresh: () =>
             ref.read(mediaListProvider.notifier).refresh(),
         child: GridView.builder(
           key: PageStorageKey(storageKey),
+          controller: controller,
           padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: settings.gridColumns,

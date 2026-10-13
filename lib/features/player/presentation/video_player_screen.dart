@@ -188,6 +188,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       ScreenKeeperService.setKeepScreenOn(true);
     }
     _precacheAdjacentVideos(_current);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _videos.isNotEmpty) {
+        ref.read(activeViewerMediaIdProvider.notifier).state = _videos[_current].id;
+      }
+    });
   }
 
   @override
@@ -536,6 +541,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _current = index;
       _hasStartedPlaying = false;
     });
+    ref.read(activeViewerMediaIdProvider.notifier).state = nextItem.id;
 
     _videoSurfaceVisible.value = false;
     if (_player.state.playing) {
@@ -613,6 +619,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   @override
   void dispose() {
+    ref.read(activeViewerMediaIdProvider.notifier).state = null;
     _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
     _videoLoadDebounce?.cancel();
     ScreenKeeperService.setKeepScreenOn(false);
