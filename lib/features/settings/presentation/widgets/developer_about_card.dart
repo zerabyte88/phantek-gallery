@@ -25,6 +25,7 @@ class DeveloperAboutCard extends ConsumerWidget {
     return FutureBuilder<PackageInfo>(
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
+        final cs = Theme.of(context).colorScheme;
         final version = snapshot.data?.version ?? '2.7.8';
         final buildNumber = snapshot.data?.buildNumber ?? '40';
 
@@ -32,12 +33,19 @@ class DeveloperAboutCard extends ConsumerWidget {
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFF131518),
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.60),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
+              color: cs.outline.withValues(alpha: 0.12),
               width: 1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: cs.shadow.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -54,10 +62,10 @@ class DeveloperAboutCard extends ConsumerWidget {
                   const SizedBox(width: 10),
                   Text(
                     context.tr.aboutApp,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: cs.onSurface,
                     ),
                   ),
                 ],
@@ -66,20 +74,20 @@ class DeveloperAboutCard extends ConsumerWidget {
               Text(
                 context.tr.offlineGalleryDesc,
                 style: TextStyle(
-                  color: Colors.grey.shade400,
+                  color: cs.onSurfaceVariant,
                   fontSize: 13,
                 ),
               ),
               const SizedBox(height: 20),
 
               // ── Key-Value Information Rows ──────────────────────────
-              _buildInfoRow(context.tr.appVersion, 'v$version'),
+              _buildInfoRow(context.tr.appVersion, 'v$version', cs),
               const SizedBox(height: 10),
-              _buildInfoRow(context.tr.buildNumberLabel, '$buildNumber (Release APK)'),
+              _buildInfoRow(context.tr.buildNumberLabel, '$buildNumber (Release APK)', cs),
               const SizedBox(height: 10),
-              _buildInfoRow(context.tr.architecture, 'ARM64-v8a (MediaKit)'),
+              _buildInfoRow(context.tr.architecture, 'ARM64-v8a (MediaKit)', cs),
               const SizedBox(height: 10),
-              _buildInfoRow(context.tr.license, 'GPLv3'),
+              _buildInfoRow(context.tr.license, 'GPLv3', cs),
               const SizedBox(height: 22),
 
               // ── Developer Profile Row ───────────────────────────────
@@ -119,8 +127,8 @@ class DeveloperAboutCard extends ConsumerWidget {
                       children: [
                         Text(
                           context.tr.developerLabel,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: cs.onSurface,
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                           ),
@@ -129,7 +137,7 @@ class DeveloperAboutCard extends ConsumerWidget {
                         Text(
                           context.tr.creatorMaintainer,
                           style: TextStyle(
-                            color: Colors.grey.shade400,
+                            color: cs.onSurfaceVariant,
                             fontSize: 13,
                           ),
                         ),
@@ -178,21 +186,21 @@ class DeveloperAboutCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildInfoRow(String label, String value, ColorScheme cs) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
           style: TextStyle(
-            color: Colors.grey.shade400,
+            color: cs.onSurfaceVariant,
             fontSize: 13,
           ),
         ),
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: cs.onSurface,
             fontSize: 13,
             fontWeight: FontWeight.bold,
           ),
