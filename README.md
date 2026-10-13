@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=for-the-badge&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
   <img src="https://img.shields.io/static/v1?label=Application%20ID&message=com.phantek.virgo.spica&color=6366f1&style=for-the-badge&logo=android&logoColor=white&labelColor=0f172a" alt="Application ID" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.5&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.7.6&color=2563eb&style=for-the-badge&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=for-the-badge&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
 </div>
 
@@ -127,6 +127,11 @@ The compiled release APK will be generated at:
 ---
 
 ## Version History
+
+### v2.7.6
+* **Comprehensive Multi-Language Localization & Modular Architecture:** Added full native dictionaries for all 11 previously missing languages (Danish, Dutch, Finnish, German, Italian, Malay, Norwegian, Swedish, Thai, Vietnamese, and Traditional Chinese `zh_TW`), refactoring the localization architecture into clean, modular per-language translation files under `lib/core/localization/translations/`.
+* **Traditional Chinese Regional Differentiation:** Differentiated `zh_TW` (Traditional Chinese) from `zh` (Simplified Chinese) via country code and script code resolution.
+* **Minimalist & Professional Typography:** Removed emoji characters across application themes, dialogs, Easter egg notifications, and localization dictionaries in favor of clean Material Icons and polished typography.
 
 ### v2.7.5
 * **Google Photos Style Morph Transition & Ghosting Elimination:** Replaced full-page route `FadeTransition` with a transparent `_mediaViewerRoute`, allowing `Hero` widgets to expand with 100% solid opacity without double-translucency ghosting. Background scrims and overlay controls independently fade in via Material 3 Emphasized curves (`Cubic(0.2, 0.0, 0.0, 1.0)`, 300ms).

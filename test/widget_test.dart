@@ -488,7 +488,7 @@ void main() {
 
     test('AppThemeMode labels and AppTheme amoled definitions', () {
       expect(AppThemeMode.amoled.label, 'AMOLED');
-      expect(AppThemeMode.amoledSakura.label, 'AMOLED Sakura 🌸');
+      expect(AppThemeMode.amoledSakura.label, 'AMOLED Sakura');
       expect(AppTheme.amoled.scaffoldBackgroundColor, Colors.black);
       expect(AppTheme.amoledSakura.scaffoldBackgroundColor, Colors.black);
     });
@@ -517,9 +517,9 @@ void main() {
       await tester.tap(find.text('Theme'));
       await tester.pumpAndSettle();
 
-      // AMOLED is available, but AMOLED Sakura 🌸 is NOT available before Easter egg
+      // AMOLED is available, but AMOLED Sakura is NOT available before Easter egg
       expect(find.text('AMOLED'), findsOneWidget);
-      expect(find.text('AMOLED Sakura 🌸'), findsNothing);
+      expect(find.text('AMOLED Sakura'), findsNothing);
 
       // Close dialog by tapping first option (System)
       await tester.tap(find.text('System').last);
@@ -570,8 +570,8 @@ void main() {
       await tester.tap(find.text('Theme'));
       await tester.pumpAndSettle();
 
-      // Now AMOLED Sakura 🌸 is in the dialog!
-      expect(find.text('AMOLED Sakura 🌸'), findsNWidgets(2)); // in dialog + in subtitle
+      // Now AMOLED Sakura is in the dialog!
+      expect(find.text('AMOLED Sakura'), findsNWidgets(2)); // in dialog + in subtitle
     });
 
     test('MediaListNotifier optimistic removeItems and restoreItems', () async {
@@ -1769,10 +1769,10 @@ void main() {
       );
     });
 
-    test('AppLocalizations complete coverage across all 11 supported languages', () {
+    test('AppLocalizations complete coverage across all 22 supported languages', () {
       for (final lang in AppLanguage.values) {
         if (lang == AppLanguage.system || lang.code == null) continue;
-        final loc = AppLocalizations(Locale(lang.code!));
+        final loc = AppLocalizations(lang.locale!);
         expect(loc.keepScreenOn.isNotEmpty, isTrue, reason: '${lang.code} keepScreenOn');
         expect(loc.keepScreenOnSubtitle.isNotEmpty, isTrue, reason: '${lang.code} keepScreenOnSubtitle');
         expect(loc.themeSystemDesc.isNotEmpty, isTrue, reason: '${lang.code} themeSystemDesc');
@@ -1797,6 +1797,49 @@ void main() {
         expect(loc.alreadyUpToDate.isNotEmpty, isTrue, reason: '${lang.code} alreadyUpToDate');
         expect(loc.downloadFailed.isNotEmpty, isTrue, reason: '${lang.code} downloadFailed');
       }
+
+      // Verify previously missing languages produce real non-English translations
+      final deLoc = AppLocalizations(const Locale('de'));
+      expect(deLoc.settings, 'Einstellungen');
+      expect(deLoc.trashBin, 'Papierkorb');
+
+      final daLoc = AppLocalizations(const Locale('da'));
+      expect(daLoc.settings, 'Indstillinger');
+      expect(daLoc.photos, 'Billeder');
+
+      final nlLoc = AppLocalizations(const Locale('nl'));
+      expect(nlLoc.settings, 'Instellingen');
+
+      final fiLoc = AppLocalizations(const Locale('fi'));
+      expect(fiLoc.settings, 'Asetukset');
+
+      final msLoc = AppLocalizations(const Locale('ms'));
+      expect(msLoc.settings, 'Tetapan');
+
+      final itLoc = AppLocalizations(const Locale('it'));
+      expect(itLoc.settings, 'Impostazioni');
+
+      final noLoc = AppLocalizations(const Locale('no'));
+      expect(noLoc.settings, 'Innstillinger');
+
+      final svLoc = AppLocalizations(const Locale('sv'));
+      expect(svLoc.settings, 'Inställningar');
+
+      final thLoc = AppLocalizations(const Locale('th'));
+      expect(thLoc.settings, 'การตั้งค่า');
+
+      final viLoc = AppLocalizations(const Locale('vi'));
+      expect(viLoc.settings, 'Cài đặt');
+
+      // Verify Chinese Traditional (zh_TW) vs Chinese Simplified (zh)
+      final zhTwLoc = AppLocalizations(const Locale('zh', 'TW'));
+      final zhLoc = AppLocalizations(const Locale('zh'));
+      expect(zhTwLoc.languageCode, 'zh_TW');
+      expect(zhLoc.languageCode, 'zh');
+      expect(zhTwLoc.favorites, '我的最愛');
+      expect(zhLoc.favorites, '收藏');
+      expect(zhTwLoc.albums, '相簿');
+      expect(zhLoc.albums, '相册');
     });
 
     testWidgets('FilterSortBar with PageController renders and updates with page navigation', (tester) async {

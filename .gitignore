@@ -52,3 +52,7 @@ key.properties
 **/key.properties
 *.jks
 *.keystore
+keystore_base64.txt
+**/keystore_base64.txt
+.env*
+*.secrets

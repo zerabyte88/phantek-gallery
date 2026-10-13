@@ -36,17 +36,16 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "Mengonfigurasi release keystore dari GitHub Secrets..."
-            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/phantek.jks
-            echo "storePassword=${KEYSTORE_PASSWORD:-***REDACTED***}" > android/key.properties
-            echo "keyPassword=${KEY_PASSWORD:-***REDACTED***}" >> android/key.properties
-            echo "keyAlias=${KEY_ALIAS:-phantek}" >> android/key.properties
-            echo "storeFile=phantek.jks" >> android/key.properties
-          else
-            echo "::error::Secret KEYSTORE_BASE64 tidak ditemukan di GitHub Repository Secrets! Tambahkan secret ini agar APK release dapat ditandatangani."
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::GitHub Secrets untuk release signing belum lengkap! Pastikan KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, dan KEY_PASSWORD telah diatur di Settings > Secrets and variables > Actions."
             exit 1
           fi
+          echo "Mengonfigurasi release keystore dari GitHub Secrets..."
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/phantek.jks
+          echo "storePassword=$KEYSTORE_PASSWORD" > android/key.properties
+          echo "keyPassword=$KEY_PASSWORD" >> android/key.properties
+          echo "keyAlias=$KEY_ALIAS" >> android/key.properties
+          echo "storeFile=phantek.jks" >> android/key.properties
 
       - name: Install Dependencies
         run: flutter pub get
