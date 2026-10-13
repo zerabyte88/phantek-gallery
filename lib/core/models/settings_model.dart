@@ -132,6 +132,6 @@ extension AppThemeModeLabel on AppThemeMode {
         AppThemeMode.light        => 'Light',
         AppThemeMode.dark         => 'Dark',
         AppThemeMode.amoled       => 'AMOLED',
-        AppThemeMode.amoledSakura => 'AMOLED Sakura 🌸',
+        AppThemeMode.amoledSakura => 'AMOLED Sakura',
       };
 }
