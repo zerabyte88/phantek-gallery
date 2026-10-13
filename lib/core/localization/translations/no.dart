@@ -90,7 +90,6 @@ const Map<String, String> noTranslations = {
   'loopOff': 'Gjenta: Av',
   'loopOn': 'Gjenta: På',
   'manageFilesPermissionRequired': 'Full filtilgang kreves for denne handlingen.',
-  'manualPathEntry': 'Skriv inn sti manuelt',
   'more': 'Mer',
   'moreOptions': 'Flere alternativer',
   'moveToTrash': 'Flytt til papirkurv',

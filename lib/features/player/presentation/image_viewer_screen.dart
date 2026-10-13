@@ -19,6 +19,7 @@ import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
 import 'widgets/rename_dialog.dart';
+import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
 
 /// Display-capped provider shared by viewer + precache (same cache key).
 /// A 100MP photo decodes to ~50 MB instead of ~408 MB, so it fits imageCache.
@@ -56,6 +57,7 @@ Widget _buildHeroShuttle({
   required HeroFlightDirection flightDirection,
   required String id,
   String? path,
+  Widget? fallbackChild,
 }) {
   final hr = ThumbnailService.instance.getMemoryHighResThumbnail(id);
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
@@ -66,7 +68,14 @@ Widget _buildHeroShuttle({
           ? FileImage(disk)
           : (path != null ? displayImage(path) : null));
 
-  if (p == null) return const SizedBox.shrink();
+  final Widget content = p != null
+      ? Image(
+          image: p,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
+        )
+      : (fallbackChild ?? const SizedBox.shrink());
 
   final curved = CurvedAnimation(
     parent: animation,
@@ -87,12 +96,7 @@ Widget _buildHeroShuttle({
         child: child,
       );
     },
-    child: Image(
-      image: p,
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-      filterQuality: FilterQuality.medium,
-    ),
+    child: content,
   );
 }
 
@@ -160,11 +164,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        ref.read(activeViewerMediaIdProvider.notifier).state = _currentItem.id;
+        _activeMediaNotifier = ref.read(activeViewerMediaIdProvider.notifier);
+        _activeMediaNotifier?.state = _currentItem.id;
       }
       _precacheAdjacent(_current);
     });
   }
+
+  StateController<String?>? _activeMediaNotifier;
 
   void _precacheAdjacent(int index) {
     if (!mounted) return;
@@ -179,7 +186,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   @override
   void dispose() {
-    ref.read(activeViewerMediaIdProvider.notifier).state = null;
+    final notifier = _activeMediaNotifier;
+    if (notifier != null) {
+      Future.microtask(() {
+        notifier.state = null;
+      });
+    }
     ScreenKeeperService.setKeepScreenOn(false);
     _transformationController.dispose();
     _zoomAnimController?.dispose();
@@ -370,31 +382,19 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     final item = _currentItem;
 
     if (widget.isTrash) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(context.tr.deletePermanentlyTitle),
-          content: Text(
-            context.tr.deletePermanentlyConfirm(item.name),
-          ),
-          actionsOverflowButtonSpacing: 8,
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(context.tr.cancel),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(context.tr.delete),
-            ),
-          ],
-        ),
+      final ok = await showDeleteConfirmationSheet(
+        context,
+        title: context.tr.deletePermanentlyTitle,
+        contentText: context.tr.deletePermanentlyConfirm(item.name),
+        isTrash: false,
       );
       if (ok != true || !mounted) return;
 
       await ref.read(trashProvider.notifier).permanentDelete(item.id);
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr.delete)),
+        );
         if (widget.items.length <= 1) {
           Navigator.of(context).pop();
         } else {
@@ -413,30 +413,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     final settings = ref.read(settingsNotifierProvider);
     final isTrash = settings.enableTrash;
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle),
-        content: Text(
-          isTrash
-              ? context.tr.moveToTrashConfirm(item.name)
-              : context.tr.deletePermanentlyConfirm(item.name),
-        ),
-        actionsOverflowButtonSpacing: 8,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(context.tr.cancel),
-          ),
-          FilledButton(
-            style: isTrash
-                ? null
-                : FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(isTrash ? context.tr.moveToTrash : context.tr.delete),
-          ),
-        ],
-      ),
+    final ok = await showDeleteConfirmationSheet(
+      context,
+      title: isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle,
+      contentText: isTrash
+          ? context.tr.moveToTrashConfirm(item.name)
+          : context.tr.deletePermanentlyConfirm(item.name),
+      isTrash: isTrash,
     );
     if (ok != true || !mounted) return;
 
@@ -480,6 +463,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
 
     if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isTrash ? context.tr.moveToTrash : context.tr.delete),
+      ),
+    );
     if (widget.items.length <= 1) {
       Navigator.of(context).pop();
     } else {
@@ -757,7 +745,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                         _isPinching = false;
                         _transformationController.value = Matrix4.identity();
                       });
-                      ref.read(activeViewerMediaIdProvider.notifier).state = widget.items[i].id;
+                      _activeMediaNotifier?.state = widget.items[i].id;
                       _precacheAdjacent(i);
                     },
                     physics: (_isCurrentlyZoomed ||
@@ -829,6 +817,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       flightDirection: flightDirection,
                                       id: it.id,
                                       path: it.path,
+                                      fallbackChild: flightDirection == HeroFlightDirection.push
+                                          ? toHeroContext.widget
+                                          : fromHeroContext.widget,
                                     ),
                                     child: _buildPhotoPage(it),
                                   ),

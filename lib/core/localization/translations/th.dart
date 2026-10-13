@@ -86,7 +86,6 @@ const Map<String, String> thTranslations = {
   'loopOff': 'เล่นวนซ้ำ: ปิด',
   'loopOn': 'เล่นวนซ้ำ: เปิด',
   'manageFilesPermissionRequired': 'ต้องได้รับอนุญาตการเข้าถึงไฟล์ทั้งหมดสำหรับการดำเนินการนี้',
-  'manualPathEntry': 'ป้อนเส้นทางด้วยตนเอง',
   'more': 'เพิ่มเติม',
   'moreOptions': 'ตัวเลือกเพิ่มเติม',
   'moveToTrash': 'ย้ายไปที่ถังขยะ',

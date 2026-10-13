@@ -93,7 +93,8 @@ class MediaUtils {
     final viewportBottom = currentScrollOffset + viewportHeight;
 
     // Already comfortably visible in viewport? Keep existing offset.
-    if (rowTop >= viewportTop + 10.0 && rowBottom <= viewportBottom - 10.0) {
+    final effectiveTopThreshold = viewportTop <= 0.0 ? 0.0 : viewportTop + 10.0;
+    if (rowTop >= effectiveTopThreshold && rowBottom <= viewportBottom - 10.0) {
       return currentScrollOffset;
     }
 

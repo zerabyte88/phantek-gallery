@@ -86,7 +86,6 @@ const Map<String, String> idTranslations = {
   'loopOff': 'Ulangi: Mati',
   'loopOn': 'Ulangi: Aktif',
   'manageFilesPermissionRequired': 'Izin Akses Semua File diperlukan untuk operasi ini.',
-  'manualPathEntry': 'Ketik path manual',
   'more': 'Lainnya',
   'moreOptions': 'Opsi lainnya',
   'moveToTrash': 'Pindahkan ke Sampah',

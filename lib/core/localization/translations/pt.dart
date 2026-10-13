@@ -90,7 +90,6 @@ const Map<String, String> ptTranslations = {
   'loopOff': 'Repetir: Desativado',
   'loopOn': 'Repetir: Ativado',
   'manageFilesPermissionRequired': 'A permissão de Acesso a todos os arquivos é necessária para esta operação.',
-  'manualPathEntry': 'Digitar caminho manualmente',
   'more': 'Mais',
   'moreOptions': 'Mais opções',
   'moveToTrash': 'Mover para a lixeira',

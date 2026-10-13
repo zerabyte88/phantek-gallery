@@ -28,19 +28,23 @@ class AppTheme {
 
   static ThemeData get dark => ThemeData(
         useMaterial3: true,
-        colorSchemeSeed: _seed,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: _seed,
+          brightness: Brightness.dark,
+          surface: Colors.black,
+        ),
         brightness: Brightness.dark,
         splashFactory: InkSparkle.splashFactory,
         switchTheme: _switchTheme,
-        scaffoldBackgroundColor: const Color(0xFF0E0E0E),
+        scaffoldBackgroundColor: Colors.black,
         appBarTheme: const AppBarTheme(
           centerTitle: false,
           elevation: 0,
-          backgroundColor: Color(0xFF0E0E0E),
+          backgroundColor: Colors.black,
         ),
         cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero),
         snackBarTheme: SnackBarThemeData(
-          backgroundColor: const Color(0xFF222428),
+          backgroundColor: const Color(0xFF1E293B),
           contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(

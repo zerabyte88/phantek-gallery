@@ -86,7 +86,6 @@ const Map<String, String> arTranslations = {
   'loopOff': 'التكرار: إيقاف',
   'loopOn': 'التكرار: تشغيل',
   'manageFilesPermissionRequired': 'مطلوب إذن إدارة جميع الملفات لهذه العملية.',
-  'manualPathEntry': 'أدخل المسار يدوياً',
   'more': 'المزيد',
   'moreOptions': 'خيارات إضافية',
   'moveToTrash': 'نقل إلى سلة المهملات',

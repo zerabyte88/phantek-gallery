@@ -86,7 +86,6 @@ const Map<String, String> jaTranslations = {
   'loopOff': 'リピート: オフ',
   'loopOn': 'リピート: オン',
   'manageFilesPermissionRequired': 'この操作には「すべてのファイルへのアクセス」権限が必要です。',
-  'manualPathEntry': '手動でパスを入力',
   'more': 'その他',
   'moreOptions': 'その他のオプション',
   'moveToTrash': 'ゴミ箱へ移動',

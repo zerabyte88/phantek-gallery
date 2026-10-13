@@ -86,7 +86,6 @@ const Map<String, String> viTranslations = {
   'loopOff': 'Lặp lại: Tắt',
   'loopOn': 'Lặp lại: Bật',
   'manageFilesPermissionRequired': 'Cần có quyền Quản lý tất cả tệp cho thao tác này.',
-  'manualPathEntry': 'Nhập đường dẫn thủ công',
   'more': 'Thêm',
   'moreOptions': 'Tùy chọn khác',
   'moveToTrash': 'Chuyển vào thùng rác',

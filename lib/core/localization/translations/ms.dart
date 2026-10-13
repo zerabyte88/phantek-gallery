@@ -86,7 +86,6 @@ const Map<String, String> msTranslations = {
   'loopOff': 'Ulang: Mati',
   'loopOn': 'Ulang: Hidup',
   'manageFilesPermissionRequired': 'Kebenaran Akses Semua Fail diperlukan untuk operasi ini.',
-  'manualPathEntry': 'Masukkan laluan secara manual',
   'more': 'Lagi',
   'moreOptions': 'Pilihan lain',
   'moveToTrash': 'Pindahkan ke Tong Sampah',

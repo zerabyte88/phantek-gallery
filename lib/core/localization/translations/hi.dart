@@ -86,7 +86,6 @@ const Map<String, String> hiTranslations = {
   'loopOff': 'लूप: बंद',
   'loopOn': 'लूप: चालू',
   'manageFilesPermissionRequired': 'इस कार्य के लिए सभी फ़ाइलों का प्रबंधन करने की अनुमति आवश्यक है।',
-  'manualPathEntry': 'मैन्युअल रूप से पथ दर्ज करें',
   'more': 'अधिक',
   'moreOptions': 'अधिक विकल्प',
   'moveToTrash': 'रीसायकल बिन में ले जाएं',

@@ -86,7 +86,6 @@ const Map<String, String> ruTranslations = {
   'loopOff': 'Повтор: Выкл',
   'loopOn': 'Повтор: Вкл',
   'manageFilesPermissionRequired': 'Для этой операции требуется разрешение на управление всеми файлами.',
-  'manualPathEntry': 'Ввести путь вручную',
   'more': 'Ещё',
   'moreOptions': 'Другие параметры',
   'moveToTrash': 'В корзину',

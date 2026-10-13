@@ -11,7 +11,7 @@ import '../providers/settings_provider.dart';
 ///   twinkling stars, and shooting meteor streaks.
 /// - [AppThemeMode.amoledSakura]: OLED black with an artistic sakura tree branch
 ///   with fresh leaves, abundant blossoms, and fluttering pink cherry blossom petals.
-/// - [AppThemeMode.dark]: Luminous volumetric Aurora Borealis curtains with shimmering ray pillars and firefly embers.
+/// - [AppThemeMode.dark]: AMOLED Nordic Winter Village with snow-capped hills, glowing cabins, pine trees, and falling crystalline snowflakes.
 /// - [AppThemeMode.light]: Prismatic morning breeze with flowing pastel silk waves, floating pearlescent glass orbs, and diamond prism sparkles.
 /// - [AppThemeMode.system]: Dynamically follows the system brightness.
 class ThemeHeaderBackground extends ConsumerStatefulWidget {
@@ -608,17 +608,31 @@ class _SakuraHeaderPainter extends CustomPainter {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 3. DARK Header Painter (Volumetric Aurora Borealis Curtains & Embers)
+// 3. DARK Header Painter (AMOLED Winter Snowfall Village & Glowing Cabins)
 // ═════════════════════════════════════════════════════════════════════════════
 
-class _EmberData {
-  final double x;
-  final double y;
-  final double size;
-  final double speed; // integer cycle speed
-  final double phase;
+class _SnowParticleData {
+  final double x; // normalized 0..1
+  final double y; // normalized 0..1
+  final double size; // 2.0 .. 5.6
+  final int cycles; // 1, 2, or 3 loops per cycle
+  final int swayFreq; // 1 or 2 sways
+  final double swayAmplitude; // 10.0 .. 19.0
+  final int rotCycles; // -2, -1, 1, 2
+  final double phase; // phase in radians
+  final int variant; // 0 = crystal cross, 1 = halo circle, 2 = crisp dot
 
-  const _EmberData(this.x, this.y, this.size, this.speed, this.phase);
+  const _SnowParticleData({
+    required this.x,
+    required this.y,
+    required this.size,
+    required this.cycles,
+    required this.swayFreq,
+    required this.swayAmplitude,
+    required this.rotCycles,
+    required this.phase,
+    required this.variant,
+  });
 }
 
 class _DarkHeaderPainter extends CustomPainter {
@@ -626,179 +640,392 @@ class _DarkHeaderPainter extends CustomPainter {
 
   _DarkHeaderPainter({required this.progress});
 
-  static final List<_EmberData> _embers = [
-    const _EmberData(0.08, 0.8, 1.8, 1.0, 0.2),
-    const _EmberData(0.18, 0.4, 2.2, 1.0, 1.5),
-    const _EmberData(0.28, 0.9, 1.5, 1.0, 2.7),
-    const _EmberData(0.40, 0.6, 2.4, 1.0, 0.8),
-    const _EmberData(0.52, 0.3, 1.6, 2.0, 3.1),
-    const _EmberData(0.64, 0.85, 2.0, 1.0, 1.9),
-    const _EmberData(0.76, 0.5, 1.4, 1.0, 0.4),
-    const _EmberData(0.88, 0.75, 2.5, 1.0, 2.3),
-    const _EmberData(0.95, 0.2, 1.7, 2.0, 1.1),
+  static const List<_SnowParticleData> _snowParticles = [
+    _SnowParticleData(x: 0.04, y: 0.12, size: 4.8, cycles: 2, swayFreq: 1, swayAmplitude: 14.0, rotCycles: 1, phase: 0.4, variant: 0),
+    _SnowParticleData(x: 0.08, y: 0.65, size: 3.2, cycles: 1, swayFreq: 2, swayAmplitude: 10.0, rotCycles: -1, phase: 1.8, variant: 1),
+    _SnowParticleData(x: 0.12, y: 0.38, size: 2.2, cycles: 3, swayFreq: 1, swayAmplitude: 18.0, rotCycles: 2, phase: 2.9, variant: 2),
+    _SnowParticleData(x: 0.16, y: 0.85, size: 5.4, cycles: 2, swayFreq: 2, swayAmplitude: 12.0, rotCycles: -2, phase: 4.1, variant: 0),
+    _SnowParticleData(x: 0.20, y: 0.05, size: 3.8, cycles: 1, swayFreq: 1, swayAmplitude: 16.0, rotCycles: 1, phase: 5.3, variant: 1),
+    _SnowParticleData(x: 0.23, y: 0.52, size: 2.5, cycles: 2, swayFreq: 2, swayAmplitude: 11.0, rotCycles: -1, phase: 0.9, variant: 2),
+    _SnowParticleData(x: 0.27, y: 0.22, size: 4.2, cycles: 1, swayFreq: 1, swayAmplitude: 15.0, rotCycles: 2, phase: 3.4, variant: 0),
+    _SnowParticleData(x: 0.31, y: 0.74, size: 3.4, cycles: 3, swayFreq: 2, swayAmplitude: 13.0, rotCycles: -1, phase: 1.2, variant: 1),
+    _SnowParticleData(x: 0.35, y: 0.41, size: 2.0, cycles: 2, swayFreq: 1, swayAmplitude: 17.0, rotCycles: 1, phase: 4.7, variant: 2),
+    _SnowParticleData(x: 0.38, y: 0.93, size: 5.0, cycles: 1, swayFreq: 2, swayAmplitude: 14.0, rotCycles: -2, phase: 2.1, variant: 0),
+    _SnowParticleData(x: 0.42, y: 0.16, size: 3.6, cycles: 2, swayFreq: 1, swayAmplitude: 12.0, rotCycles: 1, phase: 5.8, variant: 1),
+    _SnowParticleData(x: 0.45, y: 0.60, size: 2.4, cycles: 3, swayFreq: 2, swayAmplitude: 16.0, rotCycles: -1, phase: 0.3, variant: 2),
+    _SnowParticleData(x: 0.49, y: 0.29, size: 4.6, cycles: 1, swayFreq: 1, swayAmplitude: 15.0, rotCycles: 2, phase: 3.7, variant: 0),
+    _SnowParticleData(x: 0.52, y: 0.81, size: 3.0, cycles: 2, swayFreq: 2, swayAmplitude: 10.0, rotCycles: -1, phase: 1.5, variant: 1),
+    _SnowParticleData(x: 0.56, y: 0.47, size: 2.2, cycles: 1, swayFreq: 1, swayAmplitude: 18.0, rotCycles: 1, phase: 4.9, variant: 2),
+    _SnowParticleData(x: 0.59, y: 0.08, size: 5.2, cycles: 3, swayFreq: 2, swayAmplitude: 13.0, rotCycles: -2, phase: 2.6, variant: 0),
+    _SnowParticleData(x: 0.63, y: 0.69, size: 3.5, cycles: 2, swayFreq: 1, swayAmplitude: 14.0, rotCycles: 1, phase: 6.0, variant: 1),
+    _SnowParticleData(x: 0.66, y: 0.34, size: 2.6, cycles: 1, swayFreq: 2, swayAmplitude: 11.0, rotCycles: -1, phase: 0.7, variant: 2),
+    _SnowParticleData(x: 0.70, y: 0.88, size: 4.4, cycles: 2, swayFreq: 1, swayAmplitude: 16.0, rotCycles: 2, phase: 3.2, variant: 0),
+    _SnowParticleData(x: 0.73, y: 0.25, size: 3.3, cycles: 3, swayFreq: 2, swayAmplitude: 12.0, rotCycles: -1, phase: 1.9, variant: 1),
+    _SnowParticleData(x: 0.77, y: 0.58, size: 2.1, cycles: 1, swayFreq: 1, swayAmplitude: 19.0, rotCycles: 1, phase: 5.1, variant: 2),
+    _SnowParticleData(x: 0.80, y: 0.02, size: 5.6, cycles: 2, swayFreq: 2, swayAmplitude: 15.0, rotCycles: -2, phase: 2.4, variant: 0),
+    _SnowParticleData(x: 0.83, y: 0.72, size: 3.7, cycles: 1, swayFreq: 1, swayAmplitude: 10.0, rotCycles: 1, phase: 0.1, variant: 1),
+    _SnowParticleData(x: 0.86, y: 0.44, size: 2.3, cycles: 3, swayFreq: 2, swayAmplitude: 17.0, rotCycles: -1, phase: 4.3, variant: 2),
+    _SnowParticleData(x: 0.89, y: 0.96, size: 4.5, cycles: 2, swayFreq: 1, swayAmplitude: 13.0, rotCycles: 2, phase: 1.6, variant: 0),
+    _SnowParticleData(x: 0.92, y: 0.19, size: 3.1, cycles: 1, swayFreq: 2, swayAmplitude: 14.0, rotCycles: -1, phase: 5.5, variant: 1),
+    _SnowParticleData(x: 0.95, y: 0.63, size: 2.5, cycles: 2, swayFreq: 1, swayAmplitude: 18.0, rotCycles: 1, phase: 2.8, variant: 2),
+    _SnowParticleData(x: 0.98, y: 0.31, size: 4.8, cycles: 3, swayFreq: 2, swayAmplitude: 12.0, rotCycles: -2, phase: 0.5, variant: 0),
+    _SnowParticleData(x: 0.06, y: 0.83, size: 2.8, cycles: 1, swayFreq: 1, swayAmplitude: 15.0, rotCycles: 1, phase: 3.9, variant: 1),
+    _SnowParticleData(x: 0.18, y: 0.48, size: 2.0, cycles: 2, swayFreq: 2, swayAmplitude: 11.0, rotCycles: -1, phase: 1.1, variant: 2),
+    _SnowParticleData(x: 0.40, y: 0.77, size: 4.3, cycles: 1, swayFreq: 1, swayAmplitude: 16.0, rotCycles: 2, phase: 5.7, variant: 0),
+    _SnowParticleData(x: 0.61, y: 0.55, size: 3.3, cycles: 3, swayFreq: 2, swayAmplitude: 13.0, rotCycles: -1, phase: 2.2, variant: 1),
+    _SnowParticleData(x: 0.75, y: 0.36, size: 2.4, cycles: 2, swayFreq: 1, swayAmplitude: 17.0, rotCycles: 1, phase: 4.6, variant: 2),
+    _SnowParticleData(x: 0.88, y: 0.80, size: 5.1, cycles: 1, swayFreq: 2, swayAmplitude: 14.0, rotCycles: -2, phase: 0.8, variant: 0),
   ];
 
   @override
   void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    // 1. Dark surface background (#0E0E0E)
+    // 1. OLED Pitch Black Background (#000000)
     canvas.drawRect(
       Offset.zero & size,
-      Paint()..color = const Color(0xFF0E0E0E),
+      Paint()..color = Colors.black,
     );
 
-    // 2. Luminous Boreal Atmospheric Glow (Deep Emerald & Arctic Indigo wash)
-    final auroraAtmosphere = Paint()
+    // Subtle celestial night wash across the top sky
+    final skyWashPaint = Paint()
       ..shader = RadialGradient(
-        center: const Alignment(-0.25, -0.75),
-        radius: 1.4,
+        center: const Alignment(0.6, -0.7),
+        radius: 1.3,
         colors: [
-          const Color(0xFF065F46).withValues(alpha: 0.42), // Luminous emerald night
-          const Color(0xFF1E1B4B).withValues(alpha: 0.30), // Deep Arctic indigo
+          const Color(0xFF0F172A).withValues(alpha: 0.32),
+          Colors.transparent,
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, skyWashPaint);
+
+    // 2. Distant Snow Hill (Background rolling slope)
+    final backHillPath = Path();
+    final backHillBaseY = size.height * 0.76;
+    backHillPath.moveTo(0, backHillBaseY + 12);
+    backHillPath.cubicTo(
+      size.width * 0.28,
+      backHillBaseY - 18,
+      size.width * 0.64,
+      backHillBaseY + 15,
+      size.width,
+      backHillBaseY - 10,
+    );
+    backHillPath.lineTo(size.width, size.height);
+    backHillPath.lineTo(0, size.height);
+    backHillPath.close();
+
+    final backHillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0xFF1E293B).withValues(alpha: 0.50),
+          const Color(0xFF0A0F1D).withValues(alpha: 0.85),
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawPath(backHillPath, backHillPaint);
+
+    // Distant Snow Cap on back hill
+    final backHillSnowPaint = Paint()
+      ..strokeWidth = 1.6
+      ..style = PaintingStyle.stroke
+      ..color = const Color(0xFF94A3B8).withValues(alpha: 0.30);
+    canvas.drawPath(backHillPath, backHillSnowPaint);
+
+    // Pine trees on distant slope
+    _drawSnowyPine(canvas, Offset(size.width * 0.08, backHillBaseY + 8), 16, 26);
+    _drawSnowyPine(canvas, Offset(size.width * 0.52, backHillBaseY + 13), 18, 30);
+
+    // 3. Foreground Village Hill (Main layer resting at header base)
+    final hillPath = Path();
+    final hillBaseY = size.height * 0.86;
+    hillPath.moveTo(0, hillBaseY - 8);
+    hillPath.cubicTo(
+      size.width * 0.32,
+      hillBaseY + 14,
+      size.width * 0.68,
+      hillBaseY - 18,
+      size.width,
+      hillBaseY + 6,
+    );
+    hillPath.lineTo(size.width, size.height);
+    hillPath.lineTo(0, size.height);
+    hillPath.close();
+
+    final hillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0xFF0F172A).withValues(alpha: 0.95),
+          Colors.black,
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawPath(hillPath, hillPaint);
+
+    // Crisp Snow Ridge Crest along main hill
+    final snowRidgePaint = Paint()
+      ..strokeWidth = 2.4
+      ..style = PaintingStyle.stroke
+      ..shader = LinearGradient(
+        colors: [
+          const Color(0xFFCFF0FF).withValues(alpha: 0.50),
+          const Color(0xFFBAE6FD).withValues(alpha: 0.85),
+          const Color(0xFFCFF0FF).withValues(alpha: 0.40),
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawPath(hillPath, snowRidgePaint);
+
+    // Pine trees on foreground slope
+    _drawSnowyPine(canvas, Offset(size.width * 0.38, hillBaseY + 8), 16, 24);
+    _drawSnowyPine(canvas, Offset(size.width * 0.92, hillBaseY - 3), 18, 27);
+
+    // 4. Village Cabins with warm glowing windows & chimney smoke
+    // Cabin 1: Left slope (cozy cottage)
+    _drawSnowyCabin(
+      canvas,
+      Offset(size.width * 0.22, hillBaseY + 5),
+      28.0,
+      24.0,
+      chimneyXOffset: 6,
+      hasChimney: true,
+    );
+
+    // Cabin 2: Right slope (main village cabin)
+    _drawSnowyCabin(
+      canvas,
+      Offset(size.width * 0.74, hillBaseY - 13),
+      34.0,
+      29.0,
+      chimneyXOffset: -8,
+      hasChimney: true,
+    );
+
+    // 5. Falling Snowflakes in crystalline #CFF0FF (34 particles)
+    final snowBaseColor = const Color(0xFFCFF0FF);
+    for (int i = 0; i < _snowParticles.length; i++) {
+      final p = _snowParticles[i];
+      final currentProgress = (p.y + progress * p.cycles) % 1.0;
+      final yPos = currentProgress * size.height;
+
+      final sway =
+          math.sin(progress * 2 * math.pi * p.swayFreq + p.phase) *
+          (p.swayAmplitude * 1.2);
+      final xPos = (p.x * size.width + sway) % size.width;
+
+      final edgeFade = math.sin(currentProgress * math.pi);
+      final alpha = ((0.20 + 0.75 * edgeFade) * edgeFade).clamp(0.0, 1.0);
+
+      if (p.variant == 0) {
+        // Crystal cross snowflake for prominent flakes
+        final rot = progress * 2 * math.pi * p.rotCycles + p.phase;
+        canvas.save();
+        canvas.translate(xPos, yPos);
+        canvas.rotate(rot);
+
+        final arm = p.size * 0.85;
+        final flakePaint = Paint()
+          ..color = snowBaseColor.withValues(alpha: alpha)
+          ..strokeWidth = 1.1
+          ..style = PaintingStyle.stroke;
+
+        canvas.drawLine(Offset(-arm, 0), Offset(arm, 0), flakePaint);
+        canvas.drawLine(Offset(0, -arm), Offset(0, arm), flakePaint);
+        final diag = arm * 0.65;
+        canvas.drawLine(Offset(-diag, -diag), Offset(diag, diag), flakePaint);
+        canvas.drawLine(Offset(-diag, diag), Offset(diag, -diag), flakePaint);
+        canvas.restore();
+      } else if (p.variant == 1) {
+        // Frosty soft snowflake with halo
+        final haloPaint = Paint()
+          ..color = snowBaseColor.withValues(alpha: alpha * 0.35);
+        canvas.drawCircle(Offset(xPos, yPos), p.size * 0.9, haloPaint);
+        final corePaint = Paint()
+          ..color = snowBaseColor.withValues(alpha: alpha);
+        canvas.drawCircle(Offset(xPos, yPos), p.size * 0.45, corePaint);
+      } else {
+        // Crisp snow crystal dot
+        final dotPaint = Paint()
+          ..color = snowBaseColor.withValues(alpha: alpha);
+        canvas.drawCircle(
+          Offset(xPos, yPos),
+          (p.size * 0.4).clamp(1.0, 2.8),
+          dotPaint,
+        );
+      }
+    }
+  }
+
+  void _drawSnowyPine(Canvas canvas, Offset base, double width, double height) {
+    final trunkHeight = height * 0.22;
+    final trunkWidth = width * 0.18;
+    final trunkRect = Rect.fromCenter(
+      center: Offset(base.dx, base.dy - trunkHeight / 2),
+      width: trunkWidth,
+      height: trunkHeight,
+    );
+    canvas.drawRect(trunkRect, Paint()..color = const Color(0xFF1E293B));
+
+    for (int tier = 0; tier < 3; tier++) {
+      final tierBottom = base.dy - trunkHeight * 0.8 - (tier * height * 0.26);
+      final tierTop = tierBottom - height * 0.38;
+      final tierW = width * (1.0 - tier * 0.25);
+
+      final foliagePath = Path();
+      foliagePath.moveTo(base.dx, tierTop);
+      foliagePath.lineTo(base.dx + tierW / 2, tierBottom);
+      foliagePath.lineTo(base.dx - tierW / 2, tierBottom);
+      foliagePath.close();
+
+      canvas.drawPath(
+        foliagePath,
+        Paint()..color = const Color(0xFF0F172A).withValues(alpha: 0.95),
+      );
+
+      final snowPath = Path();
+      snowPath.moveTo(base.dx - tierW / 2, tierBottom);
+      snowPath.quadraticBezierTo(
+        base.dx,
+        tierBottom - 3,
+        base.dx + tierW / 2,
+        tierBottom,
+      );
+      canvas.drawPath(
+        snowPath,
+        Paint()
+          ..strokeWidth = 1.8
+          ..style = PaintingStyle.stroke
+          ..color = const Color(0xFFCFF0FF).withValues(alpha: 0.75),
+      );
+    }
+  }
+
+  void _drawSnowyCabin(
+    Canvas canvas,
+    Offset base,
+    double width,
+    double height, {
+    required double chimneyXOffset,
+    required bool hasChimney,
+  }) {
+    final bodyHeight = height * 0.58;
+    final bodyRect = Rect.fromLTWH(
+      base.dx - width / 2,
+      base.dy - bodyHeight,
+      width,
+      bodyHeight,
+    );
+    canvas.drawRect(bodyRect, Paint()..color = const Color(0xFF1E293B));
+
+    // Warm golden glowing window
+    final winW = width * 0.32;
+    final winH = bodyHeight * 0.44;
+    final winRect = Rect.fromCenter(
+      center: Offset(base.dx, base.dy - bodyHeight * 0.48),
+      width: winW,
+      height: winH,
+    );
+
+    // Window warm ambient halo glow
+    final windowGlowPulse =
+        (math.sin(progress * 2 * math.pi + base.dx) + 1) / 2;
+    final haloPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFFFDE047)
+              .withValues(alpha: 0.35 + 0.15 * windowGlowPulse),
+          const Color(0xFFFEF08A).withValues(alpha: 0.10),
           Colors.transparent,
         ],
         stops: const [0.0, 0.55, 1.0],
-      ).createShader(Offset.zero & size);
-    canvas.drawRect(Offset.zero & size, auroraAtmosphere);
+      ).createShader(
+        Rect.fromCircle(center: winRect.center, radius: winW * 1.8),
+      );
+    canvas.drawCircle(winRect.center, winW * 1.8, haloPaint);
 
-    // 3. Shimmering Aurora Vertical Ray Striations (Curtain Ray Pillars)
-    final rayPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2;
-    for (int i = 0; i < 15; i++) {
-      final rx = (i / 14) * w;
-      final raySine = math.sin(progress * 2 * math.pi * 1.0 + i * 0.45);
-      final rayHeight = (28.0 + raySine * 14.0).clamp(14.0, 52.0);
-      final rayTop = h * 0.16 + math.cos(progress * 2 * math.pi * 2.0 + i * 0.6) * 6.0;
-      final rayBottom = rayTop + rayHeight;
-      final rayAlpha = (0.20 + 0.50 * (0.5 + 0.5 * raySine)).clamp(0.0, 0.75);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(winRect, const Radius.circular(2)),
+      Paint()..color = const Color(0xFFFDE047).withValues(alpha: 0.92),
+    );
 
-      final rayColor = (i % 2 == 0)
-          ? const Color(0xFF34D399).withValues(alpha: rayAlpha)
-          : const Color(0xFF38BDF8).withValues(alpha: rayAlpha * 0.9);
+    final framePaint = Paint()
+      ..color = const Color(0xFF0F172A)
+      ..strokeWidth = 1.1
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(
+      Offset(winRect.left, winRect.center.dy),
+      Offset(winRect.right, winRect.center.dy),
+      framePaint,
+    );
+    canvas.drawLine(
+      Offset(winRect.center.dx, winRect.top),
+      Offset(winRect.center.dx, winRect.bottom),
+      framePaint,
+    );
 
-      rayPaint.shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Colors.transparent, rayColor, Colors.transparent],
-      ).createShader(Rect.fromLTWH(rx - 1.1, rayTop, 2.2, rayBottom - rayTop));
+    // Chimney & rising smoke
+    if (hasChimney) {
+      final chW = width * 0.16;
+      final chH = height * 0.34;
+      final chX = base.dx + chimneyXOffset;
+      final chY = base.dy - bodyHeight - height * 0.22;
+      canvas.drawRect(
+        Rect.fromLTWH(chX - chW / 2, chY, chW, chH),
+        Paint()..color = const Color(0xFF0F172A),
+      );
 
-      canvas.drawLine(Offset(rx, rayTop), Offset(rx, rayBottom), rayPaint);
+      // Chimney snow cap
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(chX - chW * 0.65, chY - 2, chW * 1.3, 3),
+          const Radius.circular(1.5),
+        ),
+        Paint()..color = const Color(0xFFCFF0FF),
+      );
+
+      // Drifting chimney smoke puffs
+      for (int s = 0; s < 4; s++) {
+        final smokeProgress = (progress + s * 0.25) % 1.0;
+        final smokeY = chY - smokeProgress * 36.0;
+        final smokeSway =
+            math.sin(smokeProgress * math.pi * 3 + s) * 5.0 +
+            (smokeProgress * 6.0);
+        final smokeX = chX + smokeSway;
+        final smokeRadius = 1.8 + smokeProgress * 5.0;
+        final smokeAlpha = ((1.0 - smokeProgress) * 0.30).clamp(0.0, 1.0);
+
+        canvas.drawCircle(
+          Offset(smokeX, smokeY),
+          smokeRadius,
+          Paint()..color = const Color(0xFFE2E8F0).withValues(alpha: smokeAlpha),
+        );
+      }
     }
 
-    // 4. Primary Luminous Aurora Curtain 1: Emerald & Arctic Cyan Sheet
-    final curtain1 = Path();
-    final crest1 = Path();
-    curtain1.moveTo(0, h);
-    curtain1.lineTo(0, h * 0.28);
-    crest1.moveTo(0, h * 0.28);
+    // Snow-covered gable roof
+    final roofPeak = Offset(base.dx, base.dy - height);
+    final roofLeft = Offset(base.dx - width * 0.64, base.dy - bodyHeight + 2);
+    final roofRight = Offset(base.dx + width * 0.64, base.dy - bodyHeight + 2);
 
-    for (double x = 0; x <= w; x += 10) {
-      final normX = x / w;
-      final waveY = h * 0.28 +
-          math.sin(normX * 2 * math.pi + progress * 2 * math.pi * 1.0) * 15.0 +
-          math.cos(normX * 4 * math.pi - progress * 2 * math.pi * 1.0) * 8.0;
-      curtain1.lineTo(x, waveY);
-      crest1.lineTo(x, waveY);
-    }
-    curtain1.lineTo(w, h);
-    curtain1.close();
+    final roofPath = Path();
+    roofPath.moveTo(roofPeak.dx, roofPeak.dy);
+    roofPath.lineTo(roofRight.dx, roofRight.dy);
+    roofPath.lineTo(roofLeft.dx, roofLeft.dy);
+    roofPath.close();
+    canvas.drawPath(roofPath, Paint()..color = const Color(0xFF0F172A));
 
-    final curtain1Paint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          const Color(0xFF10B981).withValues(alpha: 0.55), // Radiant Emerald
-          const Color(0xFF06B6D4).withValues(alpha: 0.42), // Arctic Cyan
-          const Color(0xFF3B82F6).withValues(alpha: 0.18), // Deep Blue wash
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.40, 0.75, 1.0],
-      ).createShader(Offset.zero & size)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(curtain1, curtain1Paint);
+    final snowRoofPath = Path();
+    snowRoofPath.moveTo(roofPeak.dx, roofPeak.dy - 2.5);
+    snowRoofPath.lineTo(roofRight.dx + 2, roofRight.dy - 1);
+    snowRoofPath.lineTo(roofRight.dx - 2, roofRight.dy + 2.5);
+    snowRoofPath.lineTo(roofPeak.dx, roofPeak.dy + 2);
+    snowRoofPath.lineTo(roofLeft.dx + 2, roofLeft.dy + 2.5);
+    snowRoofPath.lineTo(roofLeft.dx - 2, roofLeft.dy - 1);
+    snowRoofPath.close();
 
-    // Radiant Crest Edge for Curtain 1
-    final crest1Paint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          const Color(0xFF34D399).withValues(alpha: 0.80),
-          const Color(0xFF67E8F9).withValues(alpha: 0.90),
-          const Color(0xFF818CF8).withValues(alpha: 0.75),
-        ],
-      ).createShader(Offset.zero & size)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
-    canvas.drawPath(crest1, crest1Paint);
-
-    // 5. Secondary Flowing Aurora Curtain 2: Electric Cyan & Neon Violet
-    final curtain2 = Path();
-    final crest2 = Path();
-    curtain2.moveTo(0, h);
-    curtain2.lineTo(0, h * 0.48);
-    crest2.moveTo(0, h * 0.48);
-
-    for (double x = 0; x <= w; x += 10) {
-      final normX = x / w;
-      final waveY = h * 0.48 +
-          math.cos(normX * 2.5 * math.pi - progress * 2 * math.pi * 1.0) * 14.0 +
-          math.sin(normX * 3.5 * math.pi + progress * 2 * math.pi * 2.0) * 9.0;
-      curtain2.lineTo(x, waveY);
-      crest2.lineTo(x, waveY);
-    }
-    curtain2.lineTo(w, h);
-    curtain2.close();
-
-    final curtain2Paint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          const Color(0xFF06B6D4).withValues(alpha: 0.50), // Electric Cyan
-          const Color(0xFF8B5CF6).withValues(alpha: 0.45), // Neon Violet
-          const Color(0xFFEC4899).withValues(alpha: 0.22), // Magenta glow
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.45, 0.80, 1.0],
-      ).createShader(Offset.zero & size)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(curtain2, curtain2Paint);
-
-    // Radiant Crest Edge for Curtain 2
-    final crest2Paint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          const Color(0xFF22D3EE).withValues(alpha: 0.85),
-          const Color(0xFFA855F7).withValues(alpha: 0.88),
-          const Color(0xFFF472B6).withValues(alpha: 0.72),
-        ],
-      ).createShader(Offset.zero & size)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0);
-    canvas.drawPath(crest2, crest2Paint);
-
-    // 6. Floating Cosmic Firefly Embers (Seamless continuous loop)
-    for (final ember in _embers) {
-      final curY = (ember.y * size.height - progress * ember.speed * size.height + size.height) % size.height;
-      final sway = math.sin(progress * 2 * math.pi * 2.0 + ember.phase) * 10.0;
-      final curX = (ember.x * size.width + sway + size.width) % size.width;
-
-      final pulse = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(progress * 2 * math.pi * 3.0 + ember.phase));
-
-      final emberGlow = Paint()
-        ..color = const Color(0xFF67E8F9).withValues(alpha: pulse * 0.45)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
-      canvas.drawCircle(Offset(curX, curY), ember.size * 2.0, emberGlow);
-
-      final emberCore = Paint()
-        ..color = const Color(0xFFF0FDFA).withValues(alpha: pulse * 0.92);
-      canvas.drawCircle(Offset(curX, curY), ember.size * 0.85, emberCore);
-    }
+    canvas.drawPath(
+      snowRoofPath,
+      Paint()..color = const Color(0xFFCFF0FF).withValues(alpha: 0.95),
+    );
   }
 
   @override

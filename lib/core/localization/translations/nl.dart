@@ -90,7 +90,6 @@ const Map<String, String> nlTranslations = {
   'loopOff': 'Herhalen: Uit',
   'loopOn': 'Herhalen: Aan',
   'manageFilesPermissionRequired': 'Toegang tot alle bestanden is vereist voor deze bewerking.',
-  'manualPathEntry': 'Pad handmatig invoeren',
   'more': 'Meer',
   'moreOptions': 'Meer opties',
   'moveToTrash': 'Naar prullenbak',

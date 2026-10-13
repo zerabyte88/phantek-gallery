@@ -90,7 +90,6 @@ const Map<String, String> frTranslations = {
   'loopOff': 'Répéter : Désactivé',
   'loopOn': 'Répéter : Activé',
   'manageFilesPermissionRequired': 'L\\',
-  'manualPathEntry': 'Entrer le chemin manuellement',
   'more': 'Plus',
   'moreOptions': 'Plus d\\',
   'moveToTrash': 'Mettre à la corbeille',
