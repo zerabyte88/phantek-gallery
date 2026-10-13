@@ -487,8 +487,8 @@ void main() {
     });
 
     test('AppThemeMode labels and AppTheme amoled definitions', () {
-      expect(AppThemeMode.amoled.label, 'AMOLED');
-      expect(AppThemeMode.amoledSakura.label, 'AMOLED Sakura');
+      expect(AppThemeMode.amoled.label, 'Midnight');
+      expect(AppThemeMode.amoledSakura.label, 'Sakura');
       expect(AppTheme.amoled.scaffoldBackgroundColor, Colors.black);
       expect(AppTheme.amoledSakura.scaffoldBackgroundColor, Colors.black);
     });
@@ -517,9 +517,9 @@ void main() {
       await tester.tap(find.text('Theme'));
       await tester.pumpAndSettle();
 
-      // AMOLED is available, but AMOLED Sakura is NOT available before Easter egg
-      expect(find.text('AMOLED'), findsOneWidget);
-      expect(find.text('AMOLED Sakura'), findsNothing);
+      // Midnight is available, but Sakura is NOT available before Easter egg
+      expect(find.text('Midnight'), findsOneWidget);
+      expect(find.text('Sakura'), findsNothing);
 
       // Close dialog by tapping first option (System)
       await tester.tap(find.text('System').last);
@@ -570,8 +570,8 @@ void main() {
       await tester.tap(find.text('Theme'));
       await tester.pumpAndSettle();
 
-      // Now AMOLED Sakura is in the dialog!
-      expect(find.text('AMOLED Sakura'), findsNWidgets(2)); // in dialog + in subtitle
+      // Now Sakura is in the dialog!
+      expect(find.text('Sakura'), findsNWidgets(2)); // in dialog + in subtitle
     });
 
     test('MediaListNotifier optimistic removeItems and restoreItems', () async {

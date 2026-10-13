@@ -102,7 +102,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   icon: Icons.palette_rounded,
                   iconColor: const Color(0xFF8B5CF6),
                   title: context.tr.theme,
-                  subtitle: settings.themeMode.label,
+                  subtitle: context.tr.themeModeLabel(settings.themeMode),
                   onTap: () async {
                     final chosen = await _showModernThemeDialog(
                       context,
