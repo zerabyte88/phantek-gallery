@@ -277,6 +277,12 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                                 if (_selecting) {
                                   _toggleSelect(item.id);
                                 } else {
+                                  if (item.isVideo) {
+                                    ThumbnailService.instance.getHighResVideoThumbnail(
+                                      item.id,
+                                      filePath: item.trashPath,
+                                    );
+                                  }
                                   _openPreview(context, items, item);
                                 }
                               },
@@ -463,7 +469,11 @@ class _TrashGridItem extends StatelessWidget {
                   // Thumbnail image or video placeholder
                   Container(
                     color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                    child: _TrashThumbnail(item: item),
+                    child: Hero(
+                      tag: item.id,
+                      transitionOnUserGestures: true,
+                      child: _TrashThumbnail(item: item),
+                    ),
                   ),
 
                   // Video duration / play icon badge (bottom-left)
@@ -525,7 +535,15 @@ class _TrashGridItem extends StatelessWidget {
                     right: 6,
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: onOpenPreview,
+                      onTap: () {
+                        if (item.isVideo) {
+                          ThumbnailService.instance.getHighResVideoThumbnail(
+                            item.id,
+                            filePath: item.trashPath,
+                          );
+                        }
+                        onOpenPreview();
+                      },
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
@@ -571,10 +589,38 @@ class _TrashThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
+    // 1. Fast in-memory lookup (0ms)
+    final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
+    if (mem != null) {
+      return Image.memory(
+        mem,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+      );
+    }
+
+    // 2. Persistent disk cache hit (Instant on cold start — skips FutureBuilder delay)
+    final diskFile = ThumbnailService.instance.getCachedFile(item.id);
+    if (diskFile != null) {
+      return Image.file(
+        diskFile,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
+      );
+    }
+
     final file = File(item.trashPath);
 
     return FutureBuilder<Uint8List?>(
-      future: ThumbnailService.instance.getThumbnail(item.id, filePath: item.trashPath),
+      future: ThumbnailService.instance.getThumbnail(
+        item.id,
+        filePath: item.trashPath,
+        isVideo: item.isVideo,
+      ),
       builder: (_, snap) {
         if (snap.data != null) {
           return Image.memory(
@@ -585,16 +631,7 @@ class _TrashThumbnail extends StatelessWidget {
           );
         }
         if (item.isVideo) {
-          return Container(
-            color: cs.surfaceContainerHighest,
-            child: Center(
-              child: Icon(
-                Icons.videocam_outlined,
-                size: 28,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-              ),
-            ),
-          );
+          return _buildPlaceholder(cs);
         }
         return Image.file(
           file,
@@ -602,18 +639,24 @@ class _TrashThumbnail extends StatelessWidget {
           fit: BoxFit.cover,
           gaplessPlayback: true,
           filterQuality: FilterQuality.medium,
-          errorBuilder: (_, __, ___) => Container(
-            color: cs.surfaceContainerHighest,
-            child: Center(
-              child: Icon(
-                Icons.broken_image_outlined,
-                size: 26,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-              ),
-            ),
-          ),
+          errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
         );
       },
+    );
+  }
+
+  Widget _buildPlaceholder(ColorScheme cs) {
+    return Container(
+      color: cs.surfaceContainerHighest,
+      child: Center(
+        child: Icon(
+          item.isVideo
+              ? Icons.videocam_outlined
+              : Icons.broken_image_outlined,
+          size: 28,
+          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+        ),
+      ),
     );
   }
 }
