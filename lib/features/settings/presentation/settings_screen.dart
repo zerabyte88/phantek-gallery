@@ -355,14 +355,13 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 16, 6),
+      padding: const EdgeInsets.fromLTRB(20, 24, 16, 8),
       child: Text(
-        title.toUpperCase(),
+        title,
         style: TextStyle(
-          fontSize: 11,
+          fontSize: 13,
           fontWeight: FontWeight.w700,
           color: Theme.of(context).colorScheme.primary,
-          letterSpacing: 1.2,
         ),
       ),
     );
@@ -379,12 +378,19 @@ class _SettingsCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.60),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: cs.outline.withValues(alpha: 0.12),
+          color: cs.outline.withValues(alpha: 0.14),
           width: 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
