@@ -1299,12 +1299,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                             alignment: Alignment.center,
                             transform: Matrix4.translationValues(d.dx, d.dy, 0)
                               ..scaleByDouble(s, s, 1.0, 1.0),
-                            child: radius > 0
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(radius),
-                                    child: child,
-                                  )
-                                : child,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(radius),
+                              clipBehavior: radius > 0 ? Clip.antiAlias : Clip.none,
+                              child: child,
+                            ),
                           );
                         },
                         child: RepaintBoundary(

@@ -20,8 +20,6 @@ import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
 import 'widgets/rename_dialog.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
-
-/// Display-capped provider shared by viewer + precache (same cache key).
 /// A 100MP photo decodes to ~50 MB instead of ~408 MB, so it fits imageCache.
 // ponytail: fixed 4096px cap, sharp to ~3x zoom on 1080p. Swap to full-res
 // FileImage on deep zoom if pixel-peeping beyond 3x matters.
@@ -719,12 +717,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                     alignment: Alignment.center,
                     transform: Matrix4.translationValues(d.dx, d.dy, 0)
                       ..scaleByDouble(s, s, 1.0, 1.0),
-                    child: radius > 0
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(radius),
-                            child: child,
-                          )
-                        : child,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(radius),
+                      clipBehavior: radius > 0 ? Clip.antiAlias : Clip.none,
+                      child: child,
+                    ),
                   );
                 },
                 child: ValueListenableBuilder<bool>(

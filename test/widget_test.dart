@@ -1705,7 +1705,7 @@ void main() {
 
       // Modal closes, now text in settings should be localized to Indonesian
       expect(find.text('Bahasa'), findsOneWidget);
-      expect(find.text('TAMPILAN'), findsOneWidget);
+      expect(find.text('Tampilan'), findsOneWidget);
 
       // Open Excluded Folders dialog (now localized to 'Folder yang Dikecualikan')
       final excludedTile = find.text('Folder yang Dikecualikan');
