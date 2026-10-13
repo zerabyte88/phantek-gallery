@@ -51,7 +51,7 @@ class EasterEggTapHandler {
                   SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Easter Egg Unlocked!\nAMOLED Sakura Theme has been activated!',
+                      'Easter Egg Unlocked!\nSakura Theme has been activated!',
                       style: TextStyle(
                         color: Color(0xFFFF85A1),
                         fontWeight: FontWeight.bold,
@@ -86,7 +86,7 @@ class EasterEggTapHandler {
             const SnackBar(
               behavior: SnackBarBehavior.floating,
               duration: Duration(seconds: 2),
-              content: Text('AMOLED Sakura Theme is already active!'),
+              content: Text('Sakura Theme is already active!'),
             ),
           );
       }
