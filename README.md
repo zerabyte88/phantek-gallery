@@ -21,8 +21,8 @@
 ## Key Features
 
 ### 1. Modern & Sleek User Interface
-- **Theme-Adaptive Animated Headers:** Procedural real-time animations customized for every theme mode (Dark mode AMOLED Nordic Winter Village with snow-capped rolling hills, cozy glowing cabins with animated chimney smoke, snowy pine trees, and drifting crystalline snowflakes; AMOLED glowing crescent moon, twinkling starfield & falling meteors; AMOLED Sakura drifting cherry blossoms & delicate tree branch; Light mode radiant morning sunburst & golden sparkles).
-- **Harmonized Title Badges:** Adaptive animated title badge with dynamic sweep shader gradients and icons matching active themes (including Nordic Frost Ice Blue and snowflake icon for Dark mode).
+- **Theme-Adaptive Animated Headers:** Procedural real-time animations customized for every theme mode (**Snowfall** Nordic Winter Village with snow-capped rolling hills, cozy glowing cabins with animated chimney smoke, snowy pine trees, and drifting crystalline snowflakes; **Midnight** glowing crescent moon, twinkling starfield & falling meteors; secret **Sakura** drifting cherry blossoms & delicate tree branch; **Sunburst** radiant morning sunrise & golden sparkles).
+- **Harmonized Title Badges:** Adaptive animated title badge with dynamic sweep shader gradients and icons matching active themes (including Nordic Frost Ice Blue and snowflake icon for Snowfall mode).
 - **Glitch-Free Sliding Capsule Navigation:** Unified, single-indicator capsule tab filter bar (`All`, `Photos`, `Videos`, `Albums`) with real-time 1:1 finger tracking via `PageController` and synchronized text styling.
 - **Natural Fluid Swipe-to-Dismiss:** Dynamic image scaling, smooth corner rounding, instant background/overlay reactivity, synchronized underlying grid scrolling, and organic spring physics for viewer dismissal.
 - **Tactile Bouncy Feedback:** Spring-scale micro-animations (`BouncyTap`) across all interactive cards, chips, dialogs, and controls.
@@ -58,9 +58,8 @@
 
 ### 6. Multi-Language Internationalization & Theming
 - **22 Supported Languages:** English (default), Indonesian (Bahasa Indonesia), Arabic (العربية), Chinese Simplified (简体中文), Chinese Traditional (繁體中文), Danish (Dansk), Dutch (Nederlands), Finnish (Suomi), French (Français), German (Deutsch), Hindi (हिन्दी), Italian (Italiano), Japanese (日本語), Korean (한국어), Malay (Bahasa Melayu), Norwegian (Norsk), Portuguese (Português), Russian (Русский), Spanish (Español), Swedish (Svenska), Thai (ไทย), and Vietnamese (Tiếng Việt). Sorted alphabetically (A-Z) with System Default pinned at top, featuring native country flag emojis inside modern selection cards.
-- **Material 3 & Pure AMOLED Dark Themes:** System Default, Clean Light, and Pure AMOLED Dark with deep true black (`#000000`) surfaces across all screens for maximum OLED battery savings.
-- **Atmospheric Celestial Themes:** Celestial AMOLED Night (crescent moon & meteors), AMOLED Nordic Winter Village, and secret AMOLED Sakura 🌸.
-- **Developer Easter Egg:** Unlocked by tapping the "Phantek" header title 10 times consecutively.
+- **Distinct Thematic Visual Modes:** System Default (follows device appearance), **Sunburst** (warm and bright radiant golden sunrise), **Snowfall** (serene snowy winter village), and **Midnight** (starry night sky with glowing crescent moon and meteors).
+- **Secret Thematic Easter Egg:** Unlock the hidden **Sakura** 🌸 theme (soft elegance of drifting cherry blossom petals and delicate floral ambiance) by tapping the "Phantek" header title 10 times consecutively.
 
 ### 7. Over-The-Air (OTA) Updates & 64-Bit Architecture
 - **Automated GitHub Releases Updater:** In-app version verification, background APK download with live progress bar, and automated installation dispatch via Android `FileProvider`.
