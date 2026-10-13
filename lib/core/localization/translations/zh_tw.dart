@@ -86,7 +86,6 @@ const Map<String, String> zhTwTranslations = {
   'loopOff': '循環播放: 關閉',
   'loopOn': '循環播放: 開啟',
   'manageFilesPermissionRequired': '此操作需要所有檔案存取權限。',
-  'manualPathEntry': '手動輸入路徑',
   'more': '更多',
   'moreOptions': '更多選項',
   'moveToTrash': '移至垃圾桶',

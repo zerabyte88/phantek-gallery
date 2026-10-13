@@ -86,7 +86,6 @@ const Map<String, String> zhTranslations = {
   'loopOff': '循环：关闭',
   'loopOn': '循环：开启',
   'manageFilesPermissionRequired': '此操作需要“所有文件访问权限”。',
-  'manualPathEntry': '手动输入路径',
   'more': '更多',
   'moreOptions': '更多选项',
   'moveToTrash': '移至回收站',

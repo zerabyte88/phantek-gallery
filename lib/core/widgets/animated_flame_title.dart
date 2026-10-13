@@ -21,13 +21,13 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  static const _darkCyberColors = [
-    Color(0xFF6366F1), // Electric Indigo
-    Color(0xFF8B5CF6), // Neon Violet
-    Color(0xFFEC4899), // Cyber Magenta
-    Color(0xFF06B6D4), // Electric Cyan
-    Color(0xFF3B82F6), // Royal Blue
-    Color(0xFF6366F1), // Back to Indigo
+  static const _darkNordicFrostColors = [
+    Color(0xFF38BDF8), // Crystalline Sky Blue
+    Color(0xFF7DD3FC), // Frost Cyan
+    Color(0xFFBAE6FD), // Glacial Ice
+    Color(0xFFE0F2FE), // Pure Winter Snow
+    Color(0xFF93C5FD), // Soft Frost Blue
+    Color(0xFF38BDF8),
   ];
 
   static const _amoledColors = [
@@ -99,10 +99,10 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
           const Color(0xFFFFB7C5),
         ),
       AppThemeMode.dark => (
-          _darkCyberColors,
-          Icons.auto_awesome_rounded,
-          const Color(0xFF818CF8),
-          const Color(0xFFEC4899),
+          _darkNordicFrostColors,
+          Icons.ac_unit_rounded,
+          const Color(0xFF38BDF8),
+          const Color(0xFFBAE6FD),
         ),
       AppThemeMode.light => (
           _lightColors,
@@ -111,10 +111,10 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
           const Color(0xFF8B5CF6),
         ),
       AppThemeMode.system => (
-          _darkCyberColors,
-          Icons.auto_awesome_rounded,
-          const Color(0xFF818CF8),
-          const Color(0xFFEC4899),
+          _darkNordicFrostColors,
+          Icons.ac_unit_rounded,
+          const Color(0xFF38BDF8),
+          const Color(0xFFBAE6FD),
         ),
     };
 

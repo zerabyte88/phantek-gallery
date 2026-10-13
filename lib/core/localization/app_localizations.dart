@@ -84,7 +84,6 @@ class AppLocalizations {
   String get share => _t('share');
   String get pickFromManager => _t('pickFromManager');
   String get pickFromAlbums => _t('pickFromAlbums');
-  String get manualPathEntry => _t('manualPathEntry');
   String get keepScreenOn => _t('keepScreenOn');
   String get keepScreenOnSubtitle => _t('keepScreenOnSubtitle');
   String get sort => _t('sort');

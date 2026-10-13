@@ -90,7 +90,6 @@ const Map<String, String> svTranslations = {
   'loopOff': 'Upprepa: Av',
   'loopOn': 'Upprepa: På',
   'manageFilesPermissionRequired': 'Åtkomst till alla filer krävs för denna åtgärd.',
-  'manualPathEntry': 'Ange sökväg manuellt',
   'more': 'Mer',
   'moreOptions': 'Fler alternativ',
   'moveToTrash': 'Flytta till papperskorgen',

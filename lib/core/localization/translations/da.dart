@@ -90,7 +90,6 @@ const Map<String, String> daTranslations = {
   'loopOff': 'Gentag: Fra',
   'loopOn': 'Gentag: Til',
   'manageFilesPermissionRequired': 'Tilladelse til administration af alle filer er påkrævet.',
-  'manualPathEntry': 'Indtast sti manuelt',
   'more': 'Mere',
   'moreOptions': 'Flere indstillinger',
   'moveToTrash': 'Flyt til papirkurv',

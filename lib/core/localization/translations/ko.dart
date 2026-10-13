@@ -86,7 +86,6 @@ const Map<String, String> koTranslations = {
   'loopOff': '반복: 꺼짐',
   'loopOn': '반복: 켜짐',
   'manageFilesPermissionRequired': '이 작업을 수행하려면 모든 파일 관리 권한이 필요합니다.',
-  'manualPathEntry': '수동으로 경로 입력',
   'more': '더보기',
   'moreOptions': '더 많은 옵션',
   'moveToTrash': '휴지통으로 이동',

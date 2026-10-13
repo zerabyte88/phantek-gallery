@@ -90,7 +90,6 @@ const Map<String, String> deTranslations = {
   'loopOff': 'Wiederholung: Aus',
   'loopOn': 'Wiederholung: Ein',
   'manageFilesPermissionRequired': 'Vollständiger Dateizugriff für diesen Vorgang erforderlich.',
-  'manualPathEntry': 'Pfad manuell eingeben',
   'more': 'Mehr',
   'moreOptions': 'Weitere Optionen',
   'moveToTrash': 'In den Papierkorb',

@@ -90,7 +90,6 @@ const Map<String, String> fiTranslations = {
   'loopOff': 'Jatkuva toisto: Pois',
   'loopOn': 'Jatkuva toisto: Päällä',
   'manageFilesPermissionRequired': 'Kaikkien tiedostojen hallintaoikeus vaaditaan tähän toimintoon.',
-  'manualPathEntry': 'Syötä polku manuaalisesti',
   'more': 'Lisää',
   'moreOptions': 'Lisää vaihtoehtoja',
   'moveToTrash': 'Siirrä roskakoriin',

@@ -10,6 +10,7 @@ import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/thumbnail_service.dart';
+import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
 
 class TrashScreen extends ConsumerStatefulWidget {
   const TrashScreen({super.key});
@@ -54,7 +55,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     final viewportTop = currentScroll;
     final viewportBottom = currentScroll + viewportHeight;
 
-    if (rowTop >= viewportTop + 10.0 && (rowTop + tileHeight) <= viewportBottom - 10.0) {
+    final effectiveTopThreshold = viewportTop <= 0.0 ? 0.0 : viewportTop + 10.0;
+    if (rowTop >= effectiveTopThreshold && (rowTop + tileHeight) <= viewportBottom - 10.0) {
       return;
     }
 
@@ -129,80 +131,11 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
         ? context.tr.permanentlyDeleteAllTitle
         : context.tr.permanentlyDeleteCountTitle(count);
 
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        return Container(
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.35),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFF03D3D),
-                    foregroundColor: Colors.white,
-                    shape: const StadiumBorder(),
-                    elevation: 0,
-                  ),
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: Text(
-                    context.tr.delete,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 44,
-                child: TextButton(
-                  style: TextButton.styleFrom(
-                    shape: const StadiumBorder(),
-                  ),
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: Text(
-                    context.tr.cancel,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+    final ok = await showDeleteConfirmationSheet(
+      context,
+      title: title,
+      contentText: '',
+      isTrash: false,
     );
 
     if (ok != true || !mounted) return;

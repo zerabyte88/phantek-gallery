@@ -90,7 +90,6 @@ const Map<String, String> esTranslations = {
   'loopOff': 'Bucle: Desactivado',
   'loopOn': 'Bucle: Activado',
   'manageFilesPermissionRequired': 'Se requiere el permiso de Administrar todos los archivos para esta acción.',
-  'manualPathEntry': 'Introducir ruta manualmente',
   'more': 'Más',
   'moreOptions': 'Más opciones',
   'moveToTrash': 'Mover a la papelera',

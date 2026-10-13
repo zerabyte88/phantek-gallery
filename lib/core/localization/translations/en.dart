@@ -90,7 +90,6 @@ const Map<String, String> enTranslations = {
   'loopOff': 'Loop: Off',
   'loopOn': 'Loop: On',
   'manageFilesPermissionRequired': 'Manage All Files permission is required for this operation.',
-  'manualPathEntry': 'Enter path manually',
   'more': 'More',
   'moreOptions': 'More options',
   'moveToTrash': 'Move to Trash',

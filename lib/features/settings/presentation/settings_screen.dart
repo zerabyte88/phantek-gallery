@@ -658,7 +658,6 @@ Future<void> _showExcludedFoldersDialog(
   WidgetRef ref,
   SettingsModel settings,
 ) async {
-  final controller = TextEditingController();
   final current = List<String>.from(settings.excludedFolders);
   final cs = Theme.of(context).colorScheme;
 
@@ -790,57 +789,8 @@ Future<void> _showExcludedFoldersDialog(
                     ),
                   ],
 
-                  // 3. Manual typing fallback
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: controller,
-                          style: const TextStyle(fontSize: 13),
-                          decoration: InputDecoration(
-                            isDense: true,
-                            hintText: context.tr.manualPathEntry,
-                            filled: true,
-                            fillColor: cs.surfaceContainerHighest
-                                .withValues(alpha: 0.4),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      BouncyTap(
-                        scaleDown: 0.94,
-                        child: FilledButton.tonal(
-                          style: FilledButton.styleFrom(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
-                          ),
-                          onPressed: () {
-                            final path = controller.text.trim();
-                            if (path.isNotEmpty && !current.contains(path)) {
-                              setSt(() => current.add(path));
-                              controller.clear();
-                            }
-                          },
-                          child: Text(
-                            context.tr.add,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
 
-                  // 4. Excluded folders list
+                  // 3. Excluded folders list
                   if (current.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     Row(
@@ -967,7 +917,6 @@ Future<void> _showExcludedFoldersDialog(
       },
     ),
   );
-  controller.dispose();
 }
 
 Future<AppLanguage?> _showModernLanguageDialog(
@@ -1272,10 +1221,10 @@ class _ThemeOptionCard extends StatelessWidget {
           context.tr.themeLightDesc,
         ),
       AppThemeMode.dark => (
-          Icons.dark_mode_rounded,
-          const Color(0xFF818CF8),
+          Icons.ac_unit_rounded,
+          const Color(0xFF38BDF8),
           const LinearGradient(
-            colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+            colors: [Color(0xFF000000), Color(0xFF0F172A)],
           ),
           context.tr.themeDarkDesc,
         ),
