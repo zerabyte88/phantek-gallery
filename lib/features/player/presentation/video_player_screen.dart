@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
@@ -23,7 +24,7 @@ import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
 import 'widgets/rename_dialog.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
-import 'image_viewer_screen.dart' show displayImage;
+import 'image_viewer_screen.dart' show screenDisplayImage;
 
 Widget _photoThumb(String id, [String? path]) {
   final mem = ThumbnailService.instance.getMemoryThumbnail(id);
@@ -32,13 +33,13 @@ Widget _photoThumb(String id, [String? path]) {
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (path != null ? displayImage(path) : null));
+          : (path != null ? screenDisplayImage(path) : null));
   if (p == null) return const SizedBox.shrink();
   return Image(
     image: p,
     fit: BoxFit.contain,
     gaplessPlayback: true,
-    filterQuality: FilterQuality.high,
+    filterQuality: FilterQuality.medium,
   );
 }
 
@@ -56,7 +57,7 @@ Widget _buildHeroShuttle({
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (item.path.isNotEmpty && !item.isVideo ? displayImage(item.path) : null));
+          : (item.path.isNotEmpty && !item.isVideo ? screenDisplayImage(item.path) : null));
 
   final Widget content = p != null
       ? Image(
@@ -357,7 +358,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void _precacheAdjacentVideos(int index) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      for (final offset in const [-2, -1, 0, 1, 2]) {
+      for (final offset in const [-1, 1]) {
         final target = index + offset;
         if (target >= 0 && target < _videos.length) {
           final item = _videos[target];
@@ -396,7 +397,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
               precacheImage(MemoryImage(mem), context);
             }
             if (item.path.isNotEmpty && mounted) {
-              precacheImage(displayImage(item.path), context);
+              precacheImage(screenDisplayImage(item.path), context);
             }
           }
         }
@@ -597,7 +598,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         ]);
       }
     }
-    _precacheAdjacentVideos(index);
   }
 
   void _onPageChanged(int index) {
@@ -759,18 +759,27 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   Widget _buildVideoPage(int index) {
     final item = _videos[index];
     if (!item.isVideo) {
-      Widget content = Stack(
-        fit: StackFit.expand,
-        alignment: Alignment.center,
-        children: [
-          _photoThumb(item.id, item.path),
-          Image(
-            image: displayImage(item.path),
-            fit: BoxFit.contain,
-            gaplessPlayback: true,
-            filterQuality: FilterQuality.high,
-          ),
-        ],
+      Widget content = Image(
+        image: screenDisplayImage(item.path),
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (wasSynchronouslyLoaded || frame != null) {
+            return child;
+          }
+          return Stack(
+            fit: StackFit.passthrough,
+            alignment: Alignment.center,
+            children: [
+              _photoThumb(item.id, item.path),
+              child,
+            ],
+          );
+        },
+        errorBuilder: (_, __, ___) => const Center(
+          child: Icon(Icons.broken_image, size: 80, color: Colors.white38),
+        ),
       );
       if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
         content = AspectRatio(
@@ -793,6 +802,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         _VideoThumbnailPage(
           item: item,
           fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
+          isSwiping: _isSwipingPage,
         ),
         if (index == _current)
           ValueListenableBuilder<bool>(
@@ -1320,6 +1330,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         } else if (notification is ScrollEndNotification) {
                           _isSwiping = false;
                           _isSwipingPage.value = false;
+                          _precacheAdjacentVideos(_current);
                         }
                         return false;
                       },
@@ -1673,9 +1684,11 @@ class _VideoThumbnailPage extends StatefulWidget {
   const _VideoThumbnailPage({
     required this.item,
     this.fit = BoxFit.contain,
+    this.isSwiping,
   });
   final MediaItem item;
   final BoxFit fit;
+  final ValueListenable<bool>? isSwiping;
 
   @override
   State<_VideoThumbnailPage> createState() => _VideoThumbnailPageState();
@@ -1687,16 +1700,37 @@ class _VideoThumbnailPageState extends State<_VideoThumbnailPage> {
   @override
   void initState() {
     super.initState();
-    _loadHighRes();
+    widget.isSwiping?.addListener(_onSwipeChanged);
+    if (widget.isSwiping?.value != true) {
+      _loadHighRes();
+    }
+  }
+
+  void _onSwipeChanged() {
+    if (widget.isSwiping?.value == false && _highResBytes == null) {
+      _loadHighRes();
+    }
   }
 
   @override
   void didUpdateWidget(covariant _VideoThumbnailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.isSwiping != widget.isSwiping) {
+      oldWidget.isSwiping?.removeListener(_onSwipeChanged);
+      widget.isSwiping?.addListener(_onSwipeChanged);
+    }
     if (oldWidget.item.id != widget.item.id) {
       _highResBytes = null;
-      _loadHighRes();
+      if (widget.isSwiping?.value != true) {
+        _loadHighRes();
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    widget.isSwiping?.removeListener(_onSwipeChanged);
+    super.dispose();
   }
 
   void _loadHighRes() {
@@ -1726,7 +1760,7 @@ class _VideoThumbnailPageState extends State<_VideoThumbnailPage> {
           highResMem,
           fit: widget.fit,
           gaplessPlayback: true,
-          filterQuality: FilterQuality.high,
+          filterQuality: FilterQuality.medium,
         ),
       );
     }
@@ -1739,7 +1773,7 @@ class _VideoThumbnailPageState extends State<_VideoThumbnailPage> {
           highResDisk,
           fit: widget.fit,
           gaplessPlayback: true,
-          filterQuality: FilterQuality.high,
+          filterQuality: FilterQuality.medium,
         ),
       );
     }
@@ -1797,7 +1831,7 @@ class _VideoThumbnailPageState extends State<_VideoThumbnailPage> {
           hr,
           fit: widget.fit,
           gaplessPlayback: true,
-          filterQuality: FilterQuality.high,
+          filterQuality: FilterQuality.medium,
         ),
       );
     }

@@ -25,7 +25,7 @@ import 'package:phantek_gallery/features/gallery/presentation/gallery_screen.dar
 import 'package:phantek_gallery/features/gallery/presentation/widgets/filter_sort_bar.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/sort_bottom_sheet.dart';
 import 'package:phantek_gallery/features/player/presentation/widgets/media_info_sheet.dart';
-import 'package:phantek_gallery/features/player/presentation/image_viewer_screen.dart' show displayImage;
+import 'package:phantek_gallery/features/player/presentation/image_viewer_screen.dart' show displayImage, screenDisplayImage;
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
 import 'package:phantek_gallery/core/services/share_service.dart';
 import 'package:phantek_gallery/app/router.dart' show rootNavigatorKey;
@@ -1202,6 +1202,16 @@ void main() {
       const scale = 4096 / 11656;
       final bytes = (8742 * scale).round() * 4096 * 4;
       expect(bytes * 3, lessThan(256 * 1024 * 1024));
+    });
+
+    test('screenDisplayImage bounds photos to 2048px for fluid sliding and low memory', () {
+      final a = screenDisplayImage('/dcim/hasselblad.jpg') as ResizeImage;
+      final b = screenDisplayImage('/dcim/hasselblad.jpg');
+      expect(a.width, 2048);
+      expect(a.height, 2048);
+      expect(a.policy, ResizeImagePolicy.fit);
+      expect(a, equals(b));
+      expect(screenDisplayImage('/dcim/other.jpg'), isNot(equals(a)));
     });
 
     test('Hero flight shuttle preserves AspectRatio and interpolates bounds without vertical distortion', () {
