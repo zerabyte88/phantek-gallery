@@ -23,10 +23,19 @@ import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
 /// A 100MP photo decodes to ~50 MB instead of ~408 MB, so it fits imageCache.
 // ponytail: fixed 4096px cap, sharp to ~3x zoom on 1080p. Swap to full-res
 // FileImage on deep zoom if pixel-peeping beyond 3x matters.
-ImageProvider displayImage(String path) => ResizeImage(
+ImageProvider displayImage(String path, {int maxDimension = 4096}) => ResizeImage(
       FileImage(File(path)),
-      width: 4096,
-      height: 4096,
+      width: maxDimension,
+      height: maxDimension,
+      policy: ResizeImagePolicy.fit,
+    );
+
+/// Adaptive screen-fit image provider (~2048px max bounding box)
+/// keeps memory down to ~12 MB per photo, ensuring silky-smooth 60/120 fps sliding.
+ImageProvider screenDisplayImage(String path, [int maxDim = 2048]) => ResizeImage(
+      FileImage(File(path)),
+      width: maxDim,
+      height: maxDim,
       policy: ResizeImagePolicy.fit,
     );
 
@@ -39,13 +48,13 @@ Widget _thumb(String id, [String? path]) {
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (path != null ? displayImage(path) : null));
+          : (path != null ? screenDisplayImage(path) : null));
   if (p == null) return const SizedBox.shrink();
   return Image(
     image: p,
     fit: BoxFit.contain,
     gaplessPlayback: true,
-    filterQuality: FilterQuality.high,
+    filterQuality: FilterQuality.medium,
   );
 }
 
@@ -64,7 +73,7 @@ Widget _buildHeroShuttle({
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (path != null ? displayImage(path) : null));
+          : (path != null ? screenDisplayImage(path) : null));
 
   final Widget content = p != null
       ? Image(
@@ -134,9 +143,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   AnimationController? _zoomAnimController;
   TapDownDetails? _doubleTapDetails;
   bool _isPhotoZoomed = false;
+  bool _isDeepZoomed = false;
   bool _isPinching = false;
   bool _isMultiTouch = false;
   final Set<int> _activePointers = {};
+  final ValueNotifier<bool> _isSwipingPage = ValueNotifier<bool>(false);
 
   bool get _isCurrentlyZoomed =>
       _transformationController.value.getMaxScaleOnAxis() > 1.05;
@@ -173,11 +184,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   void _precacheAdjacent(int index) {
     if (!mounted) return;
-    // ±1 only: 3 × ~50 MB stays inside the 256 MB imageCache.
+    // ±1 only: 3 × ~12 MB stays inside the 256 MB imageCache.
     for (final offset in const [-1, 1]) {
       final target = index + offset;
       if (target >= 0 && target < widget.items.length) {
-        precacheImage(displayImage(widget.items[target].path), context);
+        precacheImage(screenDisplayImage(widget.items[target].path), context);
       }
     }
   }
@@ -196,6 +207,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _settle.dispose();
     _isDraggingDown.dispose();
+    _isSwipingPage.dispose();
     _drag.dispose();
     _page.dispose();
     super.dispose();
@@ -262,6 +274,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         if (mounted) {
           setState(() {
             _isPhotoZoomed = false;
+            _isDeepZoomed = false;
           });
         }
       }
@@ -312,6 +325,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         }
         setState(() {
           _isPhotoZoomed = !isZoomed;
+          _isDeepZoomed = !isZoomed;
         });
       }
     });
@@ -325,21 +339,30 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _zoomToPosition(_doubleTapDetails!.localPosition);
   }
 
-  Widget _buildPhotoPage(MediaItem it) {
-    Widget content = Stack(
-      alignment: Alignment.center,
-      children: [
-        _thumb(it.id, it.path),
-        Image(
-          image: displayImage(it.path),
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.high,
-          errorBuilder: (_, __, ___) => const Center(
-            child: Icon(Icons.broken_image, size: 80, color: Colors.white38),
-          ),
-        ),
-      ],
+  Widget _buildPhotoPage(MediaItem it, {bool isCurrent = false}) {
+    Widget content = Image(
+      image: (isCurrent && _isDeepZoomed)
+          ? displayImage(it.path, maxDimension: 4096)
+          : screenDisplayImage(it.path),
+      fit: BoxFit.contain,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded || frame != null) {
+          return child;
+        }
+        return Stack(
+          fit: StackFit.passthrough,
+          alignment: Alignment.center,
+          children: [
+            _thumb(it.id, it.path),
+            child,
+          ],
+        );
+      },
+      errorBuilder: (_, __, ___) => const Center(
+        child: Icon(Icons.broken_image, size: 80, color: Colors.white38),
+      ),
     );
 
     if (it.width != null && it.height != null && it.width! > 0 && it.height! > 0) {
@@ -370,6 +393,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           _current = _current.clamp(0, widget.items.length - 1);
           _transformationController.value = Matrix4.identity();
           _isPhotoZoomed = false;
+          _isDeepZoomed = false;
         });
         _page.jumpToPage(_current);
       }
@@ -401,6 +425,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             _current = _current.clamp(0, widget.items.length - 1);
             _transformationController.value = Matrix4.identity();
             _isPhotoZoomed = false;
+            _isDeepZoomed = false;
           });
           _page.jumpToPage(_current);
         }
@@ -475,6 +500,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         _current = _current.clamp(0, widget.items.length - 1);
         _transformationController.value = Matrix4.identity();
         _isPhotoZoomed = false;
+        _isDeepZoomed = false;
       });
       _page.jumpToPage(_current);
     }
@@ -582,6 +608,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             _isPinching = false;
             if (_transformationController.value.getMaxScaleOnAxis() <= 1.05) {
               _isPhotoZoomed = false;
+              _isDeepZoomed = false;
             }
           }
           if (_activePointers.length >= 2 || _isCurrentlyZoomed) {
@@ -732,28 +759,40 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       child: child,
                     );
                   },
-                  child: PageView.builder(
-                    controller: _page,
-                    itemCount: widget.items.length,
-                    onPageChanged: (i) {
-                      setState(() {
-                        _current = i;
-                        _isPhotoZoomed = false;
-                        _isPinching = false;
-                        _transformationController.value = Matrix4.identity();
-                      });
-                      _activeMediaNotifier?.state = widget.items[i].id;
-                      _precacheAdjacent(i);
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      if (notification is ScrollStartNotification) {
+                        if (notification.dragDetails != null) {
+                          _isSwipingPage.value = true;
+                        }
+                      } else if (notification is ScrollEndNotification) {
+                        _isSwipingPage.value = false;
+                        _precacheAdjacent(_current);
+                      }
+                      return false;
                     },
-                    physics: (_isCurrentlyZoomed ||
-                            _isPinching ||
-                            _isMultiTouch ||
-                            _activePointers.length >= 2)
-                        ? const NeverScrollableScrollPhysics()
-                        : const BouncingScrollPhysics(
-                            parent: AlwaysScrollableScrollPhysics(),
-                          ),
-                    itemBuilder: (context, index) {
+                    child: PageView.builder(
+                      controller: _page,
+                      itemCount: widget.items.length,
+                      onPageChanged: (i) {
+                        setState(() {
+                          _current = i;
+                          _isPhotoZoomed = false;
+                          _isDeepZoomed = false;
+                          _isPinching = false;
+                          _transformationController.value = Matrix4.identity();
+                        });
+                        _activeMediaNotifier?.state = widget.items[i].id;
+                      },
+                      physics: (_isCurrentlyZoomed ||
+                              _isPinching ||
+                              _isMultiTouch ||
+                              _activePointers.length >= 2)
+                          ? const NeverScrollableScrollPhysics()
+                          : const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                      itemBuilder: (context, index) {
                         final it = widget.items[index];
                         if (index == _current) {
                           return Center(
@@ -791,9 +830,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   if (scale <= 1.02) {
                                     _resetPhotoZoom();
                                   } else {
-                                    if (!_isPhotoZoomed && mounted) {
+                                    final shouldDeepZoom = scale > 1.2;
+                                    if ((!_isPhotoZoomed || _isDeepZoomed != shouldDeepZoom) && mounted) {
                                       setState(() {
                                         _isPhotoZoomed = true;
+                                        _isDeepZoomed = shouldDeepZoom;
                                       });
                                     }
                                   }
@@ -818,16 +859,17 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                           ? toHeroContext.widget
                                           : fromHeroContext.widget,
                                     ),
-                                    child: _buildPhotoPage(it),
+                                    child: _buildPhotoPage(it, isCurrent: true),
                                   ),
                                 ),
                               ),
                             ),
                           );
                         }
-                        return Center(child: _buildPhotoPage(it));
+                        return Center(child: _buildPhotoPage(it, isCurrent: false));
                       },
                     ),
+                  ),
                   ),
                 ),
 
