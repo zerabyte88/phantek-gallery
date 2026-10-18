@@ -93,13 +93,15 @@ Widget _buildHeroShuttle({
     animation: curved,
     builder: (context, child) {
       final t = curved.value;
-      final radius = flightDirection == HeroFlightDirection.push
-          ? (1.0 - t) * 8.0
-          : t * 8.0;
+      // In both push (0->1) and pop (1->0), (1 - t) * 8.0 smoothly matches
+      // the grid tile corner radius (8.0 at grid, 0.0 at viewer).
+      final radius = (1.0 - t) * 8.0;
+
+      if (radius <= 0.05) return child!;
 
       return ClipRRect(
         borderRadius: BorderRadius.circular(radius.clamp(0.0, 8.0)),
-        clipBehavior: Clip.antiAlias,
+        clipBehavior: Clip.hardEdge,
         child: child,
       );
     },
@@ -174,7 +176,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _activeMediaNotifier = ref.read(activeViewerMediaIdProvider.notifier);
-        _activeMediaNotifier?.state = _currentItem.id;
       }
       _precacheAdjacent(_current);
     });
@@ -188,7 +189,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     for (final offset in const [-1, 1]) {
       final target = index + offset;
       if (target >= 0 && target < widget.items.length) {
-        precacheImage(screenDisplayImage(widget.items[target].path), context);
+        final item = widget.items[target];
+        final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
+        if (mem != null) {
+          precacheImage(MemoryImage(mem), context);
+        }
+        precacheImage(screenDisplayImage(item.path), context);
       }
     }
   }
@@ -365,9 +371,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       ),
     );
 
-    if (it.width != null && it.height != null && it.width! > 0 && it.height! > 0) {
+    final ar = (it.width != null && it.height != null && it.width! > 0 && it.height! > 0)
+        ? (it.width! / it.height!)
+        : ThumbnailService.instance.getThumbnailAspectRatio(it.id);
+
+    if (ar != null && ar > 0) {
       content = AspectRatio(
-        aspectRatio: it.width! / it.height!,
+        aspectRatio: ar,
         child: content,
       );
     }
@@ -644,7 +654,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           if (!_isSwipingHorizontal && _drag.value == Offset.zero) {
             final adx = dx.abs();
             final ady = dy.abs();
-            if (adx > 10 && adx > ady * 1.3) {
+            if (adx > 8 && adx > ady * 1.1) {
               _isSwipingHorizontal = true;
               return;
             }
@@ -654,10 +664,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
           _vt.addPosition(e.timeStamp, e.position);
 
-          // Responsive vertical swipe deadzone: natural downward drag (dy > 6 and dy > dx.abs() * 0.75)
-          if (_drag.value != Offset.zero || (dy > 6 && dy > dx.abs() * 0.75)) {
+          // Responsive vertical swipe deadzone: natural downward drag
+          if (_drag.value != Offset.zero || (dy > 16 && dy > dx.abs() * 1.5)) {
             final dampedDx = dx * 0.45;
-            final dragY = (dy - 6).clamp(0.0, 650.0);
+            final dragY = (dy - 16).clamp(0.0, 650.0);
             _setDrag(Offset(dampedDx, dragY));
           }
         },
@@ -679,8 +689,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 !_isCurrentlyZoomed &&
                 d.dy > 0 &&
                 (d.dy > 85 || (vy > 550 && d.dy > 20))) {
-              // Hero flies from the image's current (dragged/scaled) rect to the
-              // grid tile whose Hero tag == the current item's id.
+              _activeMediaNotifier?.state = _currentItem.id;
               Navigator.of(context).pop();
               return;
             } else if (d != Offset.zero) {
@@ -768,6 +777,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       } else if (notification is ScrollEndNotification) {
                         _isSwipingPage.value = false;
                         _precacheAdjacent(_current);
+                        _activeMediaNotifier?.state = widget.items[_current].id;
                       }
                       return false;
                     },
@@ -782,7 +792,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           _isPinching = false;
                           _transformationController.value = Matrix4.identity();
                         });
-                        _activeMediaNotifier?.state = widget.items[i].id;
                       },
                       physics: (_isCurrentlyZoomed ||
                               _isPinching ||
@@ -794,51 +803,58 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                             ),
                       itemBuilder: (context, index) {
                         final it = widget.items[index];
-                        if (index == _current) {
-                          return Center(
+                        final isCur = index == _current;
+                        return RepaintBoundary(
+                          child: Center(
                             child: ClipRect(
                               child: InteractiveViewer(
                                 key: ValueKey('iv_${it.id}_${MediaQuery.orientationOf(context)}'),
-                                transformationController: _transformationController,
+                                transformationController: isCur ? _transformationController : null,
                                 minScale: 1.0,
                                 maxScale: 8.0,
-                                panEnabled: _isCurrentlyZoomed,
-                                scaleEnabled: true,
+                                panEnabled: isCur && _isCurrentlyZoomed,
+                                scaleEnabled: isCur,
                                 clipBehavior: Clip.hardEdge,
-                                onInteractionStart: (details) {
-                                  _zoomAnimController?.stop();
-                                  if (details.pointerCount >= 2) {
-                                    _isPinching = true;
-                                  }
-                                },
-                                onInteractionUpdate: (details) {
-                                  final scale = _transformationController
-                                      .value
-                                      .getMaxScaleOnAxis();
-                                  final isZoomed = scale > 1.05;
-                                  if (isZoomed != _isPhotoZoomed) {
-                                    setState(() {
-                                      _isPhotoZoomed = isZoomed;
-                                    });
-                                  }
-                                },
-                                onInteractionEnd: (details) {
-                                  _isPinching = false;
-                                  final scale = _transformationController
-                                      .value
-                                      .getMaxScaleOnAxis();
-                                  if (scale <= 1.02) {
-                                    _resetPhotoZoom();
-                                  } else {
-                                    final shouldDeepZoom = scale > 1.2;
-                                    if ((!_isPhotoZoomed || _isDeepZoomed != shouldDeepZoom) && mounted) {
-                                      setState(() {
-                                        _isPhotoZoomed = true;
-                                        _isDeepZoomed = shouldDeepZoom;
-                                      });
-                                    }
-                                  }
-                                },
+                                onInteractionStart: isCur
+                                    ? (details) {
+                                        _zoomAnimController?.stop();
+                                        if (details.pointerCount >= 2) {
+                                          _isPinching = true;
+                                        }
+                                      }
+                                    : null,
+                                onInteractionUpdate: isCur
+                                    ? (details) {
+                                        final scale = _transformationController
+                                            .value
+                                            .getMaxScaleOnAxis();
+                                        final isZoomed = scale > 1.05;
+                                        if (isZoomed != _isPhotoZoomed) {
+                                          setState(() {
+                                            _isPhotoZoomed = isZoomed;
+                                          });
+                                        }
+                                      }
+                                    : null,
+                                onInteractionEnd: isCur
+                                    ? (details) {
+                                        _isPinching = false;
+                                        final scale = _transformationController
+                                            .value
+                                            .getMaxScaleOnAxis();
+                                        if (scale <= 1.02) {
+                                          _resetPhotoZoom();
+                                        } else {
+                                          final shouldDeepZoom = scale > 1.2;
+                                          if ((!_isPhotoZoomed || _isDeepZoomed != shouldDeepZoom) && mounted) {
+                                            setState(() {
+                                              _isPhotoZoomed = true;
+                                              _isDeepZoomed = shouldDeepZoom;
+                                            });
+                                          }
+                                        }
+                                      }
+                                    : null,
                                 child: Center(
                                   child: Hero(
                                     tag: it.id,
@@ -859,14 +875,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                           ? toHeroContext.widget
                                           : fromHeroContext.widget,
                                     ),
-                                    child: _buildPhotoPage(it, isCurrent: true),
+                                    child: _buildPhotoPage(it, isCurrent: isCur),
                                   ),
                                 ),
                               ),
                             ),
-                          );
-                        }
-                        return Center(child: _buildPhotoPage(it, isCurrent: false));
+                          ),
+                        );
                       },
                     ),
                   ),
@@ -898,7 +913,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           IconButton(
                             icon: const Icon(Icons.arrow_back_ios_new,
                                 color: Colors.white, size: 20),
-                            onPressed: () => Navigator.of(context).pop(),
+                            onPressed: () {
+                              _activeMediaNotifier?.state = _currentItem.id;
+                              Navigator.of(context).pop();
+                            },
                           ),
                           const SizedBox(width: 4),
                           Expanded(
