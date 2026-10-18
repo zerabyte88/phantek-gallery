@@ -1,17 +1,30 @@
-name: Build Android APK (Manual)
+name: Build Android APK
 
 on:
-  # HANYA manual trigger (tidak berjalan otomatis saat commit/push)
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish build directly to GitHub Releases'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    name: Build APK (ARM 64-bit)
+    name: Build & Package APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -32,7 +45,7 @@ jobs:
       - name: Setup Signing Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || secrets.STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
@@ -53,20 +66,43 @@ jobs:
       - name: Build APK (ARM 64-bit)
         run: flutter build apk --release --split-per-abi --target-platform android-arm64
 
-      - name: Organize APK Artifacts
+      - name: Extract Version and Organize APK Artifacts
+        id: extract_version
         run: |
+          VERSION=$(grep '^version: ' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
           cd build/app/outputs/flutter-apk/
-          # Pindahkan dan beri nama jelas untuk arsitektur ARM 64-bit
-          mv app-arm64-v8a-release.apk Phantek-Gallery-arm64-v8a.apk
-          # Hapus file .apk sisa lainnya jika ada
+          if [ -f "app-arm64-v8a-release.apk" ]; then
+            cp app-arm64-v8a-release.apk "Phantek-Gallery-arm64-v8a-v${VERSION}.apk"
+            mv app-arm64-v8a-release.apk Phantek-Gallery-arm64-v8a.apk
+          elif [ -f "app-release.apk" ]; then
+            cp app-release.apk "Phantek-Gallery-arm64-v8a-v${VERSION}.apk"
+            mv app-release.apk Phantek-Gallery-arm64-v8a.apk
+          fi
           rm -f app-*.apk *x86*
           echo "Hasil build APK:"
           ls -la *.apk
 
-      - name: Upload APK Artifact
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: phantek-gallery-arm64-v8a
           path: build/app/outputs/flutter-apk/*.apk
           retention-days: 30
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.publish_release == true || inputs.publish_release == 'true'))
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.extract_version.outputs.version) }}
+          name: ${{ format('Phantek Gallery v{0}', steps.extract_version.outputs.version) }}
+          files: |
+            build/app/outputs/flutter-apk/Phantek-Gallery-arm64-v8a-v*.apk
+            build/app/outputs/flutter-apk/Phantek-Gallery-arm64-v8a.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

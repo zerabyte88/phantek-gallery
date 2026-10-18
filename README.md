@@ -108,7 +108,13 @@ build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0 (GPLv3)](LICENSE).
+This project is licensed under the **GNU General Public License v3.0 (GPLv3)**. See the [LICENSE](LICENSE) file for complete details.
+
+### Third-Party Licenses & Acknowledgments
+
+- **MediaKit & MPV:** Video playback is powered by [MediaKit](https://github.com/media-kit/media-kit) (MIT License) utilizing native builds of [mpv](https://mpv.io) and [FFmpeg](https://ffmpeg.org) under LGPL/GPL.
+- **Flutter & Dependencies:** Third-party Dart and Flutter packages are licensed under their respective open-source licenses (BSD-3-Clause, MIT, Apache 2.0). Complete open-source licenses can be inspected directly inside the application under **Settings > About > License**.
+- **Branding & Assets:** The Phantek Gallery name and application icon are intellectual property of zerabyte88 and are reserved.
 
 ---
 
