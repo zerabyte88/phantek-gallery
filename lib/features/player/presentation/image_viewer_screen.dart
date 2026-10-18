@@ -856,26 +856,29 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       }
                                     : null,
                                 child: Center(
-                                  child: Hero(
-                                    tag: it.id,
-                                    transitionOnUserGestures: true,
-                                    flightShuttleBuilder: (
-                                      flightContext,
-                                      animation,
-                                      flightDirection,
-                                      fromHeroContext,
-                                      toHeroContext,
-                                    ) =>
-                                        _buildHeroShuttle(
-                                      animation: animation,
-                                      flightDirection: flightDirection,
-                                      id: it.id,
-                                      path: it.path,
-                                      fallbackChild: flightDirection == HeroFlightDirection.push
-                                          ? toHeroContext.widget
-                                          : fromHeroContext.widget,
+                                  child: HeroMode(
+                                    enabled: isCur,
+                                    child: Hero(
+                                      tag: it.id,
+                                      transitionOnUserGestures: true,
+                                      flightShuttleBuilder: (
+                                        flightContext,
+                                        animation,
+                                        flightDirection,
+                                        fromHeroContext,
+                                        toHeroContext,
+                                      ) =>
+                                          _buildHeroShuttle(
+                                        animation: animation,
+                                        flightDirection: flightDirection,
+                                        id: it.id,
+                                        path: it.path,
+                                        fallbackChild: flightDirection == HeroFlightDirection.push
+                                            ? toHeroContext.widget
+                                            : fromHeroContext.widget,
+                                      ),
+                                      child: _buildPhotoPage(it, isCurrent: isCur),
                                     ),
-                                    child: _buildPhotoPage(it, isCurrent: isCur),
                                   ),
                                 ),
                               ),

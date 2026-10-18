@@ -1431,25 +1431,28 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                           }
                                         : null,
                                     child: Center(
-                                      child: Hero(
-                                        tag: _videos[index].id,
-                                        transitionOnUserGestures: true,
-                                        flightShuttleBuilder: (
-                                          flightContext,
-                                          animation,
-                                          flightDirection,
-                                          fromHeroContext,
-                                          toHeroContext,
-                                        ) =>
-                                            _buildHeroShuttle(
-                                          animation: animation,
-                                          flightDirection: flightDirection,
-                                          item: _videos[index],
-                                          fallbackChild: flightDirection == HeroFlightDirection.push
-                                              ? toHeroContext.widget
-                                              : fromHeroContext.widget,
+                                      child: HeroMode(
+                                        enabled: isCur,
+                                        child: Hero(
+                                          tag: _videos[index].id,
+                                          transitionOnUserGestures: true,
+                                          flightShuttleBuilder: (
+                                            flightContext,
+                                            animation,
+                                            flightDirection,
+                                            fromHeroContext,
+                                            toHeroContext,
+                                          ) =>
+                                              _buildHeroShuttle(
+                                            animation: animation,
+                                            flightDirection: flightDirection,
+                                            item: _videos[index],
+                                            fallbackChild: flightDirection == HeroFlightDirection.push
+                                                ? toHeroContext.widget
+                                                : fromHeroContext.widget,
+                                          ),
+                                          child: _buildVideoPage(index),
                                         ),
-                                        child: _buildVideoPage(index),
                                       ),
                                     ),
                                   ),
