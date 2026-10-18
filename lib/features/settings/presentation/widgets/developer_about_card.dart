@@ -26,8 +26,8 @@ class DeveloperAboutCard extends ConsumerWidget {
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
         final cs = Theme.of(context).colorScheme;
-        final version = snapshot.data?.version ?? '2.7.9';
-        final buildNumber = snapshot.data?.buildNumber ?? '41';
+        final version = snapshot.data?.version ?? '2.8.0';
+        final buildNumber = snapshot.data?.buildNumber ?? '42';
 
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 32),

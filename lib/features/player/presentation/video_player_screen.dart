@@ -157,6 +157,26 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   Animation<double>? _routeAnimation;
   StateController<String?>? _activeMediaNotifier;
 
+  final ValueNotifier<_FeedbackPillData?> _feedbackToastNotifier = ValueNotifier(null);
+  int _feedbackToastCounter = 0;
+
+  void _showFeedbackToast({required String message, required IconData icon}) {
+    HapticFeedback.lightImpact();
+    _feedbackToastNotifier.value = _FeedbackPillData(
+      message: message,
+      icon: icon,
+      id: ++_feedbackToastCounter,
+    );
+  }
+
+  String _speedToastMessage(double speed) {
+    final speedStr = speed == speed.roundToDouble()
+        ? '${speed.toInt()}'
+        : '$speed';
+    final isId = Localizations.localeOf(context).languageCode == 'id';
+    return isId ? 'Beralih ke ${speedStr}x' : 'Switched to ${speedStr}x';
+  }
+
   void _toggleCropToFit() {
     HapticFeedback.lightImpact();
     setState(() => _cropToFit = !_cropToFit);
@@ -642,6 +662,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _videoSurfaceVisible.dispose();
     _isSwipingPage.dispose();
     _dragNotifier.dispose();
+    _feedbackToastNotifier.dispose();
     _transformationController.dispose();
     _player.dispose(); // releases native MPV context
     _pageController.dispose();
@@ -906,7 +927,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               _playbackSpeed = speed;
                             });
                             _player.setRate(speed);
-                            HapticFeedback.lightImpact();
+                            _showFeedbackToast(
+                              message: _speedToastMessage(speed),
+                              icon: Icons.speed_rounded,
+                            );
                           },
                           child: Container(
                             width: double.infinity,
@@ -956,13 +980,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _isLooping = next;
     });
     _player.setPlaylistMode(next ? PlaylistMode.loop : PlaylistMode.none);
-    HapticFeedback.lightImpact();
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 1),
-        content: Text(next ? context.tr.loopEnabled : context.tr.loopDisabled),
-      ),
+    _showFeedbackToast(
+      message: next ? context.tr.loopEnabled : context.tr.loopDisabled,
+      icon: next ? Icons.repeat_one_rounded : Icons.repeat_rounded,
     );
   }
 
@@ -1673,12 +1693,177 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       ],
                     ),
                   ),
+                  _FeedbackPillOverlay(
+                    dataNotifier: _feedbackToastNotifier,
+                    dragNotifier: _dragNotifier,
+                  ),
                 ],
               ),
             ),
           ),
         ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Video feedback pill (Loop & Speed toast) ───────────────────────────────
+
+class _FeedbackPillData {
+  const _FeedbackPillData({
+    required this.message,
+    required this.icon,
+    required this.id,
+  });
+  final String message;
+  final IconData icon;
+  final int id;
+}
+
+class _FeedbackPillOverlay extends StatefulWidget {
+  const _FeedbackPillOverlay({
+    required this.dataNotifier,
+    required this.dragNotifier,
+  });
+
+  final ValueListenable<_FeedbackPillData?> dataNotifier;
+  final ValueListenable<Offset> dragNotifier;
+
+  @override
+  State<_FeedbackPillOverlay> createState() => _FeedbackPillOverlayState();
+}
+
+class _FeedbackPillOverlayState extends State<_FeedbackPillOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animController;
+  Timer? _hideTimer;
+  _FeedbackPillData? _currentData;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+      reverseDuration: const Duration(milliseconds: 150),
+    );
+    _animController.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed && mounted) {
+        setState(() {
+          _currentData = null;
+        });
+      }
+    });
+    widget.dataNotifier.addListener(_onDataChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.dataNotifier.removeListener(_onDataChanged);
+    _hideTimer?.cancel();
+    _animController.dispose();
+    super.dispose();
+  }
+
+  void _onDataChanged() {
+    final data = widget.dataNotifier.value;
+    if (data == null) return;
+    _hideTimer?.cancel();
+    setState(() {
+      _currentData = data;
+    });
+    _animController.forward();
+    _hideTimer = Timer(const Duration(milliseconds: 1350), () {
+      if (mounted) {
+        _animController.reverse();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_currentData == null) return const SizedBox.shrink();
+
+    final isLandscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    // In landscape, bottom bar is ~76px; placing at bottomInset + 84px positions it right above seekbar/timestamp.
+    // In portrait, bottom bar is ~110px; placing at bottomInset + 120px positions it right above seekbar/timestamp.
+    final bottomPos = isLandscape ? (bottomInset + 84.0) : (bottomInset + 120.0);
+
+    return Positioned(
+      bottom: bottomPos,
+      left: 20,
+      right: 20,
+      child: ValueListenableBuilder<Offset>(
+        valueListenable: widget.dragNotifier,
+        builder: (context, drag, child) {
+          final dragFade = (1.0 - (drag.dy / 35.0)).clamp(0.0, 1.0);
+          return FadeTransition(
+            opacity: _animController.drive(
+              CurveTween(curve: Curves.easeOut),
+            ),
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.2),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(
+                  parent: _animController,
+                  curve: Curves.easeOutCubic,
+                ),
+              ),
+              child: Opacity(
+                opacity: dragFade,
+                child: child,
+              ),
+            ),
+          );
+        },
+        child: Align(
+          alignment: Alignment.center,
+          child: IgnorePointer(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xEE1E1E1E),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  width: 0.8,
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x44000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _currentData!.icon,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    _currentData!.message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
