@@ -1,7 +1,7 @@
 name: phantek_gallery
 description: "Phantek Gallery – offline-first photo & video gallery for Android."
 publish_to: 'none'
-version: 2.8.0+42
+version: 2.8.1+43
 
 environment:
   sdk: ^3.5.0

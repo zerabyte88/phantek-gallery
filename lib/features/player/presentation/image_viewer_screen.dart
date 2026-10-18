@@ -162,11 +162,17 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _transformationController = TransformationController();
     _settle = AnimationController.unbounded(vsync: this)
       ..addListener(() {
-        final current = _settleFrom * _settle.value;
-        _setDrag(current);
-        if (!_settle.isAnimating && _activePointers.isEmpty) {
+        final val = _settle.value;
+        if (val.abs() < 0.01) {
           _setDrag(Offset.zero);
-          _isDraggingDown.value = false;
+        } else {
+          _setDrag(_settleFrom * val);
+        }
+      })
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed ||
+            status == AnimationStatus.dismissed) {
+          _setDrag(Offset.zero);
         }
       });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -223,7 +229,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   void _setDrag(Offset o) {
     _drag.value = o;
-    final isDown = o != Offset.zero;
+    final isDown = o.dy > 8.0;
     if (_isDraggingDown.value != isDown) {
       _isDraggingDown.value = isDown;
     }
@@ -232,8 +238,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   /// Spring the dragged image back to center, carrying the release velocity.
   void _springBack(double vy) {
     _settleFrom = _drag.value;
-    if (_settleFrom == Offset.zero) {
-      _isDraggingDown.value = false;
+    if (_settleFrom == Offset.zero || _settleFrom.distance < 1.0) {
+      _setDrag(Offset.zero);
       return;
     }
     final v = _settleFrom.dy.abs() > 1 ? vy / _settleFrom.dy : 0.0;
@@ -244,7 +250,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       1.0,
       0.0,
       v.clamp(-8.0, 8.0),
-    ));
+    )).whenCompleteOrCancel(() {
+      _setDrag(Offset.zero);
+    });
   }
 
   void _toggleBars() {
@@ -614,6 +622,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           _zoomAnimController?.stop();
           _isSwipingHorizontal = false;
           if (_activePointers.length == 1) {
+            _setDrag(Offset.zero);
             _isMultiTouch = false;
             _isPinching = false;
             if (_transformationController.value.getMaxScaleOnAxis() <= 1.05) {
@@ -695,6 +704,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             } else if (d != Offset.zero) {
               _springBack(vy);
               return;
+            } else {
+              _setDrag(Offset.zero);
             }
           }
         },
@@ -706,7 +717,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             _isSwipingHorizontal = false;
             _startDragY = null;
             _startDragX = null;
-            if (_drag.value != Offset.zero) _springBack(0);
+            if (_drag.value != Offset.zero) {
+              _springBack(0);
+            } else {
+              _setDrag(Offset.zero);
+            }
           }
         },
         child: GestureDetector(

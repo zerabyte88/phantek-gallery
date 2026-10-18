@@ -205,11 +205,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _transformationController = TransformationController();
     _settle = AnimationController.unbounded(vsync: this)
       ..addListener(() {
-        final current = _settleFrom * _settle.value;
-        _setDrag(current);
-        if (!_settle.isAnimating && _activePointers.isEmpty) {
+        final val = _settle.value;
+        if (val.abs() < 0.01) {
           _setDrag(Offset.zero);
-          _isDraggingDown.value = false;
+        } else {
+          _setDrag(_settleFrom * val);
+        }
+      })
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed ||
+            status == AnimationStatus.dismissed) {
+          _setDrag(Offset.zero);
         }
       });
     _initPlayer();
@@ -269,7 +275,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   void _setDrag(Offset o) {
     _dragNotifier.value = o;
-    final isDown = o != Offset.zero;
+    final isDown = o.dy > 8.0;
     if (_isDraggingDown.value != isDown) {
       _isDraggingDown.value = isDown;
     }
@@ -278,8 +284,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   /// Spring the dragged video back to center, carrying release velocity.
   void _springBack(double vy) {
     _settleFrom = _dragNotifier.value;
-    if (_settleFrom == Offset.zero) {
-      _isDraggingDown.value = false;
+    if (_settleFrom == Offset.zero || _settleFrom.distance < 1.0) {
+      _setDrag(Offset.zero);
       return;
     }
     final v = _settleFrom.dy.abs() > 1 ? vy / _settleFrom.dy : 0.0;
@@ -290,7 +296,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       1.0,
       0.0,
       v.clamp(-8.0, 8.0),
-    ));
+    )).whenCompleteOrCancel(() {
+      _setDrag(Offset.zero);
+    });
   }
 
   void _resetVideoZoom() {
@@ -1182,6 +1190,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   _zoomAnimController?.stop();
                   _isSwipingHorizontal = false;
                   if (_activePointers.length == 1) {
+                    _setDrag(Offset.zero);
                     _isMultiTouch = false;
                     _isPinching = false;
                     if (_transformationController.value.getMaxScaleOnAxis() <= 1.05) {
@@ -1216,8 +1225,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 onPointerMove: (e) {
                   // Detach the MPV texture on the first horizontal movement, before
                   // the PageView's own drag slop triggers ScrollStartNotification.
-                  if (_videoSurfaceVisible.value &&
-                      !_isCurrentlyVideoZoomed &&
+                  if (!_isCurrentlyVideoZoomed &&
                       !_isMultiTouch &&
                       !_isPinching &&
                       !_isScrubbing &&
@@ -1227,7 +1235,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     final adx = (e.position.dx - _startDragX!).abs();
                     final ady = (e.position.dy - _startDragY!).abs();
                     if (adx > 8 && adx > ady * 1.1) {
-                      _videoSurfaceVisible.value = false;
+                      if (_videoSurfaceVisible.value) {
+                        _videoSurfaceVisible.value = false;
+                      }
                       _isSwipingHorizontal = true;
                       _isSwipingPage.value = true;
                       return;
@@ -1293,6 +1303,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       Navigator.of(context).pop();
                     } else if (d != Offset.zero) {
                       _springBack(vy);
+                    } else {
+                      _setDrag(Offset.zero);
                     }
                   }
                 },
@@ -1307,7 +1319,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     if (!_isSwiping) {
                       _isSwipingPage.value = false;
                     }
-                    if (_dragNotifier.value != Offset.zero) _springBack(0);
+                    if (_dragNotifier.value != Offset.zero) {
+                      _springBack(0);
+                    } else {
+                      _setDrag(Offset.zero);
+                    }
                   }
                 },
                 child: GestureDetector(
