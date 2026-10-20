@@ -18,6 +18,7 @@ const Map<String, String> idTranslations = {
   'appVersion': 'Versi Aplikasi',
   'appearance': 'Tampilan',
   'architecture': 'Arsitektur',
+  'videoEngine': 'Engine Video',
   'autoCheckUpdate': 'Cek Pembaruan Otomatis',
   'autoPlayVideo': 'Putar Otomatis Video',
   'autoPlayVideoSubtitle': 'Langsung memutar video saat dibuka',

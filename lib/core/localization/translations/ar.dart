@@ -17,6 +17,7 @@ const Map<String, String> arTranslations = {
   'appVersion': 'إصدار التطبيق',
   'appearance': 'المظهر',
   'architecture': 'المعمارية',
+  'videoEngine': 'محرك الفيديو',
   'autoCheckUpdate': 'التحقق التلقائي من التحديثات',
   'autoPlayVideo': 'تشغيل الفيديو تلقائياً',
   'autoPlayVideoSubtitle': 'بدء التشغيل فور الفتح',

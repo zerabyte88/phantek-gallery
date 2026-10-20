@@ -19,6 +19,7 @@ const Map<String, String> frTranslations = {
   'appVersion': 'Version de l\\',
   'appearance': 'Apparence',
   'architecture': 'Architecture',
+  'videoEngine': 'Moteur vidéo',
   'autoCheckUpdate': 'Vérification automatique des mises à jour',
   'autoPlayVideo': 'Lecture automatique des vidéos',
   'autoPlayVideoSubtitle': 'Lancer la lecture immédiatement à l\\',

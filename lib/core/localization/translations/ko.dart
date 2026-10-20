@@ -17,6 +17,7 @@ const Map<String, String> koTranslations = {
   'appVersion': '앱 버전',
   'appearance': '화면',
   'architecture': '아키텍처',
+  'videoEngine': '비디오 엔진',
   'autoCheckUpdate': '업데이트 자동 확인',
   'autoPlayVideo': '동영상 자동 재생',
   'autoPlayVideoSubtitle': '열 때 즉시 재생 시작',

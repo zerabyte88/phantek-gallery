@@ -57,7 +57,6 @@
 
 ### Theming & Internationalization
 - **Theme Modes:** System default, Sunburst, Snowfall, Midnight, and Sakura themes with artistic custom headers.
-- **Multi-Language:** 22 supported languages including English, Indonesian, Japanese, Korean, Spanish, French, German, and more.
 
 ### Over-The-Air (OTA) Updates
 - **GitHub Releases Integration:** Check for updates, download releases in the background, and install updates directly from within the app.

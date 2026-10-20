@@ -17,6 +17,7 @@ const Map<String, String> hiTranslations = {
   'appVersion': 'ऐप संस्करण',
   'appearance': 'रूप-रंग',
   'architecture': 'आर्किटेक्चर',
+  'videoEngine': 'वीडियो इंजन',
   'autoCheckUpdate': 'स्वचालित रूप से अपडेट जांचें',
   'autoPlayVideo': 'स्वचालित रूप से वीडियो चलाएं',
   'autoPlayVideoSubtitle': 'खोलते ही तुरंत प्ले शुरू करें',

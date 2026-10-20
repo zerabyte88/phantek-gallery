@@ -18,6 +18,7 @@ const Map<String, String> msTranslations = {
   'appVersion': 'Versi Aplikasi',
   'appearance': 'Paparan',
   'architecture': 'Seni Bina',
+  'videoEngine': 'Enjin Video',
   'autoCheckUpdate': 'Semak Kemas Kini Automatik',
   'autoPlayVideo': 'Main Auto Video',
   'autoPlayVideoSubtitle':

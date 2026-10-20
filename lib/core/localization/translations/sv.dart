@@ -19,6 +19,7 @@ const Map<String, String> svTranslations = {
   'appVersion': 'Appversion',
   'appearance': 'Utseende',
   'architecture': 'Arkitektur',
+  'videoEngine': 'Videomotor',
   'autoCheckUpdate': 'Sök efter uppdateringar automatiskt',
   'autoPlayVideo': 'Spela upp videor automatiskt',
   'autoPlayVideoSubtitle': 'Börja spela direkt vid öppning',

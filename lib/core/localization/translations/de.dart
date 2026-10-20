@@ -19,6 +19,7 @@ const Map<String, String> deTranslations = {
   'appVersion': 'App-Version',
   'appearance': 'Erscheinungsbild',
   'architecture': 'Architektur',
+  'videoEngine': 'Video-Engine',
   'autoCheckUpdate': 'Automatisch nach Updates suchen',
   'autoPlayVideo': 'Videos automatisch abspielen',
   'autoPlayVideoSubtitle': 'Wiedergabe beim Öffnen sofort starten',

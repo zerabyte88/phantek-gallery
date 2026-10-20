@@ -19,6 +19,7 @@ const Map<String, String> fiTranslations = {
   'appVersion': 'Sovellusversio',
   'appearance': 'Ulkoasu',
   'architecture': 'Arkkitehtuuri',
+  'videoEngine': 'Videomoottori',
   'autoCheckUpdate': 'Tarkista päivitykset automaattisesti',
   'autoPlayVideo': 'Toista videot automaattisesti',
   'autoPlayVideoSubtitle': 'Aloita toisto heti avattaessa',

@@ -18,6 +18,7 @@ const Map<String, String> thTranslations = {
   'appVersion': 'เวอร์ชันแอป',
   'appearance': 'รูปลักษณ์',
   'architecture': 'สถาปัตยกรรม',
+  'videoEngine': 'เอนจินวิดีโอ',
   'autoCheckUpdate': 'ตรวจหาการอัปเดตอัตโนมัติ',
   'autoPlayVideo': 'เล่นวิดีโออัตโนมัติ',
   'autoPlayVideoSubtitle': 'เริ่มเล่นทันทีเมื่อเปิด',

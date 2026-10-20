@@ -17,6 +17,7 @@ const Map<String, String> ruTranslations = {
   'appVersion': 'Версия приложения',
   'appearance': 'Внешний вид',
   'architecture': 'Архитектура',
+  'videoEngine': 'Видеодвижок',
   'autoCheckUpdate': 'Автопроверка обновлений',
   'autoPlayVideo': 'Автовоспроизведение видео',
   'autoPlayVideoSubtitle': 'Начинать воспроизведение при открытии',

@@ -19,6 +19,7 @@ const Map<String, String> daTranslations = {
   'appVersion': 'App-version',
   'appearance': 'Udseende',
   'architecture': 'Arkitektur',
+  'videoEngine': 'Videomotor',
   'autoCheckUpdate': 'Søg automatisk efter opdateringer',
   'autoPlayVideo': 'Afspil videoer automatisk',
   'autoPlayVideoSubtitle': 'Start afspilning med det samme ved åbning',

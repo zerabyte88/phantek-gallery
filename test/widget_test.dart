@@ -28,6 +28,7 @@ import 'package:phantek_gallery/features/player/presentation/widgets/media_info_
 import 'package:phantek_gallery/features/player/presentation/image_viewer_screen.dart'
     show displayImage, screenDisplayImage;
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
+import 'package:phantek_gallery/features/settings/presentation/widgets/developer_about_card.dart';
 import 'package:phantek_gallery/core/services/share_service.dart';
 import 'package:phantek_gallery/app/router.dart' show rootNavigatorKey;
 import 'package:phantek_gallery/features/update/data/update_service.dart';
@@ -548,6 +549,28 @@ void main() {
       expect(SettingsService.instance.settings.themeMode,
           AppThemeMode.amoledSakura);
       expect(find.text('Sakura'), findsOneWidget);
+    });
+
+    testWidgets(
+        'DeveloperAboutCard renders Build, Architecture, and Video Engine rows',
+        (tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: DeveloperAboutCard(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Architecture'), findsOneWidget);
+      expect(find.text('ARM64-v8a'), findsOneWidget);
+      expect(find.text('Video Engine'), findsOneWidget);
+      expect(find.text('MediaKit'), findsOneWidget);
+      expect(find.text('Build'), findsOneWidget);
+      expect(find.text('43'), findsOneWidget);
     });
 
     test('MediaListNotifier optimistic removeItems and restoreItems', () async {

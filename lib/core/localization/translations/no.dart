@@ -19,6 +19,7 @@ const Map<String, String> noTranslations = {
   'appVersion': 'App-versjon',
   'appearance': 'Utseende',
   'architecture': 'Arkitektur',
+  'videoEngine': 'Videomotor',
   'autoCheckUpdate': 'Søk etter oppdateringer automatisk',
   'autoPlayVideo': 'Spill av videoer automatisk',
   'autoPlayVideoSubtitle': 'Start avspilling umiddelbart ved åpning',

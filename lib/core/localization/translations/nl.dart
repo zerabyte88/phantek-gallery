@@ -18,6 +18,7 @@ const Map<String, String> nlTranslations = {
   'appVersion': 'App-versie',
   'appearance': 'Weergave',
   'architecture': 'Architectuur',
+  'videoEngine': 'Video-engine',
   'autoCheckUpdate': 'Automatisch controleren op updates',
   'autoPlayVideo': 'Video\'s automatisch afspelen',
   'autoPlayVideoSubtitle': 'Start direct met afspelen bij openen',

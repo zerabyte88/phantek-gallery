@@ -176,6 +176,7 @@ class AppLocalizations {
   String get appVersion => _t('appVersion');
   String get buildNumberLabel => _t('buildNumberLabel');
   String get architecture => _t('architecture');
+  String get videoEngine => _t('videoEngine');
   String get license => _t('license');
   String get developerLabel => _t('developerLabel');
   String get creatorMaintainer => _t('creatorMaintainer');

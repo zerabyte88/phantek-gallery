@@ -20,6 +20,7 @@ const Map<String, String> esTranslations = {
   'appVersion': 'Versión de la aplicación',
   'appearance': 'Apariencia',
   'architecture': 'Arquitectura',
+  'videoEngine': 'Motor de video',
   'autoCheckUpdate': 'Buscar actualizaciones automáticamente',
   'autoPlayVideo': 'Reproducir vídeos automáticamente',
   'autoPlayVideoSubtitle': 'Comenzar a reproducir al abrir',

@@ -18,6 +18,7 @@ const Map<String, String> viTranslations = {
   'appVersion': 'Phiên bản ứng dụng',
   'appearance': 'Giao diện',
   'architecture': 'Kiến trúc',
+  'videoEngine': 'Bộ xử lý video',
   'autoCheckUpdate': 'Tự động kiểm tra bản cập nhật',
   'autoPlayVideo': 'Tự động phát video',
   'autoPlayVideoSubtitle': 'Bắt đầu phát ngay khi mở',

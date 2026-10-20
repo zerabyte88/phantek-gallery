@@ -19,6 +19,7 @@ const Map<String, String> enTranslations = {
   'appVersion': 'App Version',
   'appearance': 'Appearance',
   'architecture': 'Architecture',
+  'videoEngine': 'Video Engine',
   'autoCheckUpdate': 'Auto-check for Updates',
   'autoPlayVideo': 'Auto-play Videos',
   'autoPlayVideoSubtitle': 'Start playing immediately on open',

@@ -17,6 +17,7 @@ const Map<String, String> jaTranslations = {
   'appVersion': 'アプリのバージョン',
   'appearance': '外観',
   'architecture': 'アーキテクチャ',
+  'videoEngine': '動画エンジン',
   'autoCheckUpdate': '自動更新確認',
   'autoPlayVideo': '動画の自動再生',
   'autoPlayVideoSubtitle': '開いたときにすぐに再生を開始',

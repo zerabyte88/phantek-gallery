@@ -17,6 +17,7 @@ const Map<String, String> zhTranslations = {
   'appVersion': '应用版本',
   'appearance': '外观',
   'architecture': '架构',
+  'videoEngine': '视频引擎',
   'autoCheckUpdate': '自动检查更新',
   'autoPlayVideo': '自动播放视频',
   'autoPlayVideoSubtitle': '打开时立即开始播放',

@@ -19,6 +19,7 @@ const Map<String, String> itTranslations = {
   'appVersion': 'Versione App',
   'appearance': 'Aspetto',
   'architecture': 'Architettura',
+  'videoEngine': 'Motore video',
   'autoCheckUpdate': 'Controlla Aggiornamenti Automaticamente',
   'autoPlayVideo': 'Riproduzione Automatica Video',
   'autoPlayVideoSubtitle': 'Avvia subito la riproduzione all\'apertura',
