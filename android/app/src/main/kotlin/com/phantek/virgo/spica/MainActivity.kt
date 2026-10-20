@@ -441,6 +441,9 @@ class MainActivity : FlutterActivity() {
                 val rotationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
                 val rotation = rotationStr?.toIntOrNull() ?: 0
 
+                val streamW = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                val streamH = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+
                 val attempts = arrayOf(
                     Pair(-1L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC),
                     Pair(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC),
@@ -456,10 +459,17 @@ class MainActivity : FlutterActivity() {
                 }
 
                 // Correct rotation if needed (API 27+ getFrameAtTime may or may not apply rotation depending on OEM)
-                if (bitmap != null && (rotation == 90 || rotation == 270)) {
-                    // For 90 or 270 degree rotation, visual frame must be portrait (height >= width)
-                    // If width > height, it was not rotated yet by the platform.
-                    if (bitmap!!.width > bitmap!!.height) {
+                if (bitmap != null && rotation != 0) {
+                    val alreadyRotated = if (rotation == 90 || rotation == 270) {
+                        if (streamW > 0 && streamH > 0 && streamW != streamH) {
+                            bitmap!!.width == streamH && bitmap!!.height == streamW
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                    if (!alreadyRotated) {
                         val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
                         val rotated = android.graphics.Bitmap.createBitmap(
                             bitmap!!, 0, 0, bitmap!!.width, bitmap!!.height, matrix, true

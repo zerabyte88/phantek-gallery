@@ -2450,6 +2450,28 @@ void main() {
       // Raw width/height would falsely identify it as horizontal
       expect(encodedHeight > encodedWidth, isFalse);
     });
+
+    test('Horizontal video with encoded portrait dimensions resolves to horizontal layout via thumbnail and MPV ratio cache', () {
+      // Videos like 720x1280 or 1080x1170 with 90° rotation play horizontally.
+      const encodedWidth = 720;
+      const encodedHeight = 1280;
+      const rotate = 90;
+      const isRotated90or270 = rotate == 90 || rotate == 270;
+      const effectiveW = isRotated90or270 ? encodedHeight : encodedWidth;
+      const effectiveH = isRotated90or270 ? encodedWidth : encodedHeight;
+      const realRatio = effectiveW / effectiveH; // 1280 / 720 = 1.777
+
+      ThumbnailService.instance.setThumbnailAspectRatio('rot_video_test', realRatio);
+      final cachedRatio = ThumbnailService.instance.getThumbnailAspectRatio('rot_video_test');
+      expect(cachedRatio, closeTo(1.777, 0.01));
+
+      // With thumbRatio >= 0.95, it correctly resolves as horizontal (not portrait)
+      final isPortrait = cachedRatio! < 0.95;
+      expect(isPortrait, isFalse);
+
+      // Raw unrotated dimensions (1280 > 720) would falsely claim portrait
+      expect(encodedHeight > encodedWidth, isTrue);
+    });
   });
 }
 

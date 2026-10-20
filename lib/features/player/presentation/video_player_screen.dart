@@ -589,7 +589,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         } catch (_) {}
       }
       if (mounted && _videos.isNotEmpty && _current < _videos.length) {
-        _activeVideoParamsPath = _videos[_current].path;
+        final currentItem = _videos[_current];
+        final rotate = vp.rotate ?? 0;
+        final isRotated90or270 = rotate == 90 || rotate == 270;
+        final effectiveW = isRotated90or270 ? h : w;
+        final effectiveH = isRotated90or270 ? w : h;
+        if (effectiveW > 0 && effectiveH > 0) {
+          ThumbnailService.instance
+              .setThumbnailAspectRatio(currentItem.id, effectiveW / effectiveH);
+        }
+        _activeVideoParamsPath = currentItem.path;
         setState(() {});
       }
     });

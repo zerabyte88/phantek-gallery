@@ -103,7 +103,7 @@ class ThumbnailService {
         return ratio;
       }
     }
-    final file = getCachedFile(assetId);
+    final file = getCachedHighResFile(assetId) ?? getCachedFile(assetId);
     if (file != null) {
       try {
         final raf = file.openSync();
@@ -121,6 +121,13 @@ class ThumbnailService {
       } catch (_) {}
     }
     return null;
+  }
+
+  /// Sets or updates the visual aspect ratio cache (e.g. from MPV player probe).
+  void setThumbnailAspectRatio(String assetId, double ratio) {
+    if (ratio > 0) {
+      _thumbnailAspectRatioCache[assetId] = ratio;
+    }
   }
 
   /// Extracts an ultra-sharp high-resolution video thumbnail (1080p/1920p target)
