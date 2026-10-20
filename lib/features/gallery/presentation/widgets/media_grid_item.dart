@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/enums/thumbnail_crop_style.dart';
 import '../../../../core/models/media_item.dart';
 import '../../../../core/services/thumbnail_service.dart';
 import '../../../../core/utils/media_utils.dart';
@@ -12,6 +13,7 @@ class MediaGridItem extends ConsumerStatefulWidget {
   const MediaGridItem({
     super.key,
     required this.item,
+    this.cropStyle = ThumbnailCropStyle.square,
     required this.isSelected,
     required this.isSelecting,
     required this.showBadges,
@@ -20,6 +22,7 @@ class MediaGridItem extends ConsumerStatefulWidget {
   });
 
   final MediaItem item;
+  final ThumbnailCropStyle cropStyle;
   final bool isSelected;
   final bool isSelecting;
   final bool showBadges;
@@ -76,12 +79,16 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
   }
 
   Widget _buildThumbnail(ColorScheme cs) {
+    final fit = widget.cropStyle == ThumbnailCropStyle.adaptive
+        ? BoxFit.contain
+        : BoxFit.cover;
+
     // 1. Memory cache lookup.
     final mem = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
     if (mem != null) {
       return Image.memory(
         mem,
-        fit: BoxFit.cover,
+        fit: fit,
         gaplessPlayback: true,
         filterQuality: FilterQuality.medium,
       );
@@ -92,7 +99,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
     if (diskFile != null) {
       return Image.file(
         diskFile,
-        fit: BoxFit.cover,
+        fit: fit,
         gaplessPlayback: true,
         filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
@@ -112,7 +119,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
         if (snap.data != null && snap.data!.isNotEmpty) {
           return Image.memory(
             snap.data!,
-            fit: BoxFit.cover,
+            fit: fit,
             gaplessPlayback: true,
             filterQuality: FilterQuality.medium,
           );
@@ -123,7 +130,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
           if (currentMem != null) {
             return Image.memory(
               currentMem,
-              fit: BoxFit.cover,
+              fit: fit,
               gaplessPlayback: true,
               filterQuality: FilterQuality.medium,
             );
@@ -133,7 +140,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
           if (currentDisk != null) {
             return Image.file(
               currentDisk,
-              fit: BoxFit.cover,
+              fit: fit,
               gaplessPlayback: true,
               filterQuality: FilterQuality.medium,
               errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
@@ -146,7 +153,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
               return Image.file(
                 file,
                 cacheWidth: 512,
-                fit: BoxFit.cover,
+                fit: fit,
                 gaplessPlayback: true,
                 filterQuality: FilterQuality.medium,
                 errorBuilder: (_, __, ___) => _buildPlaceholder(cs),

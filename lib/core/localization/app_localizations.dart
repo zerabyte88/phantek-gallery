@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/settings_model.dart';
+import '../enums/thumbnail_crop_style.dart';
+import '../enums/timeline_grouping.dart';
+import '../enums/trash_cleanup_interval.dart';
+import '../enums/startup_screen.dart';
 import 'translations/translations.dart';
 
 /// Lightweight, type-safe localization dictionary for Phantek Gallery.
@@ -189,6 +193,42 @@ class AppLocalizations {
   String get alreadyUpToDate => _t('alreadyUpToDate');
   String get downloadFailed => _t('downloadFailed');
 
+  String get browsingAndNavigation => _t('browsingAndNavigation');
+  String get startupScreen => _t('startupScreen');
+  String get filterSmallImages => _t('filterSmallImages');
+  String get filterSmallImagesDesc => _t('filterSmallImagesDesc');
+  String get showHiddenFiles => _t('showHiddenFiles');
+  String get showHiddenFilesDesc => _t('showHiddenFilesDesc');
+  String get thumbnailCropStyle => _t('thumbnailCropStyle');
+  String get cropSquare => _t('cropSquare');
+  String get cropAdaptive => _t('cropAdaptive');
+  String get timelineGrouping => _t('timelineGrouping');
+  String get groupContinuous => _t('groupContinuous');
+  String get groupDaily => _t('groupDaily');
+  String get groupMonthly => _t('groupMonthly');
+  String get maxBrightnessOnMedia => _t('maxBrightnessOnMedia');
+  String get maxBrightnessOnMediaDesc => _t('maxBrightnessOnMediaDesc');
+  String get slideshowInterval => _t('slideshowInterval');
+  String get startMuted => _t('startMuted');
+  String get startMutedDesc => _t('startMutedDesc');
+  String get doubleTapSeek => _t('doubleTapSeek');
+  String get resumeVideoPlayback => _t('resumeVideoPlayback');
+  String get resumeVideoPlaybackDesc => _t('resumeVideoPlaybackDesc');
+  String get autoTrashCleanup => _t('autoTrashCleanup');
+  String get cleanupNever => _t('cleanupNever');
+  String get cleanup7Days => _t('cleanup7Days');
+  String get cleanup14Days => _t('cleanup14Days');
+  String get cleanup30Days => _t('cleanup30Days');
+  String get clearCacheConfirm => _t('clearCacheConfirm');
+  String get cacheCleared => _t('cacheCleared');
+  String get privacyAndSecurity => _t('privacyAndSecurity');
+  String get secureScreen => _t('secureScreen');
+  String get secureScreenDesc => _t('secureScreenDesc');
+  String get lockedVault => _t('lockedVault');
+  String get lockedVaultDesc => _t('lockedVaultDesc');
+  String get today => _t('today');
+  String get yesterday => _t('yesterday');
+
   String renamedTo(String name) => _t('renamedTo').replaceAll('{name}', name);
 
   String failedToRename(String err) =>
@@ -267,6 +307,35 @@ class AppLocalizations {
         AppThemeMode.amoled => _t('themeModeAmoled'),
         AppThemeMode.amoledSakura => _t('themeModeSakura'),
       };
+
+  String thumbnailCropStyleLabel(ThumbnailCropStyle style) => switch (style) {
+        ThumbnailCropStyle.square => _t('cropSquare'),
+        ThumbnailCropStyle.adaptive => _t('cropAdaptive'),
+      };
+
+  String timelineGroupingLabel(TimelineGrouping grouping) => switch (grouping) {
+        TimelineGrouping.continuous => _t('groupContinuous'),
+        TimelineGrouping.daily => _t('groupDaily'),
+        TimelineGrouping.monthly => _t('groupMonthly'),
+      };
+
+  String startupScreenLabel(StartupScreen screen) => switch (screen) {
+        StartupScreen.all => _t('all'),
+        StartupScreen.photosOnly => _t('photos'),
+        StartupScreen.videosOnly => _t('videos'),
+        StartupScreen.albums => _t('albums'),
+      };
+
+  String trashCleanupIntervalLabel(TrashCleanupInterval interval) =>
+      switch (interval) {
+        TrashCleanupInterval.never => _t('cleanupNever'),
+        TrashCleanupInterval.days7 => _t('cleanup7Days'),
+        TrashCleanupInterval.days14 => _t('cleanup14Days'),
+        TrashCleanupInterval.days30 => _t('cleanup30Days'),
+      };
+
+  String secondsCount(int count) =>
+      _t('secondsCount').replaceAll('{count}', '$count');
 
   String downloadingPercent(int percent) =>
       _t('downloadingPercent').replaceAll('{percent}', '$percent');

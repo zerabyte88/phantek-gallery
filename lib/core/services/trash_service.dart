@@ -25,9 +25,11 @@ class TrashService {
   final List<TrashItem> _items = [];
   bool _loaded = false;
 
-  Future<List<TrashItem>> getItems() async {
+  Future<List<TrashItem>> getItems({int? maxDays = 30}) async {
     await _ensureLoaded();
-    await purgeExpired();
+    if (maxDays != null) {
+      await purgeExpired(maxDays: maxDays);
+    }
     return List.unmodifiable(_items);
   }
 

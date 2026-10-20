@@ -17,4 +17,22 @@ class ScreenKeeperService {
       }
     } catch (_) {}
   }
+
+  /// Toggles maximum brightness override for media viewing.
+  static Future<void> setMaxBrightness(bool max) async {
+    try {
+      if (max) {
+        await _channel.invokeMethod('setMaxBrightness');
+      } else {
+        await _channel.invokeMethod('restoreBrightness');
+      }
+    } catch (_) {}
+  }
+
+  /// Toggles FLAG_SECURE on the native Android window to prevent screenshots and screen recordings.
+  static Future<void> setSecure(bool secure) async {
+    try {
+      await _channel.invokeMethod('setSecure', {'enabled': secure});
+    } catch (_) {}
+  }
 }

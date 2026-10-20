@@ -151,6 +151,38 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   bool _isMultiTouch = false;
   final Set<int> _activePointers = {};
   final ValueNotifier<bool> _isSwipingPage = ValueNotifier<bool>(false);
+  Timer? _slideshowTimer;
+  bool _isSlideshowPlaying = false;
+  bool _didSetMaxBrightness = false;
+
+  void _startSlideshow() {
+    setState(() => _isSlideshowPlaying = true);
+    final interval = ref.read(settingsNotifierProvider).slideshowInterval;
+    _slideshowTimer?.cancel();
+    _slideshowTimer = Timer.periodic(Duration(seconds: interval), (_) {
+      if (!mounted) return;
+      if (_current < widget.items.length - 1) {
+        _page.nextPage(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        _page.animateToPage(
+          0,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  void _stopSlideshow() {
+    _slideshowTimer?.cancel();
+    _slideshowTimer = null;
+    if (_isSlideshowPlaying && mounted) {
+      setState(() => _isSlideshowPlaying = false);
+    }
+  }
 
   bool get _isCurrentlyZoomed =>
       _transformationController.value.getMaxScaleOnAxis() > 1.05;
@@ -177,8 +209,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         }
       });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    if (ref.read(settingsNotifierProvider).keepScreenOn) {
+    final settings = ref.read(settingsNotifierProvider);
+    if (settings.keepScreenOn) {
       ScreenKeeperService.setKeepScreenOn(true);
+    }
+    if (settings.maxBrightnessOnMedia) {
+      _didSetMaxBrightness = true;
+      ScreenKeeperService.setMaxBrightness(true);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -208,6 +245,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   @override
   void dispose() {
+    _stopSlideshow();
     final notifier = _activeMediaNotifier;
     if (notifier != null) {
       Future.microtask(() {
@@ -215,6 +253,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       });
     }
     ScreenKeeperService.setKeepScreenOn(false);
+    if (_didSetMaxBrightness) {
+      ScreenKeeperService.setMaxBrightness(false);
+    }
     _transformationController.dispose();
     _zoomAnimController?.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -259,6 +300,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   }
 
   void _toggleBars() {
+    if (_isSlideshowPlaying) {
+      _stopSlideshow();
+      return;
+    }
     if (!_isCurrentlyZoomed && !_isPinching) {
       setState(() => _barsVisible = !_barsVisible);
     }
@@ -545,6 +590,28 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              ListTile(
+                leading: Icon(
+                  _isSlideshowPlaying
+                      ? Icons.pause_circle_outline_rounded
+                      : Icons.slideshow_rounded,
+                  color: Colors.white,
+                ),
+                title: Text(
+                  _isSlideshowPlaying
+                      ? context.tr.pause
+                      : context.tr.slideshowInterval,
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  if (_isSlideshowPlaying) {
+                    _stopSlideshow();
+                  } else {
+                    _startSlideshow();
+                  }
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.edit_outlined, color: Colors.white),
                 title: Text(context.tr.rename,

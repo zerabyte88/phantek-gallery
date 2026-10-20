@@ -37,26 +37,30 @@
 
 ### Media Organization & Browsing
 - **Timeline & Albums:** Browse your media chronologically or organized by on-device folders (Camera, Screenshots, Downloads, etc.).
+- **Timeline Grouping & Crop Styles:** Choose between Continuous, Daily, or Monthly date-header groupings, and toggle between Square and Adaptive thumbnail cropping.
+- **Startup Screen:** Configure your default landing tab (All Media, Photos, Videos, or Albums).
 - **Grid Customization:** Adjust grid layout between 2, 3, 4, or 5 columns independently for photos and albums.
-- **Favorites & Exclusions:** Pin frequently accessed media to Favorites and exclude private or system folders from indexing via the native Android directory picker.
-- **In-Album Filtering & Sorting:** Filter items by type (All, Photos, Videos) and sort by date or filename.
+- **Filtering & File Management:** Filter out small/junk images (< 50 KB), toggle display of hidden and `.nomedia` files, pin items to Favorites, and exclude private or system folders.
 
 ### Photo Viewer
 - **Fluid Gestures:** Pinch-to-zoom with elastic boundaries, double-tap to zoom, horizontal swipe between items, and swipe down to dismiss.
+- **Slideshow & Display:** Automated slideshow with configurable duration (1–10 seconds), optional Max Brightness on media open, and Keep Screen Awake.
 - **Quick Actions:** Share, favorite, view EXIF details, set as wallpaper, rename, or delete directly from the viewer.
 
 ### Video Player (MPV Engine)
 - **Wide Format Support:** Hardware-accelerated playback for MKV, MP4, MOV, and WebM using native MPV and FFmpeg libraries.
-- **Playback Controls:** Selectable playback speed (0.25x to 2.0x), single loop toggle with unobtrusive pill notifications, and optional auto-play.
+- **Playback Controls:** Selectable playback speed (0.25x to 2.0x), customizable double-tap seek intervals (5s, 10s, 15s, 30s), resume playback position, start muted option, and single loop toggle.
 - **Timeline Scrubbing:** Precise seekbar with real-time frame previews.
 - **Video Zoom:** Pinch-to-zoom up to 5x with pan support and quick reset.
 
-### Recycle Bin
-- **Safe Staging:** Deleted items move to a local `.trash` directory rather than immediate removal.
-- **Batch Operations:** Select multiple items to restore or permanently delete at once.
+### Privacy & Storage
+- **Secure Screen:** Enforce Android `FLAG_SECURE` to block screenshots and screen recordings while blurring app switch preview.
+- **Recycle Bin & Auto-Cleanup:** Staged deletion in `.trash` with optional automated cleanup after 7, 14, or 30 days, or manual batch restore/delete.
+- **Cache Management:** One-tap thumbnail cache clearing with real-time cache size metrics.
 
 ### Theming & Internationalization
 - **Theme Modes:** System default, Sunburst, Snowfall, Midnight, and Sakura themes with artistic custom headers.
+- **Languages:** Complete multilingual localization across 22 languages.
 
 ### Over-The-Air (OTA) Updates
 - **GitHub Releases Integration:** Check for updates, download releases in the background, and install updates directly from within the app.

@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/media_item.dart';
 import '../../../core/providers/media_provider.dart';
@@ -157,6 +158,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   bool _routeTransitionComplete = false;
   Animation<double>? _routeAnimation;
   StateController<String?>? _activeMediaNotifier;
+  bool _didSetMaxBrightness = false;
 
   final ValueNotifier<_FeedbackPillData?> _feedbackToastNotifier =
       ValueNotifier(null);
@@ -223,8 +225,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         }
       });
     _initPlayer();
-    if (ref.read(settingsNotifierProvider).keepScreenOn) {
+    final initialSettings = ref.read(settingsNotifierProvider);
+    if (initialSettings.keepScreenOn) {
       ScreenKeeperService.setKeepScreenOn(true);
+    }
+    if (initialSettings.maxBrightnessOnMedia) {
+      _didSetMaxBrightness = true;
+      ScreenKeeperService.setMaxBrightness(true);
     }
     _precacheAdjacentVideos(_current);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -553,11 +560,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         }
       }
 
+      if (settings.startMuted) {
+        await _player.setVolume(0.0);
+      }
+
       await _player.open(
         Media(currentPath),
         play: false,
       );
       _activePlayerPath = currentPath;
+      await _restoreSavedPosition(currentPath);
       if (_routeTransitionComplete && settings.autoPlayVideo) {
         _player.play();
         _controller.waitUntilFirstFrameRendered.then((_) {
@@ -571,8 +583,41 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
   }
 
+  Future<void> _restoreSavedPosition(String path) async {
+    final settings = ref.read(settingsNotifierProvider);
+    if (!settings.resumeVideoPlayback) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'playback_pos_${path.hashCode}';
+      final posMs = prefs.getInt(key);
+      if (posMs != null && posMs > 2000) {
+        await _player.seek(Duration(milliseconds: posMs));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveCurrentPosition(String path) async {
+    final settings = ref.read(settingsNotifierProvider);
+    if (!settings.resumeVideoPlayback) return;
+    try {
+      final pos = _player.state.position;
+      final dur = _player.state.duration;
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'playback_pos_${path.hashCode}';
+      if (dur.inMilliseconds > 0 &&
+          dur.inMilliseconds - pos.inMilliseconds < 3000) {
+        await prefs.remove(key);
+      } else if (pos.inMilliseconds > 2000) {
+        await prefs.setInt(key, pos.inMilliseconds);
+      }
+    } catch (_) {}
+  }
+
   void _changeToVideo(int index) {
     if (index == _current) return;
+    if (_videos.isNotEmpty && _current < _videos.length) {
+      _saveCurrentPosition(_videos[_current].path);
+    }
     _videoLoadDebounce?.cancel();
     _activePlayerPath = null;
     final thisGen = ++_videoLoadGeneration;
@@ -628,6 +673,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           }
           await _player.open(Media(path), play: settings.autoPlayVideo);
           _activePlayerPath = path;
+          if (settings.startMuted) {
+            await _player.setVolume(0.0);
+          }
+          await _restoreSavedPosition(path);
           if (_isLooping) _player.setPlaylistMode(PlaylistMode.loop);
           if (_playbackSpeed != 1.0) _player.setRate(_playbackSpeed);
           if (settings.autoPlayVideo) {
@@ -688,7 +737,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
     _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
     _videoLoadDebounce?.cancel();
+    if (_videos.isNotEmpty && _current < _videos.length) {
+      _saveCurrentPosition(_videos[_current].path);
+    }
     ScreenKeeperService.setKeepScreenOn(false);
+    if (_didSetMaxBrightness) {
+      ScreenKeeperService.setMaxBrightness(false);
+    }
     WidgetsBinding.instance.removeObserver(this);
     _zoomAnimController?.dispose();
     _settle.dispose();
@@ -917,6 +972,33 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void _handleDoubleTap() {
     if (_doubleTapDetails == null) return;
     final pos = _doubleTapDetails!.localPosition;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final settings = ref.read(settingsNotifierProvider);
+
+    if (_videos.isNotEmpty &&
+        _current < _videos.length &&
+        _videos[_current].isVideo) {
+      final seekSec = settings.doubleTapSeekInterval;
+      if (pos.dx < screenWidth * 0.35) {
+        final currentPos = _player.state.position;
+        final target = currentPos - Duration(seconds: seekSec);
+        _player.seek(target < Duration.zero ? Duration.zero : target);
+        _showFeedbackToast(
+          message: '-${seekSec}s',
+          icon: Icons.replay_10_rounded,
+        );
+        return;
+      } else if (pos.dx > screenWidth * 0.65) {
+        final currentPos = _player.state.position;
+        final target = currentPos + Duration(seconds: seekSec);
+        _player.seek(target);
+        _showFeedbackToast(
+          message: '+${seekSec}s',
+          icon: Icons.forward_10_rounded,
+        );
+        return;
+      }
+    }
 
     HapticFeedback.lightImpact();
     _zoomToPosition(pos);

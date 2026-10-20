@@ -3,6 +3,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/settings_model.dart';
 import '../enums/sort_option.dart';
 import '../enums/filter_option.dart';
+import '../enums/thumbnail_crop_style.dart';
+import '../enums/timeline_grouping.dart';
+import '../enums/trash_cleanup_interval.dart';
+import '../enums/startup_screen.dart';
 import '../localization/app_language.dart';
 
 /// Keys used in SharedPreferences.
@@ -21,6 +25,19 @@ class _K {
   static const defaultSort = 'defaultSort';
   static const defaultFilter = 'defaultFilter';
   static const favoriteIds = 'favoriteIds';
+  static const thumbnailCropStyle = 'thumbnailCropStyle';
+  static const timelineGrouping = 'timelineGrouping';
+  static const startupScreen = 'startupScreen';
+  static const autoTrashCleanup = 'autoTrashCleanup';
+  static const maxBrightnessOnMedia = 'maxBrightnessOnMedia';
+  static const slideshowInterval = 'slideshowInterval';
+  static const startMuted = 'startMuted';
+  static const doubleTapSeekInterval = 'doubleTapSeekInterval';
+  static const resumeVideoPlayback = 'resumeVideoPlayback';
+  static const filterSmallImages = 'filterSmallImages';
+  static const showHiddenFiles = 'showHiddenFiles';
+  static const secureScreen = 'secureScreen';
+  static const lockedVaultEnabled = 'lockedVaultEnabled';
 }
 
 /// Thin wrapper around SharedPreferences for typed settings access.
@@ -64,6 +81,23 @@ class SettingsService {
         defaultFilter:
             _readEnum(_K.defaultFilter, FilterOption.values, FilterOption.all),
         favoriteIds: _readStringList(_K.favoriteIds),
+        thumbnailCropStyle: _readEnum(_K.thumbnailCropStyle,
+            ThumbnailCropStyle.values, ThumbnailCropStyle.square),
+        timelineGrouping: _readEnum(_K.timelineGrouping,
+            TimelineGrouping.values, TimelineGrouping.daily),
+        startupScreen: _readEnum(
+            _K.startupScreen, StartupScreen.values, StartupScreen.all),
+        autoTrashCleanup: _readEnum(_K.autoTrashCleanup,
+            TrashCleanupInterval.values, TrashCleanupInterval.never),
+        maxBrightnessOnMedia: _prefs.getBool(_K.maxBrightnessOnMedia) ?? false,
+        slideshowInterval: _prefs.getInt(_K.slideshowInterval) ?? 3,
+        startMuted: _prefs.getBool(_K.startMuted) ?? false,
+        doubleTapSeekInterval: _prefs.getInt(_K.doubleTapSeekInterval) ?? 10,
+        resumeVideoPlayback: _prefs.getBool(_K.resumeVideoPlayback) ?? false,
+        filterSmallImages: _prefs.getBool(_K.filterSmallImages) ?? false,
+        showHiddenFiles: _prefs.getBool(_K.showHiddenFiles) ?? false,
+        secureScreen: _prefs.getBool(_K.secureScreen) ?? false,
+        lockedVaultEnabled: _prefs.getBool(_K.lockedVaultEnabled) ?? false,
       );
 
   // ── Write ─────────────────────────────────────────────────────────────────
@@ -84,6 +118,19 @@ class SettingsService {
       _prefs.setString(_K.defaultSort, model.defaultSort.name),
       _prefs.setString(_K.defaultFilter, model.defaultFilter.name),
       _prefs.setString(_K.favoriteIds, jsonEncode(model.favoriteIds)),
+      _prefs.setString(_K.thumbnailCropStyle, model.thumbnailCropStyle.name),
+      _prefs.setString(_K.timelineGrouping, model.timelineGrouping.name),
+      _prefs.setString(_K.startupScreen, model.startupScreen.name),
+      _prefs.setString(_K.autoTrashCleanup, model.autoTrashCleanup.name),
+      _prefs.setBool(_K.maxBrightnessOnMedia, model.maxBrightnessOnMedia),
+      _prefs.setInt(_K.slideshowInterval, model.slideshowInterval),
+      _prefs.setBool(_K.startMuted, model.startMuted),
+      _prefs.setInt(_K.doubleTapSeekInterval, model.doubleTapSeekInterval),
+      _prefs.setBool(_K.resumeVideoPlayback, model.resumeVideoPlayback),
+      _prefs.setBool(_K.filterSmallImages, model.filterSmallImages),
+      _prefs.setBool(_K.showHiddenFiles, model.showHiddenFiles),
+      _prefs.setBool(_K.secureScreen, model.secureScreen),
+      _prefs.setBool(_K.lockedVaultEnabled, model.lockedVaultEnabled),
     ]);
   }
 

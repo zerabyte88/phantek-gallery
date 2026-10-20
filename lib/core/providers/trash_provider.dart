@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../enums/trash_cleanup_interval.dart';
 import '../models/trash_item.dart';
 import '../services/trash_service.dart';
+
+import 'settings_provider.dart';
 
 final trashServiceProvider = Provider<TrashService>(
   (_) => TrashService(),
@@ -8,7 +11,10 @@ final trashServiceProvider = Provider<TrashService>(
 
 class TrashNotifier extends AsyncNotifier<List<TrashItem>> {
   @override
-  Future<List<TrashItem>> build() => ref.read(trashServiceProvider).getItems();
+  Future<List<TrashItem>> build() {
+    final maxDays = ref.watch(settingsNotifierProvider).autoTrashCleanup.inDays;
+    return ref.read(trashServiceProvider).getItems(maxDays: maxDays);
+  }
 
   Future<void> moveToTrash({
     required String id,
@@ -39,7 +45,9 @@ class TrashNotifier extends AsyncNotifier<List<TrashItem>> {
   }
 
   Future<void> _reload() async {
-    state = AsyncData(await ref.read(trashServiceProvider).getItems());
+    final maxDays = ref.read(settingsNotifierProvider).autoTrashCleanup.inDays;
+    state = AsyncData(
+        await ref.read(trashServiceProvider).getItems(maxDays: maxDays));
   }
 }
 

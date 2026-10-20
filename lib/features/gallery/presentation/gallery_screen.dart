@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart' hide FilterOption;
 import '../../../core/enums/filter_option.dart';
 import '../../../core/enums/sort_option.dart';
+import '../../../core/enums/startup_screen.dart';
+import '../../../core/enums/thumbnail_crop_style.dart';
+import '../../../core/enums/timeline_grouping.dart';
 import '../../../core/models/album.dart';
 import '../../../core/models/media_item.dart';
 import '../../../core/models/settings_model.dart';
@@ -64,6 +67,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   SortOption? _cachedSort;
   String? _cachedSearchQuery;
   List<String>? _cachedFavoriteIds;
+  bool? _cachedFilterSmall;
+  bool? _cachedShowHidden;
 
   List<MediaItem> _memoizedAll = const [];
   List<MediaItem> _memoizedPhotos = const [];
@@ -74,7 +79,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     if (identical(_cachedAllItemsRef, allItems) &&
         _cachedSort == settings.defaultSort &&
         _cachedSearchQuery == _searchQuery &&
-        _cachedFavoriteIds == settings.favoriteIds) {
+        _cachedFavoriteIds == settings.favoriteIds &&
+        _cachedFilterSmall == settings.filterSmallImages &&
+        _cachedShowHidden == settings.showHiddenFiles) {
       return;
     }
 
@@ -82,31 +89,46 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     _cachedSort = settings.defaultSort;
     _cachedSearchQuery = _searchQuery;
     _cachedFavoriteIds = settings.favoriteIds;
+    _cachedFilterSmall = settings.filterSmallImages;
+    _cachedShowHidden = settings.showHiddenFiles;
+
+    var filteredItems = allItems;
+    if (!settings.showHiddenFiles) {
+      filteredItems = filteredItems.where((e) {
+        final segments = e.path.split(RegExp(r'[/\\]'));
+        return !segments
+            .any((s) => s.isNotEmpty && s.startsWith('.') && s != '.');
+      }).toList();
+    }
+    if (settings.filterSmallImages) {
+      filteredItems =
+          filteredItems.where((e) => e.isVideo || e.size >= 50 * 1024).toList();
+    }
 
     _memoizedAll = _filterBySearch(
       applyFiltersAndSort(
-        allItems,
+        filteredItems,
         sort: settings.defaultSort,
         filter: FilterOption.all,
       ),
     );
     _memoizedPhotos = _filterBySearch(
       applyFiltersAndSort(
-        allItems,
+        filteredItems,
         sort: settings.defaultSort,
         filter: FilterOption.photosOnly,
       ),
     );
     _memoizedVideos = _filterBySearch(
       applyFiltersAndSort(
-        allItems,
+        filteredItems,
         sort: settings.defaultSort,
         filter: FilterOption.videosOnly,
       ),
     );
     _memoizedAlbums = _filterAlbumsBySearch(
       groupMediaIntoAlbums(
-        allItems,
+        filteredItems,
         sort: settings.defaultSort,
         favoriteIds: settings.favoriteIds,
       ),
@@ -122,7 +144,13 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       duration: const Duration(milliseconds: 350),
     );
     final settings = ref.read(settingsNotifierProvider);
-    final tabIdx = _tabs.indexOf(settings.defaultFilter);
+    final startupFilter = switch (settings.startupScreen) {
+      StartupScreen.all => FilterOption.all,
+      StartupScreen.photosOnly => FilterOption.photosOnly,
+      StartupScreen.videosOnly => FilterOption.videosOnly,
+      StartupScreen.albums => FilterOption.albums,
+    };
+    final tabIdx = _tabs.indexOf(startupFilter);
     _currentPage = tabIdx >= 0 ? tabIdx : 0;
     _pageController = PageController(initialPage: _currentPage);
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
@@ -1001,62 +1029,173 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     }
 
     final controller = _scrollControllers[tab];
+    final aspectRatio =
+        settings.thumbnailCropStyle == ThumbnailCropStyle.adaptive ? 0.8 : 1.0;
+
+    if (settings.timelineGrouping == TimelineGrouping.continuous) {
+      return _PinchZoomGridListener(
+        child: RefreshIndicator(
+          onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
+          child: GridView.builder(
+            key: PageStorageKey(storageKey),
+            controller: controller,
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: settings.gridColumns,
+              crossAxisSpacing: 3,
+              mainAxisSpacing: 3,
+              childAspectRatio: aspectRatio,
+            ),
+            itemCount: items.length,
+            itemBuilder: (_, i) => _buildMediaGridItem(items, i, tab, settings),
+          ),
+        ),
+      );
+    }
+
+    final groups = <String, List<int>>{};
+    for (var i = 0; i < items.length; i++) {
+      final key =
+          _formatTimelineGroupKey(items[i].date, settings.timelineGrouping);
+      groups.putIfAbsent(key, () => []).add(i);
+    }
+
+    final cs = Theme.of(context).colorScheme;
 
     return _PinchZoomGridListener(
       child: RefreshIndicator(
         onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
-        child: GridView.builder(
+        child: CustomScrollView(
           key: PageStorageKey(storageKey),
           controller: controller,
-          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: settings.gridColumns,
-            crossAxisSpacing: 3,
-            mainAxisSpacing: 3,
-          ),
-          itemCount: items.length,
-          itemBuilder: (_, i) {
-            final item = items[i];
-            return MediaGridItem(
-              key: ValueKey(item.id),
-              item: item,
-              isSelected: _selected.contains(item.id),
-              isSelecting: _selecting,
-              showBadges: settings.showBadges,
-              onTap: () {
-                if (_selecting) {
-                  _toggleSelect(item.id);
-                  return;
-                }
-                if (tab == FilterOption.all) {
-                  Navigator.of(context).openVideo(items, i);
-                  return;
-                }
-                if (item.isVideo) {
-                  final videos = items.where((e) => e.isVideo).toList();
-                  final idx = videos.indexOf(item);
-                  Navigator.of(context).openVideo(
-                    videos,
-                    idx >= 0 ? idx : 0,
-                  );
-                } else {
-                  // Pass only photo items for swipe navigation.
-                  final photos = items.where((e) => !e.isVideo).toList();
-                  final idx = photos.indexOf(item);
-                  Navigator.of(context).openImage(photos, idx >= 0 ? idx : 0);
-                }
-              },
-              onLongPress: () {
-                if (!_selecting) {
-                  _startSelect(item.id);
-                } else {
-                  _toggleSelect(item.id);
-                }
-              },
-            );
-          },
+          slivers: [
+            for (final entry in groups.entries) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 18, 14, 6),
+                  child: Text(
+                    entry.key,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.2,
+                      color: cs.primary,
+                    ),
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                sliver: SliverGrid(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: settings.gridColumns,
+                    crossAxisSpacing: 3,
+                    mainAxisSpacing: 3,
+                    childAspectRatio: aspectRatio,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (ctx, i) => _buildMediaGridItem(
+                      items,
+                      entry.value[i],
+                      tab,
+                      settings,
+                    ),
+                    childCount: entry.value.length,
+                  ),
+                ),
+              ),
+            ],
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          ],
         ),
       ),
+    );
+  }
+
+  String _formatTimelineGroupKey(DateTime date, TimelineGrouping grouping) {
+    if (grouping == TimelineGrouping.monthly) {
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
+      return '${months[date.month - 1]} ${date.year}';
+    }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    final diff = today.difference(target).inDays;
+    if (diff == 0) return context.tr.today;
+    if (diff == 1) return context.tr.yesterday;
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  Widget _buildMediaGridItem(
+    List<MediaItem> items,
+    int index,
+    FilterOption tab,
+    SettingsModel settings,
+  ) {
+    final item = items[index];
+    return MediaGridItem(
+      key: ValueKey(item.id),
+      item: item,
+      cropStyle: settings.thumbnailCropStyle,
+      isSelected: _selected.contains(item.id),
+      isSelecting: _selecting,
+      showBadges: settings.showBadges,
+      onTap: () {
+        if (_selecting) {
+          _toggleSelect(item.id);
+          return;
+        }
+        if (tab == FilterOption.all) {
+          Navigator.of(context).openVideo(items, index);
+          return;
+        }
+        if (item.isVideo) {
+          final videos = items.where((e) => e.isVideo).toList();
+          final idx = videos.indexOf(item);
+          Navigator.of(context).openVideo(
+            videos,
+            idx >= 0 ? idx : 0,
+          );
+        } else {
+          final photos = items.where((e) => !e.isVideo).toList();
+          final idx = photos.indexOf(item);
+          Navigator.of(context).openImage(photos, idx >= 0 ? idx : 0);
+        }
+      },
+      onLongPress: () {
+        if (!_selecting) {
+          _startSelect(item.id);
+        } else {
+          _toggleSelect(item.id);
+        }
+      },
     );
   }
 

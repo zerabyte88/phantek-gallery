@@ -32,6 +32,27 @@ class MainActivity : FlutterActivity() {
                     window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     result.success(null)
                 }
+                "setMaxBrightness" -> {
+                    val lp = window.attributes
+                    lp.screenBrightness = 1.0f
+                    window.attributes = lp
+                    result.success(null)
+                }
+                "restoreBrightness" -> {
+                    val lp = window.attributes
+                    lp.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    window.attributes = lp
+                    result.success(null)
+                }
+                "setSecure" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    if (enabled) {
+                        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                    } else {
+                        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }

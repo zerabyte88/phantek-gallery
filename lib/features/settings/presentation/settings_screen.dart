@@ -5,6 +5,10 @@ import 'package:path/path.dart' as p;
 import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/settings_model.dart';
+import '../../../core/enums/thumbnail_crop_style.dart';
+import '../../../core/enums/timeline_grouping.dart';
+import '../../../core/enums/trash_cleanup_interval.dart';
+import '../../../core/enums/startup_screen.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/folder_picker_service.dart';
@@ -164,6 +168,79 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   },
                 ),
                 const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.aspect_ratio_rounded,
+                  iconColor: const Color(0xFFEC4899),
+                  title: context.tr.thumbnailCropStyle,
+                  subtitle: context.tr
+                      .thumbnailCropStyleLabel(settings.thumbnailCropStyle),
+                  onTap: () async {
+                    final chosen =
+                        await _showModernOptionDialog<ThumbnailCropStyle>(
+                      context,
+                      title: context.tr.thumbnailCropStyle,
+                      subtitle: context.tr.chooseVisualMode,
+                      headerIcon: Icons.aspect_ratio_rounded,
+                      headerColor: const Color(0xFFEC4899),
+                      currentValue: settings.thumbnailCropStyle,
+                      options: [
+                        _OptionItem(
+                          value: ThumbnailCropStyle.square,
+                          title: context.tr.cropSquare,
+                          icon: Icons.crop_square_rounded,
+                        ),
+                        _OptionItem(
+                          value: ThumbnailCropStyle.adaptive,
+                          title: context.tr.cropAdaptive,
+                          icon: Icons.aspect_ratio_rounded,
+                        ),
+                      ],
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(thumbnailCropStyle: chosen));
+                    }
+                  },
+                ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.view_agenda_rounded,
+                  iconColor: const Color(0xFF8B5CF6),
+                  title: context.tr.timelineGrouping,
+                  subtitle: context.tr
+                      .timelineGroupingLabel(settings.timelineGrouping),
+                  onTap: () async {
+                    final chosen =
+                        await _showModernOptionDialog<TimelineGrouping>(
+                      context,
+                      title: context.tr.timelineGrouping,
+                      subtitle: context.tr.chooseVisualMode,
+                      headerIcon: Icons.view_agenda_rounded,
+                      headerColor: const Color(0xFF8B5CF6),
+                      currentValue: settings.timelineGrouping,
+                      options: [
+                        _OptionItem(
+                          value: TimelineGrouping.continuous,
+                          title: context.tr.groupContinuous,
+                          icon: Icons.view_agenda_rounded,
+                        ),
+                        _OptionItem(
+                          value: TimelineGrouping.daily,
+                          title: context.tr.groupDaily,
+                          icon: Icons.calendar_today_rounded,
+                        ),
+                        _OptionItem(
+                          value: TimelineGrouping.monthly,
+                          title: context.tr.groupMonthly,
+                          icon: Icons.calendar_month_rounded,
+                        ),
+                      ],
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(timelineGrouping: chosen));
+                    }
+                  },
+                ),
+                const _CardDivider(),
                 _ModernSwitchTile(
                   icon: Icons.badge_rounded,
                   iconColor: const Color(0xFFF59E0B),
@@ -171,6 +248,86 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   subtitle: context.tr.showDurationBadgesSubtitle,
                   value: settings.showBadges,
                   onChanged: (v) => patch((s) => s.copyWith(showBadges: v)),
+                ),
+              ],
+            ),
+            _SectionHeader(context.tr.playback),
+            _SettingsCard(
+              children: [
+                _ModernSwitchTile(
+                  icon: Icons.play_circle_outline_rounded,
+                  iconColor: const Color(0xFF06B6D4),
+                  title: context.tr.autoPlayVideo,
+                  subtitle: context.tr.autoPlayVideoSubtitle,
+                  value: settings.autoPlayVideo,
+                  onChanged: (v) => patch((s) => s.copyWith(autoPlayVideo: v)),
+                ),
+                const _CardDivider(),
+                _ModernSwitchTile(
+                  icon: Icons.volume_off_rounded,
+                  iconColor: const Color(0xFFEC4899),
+                  title: context.tr.startMuted,
+                  subtitle: context.tr.startMutedDesc,
+                  value: settings.startMuted,
+                  onChanged: (v) => patch((s) => s.copyWith(startMuted: v)),
+                ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.fast_forward_rounded,
+                  iconColor: const Color(0xFF38BDF8),
+                  title: context.tr.doubleTapSeek,
+                  subtitle:
+                      context.tr.secondsCount(settings.doubleTapSeekInterval),
+                  onTap: () async {
+                    final chosen = await _showModernOptionDialog<int>(
+                      context,
+                      title: context.tr.doubleTapSeek,
+                      subtitle: context.tr.playback,
+                      headerIcon: Icons.fast_forward_rounded,
+                      headerColor: const Color(0xFF38BDF8),
+                      currentValue: settings.doubleTapSeekInterval,
+                      options: [
+                        _OptionItem(
+                          value: 5,
+                          title: context.tr.secondsCount(5),
+                          icon: Icons.replay_5_rounded,
+                        ),
+                        _OptionItem(
+                          value: 10,
+                          title: context.tr.secondsCount(10),
+                          icon: Icons.replay_10_rounded,
+                        ),
+                        _OptionItem(
+                          value: 15,
+                          title: context.tr.secondsCount(15),
+                          icon: Icons.replay_30_rounded,
+                        ),
+                      ],
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(doubleTapSeekInterval: chosen));
+                    }
+                  },
+                ),
+                const _CardDivider(),
+                _ModernSwitchTile(
+                  icon: Icons.replay_rounded,
+                  iconColor: const Color(0xFF10B981),
+                  title: context.tr.resumeVideoPlayback,
+                  subtitle: context.tr.resumeVideoPlaybackDesc,
+                  value: settings.resumeVideoPlayback,
+                  onChanged: (v) =>
+                      patch((s) => s.copyWith(resumeVideoPlayback: v)),
+                ),
+                const _CardDivider(),
+                _ModernSwitchTile(
+                  icon: Icons.brightness_high_rounded,
+                  iconColor: const Color(0xFFF59E0B),
+                  title: context.tr.maxBrightnessOnMedia,
+                  subtitle: context.tr.maxBrightnessOnMediaDesc,
+                  value: settings.maxBrightnessOnMedia,
+                  onChanged: (v) =>
+                      patch((s) => s.copyWith(maxBrightnessOnMedia: v)),
                 ),
                 const _CardDivider(),
                 _ModernSwitchTile(
@@ -181,11 +338,121 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   value: settings.keepScreenOn,
                   onChanged: (v) => patch((s) => s.copyWith(keepScreenOn: v)),
                 ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.slideshow_rounded,
+                  iconColor: const Color(0xFF8B5CF6),
+                  title: context.tr.slideshowInterval,
+                  subtitle: context.tr.secondsCount(settings.slideshowInterval),
+                  onTap: () async {
+                    final chosen = await _showModernOptionDialog<int>(
+                      context,
+                      title: context.tr.slideshowInterval,
+                      subtitle: context.tr.playback,
+                      headerIcon: Icons.slideshow_rounded,
+                      headerColor: const Color(0xFF8B5CF6),
+                      currentValue: settings.slideshowInterval,
+                      options: [
+                        _OptionItem(
+                          value: 3,
+                          title: context.tr.secondsCount(3),
+                          icon: Icons.timer_outlined,
+                        ),
+                        _OptionItem(
+                          value: 5,
+                          title: context.tr.secondsCount(5),
+                          icon: Icons.timer_outlined,
+                        ),
+                        _OptionItem(
+                          value: 10,
+                          title: context.tr.secondsCount(10),
+                          icon: Icons.timer_outlined,
+                        ),
+                      ],
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(slideshowInterval: chosen));
+                    }
+                  },
+                ),
+                const _CardDivider(),
+                _ModernSwitchTile(
+                  icon: Icons.memory_rounded,
+                  iconColor: const Color(0xFF10B981),
+                  title: context.tr.hardwareAcceleration,
+                  subtitle: context.tr.hardwareAccelerationSubtitle,
+                  value: settings.hardwareAcceleration,
+                  onChanged: (v) =>
+                      patch((s) => s.copyWith(hardwareAcceleration: v)),
+                ),
               ],
             ),
-            _SectionHeader(context.tr.storageAndCache),
+            _SectionHeader(context.tr.browsingAndNavigation),
             _SettingsCard(
               children: [
+                _ModernTile(
+                  icon: Icons.home_outlined,
+                  iconColor: const Color(0xFF3B82F6),
+                  title: context.tr.startupScreen,
+                  subtitle:
+                      context.tr.startupScreenLabel(settings.startupScreen),
+                  onTap: () async {
+                    final chosen = await _showModernOptionDialog<StartupScreen>(
+                      context,
+                      title: context.tr.startupScreen,
+                      subtitle: context.tr.browsingAndNavigation,
+                      headerIcon: Icons.home_outlined,
+                      headerColor: const Color(0xFF3B82F6),
+                      currentValue: settings.startupScreen,
+                      options: [
+                        _OptionItem(
+                          value: StartupScreen.all,
+                          title: context.tr.all,
+                          icon: Icons.grid_view_rounded,
+                        ),
+                        _OptionItem(
+                          value: StartupScreen.photosOnly,
+                          title: context.tr.photos,
+                          icon: Icons.photo_rounded,
+                        ),
+                        _OptionItem(
+                          value: StartupScreen.videosOnly,
+                          title: context.tr.videos,
+                          icon: Icons.videocam_rounded,
+                        ),
+                        _OptionItem(
+                          value: StartupScreen.albums,
+                          title: context.tr.albums,
+                          icon: Icons.photo_library_rounded,
+                        ),
+                      ],
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(startupScreen: chosen));
+                    }
+                  },
+                ),
+                const _CardDivider(),
+                _ModernSwitchTile(
+                  icon: Icons.filter_alt_outlined,
+                  iconColor: const Color(0xFFF59E0B),
+                  title: context.tr.filterSmallImages,
+                  subtitle: context.tr.filterSmallImagesDesc,
+                  value: settings.filterSmallImages,
+                  onChanged: (v) =>
+                      patch((s) => s.copyWith(filterSmallImages: v)),
+                ),
+                const _CardDivider(),
+                _ModernSwitchTile(
+                  icon: Icons.visibility_outlined,
+                  iconColor: const Color(0xFF06B6D4),
+                  title: context.tr.showHiddenFiles,
+                  subtitle: context.tr.showHiddenFilesDesc,
+                  value: settings.showHiddenFiles,
+                  onChanged: (v) =>
+                      patch((s) => s.copyWith(showHiddenFiles: v)),
+                ),
+                const _CardDivider(),
                 _ModernTile(
                   icon: Icons.folder_off_rounded,
                   iconColor: const Color(0xFF64748B),
@@ -194,7 +461,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   onTap: () =>
                       _showExcludedFoldersDialog(context, ref, settings),
                 ),
-                const _CardDivider(),
+              ],
+            ),
+            _SectionHeader(context.tr.storageAndCache),
+            _SettingsCard(
+              children: [
                 _ModernSwitchTile(
                   icon: Icons.delete_outline_rounded,
                   iconColor: const Color(0xFF14B8A6),
@@ -202,6 +473,98 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   subtitle: context.tr.trashBinSubtitle,
                   value: settings.enableTrash,
                   onChanged: (v) => patch((s) => s.copyWith(enableTrash: v)),
+                ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.auto_delete_outlined,
+                  iconColor: const Color(0xFF06B6D4),
+                  title: context.tr.autoTrashCleanup,
+                  subtitle: context.tr
+                      .trashCleanupIntervalLabel(settings.autoTrashCleanup),
+                  onTap: () async {
+                    final chosen =
+                        await _showModernOptionDialog<TrashCleanupInterval>(
+                      context,
+                      title: context.tr.autoTrashCleanup,
+                      subtitle: context.tr.storageAndCache,
+                      headerIcon: Icons.auto_delete_outlined,
+                      headerColor: const Color(0xFF06B6D4),
+                      currentValue: settings.autoTrashCleanup,
+                      options: [
+                        _OptionItem(
+                          value: TrashCleanupInterval.never,
+                          title: context.tr.cleanupNever,
+                          icon: Icons.block_rounded,
+                        ),
+                        _OptionItem(
+                          value: TrashCleanupInterval.days7,
+                          title: context.tr.cleanup7Days,
+                          icon: Icons.schedule_rounded,
+                        ),
+                        _OptionItem(
+                          value: TrashCleanupInterval.days14,
+                          title: context.tr.cleanup14Days,
+                          icon: Icons.schedule_rounded,
+                        ),
+                        _OptionItem(
+                          value: TrashCleanupInterval.days30,
+                          title: context.tr.cleanup30Days,
+                          icon: Icons.schedule_rounded,
+                        ),
+                      ],
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(autoTrashCleanup: chosen));
+                    }
+                  },
+                ),
+                const _CardDivider(),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: _ModernActionButton(
+                    icon: Icons.cleaning_services_rounded,
+                    iconColor: const Color(0xFFF97316),
+                    title: context.tr.clearThumbnailCache,
+                    subtitle: context.tr.diskSize(_cacheSizeStr),
+                    onTap: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          title: Text(context.tr.clearThumbnailCache),
+                          content: Text(
+                            '${context.tr.clearCacheConfirm}\n\n${context.tr.diskSize(_cacheSizeStr)}',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: Text(context.tr.cancel),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: Text(context.tr.clearThumbnailCache),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        await ThumbnailService.instance.clearAll();
+                        await _loadCacheSize();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                context.tr.cacheCleared,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                  ),
                 ),
                 const _CardDivider(),
                 Padding(
@@ -249,52 +612,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     },
                   ),
                 ),
-                const _CardDivider(),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: _ModernActionButton(
-                    icon: Icons.cleaning_services_rounded,
-                    iconColor: const Color(0xFFF97316),
-                    title: context.tr.clearThumbnailCache,
-                    subtitle: context.tr.diskSize(_cacheSizeStr),
-                    onTap: () async {
-                      await ThumbnailService.instance.clearAll();
-                      await _loadCacheSize();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              context.tr.clearThumbnailCache,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ),
               ],
             ),
-            _SectionHeader(context.tr.playback),
+            _SectionHeader(context.tr.privacyAndSecurity),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
-                  icon: Icons.memory_rounded,
+                  icon: Icons.security_rounded,
                   iconColor: const Color(0xFF10B981),
-                  title: context.tr.hardwareAcceleration,
-                  subtitle: context.tr.hardwareAccelerationSubtitle,
-                  value: settings.hardwareAcceleration,
-                  onChanged: (v) =>
-                      patch((s) => s.copyWith(hardwareAcceleration: v)),
+                  title: context.tr.secureScreen,
+                  subtitle: context.tr.secureScreenDesc,
+                  value: settings.secureScreen,
+                  onChanged: (v) => patch((s) => s.copyWith(secureScreen: v)),
                 ),
                 const _CardDivider(),
                 _ModernSwitchTile(
-                  icon: Icons.play_circle_outline_rounded,
-                  iconColor: const Color(0xFF06B6D4),
-                  title: context.tr.autoPlayVideo,
-                  subtitle: context.tr.autoPlayVideoSubtitle,
-                  value: settings.autoPlayVideo,
-                  onChanged: (v) => patch((s) => s.copyWith(autoPlayVideo: v)),
+                  icon: Icons.lock_outline_rounded,
+                  iconColor: const Color(0xFF6366F1),
+                  title: context.tr.lockedVault,
+                  subtitle: context.tr.lockedVaultDesc,
+                  value: settings.lockedVaultEnabled,
+                  onChanged: (v) =>
+                      patch((s) => s.copyWith(lockedVaultEnabled: v)),
                 ),
               ],
             ),
@@ -1536,4 +1875,163 @@ class _ColumnOptionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _OptionItem<T> {
+  const _OptionItem({
+    required this.value,
+    required this.title,
+    this.subtitle,
+    required this.icon,
+  });
+
+  final T value;
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+}
+
+Future<T?> _showModernOptionDialog<T>(
+  BuildContext context, {
+  required String title,
+  String? subtitle,
+  IconData? headerIcon,
+  Color? headerColor,
+  required T currentValue,
+  required List<_OptionItem<T>> options,
+}) {
+  final cs = Theme.of(context).colorScheme;
+  return showDialog<T>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+      title: Row(
+        children: [
+          if (headerIcon != null) ...[
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: (headerColor ?? cs.primary).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                headerIcon,
+                size: 20,
+                color: headerColor ?? cs.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.normal,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: options.map((item) {
+            final isSelected = item.value == currentValue;
+            return InkWell(
+              onTap: () => Navigator.pop(ctx, item.value),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? cs.primaryContainer
+                            : cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        item.icon,
+                        size: 20,
+                        color: isSelected ? cs.primary : cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.title,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
+                              color: isSelected ? cs.primary : cs.onSurface,
+                            ),
+                          ),
+                          if (item.subtitle != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              item.subtitle!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (isSelected)
+                      Icon(Icons.check_circle_rounded, color: cs.primary)
+                    else
+                      Icon(
+                        Icons.circle_outlined,
+                        color: cs.outline.withValues(alpha: 0.4),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text(context.tr.cancel),
+        ),
+      ],
+    ),
+  );
 }

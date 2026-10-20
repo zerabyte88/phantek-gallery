@@ -7,11 +7,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'core/enums/trash_cleanup_interval.dart';
 import 'core/localization/app_language.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/models/settings_model.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/services/media_kit_setup.dart';
+import 'core/services/screen_keeper_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/services/thumbnail_service.dart';
 import 'core/services/trash_service.dart';
@@ -42,8 +44,12 @@ Future<void> main() async {
   //     SAFETY: only deletes files matching "Phantek_Gallery_v*.apk" pattern.
   await UpdateService.instance.cleanupAllApks();
 
-  //  5. Clean up any expired items in trash (> 30 days old).
-  TrashService().purgeExpired().catchError((_) {});
+  //  5. Clean up expired items in trash based on autoTrashCleanup setting.
+  final initialCleanup =
+      SettingsService.instance.settings.autoTrashCleanup.inDays;
+  if (initialCleanup != null) {
+    TrashService().purgeExpired(maxDays: initialCleanup).catchError((_) {});
+  }
 
   //  6. Balanced imageCache: 256 MB and 100 entries for instant high-res swiping.
   PaintingBinding.instance.imageCache.maximumSizeBytes = 256 * 1024 * 1024;
@@ -65,9 +71,12 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Auto-check for OTA update once on launch.
+    // Auto-check for OTA update once on launch and apply secureScreen flag.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final settings = ref.read(settingsNotifierProvider);
+      if (settings.secureScreen) {
+        ScreenKeeperService.setSecure(true);
+      }
       if (settings.autoCheckUpdate) {
         ref.read(updateNotifierProvider.notifier).checkForUpdate(silent: true);
       }
@@ -97,6 +106,11 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<bool>(
+      settingsNotifierProvider.select((s) => s.secureScreen),
+      (_, secure) => ScreenKeeperService.setSecure(secure),
+    );
+
     final themeMode = ref.watch(
       settingsNotifierProvider.select((s) => s.themeMode),
     );
