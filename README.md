@@ -56,7 +56,7 @@
 - **Batch Operations:** Select multiple items to restore or permanently delete at once.
 
 ### Theming & Internationalization
-- **Theme Modes:** System default, Light, and Dark themes with subtle seasonal headers (Snowfall, Sunburst, Midnight).
+- **Theme Modes:** System default, Sunburst, Snowfall, Midnight, and Sakura themes with artistic custom headers.
 - **Multi-Language:** 22 supported languages including English, Indonesian, Japanese, Korean, Spanish, French, German, and more.
 
 ### Over-The-Air (OTA) Updates

@@ -20,7 +20,6 @@ class _K {
   static const autoCheckUpdate = 'autoCheckUpdate';
   static const defaultSort = 'defaultSort';
   static const defaultFilter = 'defaultFilter';
-  static const isSakuraUnlocked = 'isSakuraUnlocked';
   static const favoriteIds = 'favoriteIds';
 }
 
@@ -64,7 +63,6 @@ class SettingsService {
             _readEnum(_K.defaultSort, SortOption.values, SortOption.newest),
         defaultFilter:
             _readEnum(_K.defaultFilter, FilterOption.values, FilterOption.all),
-        isSakuraUnlocked: _prefs.getBool(_K.isSakuraUnlocked) ?? false,
         favoriteIds: _readStringList(_K.favoriteIds),
       );
 
@@ -85,7 +83,6 @@ class SettingsService {
       _prefs.setBool(_K.autoCheckUpdate, model.autoCheckUpdate),
       _prefs.setString(_K.defaultSort, model.defaultSort.name),
       _prefs.setString(_K.defaultFilter, model.defaultFilter.name),
-      _prefs.setBool(_K.isSakuraUnlocked, model.isSakuraUnlocked),
       _prefs.setString(_K.favoriteIds, jsonEncode(model.favoriteIds)),
     ]);
   }

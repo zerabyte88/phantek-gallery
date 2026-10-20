@@ -8,14 +8,34 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:phantek_gallery/core/services/settings_service.dart';
 
 void main() {
-  testWidgets('Swipe to dismiss retains active item page and Hero tag instead of resetting to initial item', (tester) async {
+  testWidgets(
+      'Swipe to dismiss retains active item page and Hero tag instead of resetting to initial item',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
     await SettingsService.init();
 
     final items = [
-      MediaItem(id: 'itemA', path: '/test/a.jpg', name: 'a.jpg', date: DateTime.now(), size: 100, isVideo: false),
-      MediaItem(id: 'itemB', path: '/test/b.jpg', name: 'b.jpg', date: DateTime.now(), size: 100, isVideo: false),
-      MediaItem(id: 'itemC', path: '/test/c.jpg', name: 'c.jpg', date: DateTime.now(), size: 100, isVideo: false),
+      MediaItem(
+          id: 'itemA',
+          path: '/test/a.jpg',
+          name: 'a.jpg',
+          date: DateTime.now(),
+          size: 100,
+          isVideo: false),
+      MediaItem(
+          id: 'itemB',
+          path: '/test/b.jpg',
+          name: 'b.jpg',
+          date: DateTime.now(),
+          size: 100,
+          isVideo: false),
+      MediaItem(
+          id: 'itemC',
+          path: '/test/c.jpg',
+          name: 'c.jpg',
+          date: DateTime.now(),
+          size: 100,
+          isVideo: false),
     ];
 
     await tester.pumpWidget(
@@ -24,7 +44,8 @@ void main() {
           home: Builder(
             builder: (context) => Scaffold(
               body: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3),
                 itemCount: items.length,
                 itemBuilder: (ctx, i) => MediaGridItem(
                   key: ValueKey(items[i].id),
@@ -37,10 +58,12 @@ void main() {
                       PageRouteBuilder(
                         opaque: false,
                         barrierColor: Colors.transparent,
-                        pageBuilder: (_, __, ___) => ImageViewerScreen(items: items, initialIndex: i),
+                        pageBuilder: (_, __, ___) =>
+                            ImageViewerScreen(items: items, initialIndex: i),
                         transitionsBuilder: (_, __, ___, child) => child,
                         transitionDuration: const Duration(milliseconds: 300),
-                        reverseTransitionDuration: const Duration(milliseconds: 300),
+                        reverseTransitionDuration:
+                            const Duration(milliseconds: 300),
                       ),
                     );
                   },

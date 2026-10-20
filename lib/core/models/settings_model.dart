@@ -19,7 +19,6 @@ class SettingsModel extends Equatable {
     this.autoCheckUpdate = true,
     this.defaultSort = SortOption.newest,
     this.defaultFilter = FilterOption.all,
-    this.isSakuraUnlocked = false,
     this.favoriteIds = const [],
   });
 
@@ -56,9 +55,6 @@ class SettingsModel extends Equatable {
   final SortOption defaultSort;
   final FilterOption defaultFilter;
 
-  /// Easter Egg: whether AMOLED Sakura theme has been unlocked.
-  final bool isSakuraUnlocked;
-
   /// IDs of media items marked as favorites.
   final List<String> favoriteIds;
 
@@ -76,7 +72,6 @@ class SettingsModel extends Equatable {
     bool? autoCheckUpdate,
     SortOption? defaultSort,
     FilterOption? defaultFilter,
-    bool? isSakuraUnlocked,
     List<String>? favoriteIds,
   }) {
     return SettingsModel(
@@ -93,7 +88,6 @@ class SettingsModel extends Equatable {
       autoCheckUpdate: autoCheckUpdate ?? this.autoCheckUpdate,
       defaultSort: defaultSort ?? this.defaultSort,
       defaultFilter: defaultFilter ?? this.defaultFilter,
-      isSakuraUnlocked: isSakuraUnlocked ?? this.isSakuraUnlocked,
       favoriteIds: favoriteIds ?? this.favoriteIds,
     );
   }
@@ -113,7 +107,6 @@ class SettingsModel extends Equatable {
         autoCheckUpdate,
         defaultSort,
         defaultFilter,
-        isSakuraUnlocked,
         favoriteIds,
       ];
 }

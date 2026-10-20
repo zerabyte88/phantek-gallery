@@ -72,12 +72,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       ref.read(settingsNotifierProvider.notifier).update(fn);
     }
 
-    final availableThemeModes = [
+    const availableThemeModes = [
       AppThemeMode.system,
       AppThemeMode.light,
       AppThemeMode.dark,
       AppThemeMode.amoled,
-      if (settings.isSakuraUnlocked) AppThemeMode.amoledSakura,
+      AppThemeMode.amoledSakura,
     ];
 
     return Scaffold(

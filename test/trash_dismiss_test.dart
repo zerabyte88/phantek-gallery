@@ -20,7 +20,9 @@ class _FakeTrashNotifier extends TrashNotifier {
 }
 
 void main() {
-  testWidgets('Trash grid items contain Hero widgets matching item.id for in and out transitions', (tester) async {
+  testWidgets(
+      'Trash grid items contain Hero widgets matching item.id for in and out transitions',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
     await SettingsService.init();
 
@@ -74,12 +76,16 @@ void main() {
     // The grid items must have Hero widgets with tag matching trash item IDs
     final heroTags = heroesInTrash.map((h) => h.tag).toList();
     expect(heroTags.contains('trash_photo_1'), isTrue,
-        reason: 'trash_photo_1 should have a Hero widget for flight in/out animation');
+        reason:
+            'trash_photo_1 should have a Hero widget for flight in/out animation');
     expect(heroTags.contains('trash_video_1'), isTrue,
-        reason: 'trash_video_1 should have a Hero widget for flight in/out animation');
+        reason:
+            'trash_video_1 should have a Hero widget for flight in/out animation');
   });
 
-  testWidgets('Tapping trash photo opens viewer with Hero and swipe down dismisses back to trash grid', (tester) async {
+  testWidgets(
+      'Tapping trash photo opens viewer with Hero and swipe down dismisses back to trash grid',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
     await SettingsService.init();
 
@@ -119,7 +125,8 @@ void main() {
     expect(find.byType(TrashScreen), findsOneWidget);
     final heroInGrid = find.descendant(
       of: find.byType(TrashScreen),
-      matching: find.byWidgetPredicate((w) => w is Hero && w.tag == 'trash_photo_1'),
+      matching:
+          find.byWidgetPredicate((w) => w is Hero && w.tag == 'trash_photo_1'),
     );
     expect(heroInGrid, findsOneWidget);
 
@@ -132,7 +139,8 @@ void main() {
     expect(find.byType(ImageViewerScreen), findsOneWidget);
     final heroInViewer = find.descendant(
       of: find.byType(ImageViewerScreen),
-      matching: find.byWidgetPredicate((w) => w is Hero && w.tag == 'trash_photo_1'),
+      matching:
+          find.byWidgetPredicate((w) => w is Hero && w.tag == 'trash_photo_1'),
     );
     expect(heroInViewer, findsOneWidget);
 
@@ -147,4 +155,3 @@ void main() {
     expect(heroInGrid, findsOneWidget);
   });
 }
-

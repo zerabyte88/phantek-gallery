@@ -25,7 +25,8 @@ import 'package:phantek_gallery/features/gallery/presentation/gallery_screen.dar
 import 'package:phantek_gallery/features/gallery/presentation/widgets/filter_sort_bar.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/sort_bottom_sheet.dart';
 import 'package:phantek_gallery/features/player/presentation/widgets/media_info_sheet.dart';
-import 'package:phantek_gallery/features/player/presentation/image_viewer_screen.dart' show displayImage, screenDisplayImage;
+import 'package:phantek_gallery/features/player/presentation/image_viewer_screen.dart'
+    show displayImage, screenDisplayImage;
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
 import 'package:phantek_gallery/core/services/share_service.dart';
 import 'package:phantek_gallery/app/router.dart' show rootNavigatorKey;
@@ -45,8 +46,12 @@ void main() {
       expect(MediaUtils.formatSize(500), '500 B');
       expect(MediaUtils.formatSize(1024 * 500), '500.0 KB');
       expect(MediaUtils.formatSize(1024 * 1024 * 5), '5.0 MB');
-      expect(MediaUtils.formatDuration(const Duration(minutes: 2, seconds: 45)), '02:45');
-      expect(MediaUtils.formatDuration(const Duration(hours: 1, minutes: 5, seconds: 2)), '1:05:02');
+      expect(MediaUtils.formatDuration(const Duration(minutes: 2, seconds: 45)),
+          '02:45');
+      expect(
+          MediaUtils.formatDuration(
+              const Duration(hours: 1, minutes: 5, seconds: 2)),
+          '1:05:02');
 
       final dt = DateTime(DateTime.now().year, 9, 15, 15, 40);
       expect(MediaUtils.formatViewerDate(dt), 'September 15');
@@ -136,7 +141,8 @@ void main() {
       expect(portraitItem.width, 1080);
       expect(portraitItem.height, 1920);
       expect(portraitItem.resolution, '1080x1920');
-      expect(portraitItem.width! / portraitItem.height!, closeTo(1080 / 1920, 0.001));
+      expect(portraitItem.width! / portraitItem.height!,
+          closeTo(1080 / 1920, 0.001));
     });
 
     test('Unindexed large video (>100MB) fallback aspect ratio resolution', () {
@@ -156,7 +162,10 @@ void main() {
 
       // Verify safe aspect ratio fallback calculation
       double resolveTestRatio(MediaItem item) {
-        if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
+        if (item.width != null &&
+            item.height != null &&
+            item.width! > 0 &&
+            item.height! > 0) {
           return item.width! / item.height!;
         }
         return 16.0 / 9.0;
@@ -216,7 +225,9 @@ void main() {
       expect(settings.defaultFilter, FilterOption.all);
     });
 
-    testWidgets('FilterSortBar displays filter chips and sort bar opens bottom sheet', (tester) async {
+    testWidgets(
+        'FilterSortBar displays filter chips and sort bar opens bottom sheet',
+        (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
@@ -266,7 +277,8 @@ void main() {
       expect(find.text('By name: A to Z'), findsOneWidget);
     });
 
-    test('TrashService moveToTrash and restore lifecycle with temp file', () async {
+    test('TrashService moveToTrash and restore lifecycle with temp file',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('trash_test_');
       try {
         final testFile = File('${tempDir.path}/photo.jpg');
@@ -295,8 +307,10 @@ void main() {
       }
     });
 
-    test('TrashService purgeExpired automatically removes expired items', () async {
-      final tempDir = await Directory.systemTemp.createTemp('trash_purge_test_');
+    test('TrashService purgeExpired automatically removes expired items',
+        () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('trash_purge_test_');
       try {
         final testFile = File('${tempDir.path}/expired.jpg');
         await testFile.writeAsString('expired photo content');
@@ -381,7 +395,9 @@ void main() {
       expect(tapped, isTrue);
     });
 
-    testWidgets('AlbumGridItem shows checkmark avatar when isSelecting and isSelected', (tester) async {
+    testWidgets(
+        'AlbumGridItem shows checkmark avatar when isSelecting and isSelected',
+        (tester) async {
       final item = MediaItem(
         id: '1',
         path: '/storage/emulated/0/DCIM/photo.jpg',
@@ -418,7 +434,8 @@ void main() {
       expect(find.byKey(const ValueKey('checked')), findsOneWidget);
     });
 
-    testWidgets('AlbumDetailScreen renders album title and empty state', (tester) async {
+    testWidgets('AlbumDetailScreen renders album title and empty state',
+        (tester) async {
       await tester.pumpWidget(
         const ProviderScope(
           child: MaterialApp(
@@ -431,7 +448,8 @@ void main() {
       expect(find.text('No media in Facebook'), findsOneWidget);
     });
 
-    testWidgets('SettingsScreen Grid Columns dialog updates column count', (tester) async {
+    testWidgets('SettingsScreen Grid Columns dialog updates column count',
+        (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
@@ -493,7 +511,8 @@ void main() {
       expect(AppTheme.amoledSakura.scaffoldBackgroundColor, Colors.black);
     });
 
-    testWidgets('AppBar badge 10-tap Easter Egg unlocks AMOLED Sakura theme', (tester) async {
+    testWidgets('AMOLED Sakura theme is available by default in Theme dialog',
+        (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
@@ -517,61 +536,18 @@ void main() {
       await tester.tap(find.text('Theme'));
       await tester.pumpAndSettle();
 
-      // Midnight is available, but Sakura is NOT available before Easter egg
+      // Both Midnight and Sakura are available directly
       expect(find.text('Midnight'), findsOneWidget);
-      expect(find.text('Sakura'), findsNothing);
+      expect(find.text('Sakura'), findsOneWidget);
 
-      // Close dialog by tapping first option (System)
-      await tester.tap(find.text('System').last);
+      // Select Sakura theme
+      await tester.tap(find.text('Sakura'));
       await tester.pumpAndSettle();
 
-      // Verify SettingsScreen does not have easter egg on about card
-      expect(find.byKey(const ValueKey('settings_appbar_badge_easter_egg')), findsNothing);
-      expect(SettingsService.instance.settings.isSakuraUnlocked, isFalse);
-
-      // Pump GalleryScreen where the Easter Egg lives on the AppBar badge
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: overrides,
-          child: const MaterialApp(
-            home: GalleryScreen(),
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Find AppBar badge in GalleryScreen
-      final badgeFinder = find.byKey(const ValueKey('appbar_badge_easter_egg'));
-      expect(badgeFinder, findsOneWidget);
-
-      // Tap AppBar badge 10 times
-      for (var i = 0; i < 10; i++) {
-        await tester.tap(badgeFinder);
-        await tester.pump(const Duration(milliseconds: 100));
-      }
-      await tester.pump(const Duration(milliseconds: 300));
-
-      // SnackBar shows Easter Egg Unlocked
-      expect(find.textContaining('Easter Egg Unlocked!'), findsOneWidget);
-      expect(SettingsService.instance.settings.isSakuraUnlocked, isTrue);
-
-      // Pump SettingsScreen again to verify AMOLED Sakura is now available
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: overrides,
-          child: const MaterialApp(
-            home: SettingsScreen(),
-          ),
-        ),
-      );
-
-      // Open Theme dialog
-      await tester.tap(find.text('Theme'));
-      await tester.pumpAndSettle();
-
-      // Now Sakura is in the dialog!
-      expect(find.text('Sakura'), findsNWidgets(2)); // in dialog + in subtitle
+      // Verify Sakura is now selected
+      expect(SettingsService.instance.settings.themeMode,
+          AppThemeMode.amoledSakura);
+      expect(find.text('Sakura'), findsOneWidget);
     });
 
     test('MediaListNotifier optimistic removeItems and restoreItems', () async {
@@ -586,7 +562,9 @@ void main() {
       expect(initial.length, 3);
 
       // Optimistically remove 2 items
-      container.read(mediaListProvider.notifier).removeItems(['item_1', 'item_2']);
+      container
+          .read(mediaListProvider.notifier)
+          .removeItems(['item_1', 'item_2']);
       final afterRemove = container.read(mediaListProvider).value!;
       expect(afterRemove.length, 1);
       expect(afterRemove.first.id, 'item_3');
@@ -596,35 +574,51 @@ void main() {
       await container.read(mediaListProvider.notifier).refresh();
       final afterRefresh = container.read(mediaListProvider).value!;
       // item_1 restored and scanned back, item_2 still in deletedIds
-      expect(afterRefresh.map((e) => e.id).toSet(), containsAll({'item_1', 'item_3'}));
+      expect(afterRefresh.map((e) => e.id).toSet(),
+          containsAll({'item_1', 'item_3'}));
       expect(afterRefresh.any((e) => e.id == 'item_2'), isFalse);
     });
 
-    test('UpdateService selectBestApkAsset picks correct 64-bit and 32-bit variant', () {
+    test(
+        'UpdateService selectBestApkAsset picks correct 64-bit and 32-bit variant',
+        () {
       final assets = [
-        {'name': 'Phantek-Gallery-armeabi-v7a.apk', 'browser_download_url': 'https://example.com/v7a.apk'},
-        {'name': 'Phantek-Gallery-arm64-v8a.apk', 'browser_download_url': 'https://example.com/arm64.apk'},
+        {
+          'name': 'Phantek-Gallery-armeabi-v7a.apk',
+          'browser_download_url': 'https://example.com/v7a.apk'
+        },
+        {
+          'name': 'Phantek-Gallery-arm64-v8a.apk',
+          'browser_download_url': 'https://example.com/arm64.apk'
+        },
       ];
 
       // On 64-bit ARM device:
       final selected64 = UpdateService.selectBestApkAsset(assets, 'arm64-v8a');
       expect(selected64['name'], 'Phantek-Gallery-arm64-v8a.apk');
-      expect(selected64['browser_download_url'], 'https://example.com/arm64.apk');
+      expect(
+          selected64['browser_download_url'], 'https://example.com/arm64.apk');
 
       // On 32-bit ARM device:
-      final selected32 = UpdateService.selectBestApkAsset(assets, 'armeabi-v7a');
+      final selected32 =
+          UpdateService.selectBestApkAsset(assets, 'armeabi-v7a');
       expect(selected32['name'], 'Phantek-Gallery-armeabi-v7a.apk');
       expect(selected32['browser_download_url'], 'https://example.com/v7a.apk');
 
       // Fallback to universal when specific ABI is missing:
       final universalAssets = [
-        {'name': 'app-release.apk', 'browser_download_url': 'https://example.com/app-release.apk'},
+        {
+          'name': 'app-release.apk',
+          'browser_download_url': 'https://example.com/app-release.apk'
+        },
       ];
-      final selectedUniversal = UpdateService.selectBestApkAsset(universalAssets, 'arm64-v8a');
+      final selectedUniversal =
+          UpdateService.selectBestApkAsset(universalAssets, 'arm64-v8a');
       expect(selectedUniversal['name'], 'app-release.apk');
     });
 
-    test('ThumbnailService clearAll wipes cache and formats size properly', () async {
+    test('ThumbnailService clearAll wipes cache and formats size properly',
+        () async {
       await ThumbnailService.instance.clearAll();
       final size = await ThumbnailService.instance.getCacheSizeBytes();
       expect(size, 0);
@@ -632,7 +626,9 @@ void main() {
       expect(sizeStr, '0 B');
     });
 
-    testWidgets('GalleryScreen horizontal swipe navigates between categories without resetting', (tester) async {
+    testWidgets(
+        'GalleryScreen horizontal swipe navigates between categories without resetting',
+        (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
@@ -672,7 +668,8 @@ void main() {
       expect(videosPageView.controller?.page?.round(), 2);
     });
 
-    testWidgets('MediaInfoSheet displays details and copies path to clipboard', (tester) async {
+    testWidgets('MediaInfoSheet displays details and copies path to clipboard',
+        (tester) async {
       final testItem = MediaItem(
         id: '123',
         path: '/storage/emulated/0/DCIM/sample.jpg',
@@ -716,7 +713,8 @@ void main() {
       expect(find.text('Path copied to clipboard'), findsOneWidget);
     });
 
-    testWidgets('MediaInfoSheet displays video FPS, Codec and duration', (tester) async {
+    testWidgets('MediaInfoSheet displays video FPS, Codec and duration',
+        (tester) async {
       final videoItem = MediaItem(
         id: 'vid_1',
         path: '/storage/emulated/0/DCIM/sample.mp4',
@@ -761,7 +759,9 @@ void main() {
       expect(find.text('00:14'), findsOneWidget);
     });
 
-    test('groupMediaIntoAlbums creates Favorites album at index 0 when favoriteIds are present', () {
+    test(
+        'groupMediaIntoAlbums creates Favorites album at index 0 when favoriteIds are present',
+        () {
       final item1 = MediaItem(
         id: 'fav_1',
         path: '/storage/emulated/0/DCIM/photo1.jpg',
@@ -779,7 +779,8 @@ void main() {
         isVideo: true,
       );
 
-      final albumsWithoutFav = groupMediaIntoAlbums([item1, item2], sort: SortOption.newest);
+      final albumsWithoutFav =
+          groupMediaIntoAlbums([item1, item2], sort: SortOption.newest);
       expect(albumsWithoutFav.any((a) => a.name == 'Favorites'), isFalse);
 
       final albumsWithFav = groupMediaIntoAlbums(
@@ -805,7 +806,8 @@ void main() {
       expect(updated == model, isFalse);
     });
 
-    test('MediaListNotifier updateItem updates modified item in state', () async {
+    test('MediaListNotifier updateItem updates modified item in state',
+        () async {
       final container = ProviderContainer(
         overrides: [
           mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
@@ -826,7 +828,9 @@ void main() {
       expect(updatedItems.first.id, original.id);
     });
 
-    testWidgets('GalleryScreen search opens search bar, filters results and clears', (tester) async {
+    testWidgets(
+        'GalleryScreen search opens search bar, filters results and clears',
+        (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
@@ -858,7 +862,8 @@ void main() {
       final searchFieldRect = tester.getRect(find.byType(TextField));
       final filterBarRect = tester.getRect(find.byType(FilterSortBar));
       expect(searchFieldRect.bottom, lessThanOrEqualTo(filterBarRect.top),
-          reason: 'Search bar must strictly reside inside the toolbar above FilterSortBar with zero collision');
+          reason:
+              'Search bar must strictly reside inside the toolbar above FilterSortBar with zero collision');
 
       // Enter search query
       await tester.enterText(find.byType(TextField), '3.mp4');
@@ -922,8 +927,10 @@ void main() {
       // 4K widescreen movie (3840x2160, 0 deg)
       expect(isPortraitCheck(w: 3840, h: 2160, rotate: 0), isFalse);
 
-      final isPortrait = (portraitVideo.height ?? 0) > (portraitVideo.width ?? 0);
-      final isLandscape = (landscapeVideo.height ?? 0) > (landscapeVideo.width ?? 0);
+      final isPortrait =
+          (portraitVideo.height ?? 0) > (portraitVideo.width ?? 0);
+      final isLandscape =
+          (landscapeVideo.height ?? 0) > (landscapeVideo.width ?? 0);
 
       expect(isPortrait, isTrue);
       expect(isLandscape, isFalse);
@@ -931,7 +938,9 @@ void main() {
       expect(landscapeVideo.resolution, '3840x2160');
     });
 
-    testWidgets('UpdateListener mounts with rootNavigatorKey and has valid navigator context', (tester) async {
+    testWidgets(
+        'UpdateListener mounts with rootNavigatorKey and has valid navigator context',
+        (tester) async {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
@@ -950,12 +959,16 @@ void main() {
       expect(Navigator.of(rootNavigatorKey.currentContext!), isNotNull);
     });
 
-    test('ThumbnailService getMemoryThumbnail returns synchronously cached bytes', () {
+    test(
+        'ThumbnailService getMemoryThumbnail returns synchronously cached bytes',
+        () {
       final service = ThumbnailService.instance;
       expect(service.getMemoryThumbnail('non_existent_key'), isNull);
     });
 
-    test('ThumbnailService init and getCachedFile handles cache lookup properly', () async {
+    test(
+        'ThumbnailService init and getCachedFile handles cache lookup properly',
+        () async {
       await ThumbnailService.init();
       final service = ThumbnailService.instance;
       expect(service.getCachedFile('non_existent_disk_key'), isNull);
@@ -983,34 +996,51 @@ void main() {
       expect(matrix.getMaxScaleOnAxis() > 1.05, isFalse);
     });
 
-    test('MediaScannerService video format recognition for MKV, MOV, WebM, and MP4', () {
+    test(
+        'MediaScannerService video format recognition for MKV, MOV, WebM, and MP4',
+        () {
       expect(MediaScannerService.isSupportedVideo('.mkv'), isTrue);
       expect(MediaScannerService.isSupportedVideo('.mov'), isTrue);
       expect(MediaScannerService.isSupportedVideo('.webm'), isTrue);
       expect(MediaScannerService.isSupportedVideo('.mp4'), isTrue);
-      expect(MediaScannerService.isSupportedVideo('/storage/DCIM/clip.MKV'), isTrue);
-      expect(MediaScannerService.isSupportedVideo('/storage/Download/movie.mov'), isTrue);
-      expect(MediaScannerService.isSupportedVideo('/storage/Download/sample.webm'), isTrue);
-      expect(MediaScannerService.isSupportedVideo('/storage/DCIM/photo.jpg'), isFalse);
-      expect(MediaScannerService.isSupportedVideo('/storage/DCIM/image.png'), isFalse);
+      expect(MediaScannerService.isSupportedVideo('/storage/DCIM/clip.MKV'),
+          isTrue);
+      expect(
+          MediaScannerService.isSupportedVideo('/storage/Download/movie.mov'),
+          isTrue);
+      expect(
+          MediaScannerService.isSupportedVideo('/storage/Download/sample.webm'),
+          isTrue);
+      expect(MediaScannerService.isSupportedVideo('/storage/DCIM/photo.jpg'),
+          isFalse);
+      expect(MediaScannerService.isSupportedVideo('/storage/DCIM/image.png'),
+          isFalse);
     });
 
-    test('MediaScannerService MIME validation and inference for MKV, MOV, WebM, and others', () {
-      expect(MediaScannerService.isSupportedVideoMime('video/x-matroska'), isTrue);
+    test(
+        'MediaScannerService MIME validation and inference for MKV, MOV, WebM, and others',
+        () {
+      expect(
+          MediaScannerService.isSupportedVideoMime('video/x-matroska'), isTrue);
       expect(MediaScannerService.isSupportedVideoMime('video/mkv'), isTrue);
-      expect(MediaScannerService.isSupportedVideoMime('video/quicktime'), isTrue);
+      expect(
+          MediaScannerService.isSupportedVideoMime('video/quicktime'), isTrue);
       expect(MediaScannerService.isSupportedVideoMime('video/webm'), isTrue);
       expect(MediaScannerService.isSupportedVideoMime('video/mp4'), isTrue);
       expect(MediaScannerService.isSupportedVideoMime('image/jpeg'), isFalse);
 
-      expect(MediaScannerService.inferMimeType('video.mkv'), 'video/x-matroska');
+      expect(
+          MediaScannerService.inferMimeType('video.mkv'), 'video/x-matroska');
       expect(MediaScannerService.inferMimeType('video.webm'), 'video/webm');
       expect(MediaScannerService.inferMimeType('video.mov'), 'video/quicktime');
       expect(MediaScannerService.inferMimeType('video.mp4'), 'video/mp4');
-      expect(MediaScannerService.inferMimeType('video.unknown', isVideo: true), 'video/unknown');
+      expect(MediaScannerService.inferMimeType('video.unknown', isVideo: true),
+          'video/unknown');
     });
 
-    test('Codec configuration verifies auto-copy with SW fallback and hardware acceleration for VP9, HEVC, and H264', () {
+    test(
+        'Codec configuration verifies auto-copy with SW fallback and hardware acceleration for VP9, HEVC, and H264',
+        () {
       const hwdec = 'auto-copy';
       const bufferSize = 8388608; // 8 MB – within MPV Android hard-cap of 10 MB
 
@@ -1022,7 +1052,9 @@ void main() {
       expect(bufferSize, lessThanOrEqualTo(10485760));
     });
 
-    test('Non-fatal codec warnings are identified and suppressed from UI notifications', () {
+    test(
+        'Non-fatal codec warnings are identified and suppressed from UI notifications',
+        () {
       bool isNonFatalWarning(String err) {
         final errLower = err.toLowerCase();
         return errLower.contains('could not open codec') ||
@@ -1043,11 +1075,14 @@ void main() {
       expect(isNonFatalWarning('Using software decoding'), isTrue);
       expect(isNonFatalWarning('Error decoding video'), isTrue);
       expect(isNonFatalWarning('Cannot decode frame at timestamp'), isTrue);
-      expect(isNonFatalWarning('Invalid data found when processing input'), isTrue);
+      expect(isNonFatalWarning('Invalid data found when processing input'),
+          isTrue);
       expect(isNonFatalWarning('File not found: /storage/video.mp4'), isFalse);
     });
 
-    testWidgets('SortBottomSheet adapts accentColor and Restore defaults to active theme', (tester) async {
+    testWidgets(
+        'SortBottomSheet adapts accentColor and Restore defaults to active theme',
+        (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.amoledSakura,
@@ -1068,7 +1103,9 @@ void main() {
       expect(restoreText.style?.color, const Color(0xFFFF7597)); // Sakura pink!
     });
 
-    test('Zoom focal point math calculates correct translation offset for scale', () {
+    test(
+        'Zoom focal point math calculates correct translation offset for scale',
+        () {
       const center = Offset(200, 400);
       const tapPos = Offset(150, 300);
       const targetScale = 1.8;
@@ -1084,7 +1121,9 @@ void main() {
       expect(transformed.dy, closeTo(tapPos.dy, 0.001));
     });
 
-    test('Photo InteractiveViewer focal point matrix scales to 2.5x and returns cleanly to identity', () {
+    test(
+        'Photo InteractiveViewer focal point matrix scales to 2.5x and returns cleanly to identity',
+        () {
       final controller = TransformationController();
       expect(controller.value.getMaxScaleOnAxis(), 1.0);
       expect(controller.value.isIdentity(), isTrue);
@@ -1103,7 +1142,8 @@ void main() {
       expect(controller.value.getMaxScaleOnAxis() > 1.05, isTrue);
 
       // The focal point transformed by the matrix should stay at tapPos
-      final transformedPoint = MatrixUtils.transformPoint(controller.value, tapPos);
+      final transformedPoint =
+          MatrixUtils.transformPoint(controller.value, tapPos);
       expect(transformedPoint.dx, closeTo(tapPos.dx, 0.001));
       expect(transformedPoint.dy, closeTo(tapPos.dy, 0.001));
 
@@ -1114,7 +1154,9 @@ void main() {
       expect(controller.value.getMaxScaleOnAxis() > 1.05, isFalse);
     });
 
-    test('Responsive gesture slop deadzone filters minor horizontal jitters and accepts natural downward drag', () {
+    test(
+        'Responsive gesture slop deadzone filters minor horizontal jitters and accepts natural downward drag',
+        () {
       bool shouldStartDrag(double dx, double dy) {
         return dy > 8 && dy > dx.abs() * 1.1;
       }
@@ -1133,7 +1175,9 @@ void main() {
       expect(shouldStartDrag(20, 30), isTrue); // 30 > 20 * 1.1 (22)
     });
 
-    test('Snapdragon 685 WebM and VP9 codec safety rules route to software decode', () {
+    test(
+        'Snapdragon 685 WebM and VP9 codec safety rules route to software decode',
+        () {
       String resolveHwdec(String path) {
         if (path.toLowerCase().endsWith('.webm')) return 'no';
         return 'auto-copy';
@@ -1145,7 +1189,9 @@ void main() {
       expect(resolveHwdec('movie.mkv'), 'auto-copy');
     });
 
-    test('Video thumbnail extraction scales 4K (2160p) and 1080p down proportionally without memory bloat', () {
+    test(
+        'Video thumbnail extraction scales 4K (2160p) and 1080p down proportionally without memory bloat',
+        () {
       // 4K UHD: 3840 x 2160
       const origW = 3840;
       const origH = 2160;
@@ -1158,10 +1204,13 @@ void main() {
 
       expect(dstW, 512);
       expect(dstH, 288); // 16:9 preserved perfectly!
-      expect(dstW * dstH * 4, lessThan(600 * 1024)); // Less than 600 KB RAM vs 33 MB unscaled!
+      expect(dstW * dstH * 4,
+          lessThan(600 * 1024)); // Less than 600 KB RAM vs 33 MB unscaled!
     });
 
-    test('Photo double-tap detector identifies valid double taps within time and distance thresholds', () {
+    test(
+        'Photo double-tap detector identifies valid double taps within time and distance thresholds',
+        () {
       bool isDoubleTap({
         required int downDurationMs,
         required double moveDist,
@@ -1177,19 +1226,44 @@ void main() {
       }
 
       // Valid double tap
-      expect(isDoubleTap(downDurationMs: 80, moveDist: 2.0, intervalMs: 150, doubleTapDist: 5.0), isTrue);
+      expect(
+          isDoubleTap(
+              downDurationMs: 80,
+              moveDist: 2.0,
+              intervalMs: 150,
+              doubleTapDist: 5.0),
+          isTrue);
 
       // Too slow between taps (> 350ms)
-      expect(isDoubleTap(downDurationMs: 80, moveDist: 2.0, intervalMs: 400, doubleTapDist: 5.0), isFalse);
+      expect(
+          isDoubleTap(
+              downDurationMs: 80,
+              moveDist: 2.0,
+              intervalMs: 400,
+              doubleTapDist: 5.0),
+          isFalse);
 
       // Too far apart (> 45px)
-      expect(isDoubleTap(downDurationMs: 80, moveDist: 2.0, intervalMs: 150, doubleTapDist: 60.0), isFalse);
+      expect(
+          isDoubleTap(
+              downDurationMs: 80,
+              moveDist: 2.0,
+              intervalMs: 150,
+              doubleTapDist: 60.0),
+          isFalse);
 
       // First tap was a drag (> 25px move)
-      expect(isDoubleTap(downDurationMs: 80, moveDist: 35.0, intervalMs: 150, doubleTapDist: 5.0), isFalse);
+      expect(
+          isDoubleTap(
+              downDurationMs: 80,
+              moveDist: 35.0,
+              intervalMs: 150,
+              doubleTapDist: 5.0),
+          isFalse);
     });
 
-    test('displayImage caps 100MP photos at 4096px and shares one cache entry', () {
+    test('displayImage caps 100MP photos at 4096px and shares one cache entry',
+        () {
       final a = displayImage('/dcim/hasselblad.jpg') as ResizeImage;
       final b = displayImage('/dcim/hasselblad.jpg');
       expect(a.width, 4096);
@@ -1204,7 +1278,9 @@ void main() {
       expect(bytes * 3, lessThan(256 * 1024 * 1024));
     });
 
-    test('screenDisplayImage bounds photos to 2048px for fluid sliding and low memory', () {
+    test(
+        'screenDisplayImage bounds photos to 2048px for fluid sliding and low memory',
+        () {
       final a = screenDisplayImage('/dcim/hasselblad.jpg') as ResizeImage;
       final b = screenDisplayImage('/dcim/hasselblad.jpg');
       expect(a.width, 2048);
@@ -1214,7 +1290,9 @@ void main() {
       expect(screenDisplayImage('/dcim/other.jpg'), isNot(equals(a)));
     });
 
-    test('Hero flight shuttle preserves AspectRatio and interpolates bounds without vertical distortion', () {
+    test(
+        'Hero flight shuttle preserves AspectRatio and interpolates bounds without vertical distortion',
+        () {
       // Starting from 120x120 grid cell (1:1 aspect ratio)
       const srcWidth = 120.0;
       const srcHeight = 120.0;
@@ -1241,7 +1319,8 @@ void main() {
       expect(widthAt(1.0), 412.0);
     });
 
-    testWidgets('MediaGridItem renders Hero thumbnail inside a ClipRRect', (tester) async {
+    testWidgets('MediaGridItem renders Hero thumbnail inside a ClipRRect',
+        (tester) async {
       final testItem = MediaItem(
         id: 'test_grid_item_1',
         path: '/dcim/test.jpg',
@@ -1275,7 +1354,8 @@ void main() {
       expect(hero.tag, 'test_grid_item_1');
     });
 
-    test('Swipe-to-dismiss dynamic scale, corner radius, and opacity formulas', () {
+    test('Swipe-to-dismiss dynamic scale, corner radius, and opacity formulas',
+        () {
       double computeScale(double dy) =>
           (1.0 - (dy / 1000.0) * 0.28).clamp(0.72, 1.0);
       double computeRadius(double dy) =>
@@ -1295,7 +1375,8 @@ void main() {
       expect(computeScale(35), closeTo(0.99, 0.01));
       expect(computeRadius(35), closeTo(2.91, 0.05));
       expect(computeScrimAlpha(35), closeTo(0.89, 0.01));
-      expect(computeOverlayOpacity(35), 0.0); // Bars completely and cleanly hidden!
+      expect(computeOverlayOpacity(35),
+          0.0); // Bars completely and cleanly hidden!
 
       // Deep drag (dy = 320)
       expect(computeScrimAlpha(320), 0.0); // Background completely clear
@@ -1309,7 +1390,9 @@ void main() {
       expect(computeOverlayOpacity(2000), 0.0);
     });
 
-    test('Swipe-to-dismiss SpringSimulation description uses smooth organic damping', () {
+    test(
+        'Swipe-to-dismiss SpringSimulation description uses smooth organic damping',
+        () {
       final spring = SpringDescription.withDampingRatio(
         mass: 1.0,
         stiffness: 320,
@@ -1318,7 +1401,8 @@ void main() {
 
       expect(spring.mass, 1.0);
       expect(spring.stiffness, 320.0);
-      expect(spring.damping, closeTo(2 * 1.0 * 0.82 * 17.888, 0.5)); // 2*m*ratio*sqrt(k)
+      expect(spring.damping,
+          closeTo(2 * 1.0 * 0.82 * 17.888, 0.5)); // 2*m*ratio*sqrt(k)
     });
 
     test('FilterSortBar segmented capsule indicator alignment calculation', () {
@@ -1340,7 +1424,9 @@ void main() {
       expect(computeAlignmentX(2, 3), 1.0); // Videos
     });
 
-    testWidgets('ThemeHeaderBackground and AnimatedFlameTitle adapt to all AppThemeMode options', (tester) async {
+    testWidgets(
+        'ThemeHeaderBackground and AnimatedFlameTitle adapt to all AppThemeMode options',
+        (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
@@ -1360,7 +1446,8 @@ void main() {
               ),
             ],
             child: MaterialApp(
-              theme: mode == AppThemeMode.light ? AppTheme.light : AppTheme.dark,
+              theme:
+                  mode == AppThemeMode.light ? AppTheme.light : AppTheme.dark,
               home: Scaffold(
                 appBar: AppBar(
                   flexibleSpace: const ThemeHeaderBackground(),
@@ -1390,15 +1477,17 @@ void main() {
       }
     });
 
-    test('ThumbnailService.parseJpegDimensions parses SOF0 marker accurately', () {
+    test('ThumbnailService.parseJpegDimensions parses SOF0 marker accurately',
+        () {
       final bytes = Uint8List.fromList([
         0xFF, 0xD8, // SOI
         0xFF, 0xE0, // APP0
         0x00, 0x10, // length = 16
-        0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00,
+        0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48,
+        0x00, 0x00,
         0xFF, 0xC0, // SOF0
         0x00, 0x11, // length = 17
-        0x08,       // precision
+        0x08, // precision
         0x05, 0x00, // height = 1280 (0x0500)
         0x02, 0xD0, // width = 720 (0x02D0)
         0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
@@ -1412,7 +1501,9 @@ void main() {
       expect(size.width / size.height, 0.5625);
     });
 
-    test('ThumbnailService.parseJpegDimensions parses SOF2 progressive marker accurately', () {
+    test(
+        'ThumbnailService.parseJpegDimensions parses SOF2 progressive marker accurately',
+        () {
       final bytes = Uint8List.fromList([
         0xFF, 0xD8, // SOI
         0xFF, 0xC2, // SOF2 progressive
@@ -1431,7 +1522,9 @@ void main() {
       expect(size.width / size.height, closeTo(1.777, 0.001));
     });
 
-    test('Video player seekbar, left/right timestamps, and fullscreen button are collectively elevated by 32dp spacing above action buttons', () {
+    test(
+        'Video player seekbar, left/right timestamps, and fullscreen button are collectively elevated by 32dp spacing above action buttons',
+        () {
       // The seekbar unit (slider, left timestamp, right timestamp, fullscreen button)
       // is separated from the bottom action buttons by 32dp (+26dp above initial 6dp)
       // to comfortably match the user-marked green line and avoid accidental button taps.
@@ -1444,7 +1537,9 @@ void main() {
       expect(raisedSpacing, greaterThanOrEqualTo(24.0));
     });
 
-    testWidgets('Video player center play button fades out and ignores touch during horizontal swipe to adjacent video', (tester) async {
+    testWidgets(
+        'Video player center play button fades out and ignores touch during horizontal swipe to adjacent video',
+        (tester) async {
       final isSwipingPage = ValueNotifier<bool>(false);
 
       await tester.pumpWidget(
@@ -1465,7 +1560,8 @@ void main() {
                   ),
                 );
               },
-              child: const Icon(Icons.play_arrow_rounded, key: ValueKey('play_btn')),
+              child: const Icon(Icons.play_arrow_rounded,
+                  key: ValueKey('play_btn')),
             ),
           ),
         ),
@@ -1473,8 +1569,10 @@ void main() {
 
       // Initially stationary: opacity 1.0, touch enabled
       expect(find.byKey(const ValueKey('play_btn')), findsOneWidget);
-      AnimatedOpacity opacityWidget = tester.widget(find.byKey(const ValueKey('play_btn_opacity')));
-      IgnorePointer ignoreWidget = tester.widget(find.byKey(const ValueKey('play_btn_ignore')));
+      AnimatedOpacity opacityWidget =
+          tester.widget(find.byKey(const ValueKey('play_btn_opacity')));
+      IgnorePointer ignoreWidget =
+          tester.widget(find.byKey(const ValueKey('play_btn_ignore')));
       expect(opacityWidget.opacity, 1.0);
       expect(ignoreWidget.ignoring, isFalse);
 
@@ -1483,8 +1581,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 160));
 
-      opacityWidget = tester.widget(find.byKey(const ValueKey('play_btn_opacity')));
-      ignoreWidget = tester.widget(find.byKey(const ValueKey('play_btn_ignore')));
+      opacityWidget =
+          tester.widget(find.byKey(const ValueKey('play_btn_opacity')));
+      ignoreWidget =
+          tester.widget(find.byKey(const ValueKey('play_btn_ignore')));
       expect(opacityWidget.opacity, 0.0);
       expect(ignoreWidget.ignoring, isTrue);
 
@@ -1493,13 +1593,17 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 260));
 
-      opacityWidget = tester.widget(find.byKey(const ValueKey('play_btn_opacity')));
-      ignoreWidget = tester.widget(find.byKey(const ValueKey('play_btn_ignore')));
+      opacityWidget =
+          tester.widget(find.byKey(const ValueKey('play_btn_opacity')));
+      ignoreWidget =
+          tester.widget(find.byKey(const ValueKey('play_btn_ignore')));
       expect(opacityWidget.opacity, 1.0);
       expect(ignoreWidget.ignoring, isFalse);
     });
 
-    test('AMOLED header meteor trajectory calculation guarantees full penetration past bottom edge', () {
+    test(
+        'AMOLED header meteor trajectory calculation guarantees full penetration past bottom edge',
+        () {
       // Header dimensions: standard 90dp height
       const headerHeight = 90.0;
       const startY = -15.0;
@@ -1528,8 +1632,14 @@ void main() {
       expect(headYEnd, closeTo(targetY, 0.001));
     });
 
-    testWidgets('ThemeHeaderBackground renders AMOLED, Dark, and Light themes fluidly without exceptions', (tester) async {
-      for (final mode in [AppThemeMode.amoled, AppThemeMode.dark, AppThemeMode.light]) {
+    testWidgets(
+        'ThemeHeaderBackground renders AMOLED, Dark, and Light themes fluidly without exceptions',
+        (tester) async {
+      for (final mode in [
+        AppThemeMode.amoled,
+        AppThemeMode.dark,
+        AppThemeMode.light
+      ]) {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
@@ -1623,13 +1733,17 @@ void main() {
         if (lang == AppLanguage.system) {
           expect(lang.flagEmoji, isNull);
         } else {
-          expect(lang.flagEmoji, isNotNull, reason: '${lang.name} flagEmoji should not be null');
-          expect(lang.flagEmoji!.isNotEmpty, isTrue, reason: '${lang.name} flagEmoji should not be empty');
+          expect(lang.flagEmoji, isNotNull,
+              reason: '${lang.name} flagEmoji should not be null');
+          expect(lang.flagEmoji!.isNotEmpty, isTrue,
+              reason: '${lang.name} flagEmoji should not be empty');
         }
       }
     });
 
-    test('AppLocalizations translation dictionary coverage across all supported languages', () {
+    test(
+        'AppLocalizations translation dictionary coverage across all supported languages',
+        () {
       for (final lang in AppLanguage.values) {
         if (lang == AppLanguage.system || lang.code == null) continue;
         final loc = AppLocalizations(Locale(lang.code!));
@@ -1637,14 +1751,22 @@ void main() {
         expect(loc.photos.isNotEmpty, isTrue, reason: '${lang.code} photos');
         expect(loc.videos.isNotEmpty, isTrue, reason: '${lang.code} videos');
         expect(loc.albums.isNotEmpty, isTrue, reason: '${lang.code} albums');
-        expect(loc.favorites.isNotEmpty, isTrue, reason: '${lang.code} favorites');
-        expect(loc.searchHint.isNotEmpty, isTrue, reason: '${lang.code} searchHint');
-        expect(loc.settings.isNotEmpty, isTrue, reason: '${lang.code} settings');
-        expect(loc.appearance.isNotEmpty, isTrue, reason: '${lang.code} appearance');
-        expect(loc.language.isNotEmpty, isTrue, reason: '${lang.code} language');
-        expect(loc.excludedFolders.isNotEmpty, isTrue, reason: '${lang.code} excludedFolders');
-        expect(loc.pickFromManager.isNotEmpty, isTrue, reason: '${lang.code} pickFromManager');
-        expect(loc.clearAll.isNotEmpty, isTrue, reason: '${lang.code} clearAll');
+        expect(loc.favorites.isNotEmpty, isTrue,
+            reason: '${lang.code} favorites');
+        expect(loc.searchHint.isNotEmpty, isTrue,
+            reason: '${lang.code} searchHint');
+        expect(loc.settings.isNotEmpty, isTrue,
+            reason: '${lang.code} settings');
+        expect(loc.appearance.isNotEmpty, isTrue,
+            reason: '${lang.code} appearance');
+        expect(loc.language.isNotEmpty, isTrue,
+            reason: '${lang.code} language');
+        expect(loc.excludedFolders.isNotEmpty, isTrue,
+            reason: '${lang.code} excludedFolders');
+        expect(loc.pickFromManager.isNotEmpty, isTrue,
+            reason: '${lang.code} pickFromManager');
+        expect(loc.clearAll.isNotEmpty, isTrue,
+            reason: '${lang.code} clearAll');
       }
     });
 
@@ -1663,7 +1785,9 @@ void main() {
       expect(fromDisk.language, AppLanguage.id);
     });
 
-    testWidgets('SettingsScreen language modal and excluded folders dialog integration', (tester) async {
+    testWidgets(
+        'SettingsScreen language modal and excluded folders dialog integration',
+        (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
@@ -1674,7 +1798,8 @@ void main() {
           ],
           child: Consumer(
             builder: (context, ref, _) {
-              final lang = ref.watch(settingsNotifierProvider.select((s) => s.language));
+              final lang =
+                  ref.watch(settingsNotifierProvider.select((s) => s.language));
               return MaterialApp(
                 locale: lang.locale,
                 supportedLocales: AppLanguage.supportedLocales,
@@ -1708,7 +1833,8 @@ void main() {
 
       // Select Bahasa Indonesia
       final idFinder = find.text('Bahasa Indonesia');
-      await tester.scrollUntilVisible(idFinder, 100, scrollable: find.byType(Scrollable).last);
+      await tester.scrollUntilVisible(idFinder, 100,
+          scrollable: find.byType(Scrollable).last);
       await tester.pumpAndSettle();
       await tester.tap(idFinder);
       await tester.pumpAndSettle();
@@ -1780,34 +1906,57 @@ void main() {
       );
     });
 
-    test('AppLocalizations complete coverage across all 22 supported languages', () {
+    test('AppLocalizations complete coverage across all 22 supported languages',
+        () {
       for (final lang in AppLanguage.values) {
         if (lang == AppLanguage.system || lang.code == null) continue;
         final loc = AppLocalizations(lang.locale!);
-        expect(loc.keepScreenOn.isNotEmpty, isTrue, reason: '${lang.code} keepScreenOn');
-        expect(loc.keepScreenOnSubtitle.isNotEmpty, isTrue, reason: '${lang.code} keepScreenOnSubtitle');
-        expect(loc.themeSystemDesc.isNotEmpty, isTrue, reason: '${lang.code} themeSystemDesc');
-        expect(loc.themeLightDesc.isNotEmpty, isTrue, reason: '${lang.code} themeLightDesc');
-        expect(loc.themeDarkDesc.isNotEmpty, isTrue, reason: '${lang.code} themeDarkDesc');
-        expect(loc.themeAmoledDesc.isNotEmpty, isTrue, reason: '${lang.code} themeAmoledDesc');
-        expect(loc.themeSakuraDesc.isNotEmpty, isTrue, reason: '${lang.code} themeSakuraDesc');
-        expect(loc.aboutApp.isNotEmpty, isTrue, reason: '${lang.code} aboutApp');
-        expect(loc.aboutPhantek.isNotEmpty, isTrue, reason: '${lang.code} aboutPhantek');
-        expect(loc.offlineGalleryDesc.isNotEmpty, isTrue, reason: '${lang.code} offlineGalleryDesc');
-        expect(loc.appVersion.isNotEmpty, isTrue, reason: '${lang.code} appVersion');
-        expect(loc.buildNumberLabel.isNotEmpty, isTrue, reason: '${lang.code} buildNumberLabel');
-        expect(loc.architecture.isNotEmpty, isTrue, reason: '${lang.code} architecture');
+        expect(loc.keepScreenOn.isNotEmpty, isTrue,
+            reason: '${lang.code} keepScreenOn');
+        expect(loc.keepScreenOnSubtitle.isNotEmpty, isTrue,
+            reason: '${lang.code} keepScreenOnSubtitle');
+        expect(loc.themeSystemDesc.isNotEmpty, isTrue,
+            reason: '${lang.code} themeSystemDesc');
+        expect(loc.themeLightDesc.isNotEmpty, isTrue,
+            reason: '${lang.code} themeLightDesc');
+        expect(loc.themeDarkDesc.isNotEmpty, isTrue,
+            reason: '${lang.code} themeDarkDesc');
+        expect(loc.themeAmoledDesc.isNotEmpty, isTrue,
+            reason: '${lang.code} themeAmoledDesc');
+        expect(loc.themeSakuraDesc.isNotEmpty, isTrue,
+            reason: '${lang.code} themeSakuraDesc');
+        expect(loc.aboutApp.isNotEmpty, isTrue,
+            reason: '${lang.code} aboutApp');
+        expect(loc.aboutPhantek.isNotEmpty, isTrue,
+            reason: '${lang.code} aboutPhantek');
+        expect(loc.offlineGalleryDesc.isNotEmpty, isTrue,
+            reason: '${lang.code} offlineGalleryDesc');
+        expect(loc.appVersion.isNotEmpty, isTrue,
+            reason: '${lang.code} appVersion');
+        expect(loc.buildNumberLabel.isNotEmpty, isTrue,
+            reason: '${lang.code} buildNumberLabel');
+        expect(loc.architecture.isNotEmpty, isTrue,
+            reason: '${lang.code} architecture');
         expect(loc.license.isNotEmpty, isTrue, reason: '${lang.code} license');
-        expect(loc.developerLabel.isNotEmpty, isTrue, reason: '${lang.code} developerLabel');
-        expect(loc.creatorMaintainer.isNotEmpty, isTrue, reason: '${lang.code} creatorMaintainer');
-        expect(loc.openGitHubProfile.isNotEmpty, isTrue, reason: '${lang.code} openGitHubProfile');
-        expect(loc.newVersionAvailable.isNotEmpty, isTrue, reason: '${lang.code} newVersionAvailable');
-        expect(loc.whatsNew.isNotEmpty, isTrue, reason: '${lang.code} whatsNew');
-        expect(loc.downloadAndInstall.isNotEmpty, isTrue, reason: '${lang.code} downloadAndInstall');
+        expect(loc.developerLabel.isNotEmpty, isTrue,
+            reason: '${lang.code} developerLabel');
+        expect(loc.creatorMaintainer.isNotEmpty, isTrue,
+            reason: '${lang.code} creatorMaintainer');
+        expect(loc.openGitHubProfile.isNotEmpty, isTrue,
+            reason: '${lang.code} openGitHubProfile');
+        expect(loc.newVersionAvailable.isNotEmpty, isTrue,
+            reason: '${lang.code} newVersionAvailable');
+        expect(loc.whatsNew.isNotEmpty, isTrue,
+            reason: '${lang.code} whatsNew');
+        expect(loc.downloadAndInstall.isNotEmpty, isTrue,
+            reason: '${lang.code} downloadAndInstall');
         expect(loc.later.isNotEmpty, isTrue, reason: '${lang.code} later');
-        expect(loc.downloading.isNotEmpty, isTrue, reason: '${lang.code} downloading');
-        expect(loc.alreadyUpToDate.isNotEmpty, isTrue, reason: '${lang.code} alreadyUpToDate');
-        expect(loc.downloadFailed.isNotEmpty, isTrue, reason: '${lang.code} downloadFailed');
+        expect(loc.downloading.isNotEmpty, isTrue,
+            reason: '${lang.code} downloading');
+        expect(loc.alreadyUpToDate.isNotEmpty, isTrue,
+            reason: '${lang.code} alreadyUpToDate');
+        expect(loc.downloadFailed.isNotEmpty, isTrue,
+            reason: '${lang.code} downloadFailed');
       }
 
       // Verify previously missing languages produce real non-English translations
@@ -1854,7 +2003,9 @@ void main() {
       expect(zhLoc.albums, '相册');
     });
 
-    testWidgets('FilterSortBar with PageController renders and updates with page navigation', (tester) async {
+    testWidgets(
+        'FilterSortBar with PageController renders and updates with page navigation',
+        (tester) async {
       final pageController = PageController(initialPage: 1);
 
       await tester.pumpWidget(
@@ -1891,7 +2042,9 @@ void main() {
       expect(find.text('Page Videos'), findsOneWidget);
     });
 
-    test('Video player center play button visibility rules in portrait and landscape', () {
+    test(
+        'Video player center play button visibility rules in portrait and landscape',
+        () {
       bool shouldShowCenterPlay({
         required Orientation orientation,
         required bool hasStartedPlaying,
@@ -1900,19 +2053,33 @@ void main() {
       }
 
       // Initial portrait before playback -> visible
-      expect(shouldShowCenterPlay(orientation: Orientation.portrait, hasStartedPlaying: false), isTrue);
+      expect(
+          shouldShowCenterPlay(
+              orientation: Orientation.portrait, hasStartedPlaying: false),
+          isTrue);
 
       // Portrait after playback started (paused or playing) -> hidden to not block zoom
-      expect(shouldShowCenterPlay(orientation: Orientation.portrait, hasStartedPlaying: true), isFalse);
+      expect(
+          shouldShowCenterPlay(
+              orientation: Orientation.portrait, hasStartedPlaying: true),
+          isFalse);
 
       // Landscape before playback -> hidden (landscape has no center play button)
-      expect(shouldShowCenterPlay(orientation: Orientation.landscape, hasStartedPlaying: false), isFalse);
+      expect(
+          shouldShowCenterPlay(
+              orientation: Orientation.landscape, hasStartedPlaying: false),
+          isFalse);
 
       // Landscape after playback -> hidden
-      expect(shouldShowCenterPlay(orientation: Orientation.landscape, hasStartedPlaying: true), isFalse);
+      expect(
+          shouldShowCenterPlay(
+              orientation: Orientation.landscape, hasStartedPlaying: true),
+          isFalse);
     });
 
-    testWidgets('Video player landscape layout renders speed, loop, rotation, and more options icons', (tester) async {
+    testWidgets(
+        'Video player landscape layout renders speed, loop, rotation, and more options icons',
+        (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -1956,8 +2123,11 @@ void main() {
       expect(find.byIcon(Icons.more_vert_rounded), findsOneWidget);
     });
 
-    testWidgets('Video player fullscreen button is hidden for vertical video and visible for horizontal video', (tester) async {
-      Widget buildControls({required bool isVertical, required bool isLandscape}) {
+    testWidgets(
+        'Video player fullscreen button is hidden for vertical video and visible for horizontal video',
+        (tester) async {
+      Widget buildControls(
+          {required bool isVertical, required bool isLandscape}) {
         return MaterialApp(
           home: Scaffold(
             body: Builder(
@@ -1996,22 +2166,26 @@ void main() {
       }
 
       // 1. Vertical video in portrait: fullscreen button must NOT be found
-      await tester.pumpWidget(buildControls(isVertical: true, isLandscape: false));
+      await tester
+          .pumpWidget(buildControls(isVertical: true, isLandscape: false));
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.fullscreen_rounded), findsNothing);
 
       // 2. Horizontal video in portrait: fullscreen button MUST be found
-      await tester.pumpWidget(buildControls(isVertical: false, isLandscape: false));
+      await tester
+          .pumpWidget(buildControls(isVertical: false, isLandscape: false));
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.fullscreen_rounded), findsOneWidget);
 
       // 3. Vertical video in landscape: fullscreen button must NOT be found
-      await tester.pumpWidget(buildControls(isVertical: true, isLandscape: true));
+      await tester
+          .pumpWidget(buildControls(isVertical: true, isLandscape: true));
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.fullscreen_rounded), findsNothing);
 
       // 4. Horizontal video in landscape: fullscreen button MUST be found
-      await tester.pumpWidget(buildControls(isVertical: false, isLandscape: true));
+      await tester
+          .pumpWidget(buildControls(isVertical: false, isLandscape: true));
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.fullscreen_rounded), findsOneWidget);
     });
@@ -2032,13 +2206,15 @@ void main() {
       }
 
       // Vertical 1080x1920 (9:16)
-      final verticalVideo = isVideoPortrait(width: 1080, height: 1920, thumbRatio: 0.5625);
+      final verticalVideo =
+          isVideoPortrait(width: 1080, height: 1920, thumbRatio: 0.5625);
       expect(verticalVideo, isTrue);
       final verticalFit = verticalVideo ? BoxFit.cover : BoxFit.contain;
       expect(verticalFit, BoxFit.cover);
 
       // Horizontal 1920x1080 (16:9)
-      final horizontalVideo = isVideoPortrait(width: 1920, height: 1080, thumbRatio: 1.777);
+      final horizontalVideo =
+          isVideoPortrait(width: 1920, height: 1080, thumbRatio: 1.777);
       expect(horizontalVideo, isFalse);
       final horizontalFit = horizontalVideo ? BoxFit.cover : BoxFit.contain;
       expect(horizontalFit, BoxFit.contain);
@@ -2079,7 +2255,8 @@ void main() {
       expect(computeThumbX(computeFraction(400.0)), 344.0);
     });
 
-    test('Video seekbar tooltip offset clamping prevents screen edge overflow', () {
+    test('Video seekbar tooltip offset clamping prevents screen edge overflow',
+        () {
       const maxWidth = 360.0;
       const previewW = 144.0;
       const trackWidth = maxWidth - 32.0; // 328.0
@@ -2118,7 +2295,9 @@ void main() {
       expect(bucketFor(const Duration(seconds: 10)), 40);
     });
 
-    test('MediaUtils.calculateGridScrollOffset correctly aligns off-screen media and keeps visible items undisturbed', () {
+    test(
+        'MediaUtils.calculateGridScrollOffset correctly aligns off-screen media and keeps visible items undisturbed',
+        () {
       // 3 columns, screenWidth = 360, viewportHeight = 600, currentScrollOffset = 0
       // Item 1 (row 0): comfortably inside viewport -> returns currentScrollOffset (0.0)
       final offsetVisible = MediaUtils.calculateGridScrollOffset(
@@ -2170,9 +2349,27 @@ class _MockMediaListNotifier extends MediaListNotifier {
   @override
   Future<List<MediaItem>> build() async {
     final mockItems = [
-      MediaItem(id: 'item_1', path: '/a/1.jpg', name: '1.jpg', date: DateTime.now(), size: 10, isVideo: false),
-      MediaItem(id: 'item_2', path: '/a/2.jpg', name: '2.jpg', date: DateTime.now(), size: 20, isVideo: false),
-      MediaItem(id: 'item_3', path: '/a/3.mp4', name: '3.mp4', date: DateTime.now(), size: 30, isVideo: true),
+      MediaItem(
+          id: 'item_1',
+          path: '/a/1.jpg',
+          name: '1.jpg',
+          date: DateTime.now(),
+          size: 10,
+          isVideo: false),
+      MediaItem(
+          id: 'item_2',
+          path: '/a/2.jpg',
+          name: '2.jpg',
+          date: DateTime.now(),
+          size: 20,
+          isVideo: false),
+      MediaItem(
+          id: 'item_3',
+          path: '/a/3.mp4',
+          name: '3.mp4',
+          date: DateTime.now(),
+          size: 30,
+          isVideo: true),
     ];
     return mockItems.where((e) => !deletedIds.contains(e.id)).toList();
   }
@@ -2180,11 +2377,29 @@ class _MockMediaListNotifier extends MediaListNotifier {
   @override
   Future<void> refresh() async {
     final mockItems = [
-      MediaItem(id: 'item_1', path: '/a/1.jpg', name: '1.jpg', date: DateTime.now(), size: 10, isVideo: false),
-      MediaItem(id: 'item_2', path: '/a/2.jpg', name: '2.jpg', date: DateTime.now(), size: 20, isVideo: false),
-      MediaItem(id: 'item_3', path: '/a/3.mp4', name: '3.mp4', date: DateTime.now(), size: 30, isVideo: true),
+      MediaItem(
+          id: 'item_1',
+          path: '/a/1.jpg',
+          name: '1.jpg',
+          date: DateTime.now(),
+          size: 10,
+          isVideo: false),
+      MediaItem(
+          id: 'item_2',
+          path: '/a/2.jpg',
+          name: '2.jpg',
+          date: DateTime.now(),
+          size: 20,
+          isVideo: false),
+      MediaItem(
+          id: 'item_3',
+          path: '/a/3.mp4',
+          name: '3.mp4',
+          date: DateTime.now(),
+          size: 30,
+          isVideo: true),
     ];
-    state = AsyncData(mockItems.where((e) => !deletedIds.contains(e.id)).toList());
+    state =
+        AsyncData(mockItems.where((e) => !deletedIds.contains(e.id)).toList());
   }
 }
-

@@ -16,7 +16,6 @@ import '../../../core/services/permission_service.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/services/share_service.dart';
 import '../../../app/router.dart';
-import '../../../core/utils/easter_egg_handler.dart';
 import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/animated_flame_title.dart';
 import '../../../core/widgets/bouncy_tap.dart';
@@ -51,7 +50,6 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  final _easterEggHandler = EasterEggTapHandler();
   StreamSubscription<bool>? _mediaChangeSub;
   DateTime _lastAutoRefresh = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -673,12 +671,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             },
             child: _selecting
                 ? Text('${_selected.length} ${context.tr.selected}')
-                : BouncyTap(
-                    key: const ValueKey('appbar_badge_easter_egg'),
-                    scaleDown: 0.94,
-                    onTap: () => _easterEggHandler.handleTap(context, ref),
-                    child: const AnimatedFlameTitle(title: 'Phantek'),
-                  ),
+                : const AnimatedFlameTitle(title: 'Phantek'),
           ),
           actions: [
             AnimatedBuilder(
