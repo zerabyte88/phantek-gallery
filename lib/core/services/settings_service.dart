@@ -7,6 +7,7 @@ import '../enums/thumbnail_crop_style.dart';
 import '../enums/timeline_grouping.dart';
 import '../enums/trash_cleanup_interval.dart';
 import '../enums/startup_screen.dart';
+import '../enums/video_double_tap_action.dart';
 import '../localization/app_language.dart';
 
 /// Keys used in SharedPreferences.
@@ -33,6 +34,7 @@ class _K {
   static const slideshowInterval = 'slideshowInterval';
   static const startMuted = 'startMuted';
   static const doubleTapSeekInterval = 'doubleTapSeekInterval';
+  static const videoDoubleTapAction = 'videoDoubleTapAction';
   static const resumeVideoPlayback = 'resumeVideoPlayback';
   static const filterSmallImages = 'filterSmallImages';
   static const showHiddenFiles = 'showHiddenFiles';
@@ -93,6 +95,8 @@ class SettingsService {
         slideshowInterval: _prefs.getInt(_K.slideshowInterval) ?? 3,
         startMuted: _prefs.getBool(_K.startMuted) ?? false,
         doubleTapSeekInterval: _prefs.getInt(_K.doubleTapSeekInterval) ?? 10,
+        videoDoubleTapAction: _readEnum(_K.videoDoubleTapAction,
+            VideoDoubleTapAction.values, VideoDoubleTapAction.smart),
         resumeVideoPlayback: _prefs.getBool(_K.resumeVideoPlayback) ?? false,
         filterSmallImages: _prefs.getBool(_K.filterSmallImages) ?? false,
         showHiddenFiles: _prefs.getBool(_K.showHiddenFiles) ?? false,
@@ -126,6 +130,8 @@ class SettingsService {
       _prefs.setInt(_K.slideshowInterval, model.slideshowInterval),
       _prefs.setBool(_K.startMuted, model.startMuted),
       _prefs.setInt(_K.doubleTapSeekInterval, model.doubleTapSeekInterval),
+      _prefs.setString(
+          _K.videoDoubleTapAction, model.videoDoubleTapAction.name),
       _prefs.setBool(_K.resumeVideoPlayback, model.resumeVideoPlayback),
       _prefs.setBool(_K.filterSmallImages, model.filterSmallImages),
       _prefs.setBool(_K.showHiddenFiles, model.showHiddenFiles),

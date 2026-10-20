@@ -12,6 +12,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/enums/video_double_tap_action.dart';
 import '../../../core/models/media_item.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
@@ -1034,28 +1035,55 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     final screenWidth = MediaQuery.sizeOf(context).width;
     final settings = ref.read(settingsNotifierProvider);
 
+    // 1. If currently zoomed in, double-tap anywhere immediately resets zoom
+    final currentScale = _transformationController.value.getMaxScaleOnAxis();
+    if (_isVideoZoomed || currentScale > 1.05) {
+      HapticFeedback.lightImpact();
+      _resetVideoZoom();
+      return;
+    }
+
     if (_videos.isNotEmpty &&
         _current < _videos.length &&
         _videos[_current].isVideo) {
       final seekSec = settings.doubleTapSeekInterval;
-      if (pos.dx < screenWidth * 0.35) {
+
+      void doSeek(bool forward) {
         final currentPos = _player.state.position;
-        final target = currentPos - Duration(seconds: seekSec);
+        final target = forward
+            ? currentPos + Duration(seconds: seekSec)
+            : currentPos - Duration(seconds: seekSec);
         _player.seek(target < Duration.zero ? Duration.zero : target);
         _showFeedbackToast(
-          message: '-${seekSec}s',
-          icon: Icons.replay_10_rounded,
+          message: forward ? '+${seekSec}s' : '-${seekSec}s',
+          icon: forward ? Icons.forward_10_rounded : Icons.replay_10_rounded,
         );
-        return;
-      } else if (pos.dx > screenWidth * 0.65) {
-        final currentPos = _player.state.position;
-        final target = currentPos + Duration(seconds: seekSec);
-        _player.seek(target);
-        _showFeedbackToast(
-          message: '+${seekSec}s',
-          icon: Icons.forward_10_rounded,
-        );
-        return;
+      }
+
+      switch (settings.videoDoubleTapAction) {
+        case VideoDoubleTapAction.zoomOnly:
+          HapticFeedback.lightImpact();
+          _zoomToPosition(pos);
+          return;
+
+        case VideoDoubleTapAction.seekOnly:
+          if (pos.dx < screenWidth * 0.5) {
+            doSeek(false);
+          } else {
+            doSeek(true);
+          }
+          return;
+
+        case VideoDoubleTapAction.smart:
+          if (pos.dx < screenWidth * 0.35) {
+            doSeek(false);
+            return;
+          } else if (pos.dx > screenWidth * 0.65) {
+            doSeek(true);
+            return;
+          }
+          // Center 35% - 65% falls through to zoom
+          break;
       }
     }
 

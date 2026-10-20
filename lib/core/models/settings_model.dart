@@ -5,6 +5,7 @@ import '../enums/thumbnail_crop_style.dart';
 import '../enums/timeline_grouping.dart';
 import '../enums/trash_cleanup_interval.dart';
 import '../enums/startup_screen.dart';
+import '../enums/video_double_tap_action.dart';
 import '../localization/app_language.dart';
 
 /// Application-wide user preferences – stored locally via SettingsService.
@@ -32,6 +33,7 @@ class SettingsModel extends Equatable {
     this.slideshowInterval = 3,
     this.startMuted = false,
     this.doubleTapSeekInterval = 10,
+    this.videoDoubleTapAction = VideoDoubleTapAction.smart,
     this.resumeVideoPlayback = false,
     this.filterSmallImages = false,
     this.showHiddenFiles = false,
@@ -99,6 +101,9 @@ class SettingsModel extends Equatable {
   /// Skip interval in seconds when double-tapping player left/right edges (5, 10, 15).
   final int doubleTapSeekInterval;
 
+  /// Behavior of double-tapping the video player (smart, seekOnly, zoomOnly).
+  final VideoDoubleTapAction videoDoubleTapAction;
+
   /// Remember and resume playback position for videos.
   final bool resumeVideoPlayback;
 
@@ -137,6 +142,7 @@ class SettingsModel extends Equatable {
     int? slideshowInterval,
     bool? startMuted,
     int? doubleTapSeekInterval,
+    VideoDoubleTapAction? videoDoubleTapAction,
     bool? resumeVideoPlayback,
     bool? filterSmallImages,
     bool? showHiddenFiles,
@@ -167,6 +173,7 @@ class SettingsModel extends Equatable {
       startMuted: startMuted ?? this.startMuted,
       doubleTapSeekInterval:
           doubleTapSeekInterval ?? this.doubleTapSeekInterval,
+      videoDoubleTapAction: videoDoubleTapAction ?? this.videoDoubleTapAction,
       resumeVideoPlayback: resumeVideoPlayback ?? this.resumeVideoPlayback,
       filterSmallImages: filterSmallImages ?? this.filterSmallImages,
       showHiddenFiles: showHiddenFiles ?? this.showHiddenFiles,
@@ -199,6 +206,7 @@ class SettingsModel extends Equatable {
         slideshowInterval,
         startMuted,
         doubleTapSeekInterval,
+        videoDoubleTapAction,
         resumeVideoPlayback,
         filterSmallImages,
         showHiddenFiles,

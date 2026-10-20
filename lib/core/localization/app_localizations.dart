@@ -5,6 +5,7 @@ import '../enums/thumbnail_crop_style.dart';
 import '../enums/timeline_grouping.dart';
 import '../enums/trash_cleanup_interval.dart';
 import '../enums/startup_screen.dart';
+import '../enums/video_double_tap_action.dart';
 import 'translations/translations.dart';
 
 /// Lightweight, type-safe localization dictionary for Phantek Gallery.
@@ -212,6 +213,11 @@ class AppLocalizations {
   String get slideshowInterval => _t('slideshowInterval');
   String get startMuted => _t('startMuted');
   String get startMutedDesc => _t('startMutedDesc');
+  String get videoDoubleTapAction => _t('videoDoubleTapAction');
+  String get videoDoubleTapActionDesc => _t('videoDoubleTapActionDesc');
+  String get doubleTapActionSmart => _t('doubleTapActionSmart');
+  String get doubleTapActionSeekOnly => _t('doubleTapActionSeekOnly');
+  String get doubleTapActionZoomOnly => _t('doubleTapActionZoomOnly');
   String get doubleTapSeek => _t('doubleTapSeek');
   String get resumeVideoPlayback => _t('resumeVideoPlayback');
   String get resumeVideoPlaybackDesc => _t('resumeVideoPlaybackDesc');
@@ -333,6 +339,13 @@ class AppLocalizations {
         TrashCleanupInterval.days7 => _t('cleanup7Days'),
         TrashCleanupInterval.days14 => _t('cleanup14Days'),
         TrashCleanupInterval.days30 => _t('cleanup30Days'),
+      };
+
+  String videoDoubleTapActionLabel(VideoDoubleTapAction action) =>
+      switch (action) {
+        VideoDoubleTapAction.smart => _t('doubleTapActionSmart'),
+        VideoDoubleTapAction.seekOnly => _t('doubleTapActionSeekOnly'),
+        VideoDoubleTapAction.zoomOnly => _t('doubleTapActionZoomOnly'),
       };
 
   String secondsCount(int count) =>

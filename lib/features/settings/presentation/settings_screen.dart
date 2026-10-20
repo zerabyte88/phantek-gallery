@@ -9,6 +9,7 @@ import '../../../core/enums/thumbnail_crop_style.dart';
 import '../../../core/enums/timeline_grouping.dart';
 import '../../../core/enums/trash_cleanup_interval.dart';
 import '../../../core/enums/startup_screen.dart';
+import '../../../core/enums/video_double_tap_action.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/services/folder_picker_service.dart';
@@ -270,6 +271,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   subtitle: context.tr.startMutedDesc,
                   value: settings.startMuted,
                   onChanged: (v) => patch((s) => s.copyWith(startMuted: v)),
+                ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.touch_app_rounded,
+                  iconColor: const Color(0xFF6366F1),
+                  title: context.tr.videoDoubleTapAction,
+                  subtitle: context.tr
+                      .videoDoubleTapActionLabel(settings.videoDoubleTapAction),
+                  onTap: () async {
+                    final chosen =
+                        await _showModernOptionDialog<VideoDoubleTapAction>(
+                      context,
+                      title: context.tr.videoDoubleTapAction,
+                      subtitle: context.tr.playback,
+                      headerIcon: Icons.touch_app_rounded,
+                      headerColor: const Color(0xFF6366F1),
+                      currentValue: settings.videoDoubleTapAction,
+                      options: [
+                        _OptionItem(
+                          value: VideoDoubleTapAction.smart,
+                          title: context.tr.doubleTapActionSmart,
+                          icon: Icons.auto_awesome_rounded,
+                        ),
+                        _OptionItem(
+                          value: VideoDoubleTapAction.seekOnly,
+                          title: context.tr.doubleTapActionSeekOnly,
+                          icon: Icons.fast_forward_rounded,
+                        ),
+                        _OptionItem(
+                          value: VideoDoubleTapAction.zoomOnly,
+                          title: context.tr.doubleTapActionZoomOnly,
+                          icon: Icons.zoom_in_rounded,
+                        ),
+                      ],
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(videoDoubleTapAction: chosen));
+                    }
+                  },
                 ),
                 const _CardDivider(),
                 _ModernTile(

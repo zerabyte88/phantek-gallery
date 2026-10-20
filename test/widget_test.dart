@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:phantek_gallery/app/theme.dart';
 import 'package:phantek_gallery/core/enums/filter_option.dart';
 import 'package:phantek_gallery/core/enums/sort_option.dart';
+import 'package:phantek_gallery/core/enums/video_double_tap_action.dart';
 import 'package:phantek_gallery/core/models/album.dart';
 import 'package:phantek_gallery/core/models/media_item.dart';
 import 'package:phantek_gallery/core/models/settings_model.dart';
@@ -2471,6 +2472,39 @@ void main() {
 
       // Raw unrotated dimensions (1280 > 720) would falsely claim portrait
       expect(encodedHeight > encodedWidth, isTrue);
+    });
+
+    test('VideoDoubleTapAction settings and localization test', () async {
+      SharedPreferences.setMockInitialValues({});
+      final service = await SettingsService.init();
+      final defaultSettings = service.settings;
+      expect(defaultSettings.videoDoubleTapAction, VideoDoubleTapAction.smart);
+
+      // Save and reload seekOnly
+      final updatedSettings = defaultSettings.copyWith(
+        videoDoubleTapAction: VideoDoubleTapAction.seekOnly,
+      );
+      await service.save(updatedSettings);
+
+      final reloaded = service.settings;
+      expect(reloaded.videoDoubleTapAction, VideoDoubleTapAction.seekOnly);
+
+      // Localization test
+      final enLoc = AppLocalizations(const Locale('en'));
+      expect(enLoc.videoDoubleTapActionLabel(VideoDoubleTapAction.smart),
+          'Smart (Seek on edges, Zoom in center)');
+      expect(enLoc.videoDoubleTapActionLabel(VideoDoubleTapAction.seekOnly),
+          'Seek Only (Rewind / Forward)');
+      expect(enLoc.videoDoubleTapActionLabel(VideoDoubleTapAction.zoomOnly),
+          'Zoom Only (Zoom / Reset)');
+
+      final idLoc = AppLocalizations(const Locale('id'));
+      expect(idLoc.videoDoubleTapActionLabel(VideoDoubleTapAction.smart),
+          'Cerdas (Seek di tepi, Zoom di tengah)');
+      expect(idLoc.videoDoubleTapActionLabel(VideoDoubleTapAction.seekOnly),
+          'Hanya Seek (Mundur / Maju)');
+      expect(idLoc.videoDoubleTapActionLabel(VideoDoubleTapAction.zoomOnly),
+          'Hanya Zoom (Perbesar / Normal)');
     });
   });
 }
