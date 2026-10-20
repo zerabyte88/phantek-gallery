@@ -36,6 +36,7 @@ Route<dynamic> generateRoute(RouteSettings s) {
           items: args.items,
           initialIndex: args.initialIndex,
           isTrash: args.isTrash,
+          startSlideshow: args.startSlideshow,
         ),
         duration: const Duration(milliseconds: 300),
       );
@@ -108,19 +109,31 @@ class _ViewerArgs {
     required this.items,
     required this.initialIndex,
     this.isTrash = false,
+    this.startSlideshow = false,
   });
   final List<MediaItem> items;
   final int initialIndex;
   final bool isTrash;
+  final bool startSlideshow;
 }
 
 /// Helper extension on [NavigatorState] so call sites are clean.
 extension AppNav on NavigatorState {
-  Future<void> openImage(List<MediaItem> items, int index,
-          {bool isTrash = false}) =>
-      pushNamed(AppRoutes.image,
-          arguments:
-              _ViewerArgs(items: items, initialIndex: index, isTrash: isTrash));
+  Future<void> openImage(
+    List<MediaItem> items,
+    int index, {
+    bool isTrash = false,
+    bool startSlideshow = false,
+  }) =>
+      pushNamed(
+        AppRoutes.image,
+        arguments: _ViewerArgs(
+          items: items,
+          initialIndex: index,
+          isTrash: isTrash,
+          startSlideshow: startSlideshow,
+        ),
+      );
 
   Future<void> openVideo(List<MediaItem> items, int index,
           {bool isTrash = false}) =>

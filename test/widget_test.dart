@@ -2358,6 +2358,40 @@ void main() {
         150.0,
       );
     });
+
+    testWidgets('Slideshow action is present in gallery home 3-dot popup menu',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsNotifierProvider.overrideWith(
+                () => _TestSettingsNotifier(const SettingsModel())),
+            mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            home: GalleryScreen(),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final moreButton = find.byIcon(Icons.more_vert);
+      expect(moreButton, findsOneWidget);
+
+      await tester.tap(moreButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byIcon(Icons.slideshow_rounded), findsOneWidget);
+      expect(find.text('Slideshow'), findsOneWidget);
+    });
   });
 }
 

@@ -117,11 +117,13 @@ class ImageViewerScreen extends ConsumerStatefulWidget {
     required this.items,
     required this.initialIndex,
     this.isTrash = false,
+    this.startSlideshow = false,
   });
 
   final List<MediaItem> items;
   final int initialIndex;
   final bool isTrash;
+  final bool startSlideshow;
 
   @override
   ConsumerState<ImageViewerScreen> createState() => _ImageViewerScreenState();
@@ -156,7 +158,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   bool _didSetMaxBrightness = false;
 
   void _startSlideshow() {
-    setState(() => _isSlideshowPlaying = true);
+    setState(() {
+      _isSlideshowPlaying = true;
+      _barsVisible = false;
+    });
     final interval = ref.read(settingsNotifierProvider).slideshowInterval;
     _slideshowTimer?.cancel();
     _slideshowTimer = Timer.periodic(Duration(seconds: interval), (_) {
@@ -222,6 +227,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         _activeMediaNotifier = ref.read(activeViewerMediaIdProvider.notifier);
       }
       _precacheAdjacent(_current);
+      if (widget.startSlideshow && mounted) {
+        _startSlideshow();
+      }
     });
   }
 
@@ -598,9 +606,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   color: Colors.white,
                 ),
                 title: Text(
-                  _isSlideshowPlaying
-                      ? context.tr.pause
-                      : context.tr.slideshowInterval,
+                  _isSlideshowPlaying ? context.tr.pause : context.tr.slideshow,
                   style: const TextStyle(color: Colors.white, fontSize: 15),
                 ),
                 onTap: () {

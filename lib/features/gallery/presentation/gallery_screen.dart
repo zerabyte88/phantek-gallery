@@ -926,7 +926,26 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           ),
           offset: const Offset(0, 48),
           onSelected: (value) {
-            if (value == 'select') {
+            if (value == 'slideshow') {
+              final raw = mediaAsync.value ?? [];
+              List<MediaItem> items;
+              if (isAlbums) {
+                final photos = raw.where((e) => !e.isVideo).toList();
+                items = photos.isNotEmpty ? photos : raw;
+              } else {
+                final currentTabItems = applyFiltersAndSort(
+                  raw,
+                  sort: settings.defaultSort,
+                  filter: _tabs[_currentPage],
+                );
+                final photos =
+                    currentTabItems.where((e) => !e.isVideo).toList();
+                items = photos.isNotEmpty ? photos : currentTabItems;
+              }
+              if (items.isNotEmpty) {
+                Navigator.of(context).openImage(items, 0, startSlideshow: true);
+              }
+            } else if (value == 'select') {
               setState(() {
                 _selecting = true;
               });
@@ -937,6 +956,19 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             }
           },
           itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'slideshow',
+              child: Row(
+                children: [
+                  const Icon(Icons.slideshow_rounded,
+                      size: 20, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Text(context.tr.slideshow,
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 14)),
+                ],
+              ),
+            ),
             PopupMenuItem(
               value: 'select',
               child: Row(

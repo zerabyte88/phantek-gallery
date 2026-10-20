@@ -195,6 +195,7 @@ const Map<String, String> idTranslations = {
   'maxBrightnessOnMedia': 'Kecerahan Maksimal Saat Buka Media',
   'maxBrightnessOnMediaDesc':
       'Otomatis memaksimalkan kecerahan layar saat melihat media',
+  'slideshow': 'Slideshow',
   'slideshowInterval': 'Interval Slideshow',
   'secondsCount': '{count} detik',
   'startMuted': 'Putar Video Bisu Sejak Awal',
@@ -217,4 +218,9 @@ const Map<String, String> idTranslations = {
   'lockedVaultDesc': 'Lindungi album pribadi dengan keamanan perangkat',
   'today': 'Hari Ini',
   'yesterday': 'Kemarin',
+  'albumsCountSingular': '1 album',
+  'daysLeftSingular': '1 hari tersisa',
+  'itemsCountSingular': '1 item',
+  'itemsRestoredCountSingular': '1 item dipulihkan',
+  'permanentlyDeleteCountTitleSingular': 'Hapus permanen 1 item?',
 };

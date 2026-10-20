@@ -208,6 +208,7 @@ class AppLocalizations {
   String get groupMonthly => _t('groupMonthly');
   String get maxBrightnessOnMedia => _t('maxBrightnessOnMedia');
   String get maxBrightnessOnMediaDesc => _t('maxBrightnessOnMediaDesc');
+  String get slideshow => _t('slideshow');
   String get slideshowInterval => _t('slideshowInterval');
   String get startMuted => _t('startMuted');
   String get startMutedDesc => _t('startMutedDesc');

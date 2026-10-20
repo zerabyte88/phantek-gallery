@@ -199,6 +199,7 @@ const Map<String, String> enTranslations = {
   'maxBrightnessOnMedia': 'Max Brightness on Media',
   'maxBrightnessOnMediaDesc':
       'Boost screen brightness to maximum in media viewer',
+  'slideshow': 'Slideshow',
   'slideshowInterval': 'Slideshow Interval',
   'secondsCount': '{count} seconds',
   'startMuted': 'Start Videos Muted',
