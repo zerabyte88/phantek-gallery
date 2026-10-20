@@ -25,6 +25,7 @@ import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
 import 'widgets/rename_dialog.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
+import '../../../core/widgets/feedback_pill.dart';
 import 'image_viewer_screen.dart' show screenDisplayImage;
 
 Widget _photoThumb(String id, [String? path]) {
@@ -103,12 +104,14 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
     this.items,
     this.initialIndex = 0,
     this.isTrash = false,
+    this.startSlideshow = false,
   }) : assert(item != null || (items != null && items.length > 0));
 
   final MediaItem? item;
   final List<MediaItem>? items;
   final int initialIndex;
   final bool isTrash;
+  final bool startSlideshow;
 
   @override
   ConsumerState<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
@@ -153,12 +156,62 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   bool _hasStartedPlaying = false;
   bool _cropToFit = false;
   String? _lastSize;
-  bool _highRes = false;
-  String? _activePlayerPath;
+  String? _activeVideoParamsPath;
   bool _routeTransitionComplete = false;
   Animation<double>? _routeAnimation;
   StateController<String?>? _activeMediaNotifier;
   bool _didSetMaxBrightness = false;
+  Timer? _slideshowTimer;
+  bool _isSlideshowPlaying = false;
+
+  void _startSlideshow() {
+    setState(() {
+      _isSlideshowPlaying = true;
+      _showControls = false;
+    });
+    ScreenKeeperService.setKeepScreenOn(true);
+    if (_videos.isNotEmpty &&
+        _current < _videos.length &&
+        _videos[_current].isVideo) {
+      if (!_player.state.playing) {
+        _player.play();
+      }
+      _controller.waitUntilFirstFrameRendered.then((_) {
+        if (mounted && !_videoSurfaceVisible.value) {
+          _videoSurfaceVisible.value = true;
+        }
+      });
+    }
+    final interval = ref.read(settingsNotifierProvider).slideshowInterval;
+    _slideshowTimer?.cancel();
+    _slideshowTimer = Timer.periodic(Duration(seconds: interval), (_) {
+      if (!mounted) return;
+      if (_current < _videos.length - 1) {
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        _pageController.animateToPage(
+          0,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  void _stopSlideshow() {
+    _slideshowTimer?.cancel();
+    _slideshowTimer = null;
+    if (_isSlideshowPlaying && mounted) {
+      setState(() => _isSlideshowPlaying = false);
+    }
+    final settings = ref.read(settingsNotifierProvider);
+    if (!settings.keepScreenOn) {
+      ScreenKeeperService.setKeepScreenOn(false);
+    }
+  }
 
   final ValueNotifier<_FeedbackPillData?> _feedbackToastNotifier =
       ValueNotifier(null);
@@ -200,13 +253,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _videos = [widget.item!];
       _current = 0;
     }
-    final initialItem = _videos[_current];
-    if (initialItem.width != null &&
-        initialItem.height != null &&
-        initialItem.width! > 0 &&
-        initialItem.height! > 0) {
-      _highRes = math.max(initialItem.width!, initialItem.height!) > 1920;
-    }
     _pageController = PageController(initialPage: _current);
     _transformationController = TransformationController();
     _settle = AnimationController.unbounded(vsync: this)
@@ -237,6 +283,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _videos.isNotEmpty) {
         _activeMediaNotifier = ref.read(activeViewerMediaIdProvider.notifier);
+      }
+      if (widget.startSlideshow && mounted) {
+        _startSlideshow();
       }
     });
   }
@@ -272,7 +321,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void _startPlaybackAfterTransition() {
     if (!mounted || !_videos[_current].isVideo) return;
     final settings = ref.read(settingsNotifierProvider);
-    if (settings.autoPlayVideo) {
+    final shouldPlay =
+        settings.autoPlayVideo || _isSlideshowPlaying || widget.startSlideshow;
+    if (shouldPlay) {
       if (!_player.state.playing) {
         _player.play();
       }
@@ -511,11 +562,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     _player.stream.playing.listen((playing) {
       if (playing && mounted && _videos[_current].isVideo) {
-        if (_routeTransitionComplete && !_videoSurfaceVisible.value) {
+        if (!_videoSurfaceVisible.value) {
           _controller.waitUntilFirstFrameRendered.then((_) {
-            if (mounted &&
-                _routeTransitionComplete &&
-                !_videoSurfaceVisible.value) {
+            if (mounted && !_videoSurfaceVisible.value) {
               _videoSurfaceVisible.value = true;
             }
           });
@@ -532,7 +581,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       final w = vp.w ?? 0, h = vp.h ?? 0;
       if (w <= 0 || h <= 0 || _lastSize == '${w}x$h') return;
       _lastSize = '${w}x$h';
-      final highRes = math.max(w, h) > 1920;
       if (_player.platform is NativePlayer) {
         final native = _player.platform as NativePlayer;
         try {
@@ -540,8 +588,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           debugPrint('[VideoPlayer] Active hwdec: $hw');
         } catch (_) {}
       }
-      if (mounted && _highRes != highRes) {
-        setState(() => _highRes = highRes);
+      if (mounted && _videos.isNotEmpty && _current < _videos.length) {
+        _activeVideoParamsPath = _videos[_current].path;
+        setState(() {});
       }
     });
 
@@ -568,9 +617,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         Media(currentPath),
         play: false,
       );
-      _activePlayerPath = currentPath;
       await _restoreSavedPosition(currentPath);
-      if (_routeTransitionComplete && settings.autoPlayVideo) {
+      final shouldPlay =
+          settings.autoPlayVideo || widget.startSlideshow;
+      if (_routeTransitionComplete && shouldPlay) {
         _player.play();
         _controller.waitUntilFirstFrameRendered.then((_) {
           if (mounted &&
@@ -619,7 +669,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _saveCurrentPosition(_videos[_current].path);
     }
     _videoLoadDebounce?.cancel();
-    _activePlayerPath = null;
+    _activeVideoParamsPath = null;
     final thisGen = ++_videoLoadGeneration;
 
     if (_isVideoZoomed || !_transformationController.value.isIdentity()) {
@@ -631,12 +681,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
     _lastSize = null;
     final nextItem = _videos[index];
-    if (nextItem.width != null &&
-        nextItem.height != null &&
-        nextItem.width! > 0 &&
-        nextItem.height! > 0) {
-      _highRes = math.max(nextItem.width!, nextItem.height!) > 1920;
-    }
     setState(() {
       _current = index;
       _hasStartedPlaying = false;
@@ -671,28 +715,31 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
               thisGen != _videoLoadGeneration) {
             return;
           }
-          await _player.open(Media(path), play: settings.autoPlayVideo);
-          _activePlayerPath = path;
+          await _player.stop();
+          final shouldPlay = settings.autoPlayVideo || _isSlideshowPlaying;
+          await _player.open(Media(path), play: shouldPlay);
           if (settings.startMuted) {
             await _player.setVolume(0.0);
           }
           await _restoreSavedPosition(path);
           if (_isLooping) _player.setPlaylistMode(PlaylistMode.loop);
           if (_playbackSpeed != 1.0) _player.setRate(_playbackSpeed);
-          if (settings.autoPlayVideo) {
-            _controller.waitUntilFirstFrameRendered.then((_) {
-              if (mounted &&
-                  _current == index &&
-                  thisGen == _videoLoadGeneration) {
-                _videoSurfaceVisible.value = true;
-              }
-            });
-          }
+          _controller.waitUntilFirstFrameRendered.then((_) {
+            if (mounted &&
+                _current == index &&
+                thisGen == _videoLoadGeneration) {
+              _videoSurfaceVisible.value = true;
+            }
+          });
         } catch (_) {}
       });
+    } else {
+      try {
+        _player.stop();
+      } catch (_) {}
     }
 
-    if (_isFullscreen) {
+    if (_isFullscreen && !_isSlideshowPlaying) {
       if (_isCurrentVideoPortrait()) {
         SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
       } else {
@@ -729,10 +776,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   @override
   void dispose() {
+    _stopSlideshow();
     final notifier = _activeMediaNotifier;
     if (notifier != null) {
       Future.microtask(() {
-        notifier.state = null;
+        if (notifier.mounted) {
+          notifier.state = null;
+        }
       });
     }
     _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
@@ -760,7 +810,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   bool _isVideoPortrait(MediaItem item, int index) {
-    if (index == _current && _activePlayerPath == item.path) {
+    if (index == _current && _activeVideoParamsPath == item.path) {
       final vParams = _player.state.videoParams;
       if (vParams.w != null &&
           vParams.h != null &&
@@ -773,18 +823,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         return effectiveH > effectiveW;
       }
     }
-    // Item width and height from scanner already account for orientation
+    // Visual thumbnail aspect ratio accounts for native EXIF/MP4 rotation matrix
+    final thumbRatio =
+        ThumbnailService.instance.getThumbnailAspectRatio(item.id);
+    if (thumbRatio != null && thumbRatio > 0) {
+      return thumbRatio < 0.95;
+    }
+    // Item width and height from scanner
     if (item.width != null &&
         item.height != null &&
         item.width! > 0 &&
         item.height! > 0) {
       return item.height! > item.width!;
-    }
-    // Visual thumbnail aspect ratio fallback
-    final thumbRatio =
-        ThumbnailService.instance.getThumbnailAspectRatio(item.id);
-    if (thumbRatio != null && thumbRatio > 0) {
-      return thumbRatio < 1.0;
     }
     return false;
   }
@@ -794,7 +844,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   double? _getVideoAspectRatio(MediaItem item, int index) {
-    if (index == _current && _activePlayerPath == item.path) {
+    if (index == _current && _activeVideoParamsPath == item.path) {
       final vParams = _player.state.videoParams;
       if (vParams.w != null &&
           vParams.h != null &&
@@ -807,16 +857,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         return effectiveW / effectiveH;
       }
     }
+    final thumbRatio =
+        ThumbnailService.instance.getThumbnailAspectRatio(item.id);
+    if (thumbRatio != null && thumbRatio > 0) {
+      return thumbRatio;
+    }
     if (item.width != null &&
         item.height != null &&
         item.width! > 0 &&
         item.height! > 0) {
       return item.width! / item.height!;
-    }
-    final thumbRatio =
-        ThumbnailService.instance.getThumbnailAspectRatio(item.id);
-    if (thumbRatio != null && thumbRatio > 0) {
-      return thumbRatio;
     }
     return null;
   }
@@ -945,7 +995,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
               child: IgnorePointer(
                 ignoring: !visible,
                 child: Video(
-                  key: const ValueKey('active_video_surface'),
+                  key: ValueKey('active_video_surface_${item.id}'),
                   controller: _controller,
                   controls: NoVideoControls,
                   fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
@@ -1137,8 +1187,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     ref.read(mediaListProvider.notifier).refresh();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr.itemRestored(item.name))),
+      showFeedbackPill(
+        context,
+        message: context.tr.itemRestored(item.name),
+        icon: Icons.restore_rounded,
       );
       if (_videos.length <= 1) {
         Navigator.of(context).pop();
@@ -1171,8 +1223,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       await ref.read(trashProvider.notifier).permanentDelete(item.id);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr.delete)),
+      showFeedbackPill(
+        context,
+        message: context.tr.delete,
+        icon: Icons.delete_outline_rounded,
       );
       if (_videos.length <= 1) {
         Navigator.of(context).pop();
@@ -1245,10 +1299,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isTrash ? context.tr.moveToTrash : context.tr.delete),
-      ),
+    showFeedbackPill(
+      context,
+      message: isTrash ? context.tr.moveToTrash : context.tr.delete,
+      icon:
+          isTrash ? Icons.delete_outline_rounded : Icons.delete_forever_rounded,
     );
     if (_videos.length <= 1) {
       Navigator.of(context).pop();
@@ -1466,6 +1521,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
                     if (_dragNotifier.value.dy < 10) {
+                      if (_isSlideshowPlaying) {
+                        _stopSlideshow();
+                        return;
+                      }
                       setState(() => _showControls = !_showControls);
                     }
                   },
@@ -1858,6 +1917,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                   isFullscreen: _isFullscreen,
                                   isLooping: _isLooping,
                                   playbackSpeed: _playbackSpeed,
+                                  isSlideshowPlaying: _isSlideshowPlaying,
+                                  onStartSlideshow: _startSlideshow,
+                                  onStopSlideshow: _stopSlideshow,
                                   cropToFit: _cropToFit,
                                   onToggleCropToFit: _toggleCropToFit,
                                   onToggleFullscreen: _toggleFullscreen,
@@ -2082,11 +2144,9 @@ class _VideoThumbnailPageState extends State<_VideoThumbnailPage> {
         ThumbnailService.instance.getMemoryHighResThumbnail(widget.item.id);
     if (cached != null) {
       _highResBytes = cached;
-    } else if (widget.isSwiping?.value != true) {
+    } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted &&
-            widget.isSwiping?.value != true &&
-            _highResBytes == null) {
+        if (mounted && _highResBytes == null) {
           _loadHighRes();
         }
       });
@@ -2107,9 +2167,15 @@ class _VideoThumbnailPageState extends State<_VideoThumbnailPage> {
       widget.isSwiping?.addListener(_onSwipeChanged);
     }
     if (oldWidget.item.id != widget.item.id) {
-      _highResBytes = null;
-      if (widget.isSwiping?.value != true) {
-        _loadHighRes();
+      final cached =
+          ThumbnailService.instance.getMemoryHighResThumbnail(widget.item.id);
+      _highResBytes = cached;
+      if (cached == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _highResBytes == null) {
+            _loadHighRes();
+          }
+        });
       }
     }
   }
@@ -2124,7 +2190,11 @@ class _VideoThumbnailPageState extends State<_VideoThumbnailPage> {
     final cached =
         ThumbnailService.instance.getMemoryHighResThumbnail(widget.item.id);
     if (cached != null) {
-      _highResBytes = cached;
+      if (mounted && _highResBytes != cached) {
+        setState(() {
+          _highResBytes = cached;
+        });
+      }
       return;
     }
     ThumbnailService.instance
@@ -2455,6 +2525,9 @@ class _BottomBar extends StatefulWidget {
     this.onRestore,
     this.onRename,
     this.onScrubbingChanged,
+    this.isSlideshowPlaying = false,
+    this.onStartSlideshow,
+    this.onStopSlideshow,
   });
 
   final Player player;
@@ -2474,6 +2547,9 @@ class _BottomBar extends StatefulWidget {
   final VoidCallback? onRestore;
   final VoidCallback? onRename;
   final ValueChanged<bool>? onScrubbingChanged;
+  final bool isSlideshowPlaying;
+  final VoidCallback? onStartSlideshow;
+  final VoidCallback? onStopSlideshow;
 
   @override
   State<_BottomBar> createState() => _BottomBarState();
@@ -2850,6 +2926,28 @@ class _BottomBarState extends State<_BottomBar> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
+                  leading: Icon(
+                    widget.isSlideshowPlaying
+                        ? Icons.pause_circle_outline_rounded
+                        : Icons.slideshow_rounded,
+                    color: Colors.white,
+                  ),
+                  title: Text(
+                    widget.isSlideshowPlaying
+                        ? context.tr.pause
+                        : context.tr.slideshow,
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    if (widget.isSlideshowPlaying) {
+                      widget.onStopSlideshow?.call();
+                    } else {
+                      widget.onStartSlideshow?.call();
+                    }
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.speed, color: Colors.white),
                   title: Text(
                     '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
@@ -2944,6 +3042,29 @@ class _BottomBarState extends State<_BottomBar> {
                     },
                   ),
                 ] else ...[
+                  ListTile(
+                    leading: Icon(
+                      widget.isSlideshowPlaying
+                          ? Icons.pause_circle_outline_rounded
+                          : Icons.slideshow_rounded,
+                      color: Colors.white,
+                    ),
+                    title: Text(
+                      widget.isSlideshowPlaying
+                          ? context.tr.pause
+                          : context.tr.slideshow,
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 15),
+                    ),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      if (widget.isSlideshowPlaying) {
+                        widget.onStopSlideshow?.call();
+                      } else {
+                        widget.onStartSlideshow?.call();
+                      }
+                    },
+                  ),
                   Consumer(
                     builder: (context, ref, _) {
                       final isFav = ref.watch(
@@ -3039,6 +3160,28 @@ class _BottomBarState extends State<_BottomBar> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              ListTile(
+                leading: Icon(
+                  widget.isSlideshowPlaying
+                      ? Icons.pause_circle_outline_rounded
+                      : Icons.slideshow_rounded,
+                  color: Colors.white,
+                ),
+                title: Text(
+                  widget.isSlideshowPlaying
+                      ? context.tr.pause
+                      : context.tr.slideshow,
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  if (widget.isSlideshowPlaying) {
+                    widget.onStopSlideshow?.call();
+                  } else {
+                    widget.onStartSlideshow?.call();
+                  }
+                },
+              ),
               if (widget.onRename != null)
                 ListTile(
                   leading: const Icon(Icons.edit_outlined, color: Colors.white),

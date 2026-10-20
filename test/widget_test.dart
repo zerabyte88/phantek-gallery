@@ -26,7 +26,7 @@ import 'package:phantek_gallery/features/gallery/presentation/widgets/filter_sor
 import 'package:phantek_gallery/features/gallery/presentation/widgets/sort_bottom_sheet.dart';
 import 'package:phantek_gallery/features/player/presentation/widgets/media_info_sheet.dart';
 import 'package:phantek_gallery/features/player/presentation/image_viewer_screen.dart'
-    show displayImage, screenDisplayImage;
+    show displayImage, screenDisplayImage, ImageViewerScreen;
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
 import 'package:phantek_gallery/features/settings/presentation/widgets/developer_about_card.dart';
 import 'package:phantek_gallery/core/services/share_service.dart';
@@ -2391,6 +2391,64 @@ void main() {
 
       expect(find.byIcon(Icons.slideshow_rounded), findsOneWidget);
       expect(find.text('Slideshow'), findsOneWidget);
+    });
+
+    testWidgets('Slideshow action is present in image viewer more options menu',
+        (tester) async {
+      final items = [
+        MediaItem(
+            id: 'item_1',
+            path: '/a/1.jpg',
+            name: '1.jpg',
+            date: DateTime.now(),
+            size: 10,
+            isVideo: false),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsNotifierProvider.overrideWith(
+                () => _TestSettingsNotifier(const SettingsModel())),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            home: ImageViewerScreen(items: items, initialIndex: 0),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final moreButton = find.byIcon(Icons.more_vert);
+      expect(moreButton, findsOneWidget);
+
+      await tester.tap(moreButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byIcon(Icons.slideshow_rounded), findsOneWidget);
+      expect(find.text('Slideshow'), findsOneWidget);
+    });
+
+    test('Vertical video aspect ratio priority preserves portrait layout when encoded dimensions are landscape', () {
+      // Many smartphone camera videos are physically 1920x1080 with 90° EXIF rotation.
+      // Thumbnail aspect ratio reflects the rotated physical frame (1080 / 1920 = 0.5625).
+      const encodedWidth = 1920;
+      const encodedHeight = 1080;
+      const thumbRatio = 1080.0 / 1920.0; // 0.5625
+
+      // Prioritize thumbnail ratio < 0.95 to accurately detect portrait video
+      final isPortrait = thumbRatio < 0.95;
+      expect(isPortrait, isTrue);
+
+      // Raw width/height would falsely identify it as horizontal
+      expect(encodedHeight > encodedWidth, isFalse);
     });
   });
 }

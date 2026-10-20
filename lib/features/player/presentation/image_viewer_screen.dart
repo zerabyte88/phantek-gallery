@@ -20,6 +20,7 @@ import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
 import 'widgets/rename_dialog.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
+import '../../../core/widgets/feedback_pill.dart';
 
 /// A 100MP photo decodes to ~50 MB instead of ~408 MB, so it fits imageCache.
 // ponytail: fixed 4096px cap, sharp to ~3x zoom on 1080p. Swap to full-res
@@ -257,7 +258,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     final notifier = _activeMediaNotifier;
     if (notifier != null) {
       Future.microtask(() {
-        notifier.state = null;
+        if (notifier.mounted) {
+          notifier.state = null;
+        }
       });
     }
     ScreenKeeperService.setKeepScreenOn(false);
@@ -459,8 +462,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     ref.read(mediaListProvider.notifier).refresh();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr.itemRestored(item.name))),
+      showFeedbackPill(
+        context,
+        message: context.tr.itemRestored(item.name),
+        icon: Icons.restore_rounded,
       );
       if (widget.items.length <= 1) {
         Navigator.of(context).pop();
@@ -491,8 +496,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
       await ref.read(trashProvider.notifier).permanentDelete(item.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr.delete)),
+        showFeedbackPill(
+          context,
+          message: context.tr.delete,
+          icon: Icons.delete_outline_rounded,
         );
         if (widget.items.length <= 1) {
           Navigator.of(context).pop();
@@ -564,10 +571,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isTrash ? context.tr.moveToTrash : context.tr.delete),
-      ),
+    showFeedbackPill(
+      context,
+      message: isTrash ? context.tr.moveToTrash : context.tr.delete,
+      icon:
+          isTrash ? Icons.delete_outline_rounded : Icons.delete_forever_rounded,
     );
     if (widget.items.length <= 1) {
       Navigator.of(context).pop();

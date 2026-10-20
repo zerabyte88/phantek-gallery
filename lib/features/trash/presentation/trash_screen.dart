@@ -11,6 +11,7 @@ import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
+import '../../../core/widgets/feedback_pill.dart';
 
 class TrashScreen extends ConsumerStatefulWidget {
   const TrashScreen({super.key});
@@ -126,10 +127,10 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     ref.read(mediaListProvider.notifier).refresh();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text(context.tr.itemRestored(context.tr.itemsCount(count)))),
+      showFeedbackPill(
+        context,
+        message: context.tr.itemRestored(context.tr.itemsCount(count)),
+        icon: Icons.restore_rounded,
       );
     }
   }
@@ -155,6 +156,14 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       await ref.read(trashProvider.notifier).permanentDelete(item.id);
     }
     _clearSelection();
+
+    if (mounted) {
+      showFeedbackPill(
+        context,
+        message: context.tr.delete,
+        icon: Icons.delete_outline_rounded,
+      );
+    }
   }
 
   Widget _buildSelectAllCheckbox(BuildContext context, int totalCount) {

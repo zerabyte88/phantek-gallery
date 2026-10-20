@@ -49,6 +49,7 @@ Route<dynamic> generateRoute(RouteSettings s) {
             items: args.items,
             initialIndex: args.initialIndex,
             isTrash: args.isTrash,
+            startSlideshow: args.startSlideshow,
           ),
           duration: const Duration(milliseconds: 300),
         );
@@ -135,11 +136,21 @@ extension AppNav on NavigatorState {
         ),
       );
 
-  Future<void> openVideo(List<MediaItem> items, int index,
-          {bool isTrash = false}) =>
-      pushNamed(AppRoutes.video,
-          arguments:
-              _ViewerArgs(items: items, initialIndex: index, isTrash: isTrash));
+  Future<void> openVideo(
+    List<MediaItem> items,
+    int index, {
+    bool isTrash = false,
+    bool startSlideshow = false,
+  }) =>
+      pushNamed(
+        AppRoutes.video,
+        arguments: _ViewerArgs(
+          items: items,
+          initialIndex: index,
+          isTrash: isTrash,
+          startSlideshow: startSlideshow,
+        ),
+      );
 
   Future<void> openSingleVideo(MediaItem item) =>
       pushNamed(AppRoutes.video, arguments: item);

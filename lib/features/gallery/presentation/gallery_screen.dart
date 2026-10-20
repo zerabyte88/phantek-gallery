@@ -27,6 +27,7 @@ import 'widgets/album_grid_item.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
 import 'widgets/delete_confirmation_sheet.dart';
+import '../../../core/widgets/feedback_pill.dart';
 
 class GalleryScreen extends ConsumerStatefulWidget {
   const GalleryScreen({super.key});
@@ -391,11 +392,20 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     if (mounted) {
       ref.read(mediaListProvider.notifier).refresh();
       if (successCount < toDelete.length) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text('Processed $successCount of ${toDelete.length} items.'),
-          ),
+        showFeedbackPill(
+          context,
+          message: 'Processed $successCount of ${toDelete.length} items.',
+          icon: Icons.info_outline_rounded,
+        );
+      } else {
+        showFeedbackPill(
+          context,
+          message: settings.enableTrash
+              ? context.tr.moveToTrash
+              : context.tr.delete,
+          icon: settings.enableTrash
+              ? Icons.delete_outline_rounded
+              : Icons.delete_forever_rounded,
         );
       }
     }
@@ -500,11 +510,18 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     if (mounted) {
       ref.read(mediaListProvider.notifier).refresh();
       if (successCount < toDelete.length) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text('Processed $successCount of ${toDelete.length} items.'),
-          ),
+        showFeedbackPill(
+          context,
+          message: 'Processed $successCount of ${toDelete.length} items.',
+          icon: Icons.info_outline_rounded,
+        );
+      } else {
+        showFeedbackPill(
+          context,
+          message: isTrash ? context.tr.moveToTrash : context.tr.delete,
+          icon: isTrash
+              ? Icons.delete_outline_rounded
+              : Icons.delete_forever_rounded,
         );
       }
     }

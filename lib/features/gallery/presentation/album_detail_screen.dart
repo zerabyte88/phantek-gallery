@@ -17,6 +17,7 @@ import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
 import 'widgets/delete_confirmation_sheet.dart';
+import '../../../core/widgets/feedback_pill.dart';
 
 /// Screen displaying photos and videos belonging to a specific album.
 class AlbumDetailScreen extends ConsumerStatefulWidget {
@@ -141,11 +142,20 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     if (mounted) {
       ref.read(mediaListProvider.notifier).refresh();
       if (successCount < toDelete.length) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text('Processed $successCount of ${toDelete.length} items.'),
-          ),
+        showFeedbackPill(
+          context,
+          message: 'Processed $successCount of ${toDelete.length} items.',
+          icon: Icons.info_outline_rounded,
+        );
+      } else {
+        showFeedbackPill(
+          context,
+          message: settings.enableTrash
+              ? context.tr.moveToTrash
+              : context.tr.delete,
+          icon: settings.enableTrash
+              ? Icons.delete_outline_rounded
+              : Icons.delete_forever_rounded,
         );
       }
     }
