@@ -238,8 +238,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   void _precacheAdjacent(int index) {
     if (!mounted) return;
-    // ±1 only: 3 × ~12 MB stays inside the 256 MB imageCache.
-    for (final offset in const [-1, 1]) {
+    // Pre-cache ±2 neighbors (prioritize immediate ±1 first):
+    // 5 × ~12 MB = ~60 MB, easily accommodated by the 512 MB imageCache.
+    for (final offset in const [-1, 1, -2, 2]) {
       final target = index + offset;
       if (target >= 0 && target < widget.items.length) {
         final item = widget.items[target];
@@ -421,15 +422,26 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       gaplessPlayback: true,
       filterQuality: FilterQuality.medium,
       frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-        if (wasSynchronouslyLoaded || frame != null) {
+        if (wasSynchronouslyLoaded) {
           return child;
         }
+        final loaded = frame != null;
         return Stack(
           fit: StackFit.passthrough,
           alignment: Alignment.center,
           children: [
-            _thumb(it.id, it.path),
-            child,
+            AnimatedOpacity(
+              opacity: loaded ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              child: _thumb(it.id, it.path),
+            ),
+            AnimatedOpacity(
+              opacity: loaded ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              child: child,
+            ),
           ],
         );
       },
@@ -746,12 +758,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
           final dx = e.position.dx - _startDragX!;
           final dy = e.position.dy - _startDragY!;
+          final adx = dx.abs();
+          final ady = dy.abs();
 
-          // Detect horizontal swipe intent to avoid fighting PageView.
+          // Detect horizontal swipe intent early to lock out pull-to-dismiss
           if (!_isSwipingHorizontal && _drag.value == Offset.zero) {
-            final adx = dx.abs();
-            final ady = dy.abs();
-            if (adx > 8 && adx > ady * 1.1) {
+            if (adx > 6 && adx >= ady) {
               _isSwipingHorizontal = true;
               return;
             }
@@ -761,10 +773,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
           _vt.addPosition(e.timeStamp, e.position);
 
-          // Responsive vertical swipe deadzone: natural downward drag
-          if (_drag.value != Offset.zero || (dy > 16 && dy > dx.abs() * 1.5)) {
+          // Intentional vertical swipe deadzone: natural downward drag
+          if (_drag.value != Offset.zero || (dy > 24 && dy > adx * 1.8)) {
             final dampedDx = dx * 0.45;
-            final dragY = (dy - 16).clamp(0.0, 650.0);
+            final dragY = (dy - 24).clamp(0.0, 650.0);
             _setDrag(Offset(dampedDx, dragY));
           }
         },
@@ -888,6 +900,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                     },
                     child: PageView.builder(
                       controller: _page,
+                      dragStartBehavior: DragStartBehavior.down,
                       itemCount: widget.items.length,
                       onPageChanged: (i) {
                         setState(() {
@@ -897,6 +910,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           _isPinching = false;
                           _transformationController.value = Matrix4.identity();
                         });
+                        _precacheAdjacent(i);
                       },
                       physics: (_isCurrentlyZoomed ||
                               _isPinching ||
@@ -904,7 +918,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               _activePointers.length >= 2)
                           ? const NeverScrollableScrollPhysics()
                           : const BouncingScrollPhysics(
-                              parent: AlwaysScrollableScrollPhysics(),
+                              parent: PageScrollPhysics(),
                             ),
                       itemBuilder: (context, index) {
                         final it = widget.items[index];

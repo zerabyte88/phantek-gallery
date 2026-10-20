@@ -51,9 +51,9 @@ Future<void> main() async {
     TrashService().purgeExpired(maxDays: initialCleanup).catchError((_) {});
   }
 
-  //  6. Balanced imageCache: 256 MB and 100 entries for instant high-res swiping.
-  PaintingBinding.instance.imageCache.maximumSizeBytes = 256 * 1024 * 1024;
-  PaintingBinding.instance.imageCache.maximumSize = 100;
+  //  6. High-capacity imageCache: 512 MB and 150 entries for instant crisp swiping.
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 512 * 1024 * 1024;
+  PaintingBinding.instance.imageCache.maximumSize = 150;
 
   runApp(const ProviderScope(child: PhantekGalleryApp()));
 }

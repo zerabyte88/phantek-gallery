@@ -454,7 +454,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void _precacheAdjacentVideos(int index) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      for (final offset in const [-1, 1]) {
+      for (final offset in const [-1, 1, -2, 2]) {
         final target = index + offset;
         if (target >= 0 && target < _videos.length) {
           final item = _videos[target];
@@ -1422,13 +1422,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       _startDragY != null) {
                     final adx = (e.position.dx - _startDragX!).abs();
                     final ady = (e.position.dy - _startDragY!).abs();
-                    if (adx > 8 && adx > ady * 1.1) {
-                      if (_videoSurfaceVisible.value) {
-                        _videoSurfaceVisible.value = false;
+                    if (!_isSwipingHorizontal &&
+                        _dragNotifier.value == Offset.zero) {
+                      if (adx > 6 && adx >= ady) {
+                        if (_videoSurfaceVisible.value) {
+                          _videoSurfaceVisible.value = false;
+                        }
+                        _isSwipingHorizontal = true;
+                        _isSwipingPage.value = true;
+                        return;
                       }
-                      _isSwipingHorizontal = true;
-                      _isSwipingPage.value = true;
-                      return;
                     }
                   }
 
@@ -1452,13 +1455,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   _vt.addPosition(e.timeStamp, e.position);
                   final dy = e.position.dy - _startDragY!;
                   final dx = e.position.dx - _startDragX!;
-                  // Responsive vertical swipe deadzone: natural downward drag
+                  final adx = dx.abs();
+                  // Intentional vertical swipe deadzone: natural downward drag
                   if (_dragNotifier.value != Offset.zero ||
-                      (dy > 16 && dy > dx.abs() * 1.5)) {
+                      (dy > 24 && dy > adx * 1.8)) {
                     final dampedDx = dx * 0.45;
-                    final dragY = (dy - 16).clamp(0.0, 650.0);
+                    final dragY = (dy - 24).clamp(0.0, 650.0);
                     _setDrag(Offset(dampedDx, dragY));
-                    if (_player.state.playing && dy > 12) {
+                    if (_player.state.playing && dy > 16) {
                       _player.pause();
                     }
                   }
@@ -1585,6 +1589,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               },
                               child: PageView.builder(
                                 controller: _pageController,
+                                dragStartBehavior: DragStartBehavior.down,
                                 itemCount: _videos.length,
                                 onPageChanged: _onPageChanged,
                                 physics: (_isCurrentlyVideoZoomed ||
@@ -1593,7 +1598,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                         _isScrubbing ||
                                         _activePointers.length >= 2)
                                     ? const NeverScrollableScrollPhysics()
-                                    : const BouncingScrollPhysics(),
+                                    : const BouncingScrollPhysics(
+                                        parent: PageScrollPhysics(),
+                                      ),
                                 itemBuilder: (context, index) {
                                   final isCur = index == _current;
                                   return RepaintBoundary(
