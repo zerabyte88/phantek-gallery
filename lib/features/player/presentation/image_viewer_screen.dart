@@ -11,6 +11,7 @@ import '../../../core/models/media_item.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
+import '../../../core/providers/vault_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/screen_keeper_service.dart';
 import '../../../core/services/share_service.dart';
@@ -48,11 +49,18 @@ Widget _thumb(String id, [String? path]) {
   final hr = ThumbnailService.instance.getMemoryHighResThumbnail(id);
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
   final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
+  final isVid = path != null &&
+      (path.toLowerCase().endsWith('.mp4') ||
+          path.toLowerCase().endsWith('.mkv') ||
+          path.toLowerCase().endsWith('.webm') ||
+          path.toLowerCase().endsWith('.mov') ||
+          path.toLowerCase().endsWith('.avi') ||
+          path.toLowerCase().endsWith('.3gp'));
   final ImageProvider? p = mem != null
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (path != null ? screenDisplayImage(path) : null));
+          : (path != null && !isVid ? screenDisplayImage(path) : null));
   if (p == null) return const SizedBox.shrink();
   return Image(
     image: p,
@@ -244,6 +252,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       final target = index + offset;
       if (target >= 0 && target < widget.items.length) {
         final item = widget.items[target];
+        if (item.isVideo) continue;
         final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
         if (mem != null) {
           precacheImage(MemoryImage(mem), context);
@@ -414,6 +423,18 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   }
 
   Widget _buildPhotoPage(MediaItem it, {bool isCurrent = false}) {
+    if (it.isVideo) {
+      return Center(
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            _thumb(it.id, it.path),
+            const Icon(Icons.play_circle_fill_rounded,
+                size: 64, color: Colors.white70),
+          ],
+        ),
+      );
+    }
     Widget content = Image(
       image: (isCurrent && _isDeepZoomed)
           ? displayImage(it.path, maxDimension: 4096)
@@ -604,7 +625,56 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
   }
 
+  Future<void> _moveToVault(MediaItem item) async {
+    final hasPerm = await PermissionService.instance.ensureManageStorage();
+    if (!hasPerm) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr.manageFilesPermissionRequired),
+          ),
+        );
+      }
+      return;
+    }
+
+    ref.read(mediaListProvider.notifier).removeItems({item.id});
+
+    try {
+      await ref.read(vaultProvider.notifier).moveToVault(item);
+      ref.read(mediaListProvider.notifier).refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to move to vault: $e')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    showFeedbackPill(
+      context,
+      message: context.tr.lockedVault,
+      icon: Icons.lock_outline_rounded,
+    );
+    if (widget.items.length <= 1) {
+      Navigator.of(context).pop();
+    } else {
+      widget.items.removeAt(_current);
+      setState(() {
+        _current = _current.clamp(0, widget.items.length - 1);
+        _transformationController.value = Matrix4.identity();
+        _isPhotoZoomed = false;
+        _isDeepZoomed = false;
+      });
+      _page.jumpToPage(_current);
+      _activeMediaNotifier?.state = widget.items[_current].id;
+    }
+  }
+
   void _showMoreOptions(MediaItem item) {
+    final settings = ref.read(settingsNotifierProvider);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF1E1E1E),
@@ -618,6 +688,16 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (settings.lockedVaultEnabled && !widget.isTrash)
+                ListTile(
+                  leading: const Icon(Icons.lock_outline_rounded, color: Colors.white),
+                  title: Text(context.tr.moveToVault,
+                      style: const TextStyle(color: Colors.white, fontSize: 15)),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    await _moveToVault(item);
+                  },
+                ),
               ListTile(
                 leading: Icon(
                   _isSlideshowPlaying

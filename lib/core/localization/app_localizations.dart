@@ -83,6 +83,7 @@ class AppLocalizations {
   String get about => _t('about');
   String get resetAllSettings => _t('resetAllSettings');
   String get cancel => _t('cancel');
+  String get ok => _t('ok');
   String get save => _t('save');
   String get add => _t('add');
   String get delete => _t('delete');
@@ -233,6 +234,15 @@ class AppLocalizations {
   String get secureScreenDesc => _t('secureScreenDesc');
   String get lockedVault => _t('lockedVault');
   String get lockedVaultDesc => _t('lockedVaultDesc');
+  String get moveToVault => _t('moveToVault');
+  String get restoreFromVault => _t('restoreFromVault');
+  String get vaultEmpty => _t('vaultEmpty');
+  String get vaultEmptyDesc => _t('vaultEmptyDesc');
+  String get authenticateToOpenVault => _t('authenticateToOpenVault');
+  String get deviceLockRequired => _t('deviceLockRequired');
+  String get deviceLockRequiredDesc => _t('deviceLockRequiredDesc');
+  String get deleteFromVaultPermanently => _t('deleteFromVaultPermanently');
+  String get deleteFromVaultConfirm => _t('deleteFromVaultConfirm');
   String get today => _t('today');
   String get yesterday => _t('yesterday');
 

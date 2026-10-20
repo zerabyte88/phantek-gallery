@@ -4,6 +4,7 @@ import '../features/gallery/presentation/album_detail_screen.dart';
 import '../features/player/presentation/image_viewer_screen.dart';
 import '../features/player/presentation/video_player_screen.dart';
 import '../features/trash/presentation/trash_screen.dart';
+import '../features/vault/presentation/vault_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../core/models/media_item.dart';
 
@@ -16,6 +17,7 @@ class AppRoutes {
   static const image = '/image';
   static const video = '/video';
   static const trash = '/trash';
+  static const vault = '/vault';
   static const settings = '/settings';
   static const album = '/album';
 }
@@ -64,6 +66,9 @@ Route<dynamic> generateRoute(RouteSettings s) {
 
     case AppRoutes.trash:
       return _slide(const TrashScreen());
+
+    case AppRoutes.vault:
+      return _slide(const VaultScreen());
 
     case AppRoutes.settings:
       return _slide(const SettingsScreen());
@@ -156,6 +161,7 @@ extension AppNav on NavigatorState {
       pushNamed(AppRoutes.video, arguments: item);
 
   Future<void> openTrash() => pushNamed(AppRoutes.trash);
+  Future<void> openVault() => pushNamed(AppRoutes.vault);
   Future<void> openSettings() => pushNamed(AppRoutes.settings);
   Future<void> openAlbum(String albumName) =>
       pushNamed(AppRoutes.album, arguments: albumName);

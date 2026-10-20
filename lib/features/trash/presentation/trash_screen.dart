@@ -232,7 +232,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                   icon: const Icon(Icons.arrow_back_ios_new, size: 20),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
-          centerTitle: _selecting,
+          centerTitle: false,
           title: Text(
             _selecting
                 ? (_selected.isEmpty

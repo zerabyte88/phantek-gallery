@@ -15,6 +15,7 @@ import '../../../core/models/settings_model.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
+import '../../../core/providers/vault_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/services/share_service.dart';
@@ -24,6 +25,7 @@ import '../../../core/widgets/animated_flame_title.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import '../../../core/widgets/theme_header_background.dart';
 import 'widgets/album_grid_item.dart';
+import '../../vault/presentation/widgets/vault_album_grid_item.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
 import 'widgets/delete_confirmation_sheet.dart';
@@ -411,6 +413,42 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     }
   }
 
+  Future<void> _moveToVaultSelected(List<MediaItem> allItems) async {
+    final toVault = allItems.where((e) => _selected.contains(e.id)).toList();
+    if (toVault.isEmpty) return;
+
+    final hasPerm = await PermissionService.instance.ensureManageStorage();
+    if (!hasPerm) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Manage All Files permission is required to move items to vault.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    final toVaultIds = toVault.map((e) => e.id).toSet();
+    ref.read(mediaListProvider.notifier).removeItems(toVaultIds);
+    final count = toVault.length;
+    _clearSelection();
+
+    try {
+      await ref.read(vaultProvider.notifier).moveToVaultBatch(toVault);
+      if (mounted) {
+        showFeedbackPill(
+          context,
+          message: context.tr.itemRestored(context.tr.itemsCount(count)),
+          icon: Icons.lock_outline_rounded,
+        );
+      }
+    } catch (e) {
+      debugPrint('Vault move error: $e');
+    }
+  }
+
   Future<bool> _confirmDelete(int count) async {
     final settings = ref.read(settingsNotifierProvider);
     final isTrash = settings.enableTrash;
@@ -700,7 +738,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           automaticallyImplyLeading: false,
           leading: null,
           titleSpacing: 16.0,
-          centerTitle: true,
+          centerTitle: !_selecting,
           title: AnimatedBuilder(
             animation: _searchAnimController,
             builder: (context, child) {
@@ -904,6 +942,15 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                 },
               ),
             ),
+            if (settings.lockedVaultEnabled)
+              BouncyTap(
+                scaleDown: 0.88,
+                child: IconButton(
+                  icon: const Icon(Icons.lock_outline_rounded),
+                  tooltip: context.tr.moveToVault,
+                  onPressed: () => _moveToVaultSelected(mediaAsync.value ?? []),
+                ),
+              ),
             BouncyTap(
               scaleDown: 0.88,
               child: IconButton(
@@ -947,20 +994,21 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               final raw = mediaAsync.value ?? [];
               List<MediaItem> items;
               if (isAlbums) {
-                final photos = raw.where((e) => !e.isVideo).toList();
-                items = photos.isNotEmpty ? photos : raw;
+                items = raw;
               } else {
-                final currentTabItems = applyFiltersAndSort(
+                items = applyFiltersAndSort(
                   raw,
                   sort: settings.defaultSort,
                   filter: _tabs[_currentPage],
                 );
-                final photos =
-                    currentTabItems.where((e) => !e.isVideo).toList();
-                items = photos.isNotEmpty ? photos : currentTabItems;
               }
               if (items.isNotEmpty) {
-                Navigator.of(context).openImage(items, 0, startSlideshow: true);
+                final hasVideos = items.any((e) => e.isVideo);
+                if (hasVideos) {
+                  Navigator.of(context).openVideo(items, 0, startSlideshow: true);
+                } else {
+                  Navigator.of(context).openImage(items, 0, startSlideshow: true);
+                }
               }
             } else if (value == 'select') {
               setState(() {
@@ -1253,7 +1301,13 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     required SettingsModel settings,
     required String storageKey,
   }) {
-    if (albums.isEmpty) {
+    final showVault = settings.lockedVaultEnabled &&
+        (_searchQuery.isEmpty ||
+            context.tr.lockedVault
+                .toLowerCase()
+                .contains(_searchQuery.toLowerCase()));
+
+    if (albums.isEmpty && !showVault) {
       return RefreshIndicator(
         onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
         child: LayoutBuilder(
@@ -1288,6 +1342,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       );
     }
 
+    final totalCount = albums.length + (showVault ? 1 : 0);
+
     return RefreshIndicator(
       onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
       child: GridView.builder(
@@ -1299,9 +1355,13 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           mainAxisSpacing: 16,
           childAspectRatio: 0.74,
         ),
-        itemCount: albums.length,
+        itemCount: totalCount,
         itemBuilder: (_, i) {
-          final album = albums[i];
+          if (showVault && i == 0) {
+            return const VaultAlbumGridItem();
+          }
+          final albumIndex = showVault ? i - 1 : i;
+          final album = albums[albumIndex];
           return AlbumGridItem(
             key: ValueKey(album.name),
             album: album,

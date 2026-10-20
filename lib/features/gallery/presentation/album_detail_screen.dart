@@ -11,6 +11,7 @@ import '../../../core/models/settings_model.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
+import '../../../core/providers/vault_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/bouncy_tap.dart';
@@ -161,6 +162,42 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     }
   }
 
+  Future<void> _moveToVaultSelected(List<MediaItem> allItems) async {
+    final toVault = allItems.where((e) => _selected.contains(e.id)).toList();
+    if (toVault.isEmpty) return;
+
+    final hasPerm = await PermissionService.instance.ensureManageStorage();
+    if (!hasPerm) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Manage All Files permission is required to move items to vault.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    final toVaultIds = toVault.map((e) => e.id).toSet();
+    ref.read(mediaListProvider.notifier).removeItems(toVaultIds);
+    final count = toVault.length;
+    _clearSelection();
+
+    try {
+      await ref.read(vaultProvider.notifier).moveToVaultBatch(toVault);
+      if (mounted) {
+        showFeedbackPill(
+          context,
+          message: context.tr.itemRestored(context.tr.itemsCount(count)),
+          icon: Icons.lock_outline_rounded,
+        );
+      }
+    } catch (e) {
+      debugPrint('Vault move error: $e');
+    }
+  }
+
   Future<bool> _confirmDelete(int count) async {
     final settings = ref.read(settingsNotifierProvider);
     final isTrash = settings.enableTrash;
@@ -273,6 +310,15 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                   },
                 ),
               ),
+              if (settings.lockedVaultEnabled)
+                BouncyTap(
+                  scaleDown: 0.88,
+                  child: IconButton(
+                    icon: const Icon(Icons.lock_outline_rounded),
+                    tooltip: context.tr.moveToVault,
+                    onPressed: () => _moveToVaultSelected(sortedItems),
+                  ),
+                ),
               BouncyTap(
                 scaleDown: 0.88,
                 child: IconButton(

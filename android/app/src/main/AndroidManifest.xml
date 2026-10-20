@@ -33,6 +33,9 @@
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION"
         android:minSdkVersion="29" />
 
+    <!-- Biometric authentication for Locked Vault -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
     <application
         android:label="Phantek Gallery"
         android:name="${applicationName}"

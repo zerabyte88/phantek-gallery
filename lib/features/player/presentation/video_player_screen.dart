@@ -17,6 +17,7 @@ import '../../../core/models/media_item.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
+import '../../../core/providers/vault_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/screen_keeper_service.dart';
 import '../../../core/services/share_service.dart';
@@ -166,40 +167,62 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   bool _isSlideshowPlaying = false;
 
   void _startSlideshow() {
+    if (!mounted) return;
     setState(() {
       _isSlideshowPlaying = true;
       _showControls = false;
     });
     ScreenKeeperService.setKeepScreenOn(true);
-    if (_videos.isNotEmpty &&
-        _current < _videos.length &&
-        _videos[_current].isVideo) {
+    _scheduleNextSlideshowStep();
+  }
+
+  void _scheduleNextSlideshowStep() {
+    _slideshowTimer?.cancel();
+    _slideshowTimer = null;
+    if (!mounted || !_isSlideshowPlaying || _videos.isEmpty) return;
+
+    final currentItem = _videos[_current];
+    if (currentItem.isVideo) {
       if (!_player.state.playing) {
         _player.play();
       }
-      _controller.waitUntilFirstFrameRendered.then((_) {
-        if (mounted && !_videoSurfaceVisible.value) {
-          _videoSurfaceVisible.value = true;
+      // Safety fallback timer so slideshow never stalls indefinitely on broken or paused video
+      final dur = _player.state.duration;
+      final safetySeconds = (dur > Duration.zero && dur.inSeconds > 0)
+          ? dur.inSeconds + 1
+          : 30;
+      _slideshowTimer = Timer(Duration(seconds: safetySeconds), () {
+        if (mounted && _isSlideshowPlaying) {
+          _advanceSlideshow();
+        }
+      });
+    } else {
+      // Photo item in slideshow: advance after configured slideshowInterval
+      final interval = ref.read(settingsNotifierProvider).slideshowInterval;
+      _slideshowTimer = Timer(Duration(seconds: interval), () {
+        if (mounted && _isSlideshowPlaying) {
+          _advanceSlideshow();
         }
       });
     }
-    final interval = ref.read(settingsNotifierProvider).slideshowInterval;
+  }
+
+  void _advanceSlideshow() {
+    if (!mounted || !_isSlideshowPlaying || _videos.isEmpty) return;
     _slideshowTimer?.cancel();
-    _slideshowTimer = Timer.periodic(Duration(seconds: interval), (_) {
-      if (!mounted) return;
-      if (_current < _videos.length - 1) {
-        _pageController.nextPage(
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeInOut,
-        );
-      } else {
-        _pageController.animateToPage(
-          0,
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeInOut,
-        );
-      }
-    });
+    _slideshowTimer = null;
+    if (_current < _videos.length - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      _pageController.animateToPage(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   void _stopSlideshow() {
@@ -285,9 +308,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       if (mounted && _videos.isNotEmpty) {
         _activeMediaNotifier = ref.read(activeViewerMediaIdProvider.notifier);
       }
-      if (widget.startSlideshow && mounted) {
-        _startSlideshow();
-      }
     });
   }
 
@@ -320,7 +340,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   void _startPlaybackAfterTransition() {
-    if (!mounted || !_videos[_current].isVideo) return;
+    if (!mounted) return;
+    if (widget.startSlideshow && !_isSlideshowPlaying) {
+      _startSlideshow();
+      return;
+    }
+    if (!_videos[_current].isVideo) return;
     final settings = ref.read(settingsNotifierProvider);
     final shouldPlay =
         settings.autoPlayVideo || _isSlideshowPlaying || widget.startSlideshow;
@@ -578,6 +603,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       }
     });
 
+    _player.stream.position.listen((pos) {
+      if (pos > Duration.zero && mounted && _videos[_current].isVideo) {
+        if (!_videoSurfaceVisible.value) {
+          _videoSurfaceVisible.value = true;
+        }
+      }
+    });
+
+    _player.stream.completed.listen((completed) {
+      if (completed && mounted && _isSlideshowPlaying) {
+        _slideshowTimer?.cancel();
+        _slideshowTimer = Timer(const Duration(milliseconds: 300), () {
+          if (mounted && _isSlideshowPlaying) {
+            _advanceSlideshow();
+          }
+        });
+      }
+    });
+
     _player.stream.videoParams.listen((vp) async {
       final w = vp.w ?? 0, h = vp.h ?? 0;
       if (w <= 0 || h <= 0 || _lastSize == '${w}x$h') return;
@@ -639,6 +683,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
             _videoSurfaceVisible.value = true;
           }
         });
+      }
+      if (widget.startSlideshow && mounted && !_isSlideshowPlaying) {
+        _startSlideshow();
+      }
+    } else {
+      if (widget.startSlideshow && mounted && !_isSlideshowPlaying) {
+        _startSlideshow();
       }
     }
   }
@@ -732,7 +783,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
             await _player.setVolume(0.0);
           }
           await _restoreSavedPosition(path);
-          if (_isLooping) _player.setPlaylistMode(PlaylistMode.loop);
+          if (_isLooping && !_isSlideshowPlaying) {
+            _player.setPlaylistMode(PlaylistMode.loop);
+          } else {
+            _player.setPlaylistMode(PlaylistMode.none);
+          }
           if (_playbackSpeed != 1.0) _player.setRate(_playbackSpeed);
           _controller.waitUntilFirstFrameRendered.then((_) {
             if (mounted &&
@@ -741,12 +796,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
               _videoSurfaceVisible.value = true;
             }
           });
+          if (_isSlideshowPlaying && mounted) {
+            _scheduleNextSlideshowStep();
+          }
         } catch (_) {}
       });
     } else {
       try {
         _player.stop();
       } catch (_) {}
+      if (_isSlideshowPlaying && mounted) {
+        _scheduleNextSlideshowStep();
+      }
     }
 
     if (_isFullscreen && !_isSlideshowPlaying) {
@@ -1341,6 +1402,58 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       message: isTrash ? context.tr.moveToTrash : context.tr.delete,
       icon:
           isTrash ? Icons.delete_outline_rounded : Icons.delete_forever_rounded,
+    );
+    if (_videos.length <= 1) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() {
+        _videos.removeAt(_current);
+        _current = _current.clamp(0, _videos.length - 1);
+        _transformationController.value = Matrix4.identity();
+        _isVideoZoomed = false;
+      });
+      _pageController.jumpToPage(_current);
+      if (_videos[_current].isVideo) {
+        _player.open(Media(_videos[_current].path), play: false);
+      }
+    }
+  }
+
+  Future<void> _moveToVault() async {
+    final item = _videos[_current];
+
+    final hasPerm = await PermissionService.instance.ensureManageStorage();
+    if (!hasPerm) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr.manageFilesPermissionRequired),
+          ),
+        );
+      }
+      return;
+    }
+
+    _player.pause();
+    ref.read(mediaListProvider.notifier).removeItems({item.id});
+
+    try {
+      await ref.read(vaultProvider.notifier).moveToVault(item);
+      ref.read(mediaListProvider.notifier).refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to move to vault: $e')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    showFeedbackPill(
+      context,
+      message: context.tr.lockedVault,
+      icon: Icons.lock_outline_rounded,
     );
     if (_videos.length <= 1) {
       Navigator.of(context).pop();
@@ -1971,6 +2084,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                   onSelectSpeed: _showPlaybackSpeedSheet,
                                   onDelete: _deleteItem,
                                   onRename: _renameCurrentItem,
+                                  onMoveToVault: ref.watch(settingsNotifierProvider).lockedVaultEnabled && !widget.isTrash
+                                      ? _moveToVault
+                                      : null,
                                   onToggleOrientation: _toggleOrientation,
                                   onScrubbingChanged: (scrubbing) {
                                     if (_isScrubbing != scrubbing) {
@@ -2568,6 +2684,7 @@ class _BottomBar extends StatefulWidget {
     this.isTrash = false,
     this.onRestore,
     this.onRename,
+    this.onMoveToVault,
     this.onScrubbingChanged,
     this.isSlideshowPlaying = false,
     this.onStartSlideshow,
@@ -2590,6 +2707,7 @@ class _BottomBar extends StatefulWidget {
   final bool isTrash;
   final VoidCallback? onRestore;
   final VoidCallback? onRename;
+  final VoidCallback? onMoveToVault;
   final ValueChanged<bool>? onScrubbingChanged;
   final bool isSlideshowPlaying;
   final VoidCallback? onStartSlideshow;
@@ -3204,6 +3322,17 @@ class _BottomBarState extends State<_BottomBar> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (widget.onMoveToVault != null)
+                ListTile(
+                  leading: const Icon(Icons.lock_outline_rounded, color: Colors.white),
+                  title: Text(context.tr.moveToVault,
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 15)),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    widget.onMoveToVault?.call();
+                  },
+                ),
               ListTile(
                 leading: Icon(
                   widget.isSlideshowPlaying

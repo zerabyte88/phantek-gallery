@@ -12,6 +12,7 @@ import '../../../core/enums/startup_screen.dart';
 import '../../../core/enums/video_double_tap_action.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/services/folder_picker_service.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/thumbnail_service.dart';
@@ -672,8 +673,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   title: context.tr.lockedVault,
                   subtitle: context.tr.lockedVaultDesc,
                   value: settings.lockedVaultEnabled,
-                  onChanged: (v) =>
-                      patch((s) => s.copyWith(lockedVaultEnabled: v)),
+                  onChanged: (v) async {
+                    if (v) {
+                      final canAuth = await AuthService.instance.canAuthenticate();
+                      if (!canAuth) {
+                        if (context.mounted) {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              title: Row(
+                                children: [
+                                  const Icon(Icons.shield_outlined, color: Color(0xFFFFB74D)),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(context.tr.deviceLockRequired, style: const TextStyle(fontSize: 18))),
+                                ],
+                              ),
+                              content: Text(context.tr.deviceLockRequiredDesc),
+                              actions: [
+                                FilledButton(
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                  child: Text(context.tr.ok),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return;
+                      }
+                      if (!context.mounted) return;
+                      final reason = context.tr.authenticateToOpenVault;
+                      final ok = await AuthService.instance.authenticate(
+                        localizedReason: reason,
+                      );
+                      if (!ok) return;
+                    }
+                    patch((s) => s.copyWith(lockedVaultEnabled: v));
+                  },
                 ),
               ],
             ),
