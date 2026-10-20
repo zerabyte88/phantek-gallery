@@ -61,7 +61,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     FilterOption.videosOnly: ScrollController(),
   };
 
-  // Memoized lists per tab to guarantee zero-rebuild / zero-re-sort jitter during tab swipes
+  // Memoize lists per tab for smooth tab transitions without recalculation.
   List<MediaItem>? _cachedAllItemsRef;
   SortOption? _cachedSort;
   String? _cachedSearchQuery;
@@ -253,18 +253,13 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     return albums.where((a) => a.name.toLowerCase().contains(q)).toList();
   }
 
-  // ── Permission + initial scan ──────────────────────────────────────────
-
   Future<void> _bootstrap() async {
-    final granted =
-        await PermissionService.instance.requestMediaPermissions();
+    final granted = await PermissionService.instance.requestMediaPermissions();
     if (!mounted) return;
     if (granted) {
       ref.read(mediaListProvider.notifier).refresh();
     }
   }
-
-  // ── Navigation & Selection helpers ──────────────────────────────────────
 
   void _onTabSelected(FilterOption f) {
     final targetIdx = _tabs.indexOf(f);
@@ -323,12 +318,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     });
   }
 
-  // ── Delete selected ────────────────────────────────────────────────────
-
   Future<void> _deleteSelected(List<MediaItem> allItems) async {
     final settings = ref.read(settingsNotifierProvider);
-    final toDelete =
-        allItems.where((e) => _selected.contains(e.id)).toList();
+    final toDelete = allItems.where((e) => _selected.contains(e.id)).toList();
 
     final confirm = await _confirmDelete(toDelete.length);
     if (!confirm || !mounted) return;
@@ -347,7 +339,6 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     }
 
     final toDeleteIds = toDelete.map((e) => e.id).toSet();
-    // 1. Instantly remove from state so the gallery updates immediately
     ref.read(mediaListProvider.notifier).removeItems(toDeleteIds);
     _clearSelection();
 
@@ -376,8 +367,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       if (successCount < toDelete.length) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Processed $successCount of ${toDelete.length} items.'),
+            content:
+                Text('Processed $successCount of ${toDelete.length} items.'),
           ),
         );
       }
@@ -388,7 +379,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     final settings = ref.read(settingsNotifierProvider);
     final isTrash = settings.enableTrash;
     final itemText = context.tr.itemsCount(count);
-    final title = isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle;
+    final title = isTrash
+        ? context.tr.moveToTrashTitle
+        : context.tr.deletePermanentlyTitle;
     final contentText = isTrash
         ? context.tr.moveToTrashConfirm(itemText)
         : context.tr.deletePermanentlyConfirm(itemText);
@@ -483,15 +476,13 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       if (successCount < toDelete.length) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Processed $successCount of ${toDelete.length} items.'),
+            content:
+                Text('Processed $successCount of ${toDelete.length} items.'),
           ),
         );
       }
     }
   }
-
-  // ── Build ──────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -502,8 +493,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     });
 
     final mediaAsync = ref.watch(mediaListProvider);
-    final settings   = ref.watch(settingsNotifierProvider);
-    final isAlbums   = _tabs[_currentPage] == FilterOption.albums;
+    final settings = ref.watch(settingsNotifierProvider);
+    final isAlbums = _tabs[_currentPage] == FilterOption.albums;
 
     return PopScope(
       canPop: !_selecting && !_isSearching,
@@ -528,7 +519,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                 animation: _searchAnimController,
                 builder: (context, _) {
                   final progress = _searchAnimController.value;
-                  if (progress == 0.0 && !_isSearching) return const SizedBox.shrink();
+                  if (progress == 0.0 && !_isSearching) {
+                    return const SizedBox.shrink();
+                  }
 
                   final curvedProgress = CurvedAnimation(
                     parent: _searchAnimController,
@@ -552,99 +545,112 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                           child: Opacity(
                             opacity: curvedProgress.clamp(0.0, 1.0),
                             child: Transform.translate(
-                              offset: Offset(20.0 * (1.0 - curvedProgress), 0.0),
+                              offset:
+                                  Offset(20.0 * (1.0 - curvedProgress), 0.0),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16.0,
                                 ),
                                 child: Row(
-                              children: [
-                                Expanded(
-                                  child: Container(
-                                    height: 40,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                                    decoration: BoxDecoration(
-                                      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.search_rounded,
-                                          size: 18,
-                                          color: cs.onSurfaceVariant,
+                                  children: [
+                                    Expanded(
+                                      child: Container(
+                                        height: 40,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12),
+                                        decoration: BoxDecoration(
+                                          color: cs.surfaceContainerHighest
+                                              .withValues(alpha: 0.5),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: TextField(
-                                            controller: _searchController,
-                                            focusNode: _searchFocusNode,
-                                            style: const TextStyle(fontSize: 14),
-                                            decoration: InputDecoration(
-                                              hintText: context.tr.searchHint,
-                                              isDense: true,
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(vertical: 8),
-                                              border: InputBorder.none,
-                                              hintStyle: TextStyle(
-                                                color: cs.onSurfaceVariant,
-                                                fontSize: 14,
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.search_rounded,
+                                              size: 18,
+                                              color: cs.onSurfaceVariant,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: TextField(
+                                                controller: _searchController,
+                                                focusNode: _searchFocusNode,
+                                                style: const TextStyle(
+                                                    fontSize: 14),
+                                                decoration: InputDecoration(
+                                                  hintText:
+                                                      context.tr.searchHint,
+                                                  isDense: true,
+                                                  contentPadding:
+                                                      const EdgeInsets
+                                                          .symmetric(
+                                                          vertical: 8),
+                                                  border: InputBorder.none,
+                                                  hintStyle: TextStyle(
+                                                    color: cs.onSurfaceVariant,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                onChanged: (q) => setState(() =>
+                                                    _searchQuery = q.trim()),
                                               ),
                                             ),
-                                            onChanged: (q) =>
-                                                setState(() => _searchQuery = q.trim()),
-                                          ),
-                                        ),
-                                        if (_searchController.text.isNotEmpty)
-                                          BouncyTap(
-                                            scaleDown: 0.88,
-                                            onTap: () {
-                                              _searchController.clear();
-                                              setState(() => _searchQuery = '');
-                                            },
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(left: 4),
-                                              child: Icon(
-                                                Icons.cancel,
-                                                size: 18,
-                                                color: cs.onSurfaceVariant,
+                                            if (_searchController
+                                                .text.isNotEmpty)
+                                              BouncyTap(
+                                                scaleDown: 0.88,
+                                                onTap: () {
+                                                  _searchController.clear();
+                                                  setState(
+                                                      () => _searchQuery = '');
+                                                },
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          left: 4),
+                                                  child: Icon(
+                                                    Icons.cancel,
+                                                    size: 18,
+                                                    color: cs.onSurfaceVariant,
+                                                  ),
+                                                ),
                                               ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                BouncyTap(
-                                  key: const ValueKey('search_cancel_button'),
-                                  scaleDown: 0.92,
-                                  onTap: _clearSearch,
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6.0,
-                                      vertical: 6.0,
-                                    ),
-                                    child: Text(
-                                      context.tr.cancel,
-                                      style: TextStyle(
-                                        color: cs.primary,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                    const SizedBox(width: 8),
+                                    BouncyTap(
+                                      key: const ValueKey(
+                                          'search_cancel_button'),
+                                      scaleDown: 0.92,
+                                      onTap: _clearSearch,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6.0,
+                                          vertical: 6.0,
+                                        ),
+                                        child: Text(
+                                          context.tr.cancel,
+                                          style: TextStyle(
+                                            color: cs.primary,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-              );
-            },
+                  );
+                },
               ),
             ],
           ),
@@ -688,7 +694,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                   ),
                 );
               },
-              child: _buildNormalActions(context, mediaAsync, settings, isAlbums),
+              child:
+                  _buildNormalActions(context, mediaAsync, settings, isAlbums),
             ),
           ],
           bottom: FilterSortBar(
@@ -913,9 +920,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               value: 'select',
               child: Row(
                 children: [
-                  const Icon(Icons.checklist_rounded, size: 20, color: Colors.white),
+                  const Icon(Icons.checklist_rounded,
+                      size: 20, color: Colors.white),
                   const SizedBox(width: 12),
-                  Text(context.tr.select, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  Text(context.tr.select,
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 14)),
                 ],
               ),
             ),
@@ -923,9 +933,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               value: 'trash',
               child: Row(
                 children: [
-                  const Icon(Icons.delete_sweep_outlined, size: 20, color: Colors.white),
+                  const Icon(Icons.delete_sweep_outlined,
+                      size: 20, color: Colors.white),
                   const SizedBox(width: 12),
-                  Text(context.tr.trashBin, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  Text(context.tr.trashBin,
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 14)),
                 ],
               ),
             ),
@@ -933,9 +946,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               value: 'settings',
               child: Row(
                 children: [
-                  const Icon(Icons.settings_outlined, size: 20, color: Colors.white),
+                  const Icon(Icons.settings_outlined,
+                      size: 20, color: Colors.white),
                   const SizedBox(width: 12),
-                  Text(context.tr.settings, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  Text(context.tr.settings,
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 14)),
                 ],
               ),
             ),
@@ -995,8 +1011,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
 
     return _PinchZoomGridListener(
       child: RefreshIndicator(
-        onRefresh: () =>
-            ref.read(mediaListProvider.notifier).refresh(),
+        onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
         child: GridView.builder(
           key: PageStorageKey(storageKey),
           controller: controller,
@@ -1025,9 +1040,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                   return;
                 }
                 if (item.isVideo) {
-                  final videos = items
-                      .where((e) => e.isVideo)
-                      .toList();
+                  final videos = items.where((e) => e.isVideo).toList();
                   final idx = videos.indexOf(item);
                   Navigator.of(context).openVideo(
                     videos,
@@ -1035,12 +1048,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                   );
                 } else {
                   // Pass only photo items for swipe navigation.
-                  final photos = items
-                      .where((e) => !e.isVideo)
-                      .toList();
+                  final photos = items.where((e) => !e.isVideo).toList();
                   final idx = photos.indexOf(item);
-                  Navigator.of(context)
-                      .openImage(photos, idx >= 0 ? idx : 0);
+                  Navigator.of(context).openImage(photos, idx >= 0 ? idx : 0);
                 }
               },
               onLongPress: () {
@@ -1098,8 +1108,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     }
 
     return RefreshIndicator(
-      onRefresh: () =>
-          ref.read(mediaListProvider.notifier).refresh(),
+      onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
       child: GridView.builder(
         key: PageStorageKey(storageKey),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1138,8 +1147,6 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────
-
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onRefresh});
   final VoidCallback onRefresh;
@@ -1150,8 +1157,8 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.photo_library_outlined, size: 80,
-              color: Colors.white38),
+          const Icon(Icons.photo_library_outlined,
+              size: 80, color: Colors.white38),
           const SizedBox(height: 16),
           const Text('No media found',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
@@ -1284,4 +1291,3 @@ class _PinchZoomGridListenerState
     );
   }
 }
-

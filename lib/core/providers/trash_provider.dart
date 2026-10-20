@@ -8,8 +8,7 @@ final trashServiceProvider = Provider<TrashService>(
 
 class TrashNotifier extends AsyncNotifier<List<TrashItem>> {
   @override
-  Future<List<TrashItem>> build() =>
-      ref.read(trashServiceProvider).getItems();
+  Future<List<TrashItem>> build() => ref.read(trashServiceProvider).getItems();
 
   Future<void> moveToTrash({
     required String id,

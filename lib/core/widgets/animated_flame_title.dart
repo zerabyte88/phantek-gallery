@@ -80,12 +80,14 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
     );
 
     final effectiveMode = switch (themeMode) {
-      AppThemeMode.system =>
-        theme.brightness == Brightness.dark ? AppThemeMode.dark : AppThemeMode.light,
+      AppThemeMode.system => theme.brightness == Brightness.dark
+          ? AppThemeMode.dark
+          : AppThemeMode.light,
       _ => themeMode,
     };
 
-    final (colors, icon, iconStartColor, iconEndColor) = switch (effectiveMode) {
+    final (colors, icon, iconStartColor, iconEndColor) =
+        switch (effectiveMode) {
       AppThemeMode.amoled => (
           _amoledColors,
           Icons.nights_stay_rounded,

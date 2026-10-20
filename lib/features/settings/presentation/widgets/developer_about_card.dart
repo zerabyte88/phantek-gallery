@@ -54,7 +54,6 @@ class DeveloperAboutCard extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Header: About App ───────────────────────────────────
               Row(
                 children: [
                   const Icon(
@@ -83,8 +82,6 @@ class DeveloperAboutCard extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 14),
-
-              // ── Detail Rows ─────────────────────────────────────────
               _buildDetailRow(theme, context.tr.appVersion, 'v$version'),
               _buildDetailRow(
                 theme,
@@ -110,7 +107,6 @@ class DeveloperAboutCard extends ConsumerWidget {
                   );
                 },
               ),
-
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Divider(
@@ -118,8 +114,6 @@ class DeveloperAboutCard extends ConsumerWidget {
                   color: cs.outline.withValues(alpha: 0.15),
                 ),
               ),
-
-              // ── Developer Profile ───────────────────────────────────
               Row(
                 children: [
                   Container(
@@ -260,9 +254,7 @@ class DeveloperAboutCard extends ConsumerWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: onTap != null
-                      ? _cyan
-                      : theme.colorScheme.onSurface,
+                  color: onTap != null ? _cyan : theme.colorScheme.onSurface,
                 ),
               ),
               if (onTap != null) ...[

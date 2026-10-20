@@ -53,12 +53,15 @@ Widget _buildHeroShuttle({
 }) {
   final hr = ThumbnailService.instance.getMemoryHighResThumbnail(item.id);
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(item.id);
-  final disk = mem == null ? ThumbnailService.instance.getCachedFile(item.id) : null;
+  final disk =
+      mem == null ? ThumbnailService.instance.getCachedFile(item.id) : null;
   final ImageProvider? p = mem != null
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (item.path.isNotEmpty && !item.isVideo ? screenDisplayImage(item.path) : null));
+          : (item.path.isNotEmpty && !item.isVideo
+              ? screenDisplayImage(item.path)
+              : null));
 
   final Widget content = p != null
       ? Image(
@@ -78,8 +81,6 @@ Widget _buildHeroShuttle({
     animation: curved,
     builder: (context, child) {
       final t = curved.value;
-      // In both push (0->1) and pop (1->0), (1 - t) * 8.0 smoothly matches
-      // the grid tile corner radius (8.0 at grid, 0.0 at viewer).
       final radius = (1.0 - t) * 8.0;
 
       if (radius <= 0.05) return child!;
@@ -157,7 +158,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   Animation<double>? _routeAnimation;
   StateController<String?>? _activeMediaNotifier;
 
-  final ValueNotifier<_FeedbackPillData?> _feedbackToastNotifier = ValueNotifier(null);
+  final ValueNotifier<_FeedbackPillData?> _feedbackToastNotifier =
+      ValueNotifier(null);
   int _feedbackToastCounter = 0;
 
   void _showFeedbackToast({required String message, required IconData icon}) {
@@ -170,9 +172,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   String _speedToastMessage(double speed) {
-    final speedStr = speed == speed.roundToDouble()
-        ? '${speed.toInt()}'
-        : '$speed';
+    final speedStr =
+        speed == speed.roundToDouble() ? '${speed.toInt()}' : '$speed';
     final isId = Localizations.localeOf(context).languageCode == 'id';
     return isId ? 'Beralih ke ${speedStr}x' : 'Switched to ${speedStr}x';
   }
@@ -198,7 +199,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _current = 0;
     }
     final initialItem = _videos[_current];
-    if (initialItem.width != null && initialItem.height != null && initialItem.width! > 0 && initialItem.height! > 0) {
+    if (initialItem.width != null &&
+        initialItem.height != null &&
+        initialItem.width! > 0 &&
+        initialItem.height! > 0) {
       _highRes = math.max(initialItem.width!, initialItem.height!) > 1920;
     }
     _pageController = PageController(initialPage: _current);
@@ -250,7 +254,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _routeTransitionComplete = true;
       _startPlaybackAfterTransition();
     } else if (status == AnimationStatus.reverse) {
-      // Pop started: immediately hide video texture surface and pause to avoid freezing / black flash mid-flight
+      // Hide video texture surface and pause playback during pop exit transition.
       _videoSurfaceVisible.value = false;
       if (_player.state.playing) {
         _player.pause();
@@ -266,7 +270,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         _player.play();
       }
       _controller.waitUntilFirstFrameRendered.then((_) {
-        if (mounted && _routeTransitionComplete && !_videoSurfaceVisible.value) {
+        if (mounted &&
+            _routeTransitionComplete &&
+            !_videoSurfaceVisible.value) {
           _videoSurfaceVisible.value = true;
         }
       });
@@ -290,13 +296,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
     final v = _settleFrom.dy.abs() > 1 ? vy / _settleFrom.dy : 0.0;
     _settle.value = 1.0;
-    _settle.animateWith(SpringSimulation(
+    _settle
+        .animateWith(SpringSimulation(
       SpringDescription.withDampingRatio(
           mass: 1.0, stiffness: 320, ratio: 0.82),
       1.0,
       0.0,
       v.clamp(-8.0, 8.0),
-    )).whenCompleteOrCancel(() {
+    ))
+        .whenCompleteOrCancel(() {
       _setDrag(Offset.zero);
     });
   }
@@ -458,9 +466,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (_player.platform is NativePlayer) {
       final native = _player.platform as NativePlayer;
       await native.setProperty('hwdec-codecs', 'h264,hevc,mpeg4,vc1');
-      await native.setProperty('demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
-      await native.setProperty('demuxer-max-bytes', '33554432'); // 32 MB read-ahead
-      await native.setProperty('demuxer-max-back-bytes', '33554432'); // 32 MB backward seek buffer
+      await native.setProperty(
+          'demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
+      await native.setProperty(
+          'demuxer-max-bytes', '33554432'); // 32 MB read-ahead
+      await native.setProperty(
+          'demuxer-max-back-bytes', '33554432'); // 32 MB backward seek buffer
       await native.setProperty('demuxer-readahead-secs', '10');
       await native.setProperty('demuxer-lavf-probesize', '2097152');
       await native.setProperty('hr-seek-framedrop', 'yes');
@@ -495,7 +506,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       if (playing && mounted && _videos[_current].isVideo) {
         if (_routeTransitionComplete && !_videoSurfaceVisible.value) {
           _controller.waitUntilFirstFrameRendered.then((_) {
-            if (mounted && _routeTransitionComplete && !_videoSurfaceVisible.value) {
+            if (mounted &&
+                _routeTransitionComplete &&
+                !_videoSurfaceVisible.value) {
               _videoSurfaceVisible.value = true;
             }
           });
@@ -548,7 +561,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       if (_routeTransitionComplete && settings.autoPlayVideo) {
         _player.play();
         _controller.waitUntilFirstFrameRendered.then((_) {
-          if (mounted && _routeTransitionComplete && !_videoSurfaceVisible.value) {
+          if (mounted &&
+              _routeTransitionComplete &&
+              !_videoSurfaceVisible.value) {
             _videoSurfaceVisible.value = true;
           }
         });
@@ -571,7 +586,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
     _lastSize = null;
     final nextItem = _videos[index];
-    if (nextItem.width != null && nextItem.height != null && nextItem.width! > 0 && nextItem.height! > 0) {
+    if (nextItem.width != null &&
+        nextItem.height != null &&
+        nextItem.width! > 0 &&
+        nextItem.height! > 0) {
       _highRes = math.max(nextItem.width!, nextItem.height!) > 1920;
     }
     setState(() {
@@ -587,7 +605,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (nextItem.isVideo) {
       // Debounce loading native player so fast swipes are 100% fluid and never stall the hardware codec pipeline
       _videoLoadDebounce = Timer(const Duration(milliseconds: 250), () async {
-        if (!mounted || _current != index || thisGen != _videoLoadGeneration) return;
+        if (!mounted || _current != index || thisGen != _videoLoadGeneration) {
+          return;
+        }
         try {
           final settings = ref.read(settingsNotifierProvider);
           final path = _videos[index].path;
@@ -601,14 +621,20 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
             }
           }
-          if (!mounted || _current != index || thisGen != _videoLoadGeneration) return;
+          if (!mounted ||
+              _current != index ||
+              thisGen != _videoLoadGeneration) {
+            return;
+          }
           await _player.open(Media(path), play: settings.autoPlayVideo);
           _activePlayerPath = path;
           if (_isLooping) _player.setPlaylistMode(PlaylistMode.loop);
           if (_playbackSpeed != 1.0) _player.setRate(_playbackSpeed);
           if (settings.autoPlayVideo) {
             _controller.waitUntilFirstFrameRendered.then((_) {
-              if (mounted && _current == index && thisGen == _videoLoadGeneration) {
+              if (mounted &&
+                  _current == index &&
+                  thisGen == _videoLoadGeneration) {
                 _videoSurfaceVisible.value = true;
               }
             });
@@ -635,7 +661,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Auto-pause on background to prevent memory / battery drain.
+    // Auto-pause playback when app transitions to background.
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
@@ -681,7 +707,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   bool _isVideoPortrait(MediaItem item, int index) {
     if (index == _current && _activePlayerPath == item.path) {
       final vParams = _player.state.videoParams;
-      if (vParams.w != null && vParams.h != null && vParams.w! > 0 && vParams.h! > 0) {
+      if (vParams.w != null &&
+          vParams.h != null &&
+          vParams.w! > 0 &&
+          vParams.h! > 0) {
         final rotate = vParams.rotate ?? 0;
         final isRotated90or270 = rotate == 90 || rotate == 270;
         final effectiveW = isRotated90or270 ? vParams.h! : vParams.w!;
@@ -690,11 +719,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       }
     }
     // Item width and height from scanner already account for orientation
-    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
+    if (item.width != null &&
+        item.height != null &&
+        item.width! > 0 &&
+        item.height! > 0) {
       return item.height! > item.width!;
     }
     // Visual thumbnail aspect ratio fallback
-    final thumbRatio = ThumbnailService.instance.getThumbnailAspectRatio(item.id);
+    final thumbRatio =
+        ThumbnailService.instance.getThumbnailAspectRatio(item.id);
     if (thumbRatio != null && thumbRatio > 0) {
       return thumbRatio < 1.0;
     }
@@ -708,7 +741,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   double? _getVideoAspectRatio(MediaItem item, int index) {
     if (index == _current && _activePlayerPath == item.path) {
       final vParams = _player.state.videoParams;
-      if (vParams.w != null && vParams.h != null && vParams.w! > 0 && vParams.h! > 0) {
+      if (vParams.w != null &&
+          vParams.h != null &&
+          vParams.w! > 0 &&
+          vParams.h! > 0) {
         final rotate = vParams.rotate ?? 0;
         final isRotated90or270 = rotate == 90 || rotate == 270;
         final effectiveW = isRotated90or270 ? vParams.h! : vParams.w!;
@@ -716,10 +752,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         return effectiveW / effectiveH;
       }
     }
-    if (item.width != null && item.height != null && item.width! > 0 && item.height! > 0) {
+    if (item.width != null &&
+        item.height != null &&
+        item.width! > 0 &&
+        item.height! > 0) {
       return item.width! / item.height!;
     }
-    final thumbRatio = ThumbnailService.instance.getThumbnailAspectRatio(item.id);
+    final thumbRatio =
+        ThumbnailService.instance.getThumbnailAspectRatio(item.id);
     if (thumbRatio != null && thumbRatio > 0) {
       return thumbRatio;
     }
@@ -811,7 +851,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           child: Icon(Icons.broken_image, size: 80, color: Colors.white38),
         ),
       );
-      final ar = (item.width != null && item.height != null && item.width! > 0 && item.height! > 0)
+      final ar = (item.width != null &&
+              item.height != null &&
+              item.width! > 0 &&
+              item.height! > 0)
           ? (item.width! / item.height!)
           : ThumbnailService.instance.getThumbnailAspectRatio(item.id);
       if (ar != null && ar > 0) {
@@ -1069,7 +1112,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     final ok = await showDeleteConfirmationSheet(
       context,
-      title: isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle,
+      title: isTrash
+          ? context.tr.moveToTrashTitle
+          : context.tr.deletePermanentlyTitle,
       contentText: isTrash
           ? context.tr.moveToTrashConfirm(item.name)
           : context.tr.deletePermanentlyConfirm(item.name),
@@ -1091,7 +1136,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     _player.pause();
 
-    // 1. Immediately remove from global media list provider
     ref.read(mediaListProvider.notifier).removeItems({item.id});
 
     try {
@@ -1144,7 +1188,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   Widget build(BuildContext context) {
     final item = _videos[_current];
 
-
     return PopScope(
       canPop: !_isFullscreen,
       onPopInvokedWithResult: (didPop, _) {
@@ -1156,13 +1199,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         backgroundColor: Colors.transparent,
         body: Stack(
           children: [
-            // ── Background scrim: opacity follows route animation & drag distance ──
             Positioned.fill(
               child: AnimatedBuilder(
-                animation: ModalRoute.of(context)?.animation ?? kAlwaysCompleteAnimation,
+                animation: ModalRoute.of(context)?.animation ??
+                    kAlwaysCompleteAnimation,
                 builder: (context, _) {
-                  final routeAnim = ModalRoute.of(context)?.animation?.value ?? 1.0;
-                  final curved = const Cubic(0.2, 0.0, 0.0, 1.0).transform(routeAnim.clamp(0.0, 1.0));
+                  final routeAnim =
+                      ModalRoute.of(context)?.animation?.value ?? 1.0;
+                  final curved = const Cubic(0.2, 0.0, 0.0, 1.0)
+                      .transform(routeAnim.clamp(0.0, 1.0));
                   return ValueListenableBuilder<Offset>(
                     valueListenable: _dragNotifier,
                     builder: (_, d, __) {
@@ -1177,7 +1222,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 },
               ),
             ),
-            // ── Main Content inside SafeArea and Listener ──────────
             SafeArea(
               top: !_isFullscreen,
               bottom: !_isFullscreen,
@@ -1193,23 +1237,30 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     _setDrag(Offset.zero);
                     _isMultiTouch = false;
                     _isPinching = false;
-                    if (_transformationController.value.getMaxScaleOnAxis() <= 1.05) {
+                    if (_transformationController.value.getMaxScaleOnAxis() <=
+                        1.05) {
                       _isVideoZoomed = false;
                     }
                   }
                   final screenHeight = MediaQuery.sizeOf(context).height;
                   final isCurrentItemVideo = _videos[_current].isVideo;
                   final bottomThreshold = isCurrentItemVideo
-                      ? (MediaQuery.orientationOf(context) == Orientation.landscape ? 140.0 : 280.0)
+                      ? (MediaQuery.orientationOf(context) ==
+                              Orientation.landscape
+                          ? 140.0
+                          : 280.0)
                       : 90.0;
-                  final inBottomControlsArea = _showControls && (e.position.dy > screenHeight - bottomThreshold);
+                  final inBottomControlsArea = _showControls &&
+                      (e.position.dy > screenHeight - bottomThreshold);
                   if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
                     // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
                     _isMultiTouch = true;
                     _isPinching = true;
                     _startDragY = null;
                     _startDragX = null;
-                    if (_dragNotifier.value != Offset.zero) _setDrag(Offset.zero);
+                    if (_dragNotifier.value != Offset.zero) {
+                      _setDrag(Offset.zero);
+                    }
                     return;
                   }
                   if (inBottomControlsArea || _isScrubbing) {
@@ -1255,7 +1306,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       _activePointers.length >= 2 ||
                       _startDragY == null ||
                       _startDragX == null) {
-                    if (_dragNotifier.value != Offset.zero) _setDrag(Offset.zero);
+                    if (_dragNotifier.value != Offset.zero) {
+                      _setDrag(Offset.zero);
+                    }
                     return;
                   }
 
@@ -1263,7 +1316,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   final dy = e.position.dy - _startDragY!;
                   final dx = e.position.dx - _startDragX!;
                   // Responsive vertical swipe deadzone: natural downward drag
-                  if (_dragNotifier.value != Offset.zero || (dy > 16 && dy > dx.abs() * 1.5)) {
+                  if (_dragNotifier.value != Offset.zero ||
+                      (dy > 16 && dy > dx.abs() * 1.5)) {
                     final dampedDx = dx * 0.45;
                     final dragY = (dy - 16).clamp(0.0, 650.0);
                     _setDrag(Offset(dampedDx, dragY));
@@ -1340,303 +1394,152 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // ── Video PageView with translation + proportional scale-down + smooth corner radius ──
                       ValueListenableBuilder<Offset>(
                         valueListenable: _dragNotifier,
                         builder: (context, d, child) {
-                          final s = (1.0 - (d.dy / 1000.0) * 0.28).clamp(0.72, 1.0);
-                          final radius = (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
+                          final s =
+                              (1.0 - (d.dy / 1000.0) * 0.28).clamp(0.72, 1.0);
+                          final radius =
+                              (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
                           return Transform(
                             alignment: Alignment.center,
                             transform: Matrix4.translationValues(d.dx, d.dy, 0)
                               ..scaleByDouble(s, s, 1.0, 1.0),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(radius),
-                              clipBehavior: radius > 0 ? Clip.antiAlias : Clip.none,
+                              clipBehavior:
+                                  radius > 0 ? Clip.antiAlias : Clip.none,
                               child: child,
                             ),
                           );
                         },
                         child: RepaintBoundary(
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: (notification) {
-                        if (notification is ScrollStartNotification) {
-                          if (notification.dragDetails != null) {
-                            _isSwiping = true;
-                            _isSwipingPage.value = true;
-                            if (_player.state.playing) {
-                              _player.pause();
-                            }
-                          }
-                        } else if (notification is ScrollEndNotification) {
-                          _isSwiping = false;
-                          _isSwipingPage.value = false;
-                          _precacheAdjacentVideos(_current);
-                          _activeMediaNotifier?.state = _videos[_current].id;
-                        }
-                        return false;
-                      },
-                      child: ValueListenableBuilder<bool>(
-                        valueListenable: _isDraggingDown,
-                        builder: (context, isDraggingDown, child) {
-                          return IgnorePointer(
-                            ignoring: isDraggingDown,
-                            child: child,
-                          );
-                        },
-                        child: PageView.builder(
-                          controller: _pageController,
-                          itemCount: _videos.length,
-                          onPageChanged: _onPageChanged,
-                          physics: (_isCurrentlyVideoZoomed ||
-                                  _isPinching ||
-                                  _isMultiTouch ||
-                                  _isScrubbing ||
-                                  _activePointers.length >= 2)
-                              ? const NeverScrollableScrollPhysics()
-                              : const BouncingScrollPhysics(),
-                          itemBuilder: (context, index) {
-                            final isCur = index == _current;
-                            return RepaintBoundary(
-                              child: Center(
-                                child: ClipRect(
-                                  child: InteractiveViewer(
-                                    key: ValueKey('iv_${_videos[index].id}'),
-                                    transformationController: isCur
-                                        ? _transformationController
-                                        : null,
-                                    minScale: 1.0,
-                                    maxScale: 8.0,
-                                    panEnabled: isCur && _isCurrentlyVideoZoomed,
-                                    scaleEnabled: isCur,
-                                    clipBehavior: Clip.hardEdge,
-                                    onInteractionStart: isCur
-                                        ? (details) {
-                                            _zoomAnimController?.stop();
-                                            if (details.pointerCount >= 2) {
-                                              _isPinching = true;
-                                            }
-                                          }
-                                        : null,
-                                    onInteractionUpdate: isCur
-                                        ? (details) {
-                                            final scale = _transformationController
-                                                .value
-                                                .getMaxScaleOnAxis();
-                                            final isZoomed = scale > 1.05;
-                                            if (isZoomed != _isVideoZoomed) {
-                                              _isVideoZoomed = isZoomed;
-                                            }
-                                          }
-                                        : null,
-                                    onInteractionEnd: isCur
-                                        ? (details) {
-                                            _isPinching = false;
-                                            final scale = _transformationController
-                                                .value
-                                                .getMaxScaleOnAxis();
-                                            if (scale <= 1.02) {
-                                              _resetVideoZoom();
-                                            } else {
-                                              if (!_isVideoZoomed && mounted) {
-                                                setState(() {
-                                                  _isVideoZoomed = true;
-                                                });
-                                              }
-                                            }
-                                          }
-                                        : null,
-                                    child: Center(
-                                      child: HeroMode(
-                                        enabled: isCur,
-                                        child: Hero(
-                                          tag: _videos[index].id,
-                                          transitionOnUserGestures: true,
-                                          flightShuttleBuilder: (
-                                            flightContext,
-                                            animation,
-                                            flightDirection,
-                                            fromHeroContext,
-                                            toHeroContext,
-                                          ) =>
-                                              _buildHeroShuttle(
-                                            animation: animation,
-                                            flightDirection: flightDirection,
-                                            item: _videos[index],
-                                            fallbackChild: flightDirection == HeroFlightDirection.push
-                                                ? toHeroContext.widget
-                                                : fromHeroContext.widget,
-                                          ),
-                                          child: _buildVideoPage(index),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  
-
-
-
-                  // ── Video zoom indicator and reset pill ──────────────────
-                  if (_isVideoZoomed)
-                    Positioned(
-                      top: _showControls
-                          ? 80
-                          : (MediaQuery.of(context).padding.top + 16),
-                      right: 16,
-                      child: SafeArea(
-                        top: !_showControls,
-                        child: BouncyTap(
-                          onTap: _resetVideoZoom,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.75),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.35),
-                                width: 1,
-                              ),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Colors.black45,
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.zoom_out_map_rounded,
-                                  color: Colors.white,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: 6),
-                                ValueListenableBuilder<Matrix4>(
-                                  valueListenable: _transformationController,
-                                  builder: (context, matrix, _) {
-                                    final scale = matrix.getMaxScaleOnAxis();
-                                    return Text(
-                                      '${scale.toStringAsFixed(1)}x • Reset',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 0.3,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                  // ── Controls overlay ───────────────────────────────
-                  ValueListenableBuilder<Offset>(
-                    valueListenable: _dragNotifier,
-                    builder: (context, drag, child) {
-                      final dragFade = (1.0 - (drag.dy / 35.0)).clamp(0.0, 1.0);
-                      final baseOpacity = (_showControls && !_isPinching) ? dragFade : 0.0;
-                      final anim = ModalRoute.of(context)?.animation;
-                      if (anim == null) {
-                        return Opacity(
-                          opacity: baseOpacity,
-                          child: IgnorePointer(
-                            ignoring: !_showControls || drag.dy > 4 || _isPinching,
-                            child: child,
-                          ),
-                        );
-                      }
-                      return AnimatedBuilder(
-                        animation: anim,
-                        builder: (context, _) {
-                          final entrance = const Interval(0.65, 1.0, curve: Curves.easeOut)
-                              .transform(anim.value);
-                          final opacity = (baseOpacity * entrance).clamp(0.0, 1.0);
-                          return Opacity(
-                            opacity: opacity,
-                            child: IgnorePointer(
-                              ignoring: !_showControls || drag.dy > 4 || _isPinching || opacity < 0.5,
-                              child: child,
-                            ),
-                          );
-                        },
-                      );
-                    },
-                    child: Stack(
-                      children: [
-                        // Center play button when paused (exact center of the screen)
-                        // In landscape: completely removed.
-                        // In portrait: only shown before the video has ever started playing.
-                        if (MediaQuery.orientationOf(context) != Orientation.landscape &&
-                            !_hasStartedPlaying &&
-                            _videos[_current].isVideo)
-                          Center(
+                          child: NotificationListener<ScrollNotification>(
+                            onNotification: (notification) {
+                              if (notification is ScrollStartNotification) {
+                                if (notification.dragDetails != null) {
+                                  _isSwiping = true;
+                                  _isSwipingPage.value = true;
+                                  if (_player.state.playing) {
+                                    _player.pause();
+                                  }
+                                }
+                              } else if (notification
+                                  is ScrollEndNotification) {
+                                _isSwiping = false;
+                                _isSwipingPage.value = false;
+                                _precacheAdjacentVideos(_current);
+                                _activeMediaNotifier?.state =
+                                    _videos[_current].id;
+                              }
+                              return false;
+                            },
                             child: ValueListenableBuilder<bool>(
-                              valueListenable: _isSwipingPage,
-                              builder: (context, isSwiping, child) {
-                                return AnimatedOpacity(
-                                  duration: Duration(milliseconds: isSwiping ? 150 : 250),
-                                  curve: Curves.easeInOut,
-                                  opacity: isSwiping ? 0.0 : 1.0,
-                                  child: IgnorePointer(
-                                    ignoring: isSwiping,
-                                    child: child,
-                                  ),
+                              valueListenable: _isDraggingDown,
+                              builder: (context, isDraggingDown, child) {
+                                return IgnorePointer(
+                                  ignoring: isDraggingDown,
+                                  child: child,
                                 );
                               },
-                              child: StreamBuilder<bool>(
-                                initialData: _player.state.playing,
-                                stream: _player.stream.playing,
-                                builder: (_, snap) {
-                                  final playing = snap.data ?? _player.state.playing;
-                                  if (playing) return const SizedBox.shrink();
-                                  return BouncyTap(
-                                    onTap: () {
-                                      if (_videoLoadDebounce?.isActive == true) {
-                                        _videoLoadDebounce?.cancel();
-                                        _player.open(Media(_videos[_current].path), play: true);
-                                      } else {
-                                        _player.play();
-                                      }
-                                      if (!_hasStartedPlaying) {
-                                        setState(() => _hasStartedPlaying = true);
-                                      }
-                                    },
-                                    child: Container(
-                                      width: 72,
-                                      height: 72,
-                                      decoration: BoxDecoration(
-                                        color: Colors.black
-                                            .withValues(alpha: 0.55),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.4),
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                      child: const Center(
-                                        child: Padding(
-                                          padding: EdgeInsets.only(left: 3),
-                                          child: Icon(
-                                            Icons.play_arrow_rounded,
-                                            size: 48,
-                                            color: Colors.white,
+                              child: PageView.builder(
+                                controller: _pageController,
+                                itemCount: _videos.length,
+                                onPageChanged: _onPageChanged,
+                                physics: (_isCurrentlyVideoZoomed ||
+                                        _isPinching ||
+                                        _isMultiTouch ||
+                                        _isScrubbing ||
+                                        _activePointers.length >= 2)
+                                    ? const NeverScrollableScrollPhysics()
+                                    : const BouncingScrollPhysics(),
+                                itemBuilder: (context, index) {
+                                  final isCur = index == _current;
+                                  return RepaintBoundary(
+                                    child: Center(
+                                      child: ClipRect(
+                                        child: InteractiveViewer(
+                                          key: ValueKey(
+                                              'iv_${_videos[index].id}'),
+                                          transformationController: isCur
+                                              ? _transformationController
+                                              : null,
+                                          minScale: 1.0,
+                                          maxScale: 8.0,
+                                          panEnabled:
+                                              isCur && _isCurrentlyVideoZoomed,
+                                          scaleEnabled: isCur,
+                                          clipBehavior: Clip.hardEdge,
+                                          onInteractionStart: isCur
+                                              ? (details) {
+                                                  _zoomAnimController?.stop();
+                                                  if (details.pointerCount >=
+                                                      2) {
+                                                    _isPinching = true;
+                                                  }
+                                                }
+                                              : null,
+                                          onInteractionUpdate: isCur
+                                              ? (details) {
+                                                  final scale =
+                                                      _transformationController
+                                                          .value
+                                                          .getMaxScaleOnAxis();
+                                                  final isZoomed = scale > 1.05;
+                                                  if (isZoomed !=
+                                                      _isVideoZoomed) {
+                                                    _isVideoZoomed = isZoomed;
+                                                  }
+                                                }
+                                              : null,
+                                          onInteractionEnd: isCur
+                                              ? (details) {
+                                                  _isPinching = false;
+                                                  final scale =
+                                                      _transformationController
+                                                          .value
+                                                          .getMaxScaleOnAxis();
+                                                  if (scale <= 1.02) {
+                                                    _resetVideoZoom();
+                                                  } else {
+                                                    if (!_isVideoZoomed &&
+                                                        mounted) {
+                                                      setState(() {
+                                                        _isVideoZoomed = true;
+                                                      });
+                                                    }
+                                                  }
+                                                }
+                                              : null,
+                                          child: Center(
+                                            child: HeroMode(
+                                              enabled: isCur,
+                                              child: Hero(
+                                                tag: _videos[index].id,
+                                                transitionOnUserGestures: true,
+                                                flightShuttleBuilder: (
+                                                  flightContext,
+                                                  animation,
+                                                  flightDirection,
+                                                  fromHeroContext,
+                                                  toHeroContext,
+                                                ) =>
+                                                    _buildHeroShuttle(
+                                                  animation: animation,
+                                                  flightDirection:
+                                                      flightDirection,
+                                                  item: _videos[index],
+                                                  fallbackChild:
+                                                      flightDirection ==
+                                                              HeroFlightDirection
+                                                                  .push
+                                                          ? toHeroContext.widget
+                                                          : fromHeroContext
+                                                              .widget,
+                                                ),
+                                                child: _buildVideoPage(index),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -1646,89 +1549,271 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               ),
                             ),
                           ),
-                        // Top bar
+                        ),
+                      ),
+                      if (_isVideoZoomed)
                         Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
+                          top: _showControls
+                              ? 80
+                              : (MediaQuery.of(context).padding.top + 16),
+                          right: 16,
                           child: SafeArea(
-                            bottom: false,
-                            child: _TopBar(
-                              item: item,
-                              currentIndex: _current,
-                              totalVideos: _videos.length,
-                              isTrash: widget.isTrash,
-                              onRestore: _restoreItem,
-                              onBack: () {
-                                if (_isFullscreen) {
-                                  _exitFullscreen();
-                                } else {
-                                  _videoSurfaceVisible.value = false;
-                                  _player.pause();
-                                  _activeMediaNotifier?.state = _videos[_current].id;
-                                  Navigator.of(context).pop();
-                                }
-                              },
-                              onInfo: () => showMediaInfoSheet(context, item, player: _player),
-                              onDelete: _deleteItem,
+                            top: !_showControls,
+                            child: BouncyTap(
+                              onTap: _resetVideoZoom,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.75),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.35),
+                                    width: 1,
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black45,
+                                      blurRadius: 8,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.zoom_out_map_rounded,
+                                      color: Colors.white,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    ValueListenableBuilder<Matrix4>(
+                                      valueListenable:
+                                          _transformationController,
+                                      builder: (context, matrix, _) {
+                                        final scale =
+                                            matrix.getMaxScaleOnAxis();
+                                        return Text(
+                                          '${scale.toStringAsFixed(1)}x • Reset',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.3,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                        // Bottom controls
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          child: SafeArea(
-                            top: false,
-                            child: _BottomBar(
-                              player: _player,
-                              item: item,
-                              isVertical: _isCurrentVideoPortrait(),
-                              isTrash: widget.isTrash,
-                              onRestore: _restoreItem,
-                              isFullscreen: _isFullscreen,
-                              isLooping: _isLooping,
-                              playbackSpeed: _playbackSpeed,
-                              cropToFit: _cropToFit,
-                              onToggleCropToFit: _toggleCropToFit,
-                              onToggleFullscreen: _toggleFullscreen,
-                              onToggleLoop: _toggleLoop,
-                              onSelectSpeed: _showPlaybackSpeedSheet,
-                              onDelete: _deleteItem,
-                              onRename: _renameCurrentItem,
-                              onToggleOrientation: _toggleOrientation,
-                              onScrubbingChanged: (scrubbing) {
-                                if (_isScrubbing != scrubbing) {
-                                  setState(() => _isScrubbing = scrubbing);
-                                  if (!scrubbing && !_videoSurfaceVisible.value) {
-                                    _videoSurfaceVisible.value = true;
-                                  }
-                                }
-                              },
+                      ValueListenableBuilder<Offset>(
+                        valueListenable: _dragNotifier,
+                        builder: (context, drag, child) {
+                          final dragFade =
+                              (1.0 - (drag.dy / 35.0)).clamp(0.0, 1.0);
+                          final baseOpacity =
+                              (_showControls && !_isPinching) ? dragFade : 0.0;
+                          final anim = ModalRoute.of(context)?.animation;
+                          if (anim == null) {
+                            return Opacity(
+                              opacity: baseOpacity,
+                              child: IgnorePointer(
+                                ignoring: !_showControls ||
+                                    drag.dy > 4 ||
+                                    _isPinching,
+                                child: child,
+                              ),
+                            );
+                          }
+                          return AnimatedBuilder(
+                            animation: anim,
+                            builder: (context, _) {
+                              final entrance = const Interval(0.65, 1.0,
+                                      curve: Curves.easeOut)
+                                  .transform(anim.value);
+                              final opacity =
+                                  (baseOpacity * entrance).clamp(0.0, 1.0);
+                              return Opacity(
+                                opacity: opacity,
+                                child: IgnorePointer(
+                                  ignoring: !_showControls ||
+                                      drag.dy > 4 ||
+                                      _isPinching ||
+                                      opacity < 0.5,
+                                  child: child,
+                                ),
+                              );
+                            },
+                          );
+                        },
+                        child: Stack(
+                          children: [
+                            // Center play button when paused (exact center of the screen)
+                            // In landscape: completely removed.
+                            // In portrait: only shown before the video has ever started playing.
+                            if (MediaQuery.orientationOf(context) !=
+                                    Orientation.landscape &&
+                                !_hasStartedPlaying &&
+                                _videos[_current].isVideo)
+                              Center(
+                                child: ValueListenableBuilder<bool>(
+                                  valueListenable: _isSwipingPage,
+                                  builder: (context, isSwiping, child) {
+                                    return AnimatedOpacity(
+                                      duration: Duration(
+                                          milliseconds: isSwiping ? 150 : 250),
+                                      curve: Curves.easeInOut,
+                                      opacity: isSwiping ? 0.0 : 1.0,
+                                      child: IgnorePointer(
+                                        ignoring: isSwiping,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: StreamBuilder<bool>(
+                                    initialData: _player.state.playing,
+                                    stream: _player.stream.playing,
+                                    builder: (_, snap) {
+                                      final playing =
+                                          snap.data ?? _player.state.playing;
+                                      if (playing) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return BouncyTap(
+                                        onTap: () {
+                                          if (_videoLoadDebounce?.isActive ==
+                                              true) {
+                                            _videoLoadDebounce?.cancel();
+                                            _player.open(
+                                                Media(_videos[_current].path),
+                                                play: true);
+                                          } else {
+                                            _player.play();
+                                          }
+                                          if (!_hasStartedPlaying) {
+                                            setState(() =>
+                                                _hasStartedPlaying = true);
+                                          }
+                                        },
+                                        child: Container(
+                                          width: 72,
+                                          height: 72,
+                                          decoration: BoxDecoration(
+                                            color: Colors.black
+                                                .withValues(alpha: 0.55),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.4),
+                                              width: 1.5,
+                                            ),
+                                          ),
+                                          child: const Center(
+                                            child: Padding(
+                                              padding: EdgeInsets.only(left: 3),
+                                              child: Icon(
+                                                Icons.play_arrow_rounded,
+                                                size: 48,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            // Top bar
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: SafeArea(
+                                bottom: false,
+                                child: _TopBar(
+                                  item: item,
+                                  currentIndex: _current,
+                                  totalVideos: _videos.length,
+                                  isTrash: widget.isTrash,
+                                  onRestore: _restoreItem,
+                                  onBack: () {
+                                    if (_isFullscreen) {
+                                      _exitFullscreen();
+                                    } else {
+                                      _videoSurfaceVisible.value = false;
+                                      _player.pause();
+                                      _activeMediaNotifier?.state =
+                                          _videos[_current].id;
+                                      Navigator.of(context).pop();
+                                    }
+                                  },
+                                  onInfo: () => showMediaInfoSheet(
+                                      context, item,
+                                      player: _player),
+                                  onDelete: _deleteItem,
+                                ),
+                              ),
                             ),
-                          ),
+                            // Bottom controls
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              child: SafeArea(
+                                top: false,
+                                child: _BottomBar(
+                                  player: _player,
+                                  item: item,
+                                  isVertical: _isCurrentVideoPortrait(),
+                                  isTrash: widget.isTrash,
+                                  onRestore: _restoreItem,
+                                  isFullscreen: _isFullscreen,
+                                  isLooping: _isLooping,
+                                  playbackSpeed: _playbackSpeed,
+                                  cropToFit: _cropToFit,
+                                  onToggleCropToFit: _toggleCropToFit,
+                                  onToggleFullscreen: _toggleFullscreen,
+                                  onToggleLoop: _toggleLoop,
+                                  onSelectSpeed: _showPlaybackSpeedSheet,
+                                  onDelete: _deleteItem,
+                                  onRename: _renameCurrentItem,
+                                  onToggleOrientation: _toggleOrientation,
+                                  onScrubbingChanged: (scrubbing) {
+                                    if (_isScrubbing != scrubbing) {
+                                      setState(() => _isScrubbing = scrubbing);
+                                      if (!scrubbing &&
+                                          !_videoSurfaceVisible.value) {
+                                        _videoSurfaceVisible.value = true;
+                                      }
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      _FeedbackPillOverlay(
+                        dataNotifier: _feedbackToastNotifier,
+                        dragNotifier: _dragNotifier,
+                      ),
+                    ],
                   ),
-                  _FeedbackPillOverlay(
-                    dataNotifier: _feedbackToastNotifier,
-                    dragNotifier: _dragNotifier,
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-        ),
           ],
         ),
       ),
     );
   }
 }
-
-// ── Video feedback pill (Loop & Speed toast) ───────────────────────────────
 
 class _FeedbackPillData {
   const _FeedbackPillData({
@@ -1810,7 +1895,8 @@ class _FeedbackPillOverlayState extends State<_FeedbackPillOverlay>
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     // In landscape, bottom bar is ~76px; placing at bottomInset + 84px positions it right above seekbar/timestamp.
     // In portrait, bottom bar is ~110px; placing at bottomInset + 120px positions it right above seekbar/timestamp.
-    final bottomPos = isLandscape ? (bottomInset + 84.0) : (bottomInset + 120.0);
+    final bottomPos =
+        isLandscape ? (bottomInset + 84.0) : (bottomInset + 120.0);
 
     return Positioned(
       bottom: bottomPos,
@@ -1889,8 +1975,6 @@ class _FeedbackPillOverlayState extends State<_FeedbackPillOverlay>
   }
 }
 
-// ── Video thumbnail placeholder ───────────────────────────────────────────
-
 class _VideoThumbnailPage extends StatefulWidget {
   const _VideoThumbnailPage({
     required this.item,
@@ -1918,7 +2002,9 @@ class _VideoThumbnailPageState extends State<_VideoThumbnailPage> {
       _highResBytes = cached;
     } else if (widget.isSwiping?.value != true) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.isSwiping?.value != true && _highResBytes == null) {
+        if (mounted &&
+            widget.isSwiping?.value != true &&
+            _highResBytes == null) {
           _loadHighRes();
         }
       });
@@ -2022,8 +2108,8 @@ class _VideoThumbnailPageState extends State<_VideoThumbnailPage> {
     }
 
     return FutureBuilder<Uint8List?>(
-      future: ThumbnailService.instance
-          .getThumbnail(widget.item.id, filePath: widget.item.path, isVideo: true),
+      future: ThumbnailService.instance.getThumbnail(widget.item.id,
+          filePath: widget.item.path, isVideo: true),
       builder: (context, snapshot) {
         if (snapshot.data != null) {
           return SizedBox.expand(
@@ -2057,8 +2143,6 @@ class _VideoThumbnailPageState extends State<_VideoThumbnailPage> {
     return _buildBaseThumbnail();
   }
 }
-
-// ── Top bar (Photo 2 reference) ───────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   const _TopBar({
@@ -2139,8 +2223,6 @@ class _TopBar extends StatelessWidget {
     );
   }
 }
-
-// ── Seek preview tooltip ─────────────────────────────────────────────────────
 
 class _SeekPreviewTooltip extends StatelessWidget {
   const _SeekPreviewTooltip({
@@ -2271,8 +2353,6 @@ class _TooltipCaretPainter extends CustomPainter {
   bool shouldRepaint(covariant _TooltipCaretPainter oldDelegate) =>
       oldDelegate.color != color || oldDelegate.fillColor != fillColor;
 }
-
-// ── Bottom bar (Photo 2 reference) ────────────────────────────────────────
 
 class _BottomBar extends StatefulWidget {
   const _BottomBar({
@@ -2515,7 +2595,9 @@ class _BottomBarState extends State<_BottomBar> {
       }
     } finally {
       _isFetchingFrame = false;
-      if (mounted && _pendingTargetPos != null && (_isDragging || _showPreview)) {
+      if (mounted &&
+          _pendingTargetPos != null &&
+          (_isDragging || _showPreview)) {
         _executeNextFetch();
       }
     }
@@ -2630,8 +2712,8 @@ class _BottomBarState extends State<_BottomBar> {
 
         final trackWidth = constraints.maxWidth - 32.0;
         final thumbX = 16.0 + frac.clamp(0.0, 1.0) * trackWidth;
-        final leftOffset =
-            (thumbX - previewW / 2).clamp(8.0, constraints.maxWidth - previewW - 8.0);
+        final leftOffset = (thumbX - previewW / 2)
+            .clamp(8.0, constraints.maxWidth - previewW - 8.0);
 
         return Stack(
           clipBehavior: Clip.none,
@@ -2717,13 +2799,13 @@ class _BottomBarState extends State<_BottomBar> {
                     widget.onToggleLoop();
                   },
                 ),
-
                 if (widget.onRename != null)
                   ListTile(
                     leading:
                         const Icon(Icons.edit_outlined, color: Colors.white),
                     title: Text(context.tr.rename,
-                        style: const TextStyle(color: Colors.white, fontSize: 15)),
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 15)),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       widget.onRename?.call();
@@ -2761,16 +2843,19 @@ class _BottomBarState extends State<_BottomBar> {
                   ListTile(
                     leading: const Icon(Icons.restore, color: Colors.white),
                     title: Text(context.tr.restore,
-                        style: const TextStyle(color: Colors.white, fontSize: 15)),
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 15)),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       widget.onRestore?.call();
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
+                    leading: const Icon(Icons.delete_forever,
+                        color: Colors.redAccent),
                     title: Text(context.tr.delete,
-                        style: const TextStyle(color: Colors.redAccent, fontSize: 15)),
+                        style: const TextStyle(
+                            color: Colors.redAccent, fontSize: 15)),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       widget.onDelete();
@@ -2807,7 +2892,8 @@ class _BottomBarState extends State<_BottomBar> {
                             currentFavs.add(widget.item.id);
                           }
                           ref.read(settingsNotifierProvider.notifier).update(
-                                (s) => s.copyWith(favoriteIds: currentFavs.toList()),
+                                (s) => s.copyWith(
+                                    favoriteIds: currentFavs.toList()),
                               );
                           Navigator.pop(sheetContext);
                         },
@@ -2815,9 +2901,11 @@ class _BottomBarState extends State<_BottomBar> {
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.share_outlined, color: Colors.white),
+                    leading:
+                        const Icon(Icons.share_outlined, color: Colors.white),
                     title: Text(context.tr.share,
-                        style: const TextStyle(color: Colors.white, fontSize: 15)),
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 15)),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       ShareService.shareSingle(widget.item.path, isVideo: true);
@@ -2825,18 +2913,22 @@ class _BottomBarState extends State<_BottomBar> {
                   ),
                   if (widget.onRename != null)
                     ListTile(
-                      leading: const Icon(Icons.edit_outlined, color: Colors.white),
+                      leading:
+                          const Icon(Icons.edit_outlined, color: Colors.white),
                       title: Text(context.tr.rename,
-                          style: const TextStyle(color: Colors.white, fontSize: 15)),
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 15)),
                       onTap: () {
                         Navigator.pop(sheetContext);
                         widget.onRename!();
                       },
                     ),
                   ListTile(
-                    leading: const Icon(Icons.delete_outline, color: Colors.white),
+                    leading:
+                        const Icon(Icons.delete_outline, color: Colors.white),
                     title: Text(context.tr.delete,
-                        style: const TextStyle(color: Colors.white, fontSize: 15)),
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 15)),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       widget.onDelete();
@@ -2869,7 +2961,8 @@ class _BottomBarState extends State<_BottomBar> {
                 ListTile(
                   leading: const Icon(Icons.edit_outlined, color: Colors.white),
                   title: Text(context.tr.rename,
-                      style: const TextStyle(color: Colors.white, fontSize: 15)),
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 15)),
                   onTap: () {
                     Navigator.pop(sheetContext);
                     widget.onRename?.call();
@@ -2938,8 +3031,7 @@ class _BottomBarState extends State<_BottomBar> {
                     icon: const Icon(Icons.share_outlined,
                         color: Colors.white, size: 22),
                     label: context.tr.share,
-                    onTap: () => ShareService.shareSingle(
-                        widget.item.path,
+                    onTap: () => ShareService.shareSingle(widget.item.path,
                         isVideo: false),
                   ),
                   Consumer(
@@ -2966,10 +3058,9 @@ class _BottomBarState extends State<_BottomBar> {
                           } else {
                             currentFavs.add(widget.item.id);
                           }
-                          ref
-                              .read(settingsNotifierProvider.notifier)
-                              .update(
-                                (s) => s.copyWith(favoriteIds: currentFavs.toList()),
+                          ref.read(settingsNotifierProvider.notifier).update(
+                                (s) => s.copyWith(
+                                    favoriteIds: currentFavs.toList()),
                               );
                         },
                       );
@@ -3008,8 +3099,7 @@ class _BottomBarState extends State<_BottomBar> {
             stream: widget.player.stream.duration,
             builder: (_, durSnap) {
               final pos = posSnap.data ?? Duration.zero;
-              final dur =
-                  durSnap.data ?? widget.item.duration ?? Duration.zero;
+              final dur = durSnap.data ?? widget.item.duration ?? Duration.zero;
               final displayPos = (_isDragging &&
                       _dragFraction != null &&
                       dur.inMilliseconds > 0)
@@ -3018,8 +3108,7 @@ class _BottomBarState extends State<_BottomBar> {
                           (_dragFraction! * dur.inMilliseconds).round())
                   : pos;
               final frac = dur.inMilliseconds > 0
-                  ? (_dragFraction ??
-                      (pos.inMilliseconds / dur.inMilliseconds))
+                  ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))
                   : 0.0;
 
               if (isLandscape) {
@@ -3261,8 +3350,8 @@ class _BottomBarState extends State<_BottomBar> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(MediaUtils.formatDuration(dur),
-                        style:
-                            const TextStyle(color: Colors.white70, fontSize: 12)),
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12)),
                     const SizedBox(width: 8),
                     BouncyTap(
                       onTap: widget.onToggleOrientation,
@@ -3429,8 +3518,6 @@ class _ViewerActionButton extends StatelessWidget {
   }
 }
 
-// ── Device Rotate Icon (Photo 3 reference) ───────────────────────────────────
-
 class DeviceRotateIcon extends StatelessWidget {
   const DeviceRotateIcon({
     super.key,
@@ -3560,8 +3647,6 @@ class _DeviceRotatePainter extends CustomPainter {
       oldDelegate.color != color;
 }
 
-// ── Video Scrubber Bar ────────────────────────────────────────────────────────
-
 class _VideoScrubberBar extends StatefulWidget {
   const _VideoScrubberBar({
     required this.value,
@@ -3593,8 +3678,8 @@ class _VideoScrubberBarState extends State<_VideoScrubberBar> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final trackWidth =
-            (constraints.maxWidth - trackPadding * 2).clamp(1.0, double.infinity);
+        final trackWidth = (constraints.maxWidth - trackPadding * 2)
+            .clamp(1.0, double.infinity);
 
         return Listener(
           behavior: HitTestBehavior.opaque,
@@ -3673,8 +3758,8 @@ class _ScrubberTrackPainter extends CustomPainter {
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTRB(startX, centerY - trackHeight / 2, endX,
-            centerY + trackHeight / 2),
+        Rect.fromLTRB(
+            startX, centerY - trackHeight / 2, endX, centerY + trackHeight / 2),
         rradius,
       ),
       inactivePaint,
@@ -3727,4 +3812,3 @@ class _ScrubberTrackPainter extends CustomPainter {
       oldDelegate.isDragging != isDragging ||
       oldDelegate.isLandscape != isLandscape;
 }
-

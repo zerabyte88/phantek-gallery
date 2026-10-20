@@ -7,14 +7,7 @@ class PermissionService {
   PermissionService._();
   static final PermissionService instance = PermissionService._();
 
-  /// Request media permissions suitable for the active Android version:
-  /// - Android 14, 15, 16+ (API 34+): full access or user-selected partial access
-  /// - Android 13 (API 33): granular photos & videos
-  /// - Android 12 and below (API <= 32): storage (READ/WRITE_EXTERNAL_STORAGE)
-  ///
-  /// Uses [PhotoManager.requestPermissionExtend], which delegates directly to
-  /// native Android platform code checking Build.VERSION.SDK_INT and handling
-  /// all OS versions correctly.
+  /// Requests media permissions appropriate for the running Android version.
   Future<bool> requestMediaPermissions() async {
     try {
       if (await Permission.manageExternalStorage.isGranted) {
@@ -28,8 +21,7 @@ class PermissionService {
     }
   }
 
-  /// Request "All Files Access" (MANAGE_EXTERNAL_STORAGE) on Android 11+ (API 30+).
-  /// Required for deep trash operations and direct file deletion across arbitrary folders.
+  /// Requests All Files Access (MANAGE_EXTERNAL_STORAGE) on Android 11+.
   Future<bool> requestManageStorage() async {
     final status = await Permission.manageExternalStorage.status;
     if (status.isGranted) return true;

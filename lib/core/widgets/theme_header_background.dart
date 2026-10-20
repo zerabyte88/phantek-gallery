@@ -18,7 +18,8 @@ class ThemeHeaderBackground extends ConsumerStatefulWidget {
   const ThemeHeaderBackground({super.key});
 
   @override
-  ConsumerState<ThemeHeaderBackground> createState() => _ThemeHeaderBackgroundState();
+  ConsumerState<ThemeHeaderBackground> createState() =>
+      _ThemeHeaderBackgroundState();
 }
 
 class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
@@ -47,7 +48,6 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
     );
     final brightness = Theme.of(context).brightness;
 
-    // Resolve system mode
     final effectiveMode = switch (themeMode) {
       AppThemeMode.system =>
         brightness == Brightness.dark ? AppThemeMode.dark : AppThemeMode.light,
@@ -80,15 +80,13 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1. AMOLED Header Painter (Crescent Moon, Twinkling Stars, Shooting Meteors)
-// ═════════════════════════════════════════════════════════════════════════════
+/// AMOLED theme painter featuring a crescent moon, twinkling stars, and meteors.
 
 class _StarData {
-  final double x; // normalized 0..1
-  final double y; // normalized 0..1
+  final double x;
+  final double y;
   final double size;
-  final double speed; // integer multiplier for seamless continuous looping
+  final double speed;
   final double phase;
   final bool hasCrossGlow;
 
@@ -136,19 +134,17 @@ class _AmoledHeaderPainter extends CustomPainter {
       Paint()..color = Colors.black,
     );
 
-    // Subtle celestial gradient wash across top edge
     final skyWashPaint = Paint()
       ..shader = RadialGradient(
         center: const Alignment(0.7, -0.6),
         radius: 1.2,
         colors: [
-          const Color(0xFF1E1B4B).withValues(alpha: 0.35), // Deep Indigo night
+          const Color(0xFF1E1B4B).withValues(alpha: 0.35),
           Colors.transparent,
         ],
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, skyWashPaint);
 
-    // 2. Twinkling Stars (Continuous integer harmonics)
     final starPaint = Paint()..style = PaintingStyle.fill;
     final starGlowPaint = Paint()
       ..style = PaintingStyle.stroke
@@ -158,25 +154,30 @@ class _AmoledHeaderPainter extends CustomPainter {
       final sx = star.x * size.width;
       final sy = star.y * size.height;
       final twinkle = 0.35 +
-          0.65 * (0.5 + 0.5 * math.sin(progress * 2 * math.pi * star.speed + star.phase));
+          0.65 *
+              (0.5 +
+                  0.5 *
+                      math.sin(
+                          progress * 2 * math.pi * star.speed + star.phase));
 
       starPaint.color = Colors.white.withValues(alpha: twinkle * 0.9);
       canvas.drawCircle(Offset(sx, sy), star.size * 0.85, starPaint);
 
-      // 4-point cross-glimmer for bright stars
       if (star.hasCrossGlow && twinkle > 0.75) {
         final glowLen = star.size * 2.8 * ((twinkle - 0.75) / 0.25);
-        starGlowPaint.color = const Color(0xFFBAE6FD).withValues(alpha: (twinkle - 0.75) * 2.0);
-        canvas.drawLine(Offset(sx - glowLen, sy), Offset(sx + glowLen, sy), starGlowPaint);
-        canvas.drawLine(Offset(sx, sy - glowLen), Offset(sx, sy + glowLen), starGlowPaint);
+        starGlowPaint.color =
+            const Color(0xFFBAE6FD).withValues(alpha: (twinkle - 0.75) * 2.0);
+        canvas.drawLine(
+            Offset(sx - glowLen, sy), Offset(sx + glowLen, sy), starGlowPaint);
+        canvas.drawLine(
+            Offset(sx, sy - glowLen), Offset(sx, sy + glowLen), starGlowPaint);
       }
     }
 
-    // 3. Glowing Crescent Moon (Near Top-Right)
-    final moonCenter = Offset(size.width - 42, math.min(size.height * 0.28, 48.0));
+    final moonCenter =
+        Offset(size.width - 42, math.min(size.height * 0.28, 48.0));
     const moonRadius = 13.5;
 
-    // Ambient lunar atmospheric halo
     final moonGlowPaint = Paint()
       ..color = const Color(0xFF93C5FD).withValues(alpha: 0.16)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10.0);
@@ -191,7 +192,8 @@ class _AmoledHeaderPainter extends CustomPainter {
           radius: moonRadius * 0.88,
         ),
       );
-    final moonPath = Path.combine(PathOperation.difference, outerMoon, innerMoon);
+    final moonPath =
+        Path.combine(PathOperation.difference, outerMoon, innerMoon);
 
     final moonPaint = Paint()
       ..shader = const LinearGradient(
@@ -206,13 +208,48 @@ class _AmoledHeaderPainter extends CustomPainter {
 
     canvas.drawPath(moonPath, moonPaint);
 
-    // 4. Shooting Celestial Meteor Shower (6 Staggered Streaks Traversing Past Bottom Edge)
-    _drawMeteor(canvas, size, progress, cycleStart: 0.04, cycleDuration: 0.17, startX: 0.80, startY: -15, angle: math.pi * 0.26, glowColor: const Color(0xFF67E8F9));
-    _drawMeteor(canvas, size, progress, cycleStart: 0.19, cycleDuration: 0.15, startX: 0.44, startY: -15, angle: math.pi * 0.28, glowColor: const Color(0xFF93C5FD));
-    _drawMeteor(canvas, size, progress, cycleStart: 0.36, cycleDuration: 0.18, startX: 0.95, startY: -15, angle: math.pi * 0.25, glowColor: const Color(0xFF38BDF8));
-    _drawMeteor(canvas, size, progress, cycleStart: 0.54, cycleDuration: 0.16, startX: 0.28, startY: -15, angle: math.pi * 0.27, glowColor: const Color(0xFFE2E8F0));
-    _drawMeteor(canvas, size, progress, cycleStart: 0.70, cycleDuration: 0.18, startX: 0.68, startY: -15, angle: math.pi * 0.26, glowColor: const Color(0xFF67E8F9));
-    _drawMeteor(canvas, size, progress, cycleStart: 0.86, cycleDuration: 0.15, startX: 0.52, startY: -15, angle: math.pi * 0.29, glowColor: const Color(0xFF818CF8));
+    _drawMeteor(canvas, size, progress,
+        cycleStart: 0.04,
+        cycleDuration: 0.17,
+        startX: 0.80,
+        startY: -15,
+        angle: math.pi * 0.26,
+        glowColor: const Color(0xFF67E8F9));
+    _drawMeteor(canvas, size, progress,
+        cycleStart: 0.19,
+        cycleDuration: 0.15,
+        startX: 0.44,
+        startY: -15,
+        angle: math.pi * 0.28,
+        glowColor: const Color(0xFF93C5FD));
+    _drawMeteor(canvas, size, progress,
+        cycleStart: 0.36,
+        cycleDuration: 0.18,
+        startX: 0.95,
+        startY: -15,
+        angle: math.pi * 0.25,
+        glowColor: const Color(0xFF38BDF8));
+    _drawMeteor(canvas, size, progress,
+        cycleStart: 0.54,
+        cycleDuration: 0.16,
+        startX: 0.28,
+        startY: -15,
+        angle: math.pi * 0.27,
+        glowColor: const Color(0xFFE2E8F0));
+    _drawMeteor(canvas, size, progress,
+        cycleStart: 0.70,
+        cycleDuration: 0.18,
+        startX: 0.68,
+        startY: -15,
+        angle: math.pi * 0.26,
+        glowColor: const Color(0xFF67E8F9));
+    _drawMeteor(canvas, size, progress,
+        cycleStart: 0.86,
+        cycleDuration: 0.15,
+        startX: 0.52,
+        startY: -15,
+        angle: math.pi * 0.29,
+        glowColor: const Color(0xFF818CF8));
   }
 
   void _drawMeteor(
@@ -229,7 +266,6 @@ class _AmoledHeaderPainter extends CustomPainter {
     if (progress < cycleStart || progress > cycleStart + cycleDuration) return;
 
     final t = (progress - cycleStart) / cycleDuration;
-    // Dynamic trajectory guarantees meteor crosses fully through and beyond bottom edge
     final targetY = size.height + 50.0;
     final totalVerticalTravel = targetY - startY;
     final totalTravel = totalVerticalTravel / math.sin(angle);
@@ -238,7 +274,6 @@ class _AmoledHeaderPainter extends CustomPainter {
     final headX = startX * size.width + math.cos(angle) * currentTravel;
     final headY = startY + math.sin(angle) * currentTravel;
 
-    // Sustained trail length: grows quickly upon entry, stays full-bodied throughout fall
     final maxTrail = math.min(size.width * 0.22, 65.0);
     final trailLength = maxTrail * math.min(1.0, t * 4.0);
     final tailX = headX - math.cos(angle) * trailLength;
@@ -246,11 +281,9 @@ class _AmoledHeaderPainter extends CustomPainter {
 
     if (trailLength <= 1) return;
 
-    // Opacity: rapid fade-in upon entry (0..0.12), full brightness, smooth fade-out as head exits past bottom (0.82..1.0)
-    final opacity = (t < 0.12
-            ? (t / 0.12)
-            : (t > 0.82 ? ((1.0 - t) / 0.18) : 1.0))
-        .clamp(0.0, 1.0);
+    final opacity =
+        (t < 0.12 ? (t / 0.12) : (t > 0.82 ? ((1.0 - t) / 0.18) : 1.0))
+            .clamp(0.0, 1.0);
 
     final meteorPaint = Paint()
       ..shader = LinearGradient(
@@ -262,7 +295,8 @@ class _AmoledHeaderPainter extends CustomPainter {
           Colors.white.withValues(alpha: opacity),
         ],
         stops: const [0.0, 0.65, 1.0],
-      ).createShader(Rect.fromPoints(Offset(tailX, tailY), Offset(headX, headY)))
+      ).createShader(
+          Rect.fromPoints(Offset(tailX, tailY), Offset(headX, headY)))
       ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
@@ -280,18 +314,16 @@ class _AmoledHeaderPainter extends CustomPainter {
       oldDelegate.progress != progress;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2. AMOLED SAKURA Header Painter (Cherry Tree Branch & Fluttering Petals)
-// ═════════════════════════════════════════════════════════════════════════════
+/// Sakura theme painter featuring cherry tree branches and falling petals.
 
 class _PetalData {
-  final double startX; // normalized
-  final double startY; // normalized
+  final double startX;
+  final double startY;
   final double size;
-  final double fallSpeed; // integer cycle speed
-  final double swaySpeed; // integer cycle speed
+  final double fallSpeed;
+  final double swaySpeed;
   final double swayAmplitude;
-  final double rotSpeed; // integer cycle speed
+  final double rotSpeed;
   final double phase;
 
   const _PetalData(
@@ -336,7 +368,6 @@ class _SakuraHeaderPainter extends CustomPainter {
       Paint()..color = Colors.black,
     );
 
-    // Soft subtle blooming sakura horizon glow
     final sakuraGlow = Paint()
       ..shader = RadialGradient(
         center: const Alignment(0.85, -0.7),
@@ -348,10 +379,8 @@ class _SakuraHeaderPainter extends CustomPainter {
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, sakuraGlow);
 
-    // 2. Artistic Multi-Branch Sakura Tree with Leaves & Blossoms (Top-Right side)
     _drawSakuraBranch(canvas, size);
 
-    // 3. Falling / Fluttering Sakura Petals (Seamless continuous loop)
     for (final petal in _petals) {
       _drawPetal(canvas, size, petal, progress);
     }
@@ -359,28 +388,25 @@ class _SakuraHeaderPainter extends CustomPainter {
 
   void _drawSakuraBranch(Canvas canvas, Size size) {
     final branchPaint = Paint()
-      ..color = const Color(0xFF2B1620) // Deep dark cherry wood
+      ..color = const Color(0xFF2B1620)
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     final w = size.width;
     final h = size.height;
 
-    // ── 1. Main Trunk ────────────────────────────────────────────────────────
     final trunk = Path()
       ..moveTo(w + 10, -8)
       ..cubicTo(w - 35, h * 0.12, w - 75, h * 0.20, w - 120, h * 0.26);
     branchPaint.strokeWidth = 3.6;
     canvas.drawPath(trunk, branchPaint);
 
-    // ── 2. Primary Branch: Central-Left Deep Reach ────────────────────────────
     final midBranch = Path()
       ..moveTo(w - 120, h * 0.26)
       ..cubicTo(w - 155, h * 0.28, w - 180, h * 0.22, w - 215, h * 0.25);
     branchPaint.strokeWidth = 2.2;
     canvas.drawPath(midBranch, branchPaint);
 
-    // Mid twigs
     final twigMid1 = Path()
       ..moveTo(w - 165, h * 0.27)
       ..quadraticBezierTo(w - 175, h * 0.35, w - 190, h * 0.40);
@@ -391,14 +417,12 @@ class _SakuraHeaderPainter extends CustomPainter {
     canvas.drawPath(twigMid1, branchPaint);
     canvas.drawPath(twigMid2, branchPaint);
 
-    // ── 3. Primary Branch: Lower Sweeping Bough ──────────────────────────────
     final lowBranch = Path()
       ..moveTo(w - 60, h * 0.17)
       ..cubicTo(w - 85, h * 0.40, w - 95, h * 0.62, w - 112, h * 0.80);
     branchPaint.strokeWidth = 2.4;
     canvas.drawPath(lowBranch, branchPaint);
 
-    // Low twigs
     final twigLow1 = Path()
       ..moveTo(w - 80, h * 0.38)
       ..quadraticBezierTo(w - 100, h * 0.44, w - 118, h * 0.48);
@@ -413,14 +437,12 @@ class _SakuraHeaderPainter extends CustomPainter {
     canvas.drawPath(twigLow2, branchPaint);
     canvas.drawPath(twigLow3, branchPaint);
 
-    // ── 4. Primary Branch: Upper Crest Bough ─────────────────────────────────
     final topBranch = Path()
       ..moveTo(w - 95, h * 0.22)
       ..cubicTo(w - 120, h * 0.10, w - 145, h * 0.08, w - 170, h * 0.12);
     branchPaint.strokeWidth = 2.0;
     canvas.drawPath(topBranch, branchPaint);
 
-    // Top twigs
     final twigTop1 = Path()
       ..moveTo(w - 135, h * 0.09)
       ..quadraticBezierTo(w - 142, h * 0.03, w - 152, h * -0.02);
@@ -431,13 +453,10 @@ class _SakuraHeaderPainter extends CustomPainter {
     canvas.drawPath(twigTop1, branchPaint);
     canvas.drawPath(twigTop2, branchPaint);
 
-    // ── 5. Sakura Leaves (Dedaunan) ──────────────────────────────────────────
-    // Leaves on main trunk & base
     _drawLeaf(canvas, Offset(w - 32, h * 0.08), 8.5, -0.6);
     _drawLeaf(canvas, Offset(w - 55, h * 0.15), 7.5, 0.8);
     _drawLeaf(canvas, Offset(w - 70, h * 0.23), 8.0, -1.2);
 
-    // Leaves on lower branch & twigs
     _drawLeaf(canvas, Offset(w - 78, h * 0.36), 7.0, 1.4);
     _drawLeaf(canvas, Offset(w - 116, h * 0.46), 7.5, -0.3);
     _drawLeaf(canvas, Offset(w - 92, h * 0.54), 6.8, 2.1);
@@ -445,20 +464,17 @@ class _SakuraHeaderPainter extends CustomPainter {
     _drawLeaf(canvas, Offset(w - 108, h * 0.76), 7.2, 1.8);
     _drawLeaf(canvas, Offset(w - 128, h * 0.88), 6.0, 2.5);
 
-    // Leaves on central reach
     _drawLeaf(canvas, Offset(w - 118, h * 0.24), 8.0, 0.2);
     _drawLeaf(canvas, Offset(w - 145, h * 0.28), 7.0, 1.1);
     _drawLeaf(canvas, Offset(w - 188, h * 0.38), 6.5, 2.0);
     _drawLeaf(canvas, Offset(w - 212, h * 0.23), 7.0, -0.7);
     _drawLeaf(canvas, Offset(w - 228, h * 0.18), 6.0, -1.5);
 
-    // Leaves on upper crest
     _drawLeaf(canvas, Offset(w - 132, h * 0.08), 7.2, -1.8);
     _drawLeaf(canvas, Offset(w - 150, h * 0.01), 6.0, -2.4);
     _drawLeaf(canvas, Offset(w - 168, h * 0.10), 6.8, 0.3);
     _drawLeaf(canvas, Offset(w - 180, h * 0.15), 6.2, 1.0);
 
-    // ── 6. Blooming Sakura Blossoms (Full 5-Petal) ───────────────────────────
     _drawBlossom(canvas, Offset(w - 30, h * 0.09), 7.5, 0.4);
     _drawBlossom(canvas, Offset(w - 60, h * 0.17), 9.0, 1.8);
     _drawBlossom(canvas, Offset(w - 120, h * 0.26), 8.5, 2.7);
@@ -474,7 +490,6 @@ class _SakuraHeaderPainter extends CustomPainter {
     _drawBlossom(canvas, Offset(w - 135, h * 0.09), 6.8, 2.0);
     _drawBlossom(canvas, Offset(w - 170, h * 0.12), 6.2, 0.5);
 
-    // ── 7. Buds & Bud Clusters ───────────────────────────────────────────────
     _drawBud(canvas, Offset(w - 152, h * -0.02), 3.0);
     _drawBud(canvas, Offset(w - 182, h * 0.17), 2.8);
     _drawBud(canvas, Offset(w - 230, h * 0.19), 2.8);
@@ -498,9 +513,9 @@ class _SakuraHeaderPainter extends CustomPainter {
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
         colors: [
-          const Color(0xFF3B5D3E), // Deep tender leaf green
-          const Color(0xFF5A855A), // Vibrant spring green
-          const Color(0xFF82A882), // Soft leaf tip
+          const Color(0xFF3B5D3E),
+          const Color(0xFF5A855A),
+          const Color(0xFF82A882),
         ],
         stops: const [0.0, 0.6, 1.0],
       ).createShader(Rect.fromLTWH(0, -length * 0.3, length, length * 0.6))
@@ -535,7 +550,6 @@ class _SakuraHeaderPainter extends CustomPainter {
       ).createShader(Rect.fromCircle(center: Offset.zero, radius: radius))
       ..style = PaintingStyle.fill;
 
-    // 5-petal flower
     for (var i = 0; i < 5; i++) {
       final angle = (i * 2 * math.pi) / 5;
       final petalPath = Path();
@@ -543,8 +557,10 @@ class _SakuraHeaderPainter extends CustomPainter {
       final tipY = math.sin(angle) * radius;
       final sideAngle1 = angle - 0.4;
       final sideAngle2 = angle + 0.4;
-      final side1 = Offset(math.cos(sideAngle1) * radius * 0.6, math.sin(sideAngle1) * radius * 0.6);
-      final side2 = Offset(math.cos(sideAngle2) * radius * 0.6, math.sin(sideAngle2) * radius * 0.6);
+      final side1 = Offset(math.cos(sideAngle1) * radius * 0.6,
+          math.sin(sideAngle1) * radius * 0.6);
+      final side2 = Offset(math.cos(sideAngle2) * radius * 0.6,
+          math.sin(sideAngle2) * radius * 0.6);
 
       petalPath.moveTo(0, 0);
       petalPath.quadraticBezierTo(side1.dx, side1.dy, tipX, tipY);
@@ -552,7 +568,6 @@ class _SakuraHeaderPainter extends CustomPainter {
       canvas.drawPath(petalPath, petalPaint);
     }
 
-    // Yellow stamen center
     final stamenPaint = Paint()..color = const Color(0xFFFFD54F);
     canvas.drawCircle(Offset.zero, radius * 0.22, stamenPaint);
 
@@ -568,13 +583,23 @@ class _SakuraHeaderPainter extends CustomPainter {
 
   void _drawPetal(Canvas canvas, Size size, _PetalData petal, double progress) {
     final totalFall = size.height + 40.0;
-    final currentY = ((petal.startY * totalFall) + progress * petal.fallSpeed * totalFall) % totalFall - 20.0;
+    final currentY =
+        ((petal.startY * totalFall) + progress * petal.fallSpeed * totalFall) %
+                totalFall -
+            20.0;
 
-    final sway = math.sin(progress * 2 * math.pi * petal.swaySpeed + petal.phase) * petal.swayAmplitude;
-    final currentX = (petal.startX * size.width + sway + size.width) % size.width;
+    final sway =
+        math.sin(progress * 2 * math.pi * petal.swaySpeed + petal.phase) *
+            petal.swayAmplitude;
+    final currentX =
+        (petal.startX * size.width + sway + size.width) % size.width;
 
     final angle = progress * 2 * math.pi * petal.rotSpeed + petal.phase;
-    final flutterScale = (math.cos(progress * 2 * math.pi * petal.swaySpeed + petal.phase) * 0.35 + 0.65).abs();
+    final flutterScale =
+        (math.cos(progress * 2 * math.pi * petal.swaySpeed + petal.phase) *
+                    0.35 +
+                0.65)
+            .abs();
 
     canvas.save();
     canvas.translate(currentX, currentY);
@@ -583,8 +608,10 @@ class _SakuraHeaderPainter extends CustomPainter {
 
     final petalPath = Path()
       ..moveTo(0, -petal.size)
-      ..cubicTo(petal.size * 0.8, -petal.size * 0.7, petal.size * 0.7, petal.size * 0.5, 0, petal.size)
-      ..cubicTo(-petal.size * 0.7, petal.size * 0.5, -petal.size * 0.8, -petal.size * 0.7, 0, -petal.size);
+      ..cubicTo(petal.size * 0.8, -petal.size * 0.7, petal.size * 0.7,
+          petal.size * 0.5, 0, petal.size)
+      ..cubicTo(-petal.size * 0.7, petal.size * 0.5, -petal.size * 0.8,
+          -petal.size * 0.7, 0, -petal.size);
 
     final petalPaint = Paint()
       ..shader = LinearGradient(
@@ -607,13 +634,11 @@ class _SakuraHeaderPainter extends CustomPainter {
       oldDelegate.progress != progress;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 3. DARK Header Painter (AMOLED Winter Snowfall Village & Glowing Cabins)
-// ═════════════════════════════════════════════════════════════════════════════
+/// Dark theme painter featuring a snow-covered winter village.
 
 class _SnowParticleData {
-  final double x; // normalized 0..1
-  final double y; // normalized 0..1
+  final double x;
+  final double y;
   final double size; // 2.0 .. 5.6
   final int cycles; // 1, 2, or 3 loops per cycle
   final int swayFreq; // 1 or 2 sways
@@ -641,40 +666,346 @@ class _DarkHeaderPainter extends CustomPainter {
   _DarkHeaderPainter({required this.progress});
 
   static const List<_SnowParticleData> _snowParticles = [
-    _SnowParticleData(x: 0.04, y: 0.12, size: 4.8, cycles: 2, swayFreq: 1, swayAmplitude: 14.0, rotCycles: 1, phase: 0.4, variant: 0),
-    _SnowParticleData(x: 0.08, y: 0.65, size: 3.2, cycles: 1, swayFreq: 2, swayAmplitude: 10.0, rotCycles: -1, phase: 1.8, variant: 1),
-    _SnowParticleData(x: 0.12, y: 0.38, size: 2.2, cycles: 3, swayFreq: 1, swayAmplitude: 18.0, rotCycles: 2, phase: 2.9, variant: 2),
-    _SnowParticleData(x: 0.16, y: 0.85, size: 5.4, cycles: 2, swayFreq: 2, swayAmplitude: 12.0, rotCycles: -2, phase: 4.1, variant: 0),
-    _SnowParticleData(x: 0.20, y: 0.05, size: 3.8, cycles: 1, swayFreq: 1, swayAmplitude: 16.0, rotCycles: 1, phase: 5.3, variant: 1),
-    _SnowParticleData(x: 0.23, y: 0.52, size: 2.5, cycles: 2, swayFreq: 2, swayAmplitude: 11.0, rotCycles: -1, phase: 0.9, variant: 2),
-    _SnowParticleData(x: 0.27, y: 0.22, size: 4.2, cycles: 1, swayFreq: 1, swayAmplitude: 15.0, rotCycles: 2, phase: 3.4, variant: 0),
-    _SnowParticleData(x: 0.31, y: 0.74, size: 3.4, cycles: 3, swayFreq: 2, swayAmplitude: 13.0, rotCycles: -1, phase: 1.2, variant: 1),
-    _SnowParticleData(x: 0.35, y: 0.41, size: 2.0, cycles: 2, swayFreq: 1, swayAmplitude: 17.0, rotCycles: 1, phase: 4.7, variant: 2),
-    _SnowParticleData(x: 0.38, y: 0.93, size: 5.0, cycles: 1, swayFreq: 2, swayAmplitude: 14.0, rotCycles: -2, phase: 2.1, variant: 0),
-    _SnowParticleData(x: 0.42, y: 0.16, size: 3.6, cycles: 2, swayFreq: 1, swayAmplitude: 12.0, rotCycles: 1, phase: 5.8, variant: 1),
-    _SnowParticleData(x: 0.45, y: 0.60, size: 2.4, cycles: 3, swayFreq: 2, swayAmplitude: 16.0, rotCycles: -1, phase: 0.3, variant: 2),
-    _SnowParticleData(x: 0.49, y: 0.29, size: 4.6, cycles: 1, swayFreq: 1, swayAmplitude: 15.0, rotCycles: 2, phase: 3.7, variant: 0),
-    _SnowParticleData(x: 0.52, y: 0.81, size: 3.0, cycles: 2, swayFreq: 2, swayAmplitude: 10.0, rotCycles: -1, phase: 1.5, variant: 1),
-    _SnowParticleData(x: 0.56, y: 0.47, size: 2.2, cycles: 1, swayFreq: 1, swayAmplitude: 18.0, rotCycles: 1, phase: 4.9, variant: 2),
-    _SnowParticleData(x: 0.59, y: 0.08, size: 5.2, cycles: 3, swayFreq: 2, swayAmplitude: 13.0, rotCycles: -2, phase: 2.6, variant: 0),
-    _SnowParticleData(x: 0.63, y: 0.69, size: 3.5, cycles: 2, swayFreq: 1, swayAmplitude: 14.0, rotCycles: 1, phase: 6.0, variant: 1),
-    _SnowParticleData(x: 0.66, y: 0.34, size: 2.6, cycles: 1, swayFreq: 2, swayAmplitude: 11.0, rotCycles: -1, phase: 0.7, variant: 2),
-    _SnowParticleData(x: 0.70, y: 0.88, size: 4.4, cycles: 2, swayFreq: 1, swayAmplitude: 16.0, rotCycles: 2, phase: 3.2, variant: 0),
-    _SnowParticleData(x: 0.73, y: 0.25, size: 3.3, cycles: 3, swayFreq: 2, swayAmplitude: 12.0, rotCycles: -1, phase: 1.9, variant: 1),
-    _SnowParticleData(x: 0.77, y: 0.58, size: 2.1, cycles: 1, swayFreq: 1, swayAmplitude: 19.0, rotCycles: 1, phase: 5.1, variant: 2),
-    _SnowParticleData(x: 0.80, y: 0.02, size: 5.6, cycles: 2, swayFreq: 2, swayAmplitude: 15.0, rotCycles: -2, phase: 2.4, variant: 0),
-    _SnowParticleData(x: 0.83, y: 0.72, size: 3.7, cycles: 1, swayFreq: 1, swayAmplitude: 10.0, rotCycles: 1, phase: 0.1, variant: 1),
-    _SnowParticleData(x: 0.86, y: 0.44, size: 2.3, cycles: 3, swayFreq: 2, swayAmplitude: 17.0, rotCycles: -1, phase: 4.3, variant: 2),
-    _SnowParticleData(x: 0.89, y: 0.96, size: 4.5, cycles: 2, swayFreq: 1, swayAmplitude: 13.0, rotCycles: 2, phase: 1.6, variant: 0),
-    _SnowParticleData(x: 0.92, y: 0.19, size: 3.1, cycles: 1, swayFreq: 2, swayAmplitude: 14.0, rotCycles: -1, phase: 5.5, variant: 1),
-    _SnowParticleData(x: 0.95, y: 0.63, size: 2.5, cycles: 2, swayFreq: 1, swayAmplitude: 18.0, rotCycles: 1, phase: 2.8, variant: 2),
-    _SnowParticleData(x: 0.98, y: 0.31, size: 4.8, cycles: 3, swayFreq: 2, swayAmplitude: 12.0, rotCycles: -2, phase: 0.5, variant: 0),
-    _SnowParticleData(x: 0.06, y: 0.83, size: 2.8, cycles: 1, swayFreq: 1, swayAmplitude: 15.0, rotCycles: 1, phase: 3.9, variant: 1),
-    _SnowParticleData(x: 0.18, y: 0.48, size: 2.0, cycles: 2, swayFreq: 2, swayAmplitude: 11.0, rotCycles: -1, phase: 1.1, variant: 2),
-    _SnowParticleData(x: 0.40, y: 0.77, size: 4.3, cycles: 1, swayFreq: 1, swayAmplitude: 16.0, rotCycles: 2, phase: 5.7, variant: 0),
-    _SnowParticleData(x: 0.61, y: 0.55, size: 3.3, cycles: 3, swayFreq: 2, swayAmplitude: 13.0, rotCycles: -1, phase: 2.2, variant: 1),
-    _SnowParticleData(x: 0.75, y: 0.36, size: 2.4, cycles: 2, swayFreq: 1, swayAmplitude: 17.0, rotCycles: 1, phase: 4.6, variant: 2),
-    _SnowParticleData(x: 0.88, y: 0.80, size: 5.1, cycles: 1, swayFreq: 2, swayAmplitude: 14.0, rotCycles: -2, phase: 0.8, variant: 0),
+    _SnowParticleData(
+        x: 0.04,
+        y: 0.12,
+        size: 4.8,
+        cycles: 2,
+        swayFreq: 1,
+        swayAmplitude: 14.0,
+        rotCycles: 1,
+        phase: 0.4,
+        variant: 0),
+    _SnowParticleData(
+        x: 0.08,
+        y: 0.65,
+        size: 3.2,
+        cycles: 1,
+        swayFreq: 2,
+        swayAmplitude: 10.0,
+        rotCycles: -1,
+        phase: 1.8,
+        variant: 1),
+    _SnowParticleData(
+        x: 0.12,
+        y: 0.38,
+        size: 2.2,
+        cycles: 3,
+        swayFreq: 1,
+        swayAmplitude: 18.0,
+        rotCycles: 2,
+        phase: 2.9,
+        variant: 2),
+    _SnowParticleData(
+        x: 0.16,
+        y: 0.85,
+        size: 5.4,
+        cycles: 2,
+        swayFreq: 2,
+        swayAmplitude: 12.0,
+        rotCycles: -2,
+        phase: 4.1,
+        variant: 0),
+    _SnowParticleData(
+        x: 0.20,
+        y: 0.05,
+        size: 3.8,
+        cycles: 1,
+        swayFreq: 1,
+        swayAmplitude: 16.0,
+        rotCycles: 1,
+        phase: 5.3,
+        variant: 1),
+    _SnowParticleData(
+        x: 0.23,
+        y: 0.52,
+        size: 2.5,
+        cycles: 2,
+        swayFreq: 2,
+        swayAmplitude: 11.0,
+        rotCycles: -1,
+        phase: 0.9,
+        variant: 2),
+    _SnowParticleData(
+        x: 0.27,
+        y: 0.22,
+        size: 4.2,
+        cycles: 1,
+        swayFreq: 1,
+        swayAmplitude: 15.0,
+        rotCycles: 2,
+        phase: 3.4,
+        variant: 0),
+    _SnowParticleData(
+        x: 0.31,
+        y: 0.74,
+        size: 3.4,
+        cycles: 3,
+        swayFreq: 2,
+        swayAmplitude: 13.0,
+        rotCycles: -1,
+        phase: 1.2,
+        variant: 1),
+    _SnowParticleData(
+        x: 0.35,
+        y: 0.41,
+        size: 2.0,
+        cycles: 2,
+        swayFreq: 1,
+        swayAmplitude: 17.0,
+        rotCycles: 1,
+        phase: 4.7,
+        variant: 2),
+    _SnowParticleData(
+        x: 0.38,
+        y: 0.93,
+        size: 5.0,
+        cycles: 1,
+        swayFreq: 2,
+        swayAmplitude: 14.0,
+        rotCycles: -2,
+        phase: 2.1,
+        variant: 0),
+    _SnowParticleData(
+        x: 0.42,
+        y: 0.16,
+        size: 3.6,
+        cycles: 2,
+        swayFreq: 1,
+        swayAmplitude: 12.0,
+        rotCycles: 1,
+        phase: 5.8,
+        variant: 1),
+    _SnowParticleData(
+        x: 0.45,
+        y: 0.60,
+        size: 2.4,
+        cycles: 3,
+        swayFreq: 2,
+        swayAmplitude: 16.0,
+        rotCycles: -1,
+        phase: 0.3,
+        variant: 2),
+    _SnowParticleData(
+        x: 0.49,
+        y: 0.29,
+        size: 4.6,
+        cycles: 1,
+        swayFreq: 1,
+        swayAmplitude: 15.0,
+        rotCycles: 2,
+        phase: 3.7,
+        variant: 0),
+    _SnowParticleData(
+        x: 0.52,
+        y: 0.81,
+        size: 3.0,
+        cycles: 2,
+        swayFreq: 2,
+        swayAmplitude: 10.0,
+        rotCycles: -1,
+        phase: 1.5,
+        variant: 1),
+    _SnowParticleData(
+        x: 0.56,
+        y: 0.47,
+        size: 2.2,
+        cycles: 1,
+        swayFreq: 1,
+        swayAmplitude: 18.0,
+        rotCycles: 1,
+        phase: 4.9,
+        variant: 2),
+    _SnowParticleData(
+        x: 0.59,
+        y: 0.08,
+        size: 5.2,
+        cycles: 3,
+        swayFreq: 2,
+        swayAmplitude: 13.0,
+        rotCycles: -2,
+        phase: 2.6,
+        variant: 0),
+    _SnowParticleData(
+        x: 0.63,
+        y: 0.69,
+        size: 3.5,
+        cycles: 2,
+        swayFreq: 1,
+        swayAmplitude: 14.0,
+        rotCycles: 1,
+        phase: 6.0,
+        variant: 1),
+    _SnowParticleData(
+        x: 0.66,
+        y: 0.34,
+        size: 2.6,
+        cycles: 1,
+        swayFreq: 2,
+        swayAmplitude: 11.0,
+        rotCycles: -1,
+        phase: 0.7,
+        variant: 2),
+    _SnowParticleData(
+        x: 0.70,
+        y: 0.88,
+        size: 4.4,
+        cycles: 2,
+        swayFreq: 1,
+        swayAmplitude: 16.0,
+        rotCycles: 2,
+        phase: 3.2,
+        variant: 0),
+    _SnowParticleData(
+        x: 0.73,
+        y: 0.25,
+        size: 3.3,
+        cycles: 3,
+        swayFreq: 2,
+        swayAmplitude: 12.0,
+        rotCycles: -1,
+        phase: 1.9,
+        variant: 1),
+    _SnowParticleData(
+        x: 0.77,
+        y: 0.58,
+        size: 2.1,
+        cycles: 1,
+        swayFreq: 1,
+        swayAmplitude: 19.0,
+        rotCycles: 1,
+        phase: 5.1,
+        variant: 2),
+    _SnowParticleData(
+        x: 0.80,
+        y: 0.02,
+        size: 5.6,
+        cycles: 2,
+        swayFreq: 2,
+        swayAmplitude: 15.0,
+        rotCycles: -2,
+        phase: 2.4,
+        variant: 0),
+    _SnowParticleData(
+        x: 0.83,
+        y: 0.72,
+        size: 3.7,
+        cycles: 1,
+        swayFreq: 1,
+        swayAmplitude: 10.0,
+        rotCycles: 1,
+        phase: 0.1,
+        variant: 1),
+    _SnowParticleData(
+        x: 0.86,
+        y: 0.44,
+        size: 2.3,
+        cycles: 3,
+        swayFreq: 2,
+        swayAmplitude: 17.0,
+        rotCycles: -1,
+        phase: 4.3,
+        variant: 2),
+    _SnowParticleData(
+        x: 0.89,
+        y: 0.96,
+        size: 4.5,
+        cycles: 2,
+        swayFreq: 1,
+        swayAmplitude: 13.0,
+        rotCycles: 2,
+        phase: 1.6,
+        variant: 0),
+    _SnowParticleData(
+        x: 0.92,
+        y: 0.19,
+        size: 3.1,
+        cycles: 1,
+        swayFreq: 2,
+        swayAmplitude: 14.0,
+        rotCycles: -1,
+        phase: 5.5,
+        variant: 1),
+    _SnowParticleData(
+        x: 0.95,
+        y: 0.63,
+        size: 2.5,
+        cycles: 2,
+        swayFreq: 1,
+        swayAmplitude: 18.0,
+        rotCycles: 1,
+        phase: 2.8,
+        variant: 2),
+    _SnowParticleData(
+        x: 0.98,
+        y: 0.31,
+        size: 4.8,
+        cycles: 3,
+        swayFreq: 2,
+        swayAmplitude: 12.0,
+        rotCycles: -2,
+        phase: 0.5,
+        variant: 0),
+    _SnowParticleData(
+        x: 0.06,
+        y: 0.83,
+        size: 2.8,
+        cycles: 1,
+        swayFreq: 1,
+        swayAmplitude: 15.0,
+        rotCycles: 1,
+        phase: 3.9,
+        variant: 1),
+    _SnowParticleData(
+        x: 0.18,
+        y: 0.48,
+        size: 2.0,
+        cycles: 2,
+        swayFreq: 2,
+        swayAmplitude: 11.0,
+        rotCycles: -1,
+        phase: 1.1,
+        variant: 2),
+    _SnowParticleData(
+        x: 0.40,
+        y: 0.77,
+        size: 4.3,
+        cycles: 1,
+        swayFreq: 1,
+        swayAmplitude: 16.0,
+        rotCycles: 2,
+        phase: 5.7,
+        variant: 0),
+    _SnowParticleData(
+        x: 0.61,
+        y: 0.55,
+        size: 3.3,
+        cycles: 3,
+        swayFreq: 2,
+        swayAmplitude: 13.0,
+        rotCycles: -1,
+        phase: 2.2,
+        variant: 1),
+    _SnowParticleData(
+        x: 0.75,
+        y: 0.36,
+        size: 2.4,
+        cycles: 2,
+        swayFreq: 1,
+        swayAmplitude: 17.0,
+        rotCycles: 1,
+        phase: 4.6,
+        variant: 2),
+    _SnowParticleData(
+        x: 0.88,
+        y: 0.80,
+        size: 5.1,
+        cycles: 1,
+        swayFreq: 2,
+        swayAmplitude: 14.0,
+        rotCycles: -2,
+        phase: 0.8,
+        variant: 0),
   ];
 
   @override
@@ -685,7 +1016,6 @@ class _DarkHeaderPainter extends CustomPainter {
       Paint()..color = Colors.black,
     );
 
-    // Subtle celestial night wash across the top sky
     final skyWashPaint = Paint()
       ..shader = RadialGradient(
         center: const Alignment(0.6, -0.7),
@@ -697,7 +1027,6 @@ class _DarkHeaderPainter extends CustomPainter {
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, skyWashPaint);
 
-    // 2. Distant Snow Hill (Background rolling slope)
     final backHillPath = Path();
     final backHillBaseY = size.height * 0.76;
     backHillPath.moveTo(0, backHillBaseY + 12);
@@ -724,18 +1053,17 @@ class _DarkHeaderPainter extends CustomPainter {
       ).createShader(Offset.zero & size);
     canvas.drawPath(backHillPath, backHillPaint);
 
-    // Distant Snow Cap on back hill
     final backHillSnowPaint = Paint()
       ..strokeWidth = 1.6
       ..style = PaintingStyle.stroke
       ..color = const Color(0xFF94A3B8).withValues(alpha: 0.30);
     canvas.drawPath(backHillPath, backHillSnowPaint);
 
-    // Pine trees on distant slope
-    _drawSnowyPine(canvas, Offset(size.width * 0.08, backHillBaseY + 8), 16, 26);
-    _drawSnowyPine(canvas, Offset(size.width * 0.52, backHillBaseY + 13), 18, 30);
+    _drawSnowyPine(
+        canvas, Offset(size.width * 0.08, backHillBaseY + 8), 16, 26);
+    _drawSnowyPine(
+        canvas, Offset(size.width * 0.52, backHillBaseY + 13), 18, 30);
 
-    // 3. Foreground Village Hill (Main layer resting at header base)
     final hillPath = Path();
     final hillBaseY = size.height * 0.86;
     hillPath.moveTo(0, hillBaseY - 8);
@@ -762,7 +1090,6 @@ class _DarkHeaderPainter extends CustomPainter {
       ).createShader(Offset.zero & size);
     canvas.drawPath(hillPath, hillPaint);
 
-    // Crisp Snow Ridge Crest along main hill
     final snowRidgePaint = Paint()
       ..strokeWidth = 2.4
       ..style = PaintingStyle.stroke
@@ -775,12 +1102,9 @@ class _DarkHeaderPainter extends CustomPainter {
       ).createShader(Offset.zero & size);
     canvas.drawPath(hillPath, snowRidgePaint);
 
-    // Pine trees on foreground slope
     _drawSnowyPine(canvas, Offset(size.width * 0.38, hillBaseY + 8), 16, 24);
     _drawSnowyPine(canvas, Offset(size.width * 0.92, hillBaseY - 3), 18, 27);
 
-    // 4. Village Cabins with warm glowing windows & chimney smoke
-    // Cabin 1: Left slope (cozy cottage)
     _drawSnowyCabin(
       canvas,
       Offset(size.width * 0.22, hillBaseY + 5),
@@ -790,7 +1114,6 @@ class _DarkHeaderPainter extends CustomPainter {
       hasChimney: true,
     );
 
-    // Cabin 2: Right slope (main village cabin)
     _drawSnowyCabin(
       canvas,
       Offset(size.width * 0.74, hillBaseY - 13),
@@ -800,15 +1123,13 @@ class _DarkHeaderPainter extends CustomPainter {
       hasChimney: true,
     );
 
-    // 5. Falling Snowflakes in crystalline #CFF0FF (34 particles)
     final snowBaseColor = const Color(0xFFCFF0FF);
     for (int i = 0; i < _snowParticles.length; i++) {
       final p = _snowParticles[i];
       final currentProgress = (p.y + progress * p.cycles) % 1.0;
       final yPos = currentProgress * size.height;
 
-      final sway =
-          math.sin(progress * 2 * math.pi * p.swayFreq + p.phase) *
+      final sway = math.sin(progress * 2 * math.pi * p.swayFreq + p.phase) *
           (p.swayAmplitude * 1.2);
       final xPos = (p.x * size.width + sway) % size.width;
 
@@ -816,7 +1137,6 @@ class _DarkHeaderPainter extends CustomPainter {
       final alpha = ((0.20 + 0.75 * edgeFade) * edgeFade).clamp(0.0, 1.0);
 
       if (p.variant == 0) {
-        // Crystal cross snowflake for prominent flakes
         final rot = progress * 2 * math.pi * p.rotCycles + p.phase;
         canvas.save();
         canvas.translate(xPos, yPos);
@@ -835,7 +1155,6 @@ class _DarkHeaderPainter extends CustomPainter {
         canvas.drawLine(Offset(-diag, diag), Offset(diag, -diag), flakePaint);
         canvas.restore();
       } else if (p.variant == 1) {
-        // Frosty soft snowflake with halo
         final haloPaint = Paint()
           ..color = snowBaseColor.withValues(alpha: alpha * 0.35);
         canvas.drawCircle(Offset(xPos, yPos), p.size * 0.9, haloPaint);
@@ -843,7 +1162,6 @@ class _DarkHeaderPainter extends CustomPainter {
           ..color = snowBaseColor.withValues(alpha: alpha);
         canvas.drawCircle(Offset(xPos, yPos), p.size * 0.45, corePaint);
       } else {
-        // Crisp snow crystal dot
         final dotPaint = Paint()
           ..color = snowBaseColor.withValues(alpha: alpha);
         canvas.drawCircle(
@@ -916,7 +1234,6 @@ class _DarkHeaderPainter extends CustomPainter {
     );
     canvas.drawRect(bodyRect, Paint()..color = const Color(0xFF1E293B));
 
-    // Warm golden glowing window
     final winW = width * 0.32;
     final winH = bodyHeight * 0.44;
     final winRect = Rect.fromCenter(
@@ -925,7 +1242,6 @@ class _DarkHeaderPainter extends CustomPainter {
       height: winH,
     );
 
-    // Window warm ambient halo glow
     final windowGlowPulse =
         (math.sin(progress * 2 * math.pi + base.dx) + 1) / 2;
     final haloPaint = Paint()
@@ -962,7 +1278,6 @@ class _DarkHeaderPainter extends CustomPainter {
       framePaint,
     );
 
-    // Chimney & rising smoke
     if (hasChimney) {
       final chW = width * 0.16;
       final chH = height * 0.34;
@@ -973,7 +1288,6 @@ class _DarkHeaderPainter extends CustomPainter {
         Paint()..color = const Color(0xFF0F172A),
       );
 
-      // Chimney snow cap
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(chX - chW * 0.65, chY - 2, chW * 1.3, 3),
@@ -982,12 +1296,10 @@ class _DarkHeaderPainter extends CustomPainter {
         Paint()..color = const Color(0xFFCFF0FF),
       );
 
-      // Drifting chimney smoke puffs
       for (int s = 0; s < 4; s++) {
         final smokeProgress = (progress + s * 0.25) % 1.0;
         final smokeY = chY - smokeProgress * 36.0;
-        final smokeSway =
-            math.sin(smokeProgress * math.pi * 3 + s) * 5.0 +
+        final smokeSway = math.sin(smokeProgress * math.pi * 3 + s) * 5.0 +
             (smokeProgress * 6.0);
         final smokeX = chX + smokeSway;
         final smokeRadius = 1.8 + smokeProgress * 5.0;
@@ -996,12 +1308,12 @@ class _DarkHeaderPainter extends CustomPainter {
         canvas.drawCircle(
           Offset(smokeX, smokeY),
           smokeRadius,
-          Paint()..color = const Color(0xFFE2E8F0).withValues(alpha: smokeAlpha),
+          Paint()
+            ..color = const Color(0xFFE2E8F0).withValues(alpha: smokeAlpha),
         );
       }
     }
 
-    // Snow-covered gable roof
     final roofPeak = Offset(base.dx, base.dy - height);
     final roofLeft = Offset(base.dx - width * 0.64, base.dy - bodyHeight + 2);
     final roofRight = Offset(base.dx + width * 0.64, base.dy - bodyHeight + 2);
@@ -1033,9 +1345,7 @@ class _DarkHeaderPainter extends CustomPainter {
       oldDelegate.progress != progress;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 4. LIGHT Header Painter (Prismatic Morning Breeze & Floating Glass Orbs)
-// ═════════════════════════════════════════════════════════════════════════════
+/// Light theme painter featuring pastel silk waves and prism bubbles.
 
 class _GlassOrbData {
   final double startX;
@@ -1099,23 +1409,20 @@ class _LightHeaderPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    // 1. Soft, radiant daylight ambient wash
     final morningGlow = Paint()
       ..shader = RadialGradient(
         center: const Alignment(0.85, -0.65),
         radius: 1.30,
         colors: [
-          const Color(0xFFBAE6FD).withValues(alpha: 0.38), // Morning sky cyan
-          const Color(0xFFE0E7FF).withValues(alpha: 0.28), // Soft periwinkle
-          const Color(0xFFFDF4FF).withValues(alpha: 0.16), // Morning blush
+          const Color(0xFFBAE6FD).withValues(alpha: 0.38),
+          const Color(0xFFE0E7FF).withValues(alpha: 0.28),
+          const Color(0xFFFDF4FF).withValues(alpha: 0.16),
           Colors.transparent,
         ],
         stops: const [0.0, 0.45, 0.75, 1.0],
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, morningGlow);
 
-    // 2. Dual Iridescent Fluid Silk Waves
-    // ── Wave 1: Sky Azure & Periwinkle Silk Ribbon ──
     final silkWave1 = Path();
     final crest1 = Path();
     silkWave1.moveTo(0, h);
@@ -1138,9 +1445,9 @@ class _LightHeaderPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFF38BDF8).withValues(alpha: 0.26), // Sky Cyan
-          const Color(0xFF818CF8).withValues(alpha: 0.20), // Periwinkle
-          const Color(0xFFC084FC).withValues(alpha: 0.12), // Soft Violet
+          const Color(0xFF38BDF8).withValues(alpha: 0.26),
+          const Color(0xFF818CF8).withValues(alpha: 0.20),
+          const Color(0xFFC084FC).withValues(alpha: 0.12),
           Colors.transparent,
         ],
         stops: const [0.0, 0.40, 0.75, 1.0],
@@ -1161,7 +1468,6 @@ class _LightHeaderPainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
     canvas.drawPath(crest1, crestPaint1);
 
-    // ── Wave 2: Rose Quartz & Sunrise Blush Ribbon ──
     final silkWave2 = Path();
     final crest2 = Path();
     silkWave2.moveTo(0, h);
@@ -1171,7 +1477,8 @@ class _LightHeaderPainter extends CustomPainter {
     for (double x = 0; x <= w; x += 10) {
       final normX = x / w;
       final waveY = h * 0.58 +
-          math.cos(normX * 2.5 * math.pi - progress * 2 * math.pi * 1.0) * 10.0 +
+          math.cos(normX * 2.5 * math.pi - progress * 2 * math.pi * 1.0) *
+              10.0 +
           math.sin(normX * 3.5 * math.pi + progress * 2 * math.pi * 2.0) * 6.0;
       silkWave2.lineTo(x, waveY);
       crest2.lineTo(x, waveY);
@@ -1184,9 +1491,9 @@ class _LightHeaderPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFFF472B6).withValues(alpha: 0.22), // Rose Quartz
-          const Color(0xFFFB923C).withValues(alpha: 0.16), // Morning Sunrise
-          const Color(0xFF38BDF8).withValues(alpha: 0.12), // Cyan wash
+          const Color(0xFFF472B6).withValues(alpha: 0.22),
+          const Color(0xFFFB923C).withValues(alpha: 0.16),
+          const Color(0xFF38BDF8).withValues(alpha: 0.12),
           Colors.transparent,
         ],
         stops: const [0.0, 0.45, 0.75, 1.0],
@@ -1207,39 +1514,50 @@ class _LightHeaderPainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
     canvas.drawPath(crest2, crestPaint2);
 
-    // 3. Floating Pearlescent Glass Orbs / Iridescent Bubbles (Seamless continuous loop)
     for (final orb in _orbs) {
       final totalH = h + 40.0;
-      final curY = ((orb.startY * totalH) - progress * orb.speed * totalH + totalH) % totalH - 20.0;
-      final sway = math.sin(progress * 2 * math.pi * orb.swaySpeed + orb.phase) * orb.swayAmplitude;
+      final curY =
+          ((orb.startY * totalH) - progress * orb.speed * totalH + totalH) %
+                  totalH -
+              20.0;
+      final sway =
+          math.sin(progress * 2 * math.pi * orb.swaySpeed + orb.phase) *
+              orb.swayAmplitude;
       final curX = (orb.startX * w + sway + w) % w;
 
       _drawGlassOrb(canvas, Offset(curX, curY), orb.radius);
     }
 
-    // 4. Prismatic Diamond Sparkles & Refraction Glints (Seamless continuous loop)
     for (final s in _sparkles) {
       final sx = s.x * w;
       final sy = (s.y * h - progress * s.speed * h + h) % h;
-      final twinkle = 0.25 + 0.75 * (0.5 + 0.5 * math.sin(progress * 2 * math.pi * s.speed * 2.0 + s.phase));
+      final twinkle = 0.25 +
+          0.75 *
+              (0.5 +
+                  0.5 *
+                      math.sin(
+                          progress * 2 * math.pi * s.speed * 2.0 + s.phase));
 
       if (twinkle > 0.60) {
         final sparkLen = s.size * 2.4 * ((twinkle - 0.60) / 0.40);
         final sparkPaint = Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.0
-          ..color = const Color(0xFF0284C7).withValues(alpha: (twinkle - 0.60) * 1.8);
-        canvas.drawLine(Offset(sx - sparkLen, sy), Offset(sx + sparkLen, sy), sparkPaint);
-        canvas.drawLine(Offset(sx, sy - sparkLen), Offset(sx, sy + sparkLen), sparkPaint);
+          ..color =
+              const Color(0xFF0284C7).withValues(alpha: (twinkle - 0.60) * 1.8);
+        canvas.drawLine(
+            Offset(sx - sparkLen, sy), Offset(sx + sparkLen, sy), sparkPaint);
+        canvas.drawLine(
+            Offset(sx, sy - sparkLen), Offset(sx, sy + sparkLen), sparkPaint);
 
-        final sparkCenter = Paint()..color = Colors.white.withValues(alpha: twinkle);
+        final sparkCenter = Paint()
+          ..color = Colors.white.withValues(alpha: twinkle);
         canvas.drawCircle(Offset(sx, sy), 1.0, sparkCenter);
       }
     }
   }
 
   void _drawGlassOrb(Canvas canvas, Offset center, double radius) {
-    // Translucent pearlescent glass bubble body
     final orbFill = Paint()
       ..shader = RadialGradient(
         center: const Alignment(-0.35, -0.35),
@@ -1254,7 +1572,6 @@ class _LightHeaderPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     canvas.drawCircle(center, radius, orbFill);
 
-    // Subtle iridescent glass rim
     final rimPaint = Paint()
       ..shader = SweepGradient(
         colors: [
@@ -1268,7 +1585,6 @@ class _LightHeaderPainter extends CustomPainter {
       ..strokeWidth = 0.85;
     canvas.drawCircle(center, radius, rimPaint);
 
-    // Specular refraction highlight (crescent reflection)
     final highlightPaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.85)
       ..style = PaintingStyle.fill;

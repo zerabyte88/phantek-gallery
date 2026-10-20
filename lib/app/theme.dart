@@ -22,7 +22,8 @@ class AppTheme {
         cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero),
         snackBarTheme: SnackBarThemeData(
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
 

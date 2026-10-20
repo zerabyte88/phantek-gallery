@@ -21,21 +21,15 @@ class _ThumbnailRequest {
   final Completer<Uint8List?> completer;
 }
 
-/// Asynchronous thumbnail cache with persistent disk storage, multi-worker pool,
-/// and an in-memory layer.
-///
-/// Features:
-/// - Fast in-memory lookup (0ms)
-/// - Persistent disk caching
-/// - 4 concurrent background worker pool (never stalls the UI or queue)
-/// - Zero origin-file copy overhead: extracts video frames directly via native MediaMetadataRetriever
-/// - Direct asset entity registration to avoid redundant IPC calls
+/// Asynchronous thumbnail cache with persistent disk storage, background worker pool, and in-memory layer.
 class ThumbnailService {
   ThumbnailService._();
   static final ThumbnailService instance = ThumbnailService._();
 
-  static const int _thumbnailSize = 512; // px — high-DPI physical pixels for ultra-sharp full-screen preview & crisp gallery grid
-  static const int _thumbnailQuality = 90; // 90% quality (fast encode, zero pixelation / artifacts)
+  static const int _thumbnailSize =
+      512; // px — high-DPI physical pixels for ultra-sharp full-screen preview & crisp gallery grid
+  static const int _thumbnailQuality =
+      90; // 90% quality (fast encode, zero pixelation / artifacts)
   static const int _maxMemoryEntries = 500;
   static const int _maxConcurrent = 6;
   static const MethodChannel _nativeChannel =
@@ -91,7 +85,8 @@ class ThumbnailService {
   Uint8List? getMemoryThumbnail(String assetId) => _memoryCache[assetId];
 
   /// Fast synchronous lookup for high-res video thumbnail (0ms).
-  Uint8List? getMemoryHighResThumbnail(String assetId) => _highResVideoCache[assetId];
+  Uint8List? getMemoryHighResThumbnail(String assetId) =>
+      _highResVideoCache[assetId];
 
   /// Returns the visual aspect ratio (width / height) of the cached thumbnail.
   /// Reads directly from memory or extracts from cached JPEG bytes in <1µs.
@@ -138,7 +133,6 @@ class ThumbnailService {
     final cached = _highResVideoCache[assetId];
     if (cached != null) return cached;
 
-    // 1. Check persistent disk cache first (instant 0ms)
     final diskFile = getCachedHighResFile(assetId);
     if (diskFile != null) {
       try {
@@ -166,23 +160,27 @@ class ThumbnailService {
     try {
       Uint8List? bytes;
 
-      // 1. Primary: Native hardware-accelerated MediaMetadataRetriever via MediaStore URI
       try {
         bytes = await _nativeChannel.invokeMethod<Uint8List>(
           'getVideoThumbnail',
           {'path': filePath, 'assetId': assetId, 'size': size},
         );
       } catch (e) {
-        debugPrint('[ThumbnailService] Native getHighResVideoThumbnail failed for $filePath: $e');
+        debugPrint(
+            '[ThumbnailService] Native getHighResVideoThumbnail failed for $filePath: $e');
       }
 
-      // 2. Fallback: photo_manager with proportional bounds
       if (bytes == null || bytes.isEmpty) {
-        final entity = _entityCache[assetId] ?? await AssetEntity.fromId(assetId);
+        final entity =
+            _entityCache[assetId] ?? await AssetEntity.fromId(assetId);
         if (entity != null) {
           try {
-            final w = entity.orientatedWidth > 0 ? entity.orientatedWidth : entity.width;
-            final h = entity.orientatedHeight > 0 ? entity.orientatedHeight : entity.height;
+            final w = entity.orientatedWidth > 0
+                ? entity.orientatedWidth
+                : entity.width;
+            final h = entity.orientatedHeight > 0
+                ? entity.orientatedHeight
+                : entity.height;
             final maxDim = (w > 0 && h > 0) ? (w > h ? w : h) : size;
             final scale = maxDim > size ? size / maxDim : 1.0;
             final targetW = (w > 0) ? (w * scale).toInt().clamp(2, size) : size;
@@ -195,7 +193,6 @@ class ThumbnailService {
         }
       }
 
-      // 3. Fallback: media_kit (MPV) headless software frame extraction (handles exotic codecs/containers)
       if (bytes == null || bytes.isEmpty) {
         try {
           bytes = await _extractFrameViaMpv(filePath);
@@ -216,7 +213,8 @@ class ThumbnailService {
         return bytes;
       }
     } catch (e) {
-      debugPrint('[ThumbnailService] getHighResVideoThumbnail overall error: $e');
+      debugPrint(
+          '[ThumbnailService] getHighResVideoThumbnail overall error: $e');
     } finally {
       _highResInFlight.remove(assetId);
     }
@@ -293,7 +291,6 @@ class ThumbnailService {
     if (cached != null) return cached;
 
     Uint8List? result;
-    // 1. Primary: Native MediaMetadataRetriever
     try {
       final bytes = await _nativeChannel.invokeMethod<Uint8List>(
         'getVideoFrame',
@@ -308,7 +305,8 @@ class ThumbnailService {
         result = bytes;
       }
     } catch (e) {
-      debugPrint('[ThumbnailService] Native getVideoFrame failed for $filePath: $e');
+      debugPrint(
+          '[ThumbnailService] Native getVideoFrame failed for $filePath: $e');
     }
 
     // 2. Fallback: MPV frame extraction if native returned null (e.g. MKV/AV1/HEVC 10-bit)
@@ -316,7 +314,8 @@ class ThumbnailService {
       try {
         result = await _extractFrameAtTimeViaMpv(filePath, time);
       } catch (e) {
-        debugPrint('[ThumbnailService] MPV fallback getVideoFrame failed for $filePath: $e');
+        debugPrint(
+            '[ThumbnailService] MPV fallback getVideoFrame failed for $filePath: $e');
       }
     }
 
@@ -331,7 +330,8 @@ class ThumbnailService {
   }
 
   /// Extracts a video frame at a specific timestamp using headless MPV engine when native fails.
-  Future<Uint8List?> _extractFrameAtTimeViaMpv(String filePath, Duration time) async {
+  Future<Uint8List?> _extractFrameAtTimeViaMpv(
+      String filePath, Duration time) async {
     final player = Player(
       configuration: const PlayerConfiguration(
         logLevel: MPVLogLevel.error,
@@ -376,7 +376,8 @@ class ThumbnailService {
         player,
         configuration: const VideoControllerConfiguration(
           enableHardwareAcceleration: false,
-          hwdec: 'no', // Software decode (FFmpeg): decode all exotic codecs without crashing
+          hwdec:
+              'no', // Software decode (FFmpeg): decode all exotic codecs without crashing
         ),
       );
 
@@ -575,7 +576,8 @@ class ThumbnailService {
         try {
           await _processRequest(req);
         } catch (e) {
-          debugPrint('[ThumbnailService] Error processing request ${req.id}: $e');
+          debugPrint(
+              '[ThumbnailService] Error processing request ${req.id}: $e');
           if (!req.completer.isCompleted) {
             req.completer.complete(null);
           }
@@ -605,7 +607,8 @@ class ThumbnailService {
         }
       }
     } catch (e) {
-      debugPrint('[ThumbnailService] Error reading disk cache for ${req.id}: $e');
+      debugPrint(
+          '[ThumbnailService] Error reading disk cache for ${req.id}: $e');
     }
 
     Uint8List? bytes;
@@ -644,12 +647,22 @@ class ThumbnailService {
               _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
           if (entity != null) {
             try {
-              final w = entity.orientatedWidth > 0 ? entity.orientatedWidth : entity.width;
-              final h = entity.orientatedHeight > 0 ? entity.orientatedHeight : entity.height;
-              final maxDim = (w > 0 && h > 0) ? (w > h ? w : h) : _thumbnailSize;
-              final scale = maxDim > _thumbnailSize ? _thumbnailSize / maxDim : 1.0;
-              final targetW = (w > 0) ? (w * scale).toInt().clamp(2, _thumbnailSize) : _thumbnailSize;
-              final targetH = (h > 0) ? (h * scale).toInt().clamp(2, _thumbnailSize) : _thumbnailSize;
+              final w = entity.orientatedWidth > 0
+                  ? entity.orientatedWidth
+                  : entity.width;
+              final h = entity.orientatedHeight > 0
+                  ? entity.orientatedHeight
+                  : entity.height;
+              final maxDim =
+                  (w > 0 && h > 0) ? (w > h ? w : h) : _thumbnailSize;
+              final scale =
+                  maxDim > _thumbnailSize ? _thumbnailSize / maxDim : 1.0;
+              final targetW = (w > 0)
+                  ? (w * scale).toInt().clamp(2, _thumbnailSize)
+                  : _thumbnailSize;
+              final targetH = (h > 0)
+                  ? (h * scale).toInt().clamp(2, _thumbnailSize)
+                  : _thumbnailSize;
               bytes = await entity
                   .thumbnailDataWithSize(
                     ThumbnailSize(targetW, targetH),
@@ -683,7 +696,8 @@ class ThumbnailService {
 
         // 2. Try photo_manager thumbnailDataWithSize (Glide-backed) if native returned null
         if (bytes == null || bytes.isEmpty) {
-          final entity = _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
+          final entity =
+              _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
           if (entity != null) {
             try {
               bytes = await entity
@@ -777,7 +791,8 @@ class ThumbnailService {
         } catch (_) {}
       }
     } catch (e) {
-      debugPrint('[ThumbnailService] Failed to persist high-res thumbnail $assetId: $e');
+      debugPrint(
+          '[ThumbnailService] Failed to persist high-res thumbnail $assetId: $e');
     }
   }
 

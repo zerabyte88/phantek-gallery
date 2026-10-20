@@ -40,7 +40,8 @@ List<Album> groupMediaIntoAlbums(
 
   final albums = grouped.entries.map((entry) {
     final albumItems = entry.value;
-    final sortedByDate = [...albumItems]..sort((a, b) => b.date.compareTo(a.date));
+    final sortedByDate = [...albumItems]
+      ..sort((a, b) => b.date.compareTo(a.date));
     return Album(
       name: entry.key,
       items: albumItems,
@@ -51,9 +52,11 @@ List<Album> groupMediaIntoAlbums(
   if (sort != null) {
     switch (sort) {
       case SortOption.newest:
-        albums.sort((a, b) => b.coverItem.timeAdded.compareTo(a.coverItem.timeAdded));
+        albums.sort(
+            (a, b) => b.coverItem.timeAdded.compareTo(a.coverItem.timeAdded));
       case SortOption.oldest:
-        albums.sort((a, b) => a.coverItem.timeAdded.compareTo(b.coverItem.timeAdded));
+        albums.sort(
+            (a, b) => a.coverItem.timeAdded.compareTo(b.coverItem.timeAdded));
       case SortOption.shootingTimeDesc:
         albums.sort((a, b) => b.coverItem.date.compareTo(a.coverItem.date));
       case SortOption.shootingTimeAsc:
@@ -70,13 +73,15 @@ List<Album> groupMediaIntoAlbums(
         albums.sort((a, b) => a.itemCount.compareTo(b.itemCount));
     }
   } else {
-    albums.sort((a, b) => b.coverItem.timeAdded.compareTo(a.coverItem.timeAdded));
+    albums
+        .sort((a, b) => b.coverItem.timeAdded.compareTo(a.coverItem.timeAdded));
   }
 
   if (favoriteIds.isNotEmpty) {
     final favItems = items.where((e) => favoriteIds.contains(e.id)).toList();
     if (favItems.isNotEmpty) {
-      final sortedFavs = [...favItems]..sort((a, b) => b.date.compareTo(a.date));
+      final sortedFavs = [...favItems]
+        ..sort((a, b) => b.date.compareTo(a.date));
       albums.insert(
         0,
         Album(

@@ -44,7 +44,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     final screenWidth = MediaQuery.sizeOf(context).width;
     const paddingHorizontal = 16.0;
     const spacing = 8.0;
-    final availableWidth = screenWidth - paddingHorizontal - ((cols - 1) * spacing);
+    final availableWidth =
+        screenWidth - paddingHorizontal - ((cols - 1) * spacing);
     final tileWidth = availableWidth / cols;
     final tileHeight = tileWidth / 0.82;
     final rowHeight = tileHeight + spacing;
@@ -56,7 +57,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     final viewportBottom = currentScroll + viewportHeight;
 
     final effectiveTopThreshold = viewportTop <= 0.0 ? 0.0 : viewportTop + 10.0;
-    if (rowTop >= effectiveTopThreshold && (rowTop + tileHeight) <= viewportBottom - 10.0) {
+    if (rowTop >= effectiveTopThreshold &&
+        (rowTop + tileHeight) <= viewportBottom - 10.0) {
       return;
     }
 
@@ -78,13 +80,18 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     });
   }
 
-  void _startSelect(String id) =>
-      setState(() { _selecting = true; _selected.add(id); });
+  void _startSelect(String id) => setState(() {
+        _selecting = true;
+        _selected.add(id);
+      });
 
-  void _clearSelection() =>
-      setState(() { _selected.clear(); _selecting = false; });
+  void _clearSelection() => setState(() {
+        _selected.clear();
+        _selecting = false;
+      });
 
-  void _openPreview(BuildContext context, List<TrashItem> items, TrashItem item) {
+  void _openPreview(
+      BuildContext context, List<TrashItem> items, TrashItem item) {
     if (item.isVideo) {
       final videos = items.where((e) => e.isVideo).toList();
       final idx = videos.indexOf(item);
@@ -113,12 +120,16 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     }
     final count = toRestore.length;
     _clearSelection();
-    ref.read(mediaListProvider.notifier).restoreItems(toRestore.map((e) => e.id));
+    ref
+        .read(mediaListProvider.notifier)
+        .restoreItems(toRestore.map((e) => e.id));
     ref.read(mediaListProvider.notifier).refresh();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr.itemRestored(context.tr.itemsCount(count)))),
+        SnackBar(
+            content:
+                Text(context.tr.itemRestored(context.tr.itemsCount(count)))),
       );
     }
   }
@@ -162,8 +173,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
               : Colors.transparent,
           border: Border.all(
             color: (allSelected || partialSelected)
-              ? cs.primary
-              : cs.onSurface.withValues(alpha: 0.6),
+                ? cs.primary
+                : cs.onSurface.withValues(alpha: 0.6),
             width: 2,
           ),
           borderRadius: BorderRadius.circular(5),
@@ -215,7 +226,9 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           centerTitle: _selecting,
           title: Text(
             _selecting
-                ? (_selected.isEmpty ? context.tr.selectItems : '${_selected.length} ${context.tr.selected}')
+                ? (_selected.isEmpty
+                    ? context.tr.selectItems
+                    : '${_selected.length} ${context.tr.selected}')
                 : context.tr.recentlyDeleted,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
           ),
@@ -235,8 +248,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           ],
         ),
         body: trashAsync.when(
-          loading: () =>
-              const Center(child: CircularProgressIndicator()),
+          loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('Error: $e')),
           data: (items) {
             return Column(
@@ -248,7 +260,10 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                     context.tr.trashRetentionNote,
                     style: TextStyle(
                       fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant
+                          .withValues(alpha: 0.8),
                     ),
                   ),
                 ),
@@ -257,8 +272,10 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                       ? const _TrashEmptyState()
                       : GridView.builder(
                           controller: _scrollController,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: settings.gridColumns,
                             crossAxisSpacing: 8,
                             mainAxisSpacing: 8,
@@ -278,7 +295,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                                   _toggleSelect(item.id);
                                 } else {
                                   if (item.isVideo) {
-                                    ThumbnailService.instance.getHighResVideoThumbnail(
+                                    ThumbnailService.instance
+                                        .getHighResVideoThumbnail(
                                       item.id,
                                       filePath: item.trashPath,
                                     );
@@ -286,7 +304,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                                   _openPreview(context, items, item);
                                 }
                               },
-                              onOpenPreview: () => _openPreview(context, items, item),
+                              onOpenPreview: () =>
+                                  _openPreview(context, items, item),
                               onLongPress: () {
                                 if (!_selecting) {
                                   _startSelect(item.id);
@@ -305,12 +324,14 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
         bottomNavigationBar: _selecting
             ? Container(
                 height: 70,
-                padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 48, vertical: 8),
                 decoration: BoxDecoration(
                   color: Theme.of(context).scaffoldBackgroundColor,
                   border: Border(
                     top: BorderSide(
-                      color: Theme.of(context).dividerColor.withValues(alpha: 0.2),
+                      color:
+                          Theme.of(context).dividerColor.withValues(alpha: 0.2),
                       width: 0.5,
                     ),
                   ),
@@ -359,9 +380,7 @@ class _BottomActionItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final color = enabled
-        ? cs.onSurface
-        : cs.onSurface.withValues(alpha: 0.38);
+    final color = enabled ? cs.onSurface : cs.onSurface.withValues(alpha: 0.38);
 
     return InkWell(
       onTap: onTap,
@@ -466,7 +485,6 @@ class _TrashGridItem extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Thumbnail image or video placeholder
                   Container(
                     color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
                     child: Hero(
@@ -475,14 +493,13 @@ class _TrashGridItem extends StatelessWidget {
                       child: _TrashThumbnail(item: item),
                     ),
                   ),
-
-                  // Video duration / play icon badge (bottom-left)
                   if (item.isVideo)
                     Positioned(
                       bottom: 6,
                       left: 6,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.65),
                           borderRadius: BorderRadius.circular(4),
@@ -494,8 +511,6 @@ class _TrashGridItem extends StatelessWidget {
                         ),
                       ),
                     ),
-
-                  // Multi-selection tint overlay
                   if (isSelecting && isSelected)
                     Positioned.fill(
                       child: Container(
@@ -506,8 +521,6 @@ class _TrashGridItem extends StatelessWidget {
                         ),
                       ),
                     ),
-
-                  // Multi-selection checkmark indicator (top-right)
                   if (isSelecting)
                     Positioned(
                       top: 6,
@@ -524,12 +537,11 @@ class _TrashGridItem extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: isSelected
-                            ? const Icon(Icons.check, size: 14, color: Colors.white)
+                            ? const Icon(Icons.check,
+                                size: 14, color: Colors.white)
                             : null,
                       ),
                     ),
-
-                  // Expand/Fullscreen button (bottom-right)
                   Positioned(
                     bottom: 6,
                     right: 6,
@@ -590,7 +602,6 @@ class _TrashThumbnail extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    // 1. Fast in-memory lookup (0ms)
     final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
     if (mem != null) {
       return Image.memory(
@@ -601,7 +612,6 @@ class _TrashThumbnail extends StatelessWidget {
       );
     }
 
-    // 2. Persistent disk cache hit (Instant on cold start — skips FutureBuilder delay)
     final diskFile = ThumbnailService.instance.getCachedFile(item.id);
     if (diskFile != null) {
       return Image.file(
@@ -650,9 +660,7 @@ class _TrashThumbnail extends StatelessWidget {
       color: cs.surfaceContainerHighest,
       child: Center(
         child: Icon(
-          item.isVideo
-              ? Icons.videocam_outlined
-              : Icons.broken_image_outlined,
+          item.isVideo ? Icons.videocam_outlined : Icons.broken_image_outlined,
           size: 28,
           color: cs.onSurfaceVariant.withValues(alpha: 0.6),
         ),

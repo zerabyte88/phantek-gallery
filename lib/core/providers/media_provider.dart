@@ -22,28 +22,28 @@ class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
       settingsNotifierProvider.select((s) => s.excludedFolders),
     );
 
-    // 1. Load from disk cache instantly (no spinner on re-open)
+    // Load from disk cache first for instant display.
     final cached = await MediaCacheService.instance.load();
     if (cached != null && cached.isNotEmpty) {
-      // Filter stale items from excluded folders and recently deleted IDs
+      // Filter out items in excluded folders and recently deleted IDs.
       final visible = cached
           .where((e) => !excludedFolders.any((f) => e.path.startsWith(f)))
           .where((e) => !_deletedIds.contains(e.id))
           .toList();
 
-      // Kick off background refresh so new/deleted files are picked up
+      // Trigger background refresh to detect file changes.
       Future.microtask(() => _backgroundRefresh(excludedFolders));
       return visible;
     }
 
-    // 2. First launch: full scan (no cache yet)
+    // Full media scan on initial launch.
     return _scan(excludedFolders);
   }
 
   Future<List<MediaItem>> _scan(List<String> excludedFolders) async {
     final scanner = ref.read(mediaScannerProvider);
     final items = await scanner.scanAll(excludedFolders: excludedFolders);
-    // Persist unfiltered list for next startup
+    // Persist full list to cache for subsequent launches.
     MediaCacheService.instance.save(items);
     if (_deletedIds.isEmpty) return items;
     return items.where((e) => !_deletedIds.contains(e.id)).toList();
@@ -54,7 +54,7 @@ class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
     _backgroundRefreshing = true;
     try {
       final fresh = await _scan(excludedFolders);
-      // Only update if we're still showing data (not re-loading)
+      // Update data only if the current state is still active.
       if (state.hasValue) {
         state = AsyncData(fresh);
       }
@@ -64,10 +64,10 @@ class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
     }
   }
 
-  /// Set of deleted/trashed IDs currently filtered out from scans.
+  /// Set of deleted or trashed media IDs currently filtered out from scans.
   Set<String> get deletedIds => Set.unmodifiable(_deletedIds);
 
-  /// Instantly removes items from state so the UI reflects deletions immediately.
+  /// Instantly removes items from state.
   void removeItems(Iterable<String> ids) {
     _deletedIds.addAll(ids);
     state = state.whenData(
@@ -87,7 +87,7 @@ class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
     );
   }
 
-  /// Refreshes from disk without blanking the UI with a full loading spinner.
+  /// Refreshes media list from disk in the background.
   Future<void> refresh() async {
     final settings = ref.read(settingsNotifierProvider);
     final updated = await AsyncValue.guard(
@@ -100,15 +100,16 @@ class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
 }
 
 final mediaListProvider =
-    AsyncNotifierProvider<MediaListNotifier, List<MediaItem>>(MediaListNotifier.new);
+    AsyncNotifierProvider<MediaListNotifier, List<MediaItem>>(
+        MediaListNotifier.new);
 
 /// Derived provider: applies sort + filter on top of [mediaListProvider].
 final filteredMediaProvider = Provider<AsyncValue<List<MediaItem>>>((ref) {
-  final raw      = ref.watch(mediaListProvider);
+  final raw = ref.watch(mediaListProvider);
   final settings = ref.watch(settingsNotifierProvider);
   return raw.whenData((items) => applyFiltersAndSort(
         items,
-        sort:   settings.defaultSort,
+        sort: settings.defaultSort,
         filter: settings.defaultFilter,
       ));
 });
@@ -125,15 +126,20 @@ List<MediaItem> applyFiltersAndSort(
   };
 
   return switch (sort) {
-    SortOption.newest => [...result]..sort((a, b) => b.timeAdded.compareTo(a.timeAdded)),
-    SortOption.oldest => [...result]..sort((a, b) => a.timeAdded.compareTo(b.timeAdded)),
-    SortOption.shootingTimeDesc => [...result]..sort((a, b) => b.date.compareTo(a.date)),
-    SortOption.shootingTimeAsc => [...result]..sort((a, b) => a.date.compareTo(b.date)),
+    SortOption.newest => [...result]
+      ..sort((a, b) => b.timeAdded.compareTo(a.timeAdded)),
+    SortOption.oldest => [...result]
+      ..sort((a, b) => a.timeAdded.compareTo(b.timeAdded)),
+    SortOption.shootingTimeDesc => [...result]
+      ..sort((a, b) => b.date.compareTo(a.date)),
+    SortOption.shootingTimeAsc => [...result]
+      ..sort((a, b) => a.date.compareTo(b.date)),
     SortOption.nameAZ => [...result]
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
     SortOption.nameZA => [...result]
-        ..sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase())),
-    SortOption.sizeDesc => [...result]..sort((a, b) => b.size.compareTo(a.size)),
+      ..sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase())),
+    SortOption.sizeDesc => [...result]
+      ..sort((a, b) => b.size.compareTo(a.size)),
     SortOption.sizeAsc => [...result]..sort((a, b) => a.size.compareTo(b.size)),
   };
 }
@@ -141,4 +147,3 @@ List<MediaItem> applyFiltersAndSort(
 /// Tracks the media ID currently visible in the full-screen photo/video viewer.
 /// Gallery and Album screens listen to this to silently align their scroll viewports.
 final activeViewerMediaIdProvider = StateProvider<String?>((ref) => null);
-

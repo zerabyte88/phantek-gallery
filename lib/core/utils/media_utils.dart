@@ -39,7 +39,8 @@ class MediaUtils {
   }
 
   /// Formats time for media viewer top bar: "3:40 PM".
-  static String formatViewerTime(DateTime dt) => DateFormat('h:mm a').format(dt);
+  static String formatViewerTime(DateTime dt) =>
+      DateFormat('h:mm a').format(dt);
 
   /// Formats frame rate into clean string, e.g. "60 fps", "29.97 fps", "24 fps".
   static String formatFps(double fps) {
@@ -83,7 +84,8 @@ class MediaUtils {
   }) {
     if (crossAxisCount <= 0) return currentScrollOffset;
     final row = index ~/ crossAxisCount;
-    final availableWidth = screenWidth - paddingHorizontal - ((crossAxisCount - 1) * spacing);
+    final availableWidth =
+        screenWidth - paddingHorizontal - ((crossAxisCount - 1) * spacing);
     final tileSize = availableWidth / crossAxisCount;
     final rowHeight = tileSize + spacing;
     final rowTop = paddingTop + (row * rowHeight);
@@ -102,4 +104,3 @@ class MediaUtils {
     return ideal.clamp(0.0, maxScrollExtent);
   }
 }
-

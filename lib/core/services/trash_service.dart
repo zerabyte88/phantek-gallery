@@ -25,8 +25,6 @@ class TrashService {
   final List<TrashItem> _items = [];
   bool _loaded = false;
 
-  // ── Public API ─────────────────────────────────────────────────────────────
-
   Future<List<TrashItem>> getItems() async {
     await _ensureLoaded();
     await purgeExpired();
@@ -67,19 +65,19 @@ class TrashService {
 
     final trashDir = await _getTrashDir();
     final name = p.basename(sourcePath);
-    // Prefix with timestamp to avoid collisions.
+    // Prefix with timestamp to ensure a unique filename.
     final trashName = '${DateTime.now().millisecondsSinceEpoch}_$name';
     final trashPath = p.join(trashDir.path, trashName);
 
     try {
       await src.rename(trashPath);
     } catch (_) {
-      // Fallback for cross-device / cross-filesystem moves (EXDEV)
+      // Fallback copy if rename fails across filesystems (EXDEV).
       await src.copy(trashPath);
       await src.delete();
     }
 
-    // Inform MediaStore/PhotoManager that original entry is gone
+    // Notify MediaStore that the original entry was moved.
     try {
       await PhotoManager.editor.deleteWithIds([id]);
     } catch (_) {}
@@ -146,10 +144,8 @@ class TrashService {
     await _persist();
   }
 
-  // ── Persistence ────────────────────────────────────────────────────────────
-
   Future<Directory> _getTrashDir() async {
-    // Store trash alongside the app's external files to avoid scoped-storage issues.
+    // Store trash directory in app-specific external storage.
     String? basePath;
     try {
       if (Platform.isAndroid) {
@@ -187,7 +183,7 @@ class TrashService {
       final list = (jsonDecode(content) as List);
       _items.addAll(list.map((e) => _fromJson(e as Map<String, dynamic>)));
     } catch (_) {
-      // Corrupt index – start fresh.
+      // Corrupt index; reset to initial state.
       _items.clear();
     }
   }
@@ -196,8 +192,6 @@ class TrashService {
     final f = await _indexFile();
     await f.writeAsString(jsonEncode(_items.map(_toJson).toList()));
   }
-
-  // ── JSON helpers ───────────────────────────────────────────────────────────
 
   static Map<String, dynamic> _toJson(TrashItem e) => {
         'id': e.id,
@@ -219,4 +213,3 @@ class TrashService {
         size: m['size'] as int?,
       );
 }
-

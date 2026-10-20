@@ -18,16 +18,16 @@ enum FilterOption {
 
 extension FilterOptionLabel on FilterOption {
   String get label => switch (this) {
-        FilterOption.all         => 'All',
-        FilterOption.photosOnly  => 'Photos',
-        FilterOption.videosOnly  => 'Videos',
-        FilterOption.albums      => 'Albums',
+        FilterOption.all => 'All',
+        FilterOption.photosOnly => 'Photos',
+        FilterOption.videosOnly => 'Videos',
+        FilterOption.albums => 'Albums',
       };
 
   String localizedLabel(BuildContext context) => switch (this) {
-        FilterOption.all         => context.tr.all,
-        FilterOption.photosOnly  => context.tr.photos,
-        FilterOption.videosOnly  => context.tr.videos,
-        FilterOption.albums      => context.tr.albums,
+        FilterOption.all => context.tr.all,
+        FilterOption.photosOnly => context.tr.photos,
+        FilterOption.videosOnly => context.tr.videos,
+        FilterOption.albums => context.tr.albums,
       };
 }

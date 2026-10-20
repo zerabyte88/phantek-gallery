@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 /// Lightweight native Android sharing service via MethodChannel.
 class ShareService {
   ShareService._();
-  static const MethodChannel _channel = MethodChannel('com.phantek.gallery/share');
+  static const MethodChannel _channel =
+      MethodChannel('com.phantek.gallery/share');
 
   /// Shares one or multiple media files using Android native share sheet.
   static Future<bool> shareFiles(
@@ -33,7 +34,8 @@ class ShareService {
   }
 
   /// Opens Android native "Set as" (Wallpaper, Contact Photo, Lock Screen) via ACTION_ATTACH_DATA.
-  static Future<bool> setAsWallpaper(String path, {String mimeType = 'image/*'}) async {
+  static Future<bool> setAsWallpaper(String path,
+      {String mimeType = 'image/*'}) async {
     try {
       if (!Platform.isAndroid) return false;
       await _channel.invokeMethod('setAsWallpaper', {

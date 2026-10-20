@@ -42,14 +42,11 @@ class _ShimmerLoadingTileState extends State<ShimmerLoadingTile>
     final baseColor = isDark
         ? const Color(0xFF16181C)
         : cs.surfaceContainerHighest.withValues(alpha: 0.6);
-    final highlightColor = isDark
-        ? const Color(0xFF282C34)
-        : cs.surfaceContainerHighest;
+    final highlightColor =
+        isDark ? const Color(0xFF282C34) : cs.surfaceContainerHighest;
 
     final displayIcon = widget.icon ??
-        (widget.isVideo
-            ? Icons.videocam_rounded
-            : Icons.image_rounded);
+        (widget.isVideo ? Icons.videocam_rounded : Icons.image_rounded);
 
     return AnimatedBuilder(
       animation: _controller,

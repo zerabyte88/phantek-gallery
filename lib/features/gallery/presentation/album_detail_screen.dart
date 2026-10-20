@@ -97,8 +97,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
 
   Future<void> _deleteSelected(List<MediaItem> allItems) async {
     final settings = ref.read(settingsNotifierProvider);
-    final toDelete =
-        allItems.where((e) => _selected.contains(e.id)).toList();
+    final toDelete = allItems.where((e) => _selected.contains(e.id)).toList();
 
     final confirm = await _confirmDelete(toDelete.length);
     if (!confirm || !mounted) return;
@@ -144,8 +143,8 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
       if (successCount < toDelete.length) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Processed $successCount of ${toDelete.length} items.'),
+            content:
+                Text('Processed $successCount of ${toDelete.length} items.'),
           ),
         );
       }
@@ -156,7 +155,9 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     final settings = ref.read(settingsNotifierProvider);
     final isTrash = settings.enableTrash;
     final itemText = context.tr.itemsCount(count);
-    final title = isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle;
+    final title = isTrash
+        ? context.tr.moveToTrashTitle
+        : context.tr.deletePermanentlyTitle;
     final contentText = isTrash
         ? context.tr.moveToTrashConfirm(itemText)
         : context.tr.deletePermanentlyConfirm(itemText);
@@ -189,16 +190,22 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     // 2. Sort by selected sort or settings.defaultSort
     final activeSort = _sort ?? settings.defaultSort;
     final sortedItems = switch (activeSort) {
-      SortOption.newest => [...filteredItems]..sort((a, b) => b.timeAdded.compareTo(a.timeAdded)),
-      SortOption.oldest => [...filteredItems]..sort((a, b) => a.timeAdded.compareTo(b.timeAdded)),
-      SortOption.shootingTimeDesc => [...filteredItems]..sort((a, b) => b.date.compareTo(a.date)),
-      SortOption.shootingTimeAsc => [...filteredItems]..sort((a, b) => a.date.compareTo(b.date)),
+      SortOption.newest => [...filteredItems]
+        ..sort((a, b) => b.timeAdded.compareTo(a.timeAdded)),
+      SortOption.oldest => [...filteredItems]
+        ..sort((a, b) => a.timeAdded.compareTo(b.timeAdded)),
+      SortOption.shootingTimeDesc => [...filteredItems]
+        ..sort((a, b) => b.date.compareTo(a.date)),
+      SortOption.shootingTimeAsc => [...filteredItems]
+        ..sort((a, b) => a.date.compareTo(b.date)),
       SortOption.nameAZ => [...filteredItems]
-          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
       SortOption.nameZA => [...filteredItems]
-          ..sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase())),
-      SortOption.sizeDesc => [...filteredItems]..sort((a, b) => b.size.compareTo(a.size)),
-      SortOption.sizeAsc => [...filteredItems]..sort((a, b) => a.size.compareTo(b.size)),
+        ..sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase())),
+      SortOption.sizeDesc => [...filteredItems]
+        ..sort((a, b) => b.size.compareTo(a.size)),
+      SortOption.sizeAsc => [...filteredItems]
+        ..sort((a, b) => a.size.compareTo(b.size)),
     };
 
     ref.listen<String?>(activeViewerMediaIdProvider, (_, nextId) {

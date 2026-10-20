@@ -61,7 +61,8 @@ void showMediaInfoSheet(
                     ),
               ),
               const SizedBox(height: 16),
-              _InfoRow(icon: Icons.title, label: context.tr.name, value: item.name),
+              _InfoRow(
+                  icon: Icons.title, label: context.tr.name, value: item.name),
               _InfoRow(
                 icon: Icons.calendar_today_outlined,
                 label: context.tr.date,

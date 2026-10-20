@@ -5,13 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../models/media_item.dart';
 
-/// Persists the last media scan result to disk so the gallery can render
-/// immediately on the next app open without showing a loading spinner.
-///
-/// Usage: stale-while-revalidate
-///   1. [load()] → returns last known list instantly (~10–50 ms)
-///   2. Show grid immediately with cached data
-///   3. Run background scan → call [save()] when done → update UI state
+/// Persists the last media scan result to disk for instant display on startup.
 class MediaCacheService {
   MediaCacheService._();
   static final MediaCacheService instance = MediaCacheService._();
@@ -23,7 +17,7 @@ class MediaCacheService {
     return File(p.join(dir.path, _fileName));
   }
 
-  /// Load persisted media list. Returns null if no cache or corrupt data.
+  /// Loads the persisted media list from disk cache.
   Future<List<MediaItem>?> load() async {
     try {
       final f = await _file();
@@ -40,7 +34,7 @@ class MediaCacheService {
     }
   }
 
-  /// Persist media list to disk (fire-and-forget safe to call unawaited).
+  /// Persists the media list to disk cache asynchronously.
   Future<void> save(List<MediaItem> items) async {
     try {
       final f = await _file();
@@ -50,7 +44,7 @@ class MediaCacheService {
     }
   }
 
-  /// Remove cache file (e.g., on settings reset).
+  /// Deletes the cache file from disk.
   Future<void> clear() async {
     try {
       final f = await _file();

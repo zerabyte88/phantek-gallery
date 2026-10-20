@@ -94,7 +94,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         child: ListView(
           padding: const EdgeInsets.only(bottom: 24),
           children: [
-            // ══ Appearance ══════════════════════════════════════
             _SectionHeader(context.tr.appearance),
             _SettingsCard(
               children: [
@@ -184,8 +183,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ══ Storage & Cache ══════════════════════════════════
             _SectionHeader(context.tr.storageAndCache),
             _SettingsCard(
               children: [
@@ -278,8 +275,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ══ Playback ═════════════════════════════════════════
             _SectionHeader(context.tr.playback),
             _SettingsCard(
               children: [
@@ -303,8 +298,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ══ Updates ══════════════════════════════════════════
             _SectionHeader(context.tr.updates),
             _SettingsCard(
               children: [
@@ -334,8 +327,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ══ Developer Card ══════════════════════════════════
             const DeveloperAboutCard(),
           ],
         ),
@@ -343,8 +334,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader(this.title);
@@ -665,11 +654,12 @@ Future<void> _showExcludedFoldersDialog(
   final current = List<String>.from(settings.excludedFolders);
   final cs = Theme.of(context).colorScheme;
 
-  // Retrieve detected folder paths from media items currently loaded in memory
+  // Retrieve unique folder paths from media items currently loaded in memory.
   final mediaItems = ref.read(mediaListProvider).valueOrNull ?? [];
   final detectedFolders = mediaItems
       .map((e) => p.dirname(e.path))
-      .where((path) => path.isNotEmpty && path != '/' && !path.contains('.trash'))
+      .where(
+          (path) => path.isNotEmpty && path != '/' && !path.contains('.trash'))
       .toSet()
       .toList()
     ..sort();
@@ -682,7 +672,8 @@ Future<void> _showExcludedFoldersDialog(
             detectedFolders.where((f) => !current.contains(f)).toList();
 
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: Row(
             children: [
               Container(
@@ -701,7 +692,8 @@ Future<void> _showExcludedFoldersDialog(
               Expanded(
                 child: Text(
                   context.tr.excludedFolders,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -722,8 +714,6 @@ Future<void> _showExcludedFoldersDialog(
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // 1. Primary Button: Direct Native File Manager Picker
                   SizedBox(
                     width: double.infinity,
                     child: BouncyTap(
@@ -755,8 +745,6 @@ Future<void> _showExcludedFoldersDialog(
                       ),
                     ),
                   ),
-
-                  // 2. Detected Media Albums Quick Pick (Tap to add)
                   if (availableAlbums.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     Text(
@@ -792,9 +780,6 @@ Future<void> _showExcludedFoldersDialog(
                       ),
                     ),
                   ],
-
-
-                  // 3. Excluded folders list
                   if (current.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     Row(
@@ -862,7 +847,8 @@ Future<void> _showExcludedFoldersDialog(
                                 style: const TextStyle(fontSize: 12)),
                             trailing: IconButton(
                               icon: const Icon(Icons.close, size: 18),
-                              onPressed: () => setSt(() => current.remove(item)),
+                              onPressed: () =>
+                                  setSt(() => current.remove(item)),
                             ),
                           );
                         },
@@ -889,7 +875,8 @@ Future<void> _showExcludedFoldersDialog(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                       ),
                       onPressed: () => Navigator.pop(ctx),
-                      child: Text(context.tr.cancel, textAlign: TextAlign.center),
+                      child:
+                          Text(context.tr.cancel, textAlign: TextAlign.center),
                     ),
                   ),
                 ),
@@ -905,9 +892,8 @@ Future<void> _showExcludedFoldersDialog(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                       ),
                       onPressed: () {
-                        ref
-                            .read(settingsNotifierProvider.notifier)
-                            .update((s) => s.copyWith(excludedFolders: current));
+                        ref.read(settingsNotifierProvider.notifier).update(
+                            (s) => s.copyWith(excludedFolders: current));
                         Navigator.pop(ctx);
                       },
                       child: Text(context.tr.save, textAlign: TextAlign.center),
@@ -981,16 +967,19 @@ Future<AppLanguage?> _showModernLanguageDialog(
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: AppLanguage.sortedLanguages.map(
-                    (lang) => _ModernLanguageOptionCard(
-                      language: lang,
-                      selected: currentLanguage == lang,
-                      onTap: () async {
-                        await Future.delayed(const Duration(milliseconds: 140));
-                        if (ctx.mounted) Navigator.pop(ctx, lang);
-                      },
-                    ),
-                  ).toList(),
+                  children: AppLanguage.sortedLanguages
+                      .map(
+                        (lang) => _ModernLanguageOptionCard(
+                          language: lang,
+                          selected: currentLanguage == lang,
+                          onTap: () async {
+                            await Future.delayed(
+                                const Duration(milliseconds: 140));
+                            if (ctx.mounted) Navigator.pop(ctx, lang);
+                          },
+                        ),
+                      )
+                      .toList(),
                 ),
               ),
             ),
@@ -1030,9 +1019,7 @@ class _ModernLanguageOptionCard extends StatelessWidget {
                 : cs.surfaceContainerHighest.withValues(alpha: 0.35),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: selected
-                  ? cs.primary
-                  : cs.outline.withValues(alpha: 0.15),
+              color: selected ? cs.primary : cs.outline.withValues(alpha: 0.15),
               width: selected ? 2 : 1,
             ),
           ),
@@ -1256,82 +1243,80 @@ class _ThemeOptionCard extends StatelessWidget {
         scaleDown: 0.96,
         onTap: onTap,
         child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: selected
-                    ? cs.primary.withValues(alpha: 0.12)
-                    : cs.surfaceContainerHighest.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: selected
-                      ? cs.primary
-                      : cs.outline.withValues(alpha: 0.15),
-                  width: selected ? 2 : 1,
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? cs.primary.withValues(alpha: 0.12)
+                : cs.surfaceContainerHighest.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? cs.primary : cs.outline.withValues(alpha: 0.15),
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: bgPreview,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected
+                        ? cs.primary
+                        : Colors.white.withValues(alpha: 0.2),
+                    width: 1.5,
+                  ),
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr.themeModeLabel(mode),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight:
+                            selected ? FontWeight.bold : FontWeight.w600,
+                        color: selected ? cs.primary : cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      gradient: bgPreview,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: selected
-                            ? cs.primary
-                            : Colors.white.withValues(alpha: 0.2),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Icon(icon, color: iconColor, size: 22),
+              const SizedBox(width: 8),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected ? cs.primary : Colors.transparent,
+                  border: Border.all(
+                    color: selected
+                        ? cs.primary
+                        : cs.outline.withValues(alpha: 0.4),
+                    width: 2,
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.tr.themeModeLabel(mode),
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight:
-                                selected ? FontWeight.bold : FontWeight.w600,
-                            color: selected ? cs.primary : cs.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          description,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: selected ? cs.primary : Colors.transparent,
-                      border: Border.all(
-                        color: selected
-                            ? cs.primary
-                            : cs.outline.withValues(alpha: 0.4),
-                        width: 2,
-                      ),
-                    ),
-                    child: selected
-                        ? Icon(Icons.check, size: 14, color: cs.onPrimary)
-                        : null,
-                  ),
-                ],
+                ),
+                child: selected
+                    ? Icon(Icons.check, size: 14, color: cs.onPrimary)
+                    : null,
+              ),
+            ],
           ),
         ),
       ),
@@ -1345,8 +1330,9 @@ Future<int?> _showModernGridColumnsDialog(
   required bool isAlbum,
 }) {
   final cs = Theme.of(context).colorScheme;
-  final title =
-      isAlbum ? context.tr.selectAlbumsGridColumns : context.tr.selectGridColumns;
+  final title = isAlbum
+      ? context.tr.selectAlbumsGridColumns
+      : context.tr.selectGridColumns;
   final subtitle = isAlbum
       ? context.tr.chooseAlbumDensity
       : context.tr.chooseThumbnailDensity;
@@ -1461,15 +1447,12 @@ class _ColumnOptionCard extends StatelessWidget {
                 : cs.surfaceContainerHighest.withValues(alpha: 0.35),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: selected
-                  ? cs.primary
-                  : cs.outline.withValues(alpha: 0.15),
+              color: selected ? cs.primary : cs.outline.withValues(alpha: 0.15),
               width: selected ? 2 : 1,
             ),
           ),
           child: Row(
             children: [
-              // Mini visual grid preview
               Container(
                 width: 48,
                 height: 38,
@@ -1554,4 +1537,3 @@ class _ColumnOptionCard extends StatelessWidget {
     );
   }
 }
-

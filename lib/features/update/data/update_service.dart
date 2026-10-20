@@ -7,7 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 /// GitHub repository coordinates.
 const _kGitHubOwner = 'zerabyte88';
-const _kGitHubRepo  = 'phantek-gallery';
+const _kGitHubRepo = 'phantek-gallery';
 const _kApiUrl =
     'https://api.github.com/repos/$_kGitHubOwner/$_kGitHubRepo/releases/latest';
 
@@ -21,10 +21,10 @@ class UpdateInfo {
     required this.publishedAt,
   });
 
-  final String version;       // e.g. "1.2.0"
-  final int versionCode;      // e.g. 5
-  final String apkUrl;        // direct APK download URL
-  final String releaseNotes;  // body of the release
+  final String version; // e.g. "1.2.0"
+  final int versionCode; // e.g. 5
+  final String apkUrl; // direct APK download URL
+  final String releaseNotes; // body of the release
   final DateTime publishedAt;
 }
 
@@ -54,29 +54,27 @@ class UpdateService {
   UpdateService._();
   static final UpdateService instance = UpdateService._();
 
-  // ── Check ─────────────────────────────────────────────────────────────
-
   Future<UpdateResult> checkForUpdate() async {
     try {
       final info = await PackageInfo.fromPlatform();
       final currentCode = int.tryParse(info.buildNumber) ?? 0;
       final currentVersion = info.version;
 
-      final resp = await http
-          .get(Uri.parse(_kApiUrl), headers: {'Accept': 'application/json'})
-          .timeout(const Duration(seconds: 15));
+      final resp = await http.get(Uri.parse(_kApiUrl), headers: {
+        'Accept': 'application/json'
+      }).timeout(const Duration(seconds: 15));
 
       if (resp.statusCode != 200) {
         return UpdateCheckFailed('HTTP ${resp.statusCode}');
       }
 
       final json = jsonDecode(resp.body) as Map<String, dynamic>;
-      final rawTag    = json['tag_name'] as String? ?? '';
-      final cleanTag  = rawTag.startsWith('v') ? rawTag.substring(1) : rawTag;
-      final body      = json['body'] as String? ?? '';
-      final published = DateTime.tryParse(
-              json['published_at'] as String? ?? '') ??
-          DateTime.now();
+      final rawTag = json['tag_name'] as String? ?? '';
+      final cleanTag = rawTag.startsWith('v') ? rawTag.substring(1) : rawTag;
+      final body = json['body'] as String? ?? '';
+      final published =
+          DateTime.tryParse(json['published_at'] as String? ?? '') ??
+              DateTime.now();
 
       // Look for .apk assets in release assets and pick the matching ABI variant
       final assets =
@@ -88,12 +86,14 @@ class UpdateService {
       final apkAsset = selectBestApkAsset(apkAssets);
       final apkUrl = apkAsset['browser_download_url'] as String? ?? '';
       if (apkUrl.isEmpty) {
-        return const UpdateCheckFailed('No compatible APK asset found in release');
+        return const UpdateCheckFailed(
+            'No compatible APK asset found in release');
       }
 
       // Supports both "v1.2.0+5" and "v1.2.0" tag formats
       final plusIdx = cleanTag.indexOf('+');
-      final remoteVersion = plusIdx != -1 ? cleanTag.substring(0, plusIdx) : cleanTag;
+      final remoteVersion =
+          plusIdx != -1 ? cleanTag.substring(0, plusIdx) : cleanTag;
       final remoteCode = plusIdx != -1
           ? int.tryParse(cleanTag.substring(plusIdx + 1)) ?? 0
           : 0;
@@ -132,9 +132,12 @@ class UpdateService {
       return remoteCode > localCode;
     }
     // Fallback: SemVer comparison (e.g., 1.0.1 > 1.0.0)
-    final rParts = remoteVer.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-    final lParts = localVer.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-    final maxLen = rParts.length > lParts.length ? rParts.length : lParts.length;
+    final rParts =
+        remoteVer.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final lParts =
+        localVer.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final maxLen =
+        rParts.length > lParts.length ? rParts.length : lParts.length;
     for (var i = 0; i < maxLen; i++) {
       final r = i < rParts.length ? rParts[i] : 0;
       final l = i < lParts.length ? lParts[i] : 0;
@@ -173,7 +176,6 @@ class UpdateService {
         (deviceAbi.contains('armeabi') || deviceAbi.contains('x86'));
 
     if (is64Bit) {
-      // 1. Prefer 64-bit APK (arm64-v8a / arm64 / v8a)
       final arm64 = apkAssets.firstWhere(
         (a) {
           final name = (a['name'] as String? ?? '').toLowerCase();
@@ -183,7 +185,6 @@ class UpdateService {
       );
       if (arm64.isNotEmpty) return arm64;
     } else if (is32Bit) {
-      // 1. Prefer 32-bit APK (armeabi-v7a / v7a / arm32)
       final arm32 = apkAssets.firstWhere(
         (a) {
           final name = (a['name'] as String? ?? '').toLowerCase();
@@ -196,7 +197,6 @@ class UpdateService {
       if (arm32.isNotEmpty) return arm32;
     }
 
-    // 2. Fallback to universal APK (not tagged with specific ABI)
     final universal = apkAssets.firstWhere(
       (a) {
         final name = (a['name'] as String? ?? '').toLowerCase();
@@ -206,11 +206,8 @@ class UpdateService {
     );
     if (universal.isNotEmpty) return universal;
 
-    // 3. Fallback to first available APK
     return apkAssets.first;
   }
-
-  // ── Download ──────────────────────────────────────────────────────────
 
   /// Downloads the APK to the public Downloads folder.
   /// Reports progress [0.0 – 1.0] via [onProgress].
@@ -228,10 +225,10 @@ class UpdateService {
 
     final client = http.Client();
     try {
-      final request  = http.Request('GET', Uri.parse(info.apkUrl));
+      final request = http.Request('GET', Uri.parse(info.apkUrl));
       final response = await client.send(request);
-      final total    = response.contentLength ?? 0;
-      var received   = 0;
+      final total = response.contentLength ?? 0;
+      var received = 0;
 
       // Collect all bytes before writing – ensures the file is complete
       // before we return it. The old listener+onDone approach was not awaited
@@ -253,8 +250,6 @@ class UpdateService {
     return apkFile;
   }
 
-  // ── Cleanup ───────────────────────────────────────────────────────────
-
   /// Deletes any previously downloaded APK for the given version.
   ///
   /// PROTEKSI: ONLY deletes the exact path returned by [_apkFile].
@@ -269,13 +264,10 @@ class UpdateService {
   Future<void> cleanupAllApks() async {
     final dir = await _downloadsDir();
     if (!await dir.exists()) return;
-    final apks = dir
-        .listSync()
-        .whereType<File>()
-        .where((f) {
-          final name = f.uri.pathSegments.last;
-          return name.startsWith('Phantek_Gallery_v') && name.endsWith('.apk');
-        });
+    final apks = dir.listSync().whereType<File>().where((f) {
+      final name = f.uri.pathSegments.last;
+      return name.startsWith('Phantek_Gallery_v') && name.endsWith('.apk');
+    });
     for (final apk in apks) {
       // Extra guard: only delete if the path starts with our expected dir.
       if (apk.path.startsWith(dir.path)) {
@@ -283,8 +275,6 @@ class UpdateService {
       }
     }
   }
-
-  // ── Path helpers ──────────────────────────────────────────────────────
 
   Future<File> _apkFile(String version) async {
     final dir = await _downloadsDir();
@@ -299,8 +289,7 @@ class UpdateService {
     if (await d.exists()) return d;
     // Fallback to app-specific external dir (no extra permissions needed).
     final ext = await getExternalStorageDirectory();
-    return Directory(
-        '${ext?.path ?? (await _appDocDir()).path}/downloads');
+    return Directory('${ext?.path ?? (await _appDocDir()).path}/downloads');
   }
 
   Future<Directory> _appDocDir() async {

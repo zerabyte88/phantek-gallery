@@ -53,7 +53,9 @@ class MediaScannerService {
   static bool isSupportedVideo(String pathOrExt) {
     final ext = p.extension(pathOrExt).isNotEmpty
         ? p.extension(pathOrExt).toLowerCase()
-        : (pathOrExt.startsWith('.') ? pathOrExt.toLowerCase() : '.$pathOrExt'.toLowerCase());
+        : (pathOrExt.startsWith('.')
+            ? pathOrExt.toLowerCase()
+            : '.$pathOrExt'.toLowerCase());
     return _kSupportedVideoExtensions.contains(ext);
   }
 
@@ -66,7 +68,9 @@ class MediaScannerService {
   static String? inferMimeType(String pathOrExt, {bool isVideo = false}) {
     final ext = p.extension(pathOrExt).isNotEmpty
         ? p.extension(pathOrExt).toLowerCase()
-        : (pathOrExt.startsWith('.') ? pathOrExt.toLowerCase() : '.$pathOrExt'.toLowerCase());
+        : (pathOrExt.startsWith('.')
+            ? pathOrExt.toLowerCase()
+            : '.$pathOrExt'.toLowerCase());
     return switch (ext) {
       '.mkv' => 'video/x-matroska',
       '.webm' => 'video/webm',
@@ -89,7 +93,7 @@ class MediaScannerService {
     List<String> excludedFolders = const [],
     void Function(int loaded, int total)? onProgress,
   }) async {
-    // Ensure permission is granted before querying MediaStore
+    // Ensure permission is granted before querying MediaStore.
     final hasPermission = await PermissionService.instance.hasMediaPermission();
     if (!hasPermission) {
       final granted =
@@ -102,13 +106,13 @@ class MediaScannerService {
       hasAll: true,
     );
 
-    // Collect asset IDs across all albums (dedup by id).
+    // Collect unique asset IDs across all albums.
     final seen = <String>{};
     final assets = <AssetEntity>[];
 
     for (final album in albums) {
-      final albumAssets =
-          await album.getAssetListRange(start: 0, end: await album.assetCountAsync);
+      final albumAssets = await album.getAssetListRange(
+          start: 0, end: await album.assetCountAsync);
       for (final a in albumAssets) {
         if (seen.add(a.id)) {
           assets.add(a);
@@ -117,7 +121,7 @@ class MediaScannerService {
     }
 
     final total = assets.length;
-    // Pre-cache entities in ThumbnailService to eliminate expensive IPC fromId calls
+    // Pre-register entities in ThumbnailService to accelerate thumbnail generation.
     ThumbnailService.instance.registerEntities(assets);
 
     final results = <MediaItem>[];
@@ -151,7 +155,7 @@ class MediaScannerService {
 
     final path = file.path;
 
-    // Check trash folder and exclusion list.
+    // Skip item if it resides in trash or excluded folders.
     if (path.contains('/.trash/') ||
         path.contains(r'\.trash\') ||
         path.endsWith('/.trash') ||
@@ -164,13 +168,14 @@ class MediaScannerService {
     }
 
     final ext = p.extension(path).toLowerCase();
-    final isVideo =
-        entity.type == AssetType.video || _kSupportedVideoExtensions.contains(ext);
+    final isVideo = entity.type == AssetType.video ||
+        _kSupportedVideoExtensions.contains(ext);
 
-    // For video, filter unsupported video formats.
+    // Filter out unsupported video formats.
     if (isVideo) {
       final mime = entity.mimeType?.toLowerCase() ?? '';
-      final hasSupportedMime = mime.isNotEmpty && _kSupportedVideoMimes.contains(mime);
+      final hasSupportedMime =
+          mime.isNotEmpty && _kSupportedVideoMimes.contains(mime);
       final hasSupportedExt = _kSupportedVideoExtensions.contains(ext);
       if (!hasSupportedMime && !hasSupportedExt) return null;
     }

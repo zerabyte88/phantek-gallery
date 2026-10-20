@@ -60,7 +60,8 @@ Future<MediaItem?> showRenameMediaDialog(
                 onPressed: () async {
                   final newBaseName = controller.text.trim();
                   if (newBaseName.isEmpty) {
-                    setDialogState(() => errorMessage = context.tr.nameCannotBeEmpty);
+                    setDialogState(
+                        () => errorMessage = context.tr.nameCannotBeEmpty);
                     return;
                   }
                   if (newBaseName == initialName) {
@@ -69,8 +70,8 @@ Future<MediaItem?> showRenameMediaDialog(
                   }
                   final invalidChars = RegExp(r'[\\/:*?"<>|]');
                   if (invalidChars.hasMatch(newBaseName)) {
-                    setDialogState(
-                        () => errorMessage = context.tr.containsInvalidCharacters);
+                    setDialogState(() =>
+                        errorMessage = context.tr.containsInvalidCharacters);
                     return;
                   }
 
@@ -122,10 +123,10 @@ Future<MediaItem?> showRenameMediaDialog(
       path: newPath,
     );
 
-    // Notify Android MediaStore of both the old and new paths
+    // Notify MediaStore of file path changes.
     await ShareService.scanFiles([item.path, newPath]);
 
-    // Update global state immediately
+    // Update global media state immediately.
     ref.read(mediaListProvider.notifier).updateItem(newItem);
     ref.read(mediaListProvider.notifier).refresh();
 

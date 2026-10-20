@@ -104,8 +104,20 @@ class MediaItem extends Equatable {
   }
 
   @override
-  List<Object?> get props =>
-      [id, path, name, date, dateAdded, size, isVideo, duration, width, height, mimeType, album];
+  List<Object?> get props => [
+        id,
+        path,
+        name,
+        date,
+        dateAdded,
+        size,
+        isVideo,
+        duration,
+        width,
+        height,
+        mimeType,
+        album
+      ];
 
   Map<String, dynamic> toJson() => {
         'id': id,

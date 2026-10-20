@@ -30,30 +30,32 @@ enum SortCriterion {
       };
 
   String directionLabel(SortDirection direction) => switch (this) {
-        SortCriterion.shootingTime || SortCriterion.timeAdded =>
+        SortCriterion.shootingTime ||
+        SortCriterion.timeAdded =>
           direction == SortDirection.ascending
               ? 'Oldest to newest'
               : 'Newest to oldest',
         SortCriterion.name =>
           direction == SortDirection.ascending ? 'A to Z' : 'Z to A',
-        SortCriterion.size =>
-          direction == SortDirection.ascending
-              ? 'Smallest to largest'
-              : 'Largest to smallest',
+        SortCriterion.size => direction == SortDirection.ascending
+            ? 'Smallest to largest'
+            : 'Largest to smallest',
       };
 
-  String localizedDirectionLabel(BuildContext context, SortDirection direction) =>
+  String localizedDirectionLabel(
+          BuildContext context, SortDirection direction) =>
       switch (this) {
-        SortCriterion.shootingTime || SortCriterion.timeAdded =>
+        SortCriterion.shootingTime ||
+        SortCriterion.timeAdded =>
           direction == SortDirection.ascending
               ? context.tr.oldestToNewest
               : context.tr.newestToOldest,
-        SortCriterion.name =>
-          direction == SortDirection.ascending ? context.tr.aToZ : context.tr.zToA,
-        SortCriterion.size =>
-          direction == SortDirection.ascending
-              ? context.tr.smallestToLargest
-              : context.tr.largestToSmallest,
+        SortCriterion.name => direction == SortDirection.ascending
+            ? context.tr.aToZ
+            : context.tr.zToA,
+        SortCriterion.size => direction == SortDirection.ascending
+            ? context.tr.smallestToLargest
+            : context.tr.largestToSmallest,
       };
 }
 
@@ -95,7 +97,8 @@ enum SortOption {
 
   SortCriterion get criterion => switch (this) {
         SortOption.newest || SortOption.oldest => SortCriterion.timeAdded,
-        SortOption.shootingTimeDesc || SortOption.shootingTimeAsc =>
+        SortOption.shootingTimeDesc ||
+        SortOption.shootingTimeAsc =>
           SortCriterion.shootingTime,
         SortOption.nameAZ || SortOption.nameZA => SortCriterion.name,
         SortOption.sizeDesc || SortOption.sizeAsc => SortCriterion.size,

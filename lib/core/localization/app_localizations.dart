@@ -8,7 +8,8 @@ class AppLocalizations {
   final Locale locale;
   final Map<String, String> _dict;
 
-  AppLocalizations(this.locale) : _dict = getTranslationMap(_resolveLang(locale));
+  AppLocalizations(this.locale)
+      : _dict = getTranslationMap(_resolveLang(locale));
 
   static AppLocalizations of(BuildContext context) {
     return Localizations.of<AppLocalizations>(context, AppLocalizations) ??
@@ -37,7 +38,6 @@ class AppLocalizations {
 
   String _t(String key) => _dict[key] ?? enTranslations[key] ?? key;
 
-  // ── Getters ─────────────────────────────────────────────────────────────
   String get all => _t('all');
   String get photos => _t('photos');
   String get videos => _t('videos');
@@ -123,7 +123,8 @@ class AppLocalizations {
   String get deletePermanentlyTitle => _t('deletePermanentlyTitle');
   String get moveToTrashTitle => _t('moveToTrashTitle');
   String get moveToTrash => _t('moveToTrash');
-  String get manageFilesPermissionRequired => _t('manageFilesPermissionRequired');
+  String get manageFilesPermissionRequired =>
+      _t('manageFilesPermissionRequired');
   String get name => _t('name');
   String get date => _t('date');
   String get size => _t('size');
@@ -187,10 +188,10 @@ class AppLocalizations {
   String get alreadyUpToDate => _t('alreadyUpToDate');
   String get downloadFailed => _t('downloadFailed');
 
-  // ── Parameterized methods ───────────────────────────────────────────────
   String renamedTo(String name) => _t('renamedTo').replaceAll('{name}', name);
 
-  String failedToRename(String err) => _t('failedToRename').replaceAll('{err}', err);
+  String failedToRename(String err) =>
+      _t('failedToRename').replaceAll('{err}', err);
 
   String deletePermanentlyItemDesc(String name) =>
       _t('deletePermanentlyItemDesc').replaceAll('{name}', name);
@@ -198,7 +199,8 @@ class AppLocalizations {
   String moveToTrashItemDesc(String name) =>
       _t('moveToTrashItemDesc').replaceAll('{name}', name);
 
-  String itemRestored(String name) => _t('itemRestored').replaceAll('{name}', name);
+  String itemRestored(String name) =>
+      _t('itemRestored').replaceAll('{name}', name);
 
   String itemsRestoredCount(int count) {
     if (count == 1 && _dict.containsKey('itemsRestoredCountSingular')) {
@@ -207,7 +209,8 @@ class AppLocalizations {
     return _t('itemsRestoredCount').replaceAll('{count}', '$count');
   }
 
-  String failedToDelete(String err) => _t('failedToDelete').replaceAll('{err}', err);
+  String failedToDelete(String err) =>
+      _t('failedToDelete').replaceAll('{err}', err);
 
   String noMediaMatching(String query) =>
       _t('noMediaMatching').replaceAll('{query}', query);
@@ -230,7 +233,8 @@ class AppLocalizations {
   }
 
   String permanentlyDeleteCountTitle(int count) {
-    if (count == 1 && _dict.containsKey('permanentlyDeleteCountTitleSingular')) {
+    if (count == 1 &&
+        _dict.containsKey('permanentlyDeleteCountTitleSingular')) {
       return _dict['permanentlyDeleteCountTitleSingular']!;
     }
     return _t('permanentlyDeleteCountTitle').replaceAll('{count}', '$count');
@@ -249,9 +253,11 @@ class AppLocalizations {
     return _t('daysLeft').replaceAll('{count}', '$count');
   }
 
-  String columnsCount(int count) => _t('columnsCount').replaceAll('{count}', '$count');
+  String columnsCount(int count) =>
+      _t('columnsCount').replaceAll('{count}', '$count');
 
-  String diskSize(String sizeStr) => _t('diskSize').replaceAll('{sizeStr}', sizeStr);
+  String diskSize(String sizeStr) =>
+      _t('diskSize').replaceAll('{sizeStr}', sizeStr);
 
   String themeModeLabel(AppThemeMode mode) => switch (mode) {
         AppThemeMode.system => _t('themeModeSystem'),

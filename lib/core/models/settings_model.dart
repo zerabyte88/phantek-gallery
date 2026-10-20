@@ -128,10 +128,10 @@ enum AppThemeMode {
 
 extension AppThemeModeLabel on AppThemeMode {
   String get label => switch (this) {
-        AppThemeMode.system       => 'System',
-        AppThemeMode.light        => 'Sunburst',
-        AppThemeMode.dark         => 'Snowfall',
-        AppThemeMode.amoled       => 'Midnight',
+        AppThemeMode.system => 'System',
+        AppThemeMode.light => 'Sunburst',
+        AppThemeMode.dark => 'Snowfall',
+        AppThemeMode.amoled => 'Midnight',
         AppThemeMode.amoledSakura => 'Sakura',
       };
 }

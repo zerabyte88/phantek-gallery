@@ -13,7 +13,8 @@ Future<bool> showDeleteConfirmationSheet(
     backgroundColor: Colors.transparent,
     builder: (ctx) {
       final cs = Theme.of(ctx).colorScheme;
-      final btnLabel = actionLabel ?? (isTrash ? context.tr.moveToTrash : context.tr.delete);
+      final btnLabel =
+          actionLabel ?? (isTrash ? context.tr.moveToTrash : context.tr.delete);
       return Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
@@ -56,9 +57,8 @@ Future<bool> showDeleteConfirmationSheet(
               height: 48,
               child: FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: isTrash
-                      ? cs.primary
-                      : const Color(0xFFF03D3D),
+                  backgroundColor:
+                      isTrash ? cs.primary : const Color(0xFFF03D3D),
                   foregroundColor: isTrash ? cs.onPrimary : Colors.white,
                   shape: const StadiumBorder(),
                   elevation: 0,

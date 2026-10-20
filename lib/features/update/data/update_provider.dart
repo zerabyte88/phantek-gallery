@@ -14,20 +14,30 @@ final autoCheckUpdateTriggerProvider = Provider<bool>((ref) {
 sealed class UpdateState {
   const UpdateState();
 }
-final class UpdateIdle  extends UpdateState { const UpdateIdle(); }
-final class UpdateChecking extends UpdateState { const UpdateChecking(); }
+
+final class UpdateIdle extends UpdateState {
+  const UpdateIdle();
+}
+
+final class UpdateChecking extends UpdateState {
+  const UpdateChecking();
+}
+
 final class UpdateFound extends UpdateState {
   const UpdateFound(this.info);
   final UpdateInfo info;
 }
+
 final class UpdateDownloading extends UpdateState {
   const UpdateDownloading(this.progress);
   final double progress; // 0.0 – 1.0
 }
+
 final class UpdateError extends UpdateState {
   const UpdateError(this.message);
   final String message;
 }
+
 final class UpdateNotifier extends AsyncNotifier<UpdateState> {
   @override
   Future<UpdateState> build() async => const UpdateIdle();
@@ -62,7 +72,8 @@ final class UpdateNotifier extends AsyncNotifier<UpdateState> {
     }
   }
 
-  Future<File?> downloadAndInstall(UpdateInfo info, BuildContext context) async {
+  Future<File?> downloadAndInstall(
+      UpdateInfo info, BuildContext context) async {
     state = const AsyncData(UpdateDownloading(0));
     try {
       final apkFile = await UpdateService.instance.downloadApk(
@@ -80,10 +91,8 @@ final class UpdateNotifier extends AsyncNotifier<UpdateState> {
   }
 
   /// Call on app resume to delete leftover APK files from prior updates.
-  Future<void> cleanupOldApks() =>
-      UpdateService.instance.cleanupAllApks();
+  Future<void> cleanupOldApks() => UpdateService.instance.cleanupAllApks();
 }
 
 final updateNotifierProvider =
-    AsyncNotifierProvider<UpdateNotifier, UpdateState>(
-        UpdateNotifier.new);
+    AsyncNotifierProvider<UpdateNotifier, UpdateState>(UpdateNotifier.new);

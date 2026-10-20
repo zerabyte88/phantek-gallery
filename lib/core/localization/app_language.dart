@@ -110,7 +110,9 @@ enum AppLanguage {
 
   /// Languages sorted alphabetically (A-Z) by [englishName], with [system] pinned at the top.
   static List<AppLanguage> get sortedLanguages {
-    final list = AppLanguage.values.where((l) => l != AppLanguage.system).toList()
+    final list = AppLanguage.values
+        .where((l) => l != AppLanguage.system)
+        .toList()
       ..sort((a, b) => a.englishName.compareTo(b.englishName));
     return [AppLanguage.system, ...list];
   }

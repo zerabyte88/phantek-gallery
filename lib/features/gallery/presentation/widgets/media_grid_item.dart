@@ -7,7 +7,7 @@ import '../../../../core/services/thumbnail_service.dart';
 import '../../../../core/utils/media_utils.dart';
 import 'shimmer_loading_tile.dart';
 
-/// Single cell in the gallery grid. Shows thumbnail + video badge if selected.
+/// Gallery grid thumbnail item.
 class MediaGridItem extends ConsumerStatefulWidget {
   const MediaGridItem({
     super.key,
@@ -49,7 +49,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
   }
 
   void _initThumbnail() {
-    // If already in memory or on persistent disk cache, skip queuing
+    // Skip queue if already available in memory or disk cache.
     if (ThumbnailService.instance.getMemoryThumbnail(widget.item.id) != null ||
         ThumbnailService.instance.getCachedFile(widget.item.id) != null) {
       _thumbFuture = null;
@@ -76,7 +76,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
   }
 
   Widget _buildThumbnail(ColorScheme cs) {
-    // 1. Fast in-memory lookup (0ms)
+    // 1. Memory cache lookup.
     final mem = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
     if (mem != null) {
       return Image.memory(
@@ -87,7 +87,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
       );
     }
 
-    // 2. Persistent disk cache hit (Instant on cold start — skips FutureBuilder delay!)
+    // 2. Disk cache lookup.
     final diskFile = ThumbnailService.instance.getCachedFile(widget.item.id);
     if (diskFile != null) {
       return Image.file(
@@ -99,7 +99,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
       );
     }
 
-    // 3. Fallback: uncached, fetch asynchronously
+    // 3. Fetch asynchronously if not cached.
     _thumbFuture ??= ThumbnailService.instance.getThumbnail(
       widget.item.id,
       filePath: widget.item.path,
@@ -177,9 +177,6 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Thumbnail ───────────────────────────────────────
-          // Hero tag == item id: the viewer's current page (same tag) flies
-          // back to this tile on pop, whichever photo it was swiped to.
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Hero(
@@ -188,8 +185,6 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
               child: _buildThumbnail(cs),
             ),
           ),
-
-          // ── Video badge ─────────────────────────────────────
           if (widget.item.isVideo && widget.showBadges)
             Positioned(
               bottom: 4,
@@ -209,8 +204,6 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
                 ),
               ),
             ),
-
-          // ── Selection overlay ───────────────────────────────
           if (widget.isSelecting)
             Positioned.fill(
               child: AnimatedContainer(
@@ -225,7 +218,6 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
                 ),
               ),
             ),
-
           if (widget.isSelecting)
             Positioned(
               top: 4,

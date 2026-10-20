@@ -12,12 +12,12 @@ final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 /// Named route constants.
 class AppRoutes {
-  static const gallery  = '/';
-  static const image    = '/image';
-  static const video    = '/video';
-  static const trash    = '/trash';
+  static const gallery = '/';
+  static const image = '/image';
+  static const video = '/video';
+  static const trash = '/trash';
   static const settings = '/settings';
-  static const album    = '/album';
+  static const album = '/album';
 }
 
 Route<dynamic> generateRoute(RouteSettings s) {
@@ -116,13 +116,17 @@ class _ViewerArgs {
 
 /// Helper extension on [NavigatorState] so call sites are clean.
 extension AppNav on NavigatorState {
-  Future<void> openImage(List<MediaItem> items, int index, {bool isTrash = false}) =>
+  Future<void> openImage(List<MediaItem> items, int index,
+          {bool isTrash = false}) =>
       pushNamed(AppRoutes.image,
-          arguments: _ViewerArgs(items: items, initialIndex: index, isTrash: isTrash));
+          arguments:
+              _ViewerArgs(items: items, initialIndex: index, isTrash: isTrash));
 
-  Future<void> openVideo(List<MediaItem> items, int index, {bool isTrash = false}) =>
+  Future<void> openVideo(List<MediaItem> items, int index,
+          {bool isTrash = false}) =>
       pushNamed(AppRoutes.video,
-          arguments: _ViewerArgs(items: items, initialIndex: index, isTrash: isTrash));
+          arguments:
+              _ViewerArgs(items: items, initialIndex: index, isTrash: isTrash));
 
   Future<void> openSingleVideo(MediaItem item) =>
       pushNamed(AppRoutes.video, arguments: item);

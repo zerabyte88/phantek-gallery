@@ -20,10 +20,12 @@ import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
 import 'widgets/rename_dialog.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
+
 /// A 100MP photo decodes to ~50 MB instead of ~408 MB, so it fits imageCache.
 // ponytail: fixed 4096px cap, sharp to ~3x zoom on 1080p. Swap to full-res
 // FileImage on deep zoom if pixel-peeping beyond 3x matters.
-ImageProvider displayImage(String path, {int maxDimension = 4096}) => ResizeImage(
+ImageProvider displayImage(String path, {int maxDimension = 4096}) =>
+    ResizeImage(
       FileImage(File(path)),
       width: maxDimension,
       height: maxDimension,
@@ -32,7 +34,8 @@ ImageProvider displayImage(String path, {int maxDimension = 4096}) => ResizeImag
 
 /// Adaptive screen-fit image provider (~2048px max bounding box)
 /// keeps memory down to ~12 MB per photo, ensuring silky-smooth 60/120 fps sliding.
-ImageProvider screenDisplayImage(String path, [int maxDim = 2048]) => ResizeImage(
+ImageProvider screenDisplayImage(String path, [int maxDim = 2048]) =>
+    ResizeImage(
       FileImage(File(path)),
       width: maxDim,
       height: maxDim,
@@ -93,8 +96,6 @@ Widget _buildHeroShuttle({
     animation: curved,
     builder: (context, child) {
       final t = curved.value;
-      // In both push (0->1) and pop (1->0), (1 - t) * 8.0 smoothly matches
-      // the grid tile corner radius (8.0 at grid, 0.0 at viewer).
       final radius = (1.0 - t) * 8.0;
 
       if (radius <= 0.05) return child!;
@@ -244,13 +245,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
     final v = _settleFrom.dy.abs() > 1 ? vy / _settleFrom.dy : 0.0;
     _settle.value = 1.0;
-    _settle.animateWith(SpringSimulation(
+    _settle
+        .animateWith(SpringSimulation(
       SpringDescription.withDampingRatio(
           mass: 1.0, stiffness: 320, ratio: 0.82),
       1.0,
       0.0,
       v.clamp(-8.0, 8.0),
-    )).whenCompleteOrCancel(() {
+    ))
+        .whenCompleteOrCancel(() {
       _setDrag(Offset.zero);
     });
   }
@@ -379,7 +382,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       ),
     );
 
-    final ar = (it.width != null && it.height != null && it.width! > 0 && it.height! > 0)
+    final ar = (it.width != null &&
+            it.height != null &&
+            it.width! > 0 &&
+            it.height! > 0)
         ? (it.width! / it.height!)
         : ThumbnailService.instance.getThumbnailAspectRatio(it.id);
 
@@ -456,7 +462,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
     final ok = await showDeleteConfirmationSheet(
       context,
-      title: isTrash ? context.tr.moveToTrashTitle : context.tr.deletePermanentlyTitle,
+      title: isTrash
+          ? context.tr.moveToTrashTitle
+          : context.tr.deletePermanentlyTitle,
       contentText: isTrash
           ? context.tr.moveToTrashConfirm(item.name)
           : context.tr.deletePermanentlyConfirm(item.name),
@@ -476,7 +484,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       return;
     }
 
-    // 1. Immediately remove from global media list provider
     ref.read(mediaListProvider.notifier).removeItems({item.id});
 
     try {
@@ -631,7 +638,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             }
           }
           if (_activePointers.length >= 2 || _isCurrentlyZoomed) {
-            // Multi-touch, pinch, or zoomed: abort any drag-to-dismiss immediately.
+            // Abort drag-to-dismiss during multi-touch, pinch, or zoom.
             _isMultiTouch = true;
             _isPinching = true;
             _startDragY = null;
@@ -659,7 +666,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           final dx = e.position.dx - _startDragX!;
           final dy = e.position.dy - _startDragY!;
 
-          // Detect horizontal swipe intention to avoid fighting PageView
+          // Detect horizontal swipe intent to avoid fighting PageView.
           if (!_isSwipingHorizontal && _drag.value == Offset.zero) {
             final adx = dx.abs();
             final ady = dy.abs();
@@ -737,13 +744,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           onDoubleTap: _handleDoubleTap,
           child: Stack(
             children: [
-              // ── Background scrim: opacity follows route animation & drag distance ──
               Positioned.fill(
                 child: AnimatedBuilder(
-                  animation: ModalRoute.of(context)?.animation ?? kAlwaysCompleteAnimation,
+                  animation: ModalRoute.of(context)?.animation ??
+                      kAlwaysCompleteAnimation,
                   builder: (context, _) {
-                    final routeAnim = ModalRoute.of(context)?.animation?.value ?? 1.0;
-                    final curved = const Cubic(0.2, 0.0, 0.0, 1.0).transform(routeAnim.clamp(0.0, 1.0));
+                    final routeAnim =
+                        ModalRoute.of(context)?.animation?.value ?? 1.0;
+                    final curved = const Cubic(0.2, 0.0, 0.0, 1.0)
+                        .transform(routeAnim.clamp(0.0, 1.0));
                     return ValueListenableBuilder<Offset>(
                       valueListenable: _drag,
                       builder: (_, d, __) {
@@ -758,12 +767,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   },
                 ),
               ),
-              // ── Gallery: translate + proportional scale-down + subtle corner radius ─────
               ValueListenableBuilder<Offset>(
                 valueListenable: _drag,
                 builder: (_, d, child) {
                   final s = (1.0 - (d.dy / 1000.0) * 0.28).clamp(0.72, 1.0);
-                  final radius = (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
+                  final radius =
+                      (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
                   return Transform(
                     alignment: Alignment.center,
                     transform: Matrix4.translationValues(d.dx, d.dy, 0)
@@ -823,8 +832,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           child: Center(
                             child: ClipRect(
                               child: InteractiveViewer(
-                                key: ValueKey('iv_${it.id}_${MediaQuery.orientationOf(context)}'),
-                                transformationController: isCur ? _transformationController : null,
+                                key: ValueKey(
+                                    'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
+                                transformationController:
+                                    isCur ? _transformationController : null,
                                 minScale: 1.0,
                                 maxScale: 8.0,
                                 panEnabled: isCur && _isCurrentlyZoomed,
@@ -861,7 +872,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                           _resetPhotoZoom();
                                         } else {
                                           final shouldDeepZoom = scale > 1.2;
-                                          if ((!_isPhotoZoomed || _isDeepZoomed != shouldDeepZoom) && mounted) {
+                                          if ((!_isPhotoZoomed ||
+                                                  _isDeepZoomed !=
+                                                      shouldDeepZoom) &&
+                                              mounted) {
                                             setState(() {
                                               _isPhotoZoomed = true;
                                               _isDeepZoomed = shouldDeepZoom;
@@ -888,11 +902,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                         flightDirection: flightDirection,
                                         id: it.id,
                                         path: it.path,
-                                        fallbackChild: flightDirection == HeroFlightDirection.push
+                                        fallbackChild: flightDirection ==
+                                                HeroFlightDirection.push
                                             ? toHeroContext.widget
                                             : fromHeroContext.widget,
                                       ),
-                                      child: _buildPhotoPage(it, isCurrent: isCur),
+                                      child:
+                                          _buildPhotoPage(it, isCurrent: isCur),
                                     ),
                                   ),
                                 ),
@@ -903,10 +919,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       },
                     ),
                   ),
-                  ),
                 ),
-
-            // ── Top bar ────────────────────────────────────────
+              ),
               Positioned(
                 top: 0,
                 left: 0,
@@ -917,8 +931,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   child: SafeArea(
                     bottom: false,
                     child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 4),
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
@@ -979,8 +993,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   ),
                 ),
               ),
-
-              // ── Bottom action bar (Photo 2 reference) ───────────
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -1044,15 +1056,21 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                     );
                                     return _ViewerActionButton(
                                       icon: Icon(
-                                        isFav ? Icons.favorite : Icons.favorite_border,
-                                        color: isFav ? Colors.redAccent : Colors.white,
+                                        isFav
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
+                                        color: isFav
+                                            ? Colors.redAccent
+                                            : Colors.white,
                                         size: 22,
                                       ),
                                       label: context.tr.favorite,
                                       onTap: () {
                                         HapticFeedback.lightImpact();
                                         final currentFavs = Set<String>.from(
-                                          ref.read(settingsNotifierProvider).favoriteIds,
+                                          ref
+                                              .read(settingsNotifierProvider)
+                                              .favoriteIds,
                                         );
                                         if (currentFavs.contains(item.id)) {
                                           currentFavs.remove(item.id);
@@ -1060,9 +1078,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                           currentFavs.add(item.id);
                                         }
                                         ref
-                                            .read(settingsNotifierProvider.notifier)
+                                            .read(settingsNotifierProvider
+                                                .notifier)
                                             .update(
-                                              (s) => s.copyWith(favoriteIds: currentFavs.toList()),
+                                              (s) => s.copyWith(
+                                                  favoriteIds:
+                                                      currentFavs.toList()),
                                             );
                                       },
                                     );
@@ -1130,4 +1151,3 @@ class _ViewerActionButton extends StatelessWidget {
     );
   }
 }
-

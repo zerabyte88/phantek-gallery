@@ -7,21 +7,21 @@ import '../localization/app_language.dart';
 
 /// Keys used in SharedPreferences.
 class _K {
-  static const themeMode          = 'themeMode';
-  static const language           = 'language';
-  static const gridColumns        = 'gridColumns';
-  static const albumGridColumns   = 'albumGridColumns';
-  static const showBadges         = 'showBadges';
-  static const enableTrash        = 'enableTrash';
-  static const hardwareAccel      = 'hardwareAcceleration';
-  static const autoPlayVideo      = 'autoPlayVideo';
-  static const keepScreenOn       = 'keepScreenOn';
-  static const excludedFolders    = 'excludedFolders';
-  static const autoCheckUpdate    = 'autoCheckUpdate';
-  static const defaultSort        = 'defaultSort';
-  static const defaultFilter      = 'defaultFilter';
-  static const isSakuraUnlocked   = 'isSakuraUnlocked';
-  static const favoriteIds        = 'favoriteIds';
+  static const themeMode = 'themeMode';
+  static const language = 'language';
+  static const gridColumns = 'gridColumns';
+  static const albumGridColumns = 'albumGridColumns';
+  static const showBadges = 'showBadges';
+  static const enableTrash = 'enableTrash';
+  static const hardwareAccel = 'hardwareAcceleration';
+  static const autoPlayVideo = 'autoPlayVideo';
+  static const keepScreenOn = 'keepScreenOn';
+  static const excludedFolders = 'excludedFolders';
+  static const autoCheckUpdate = 'autoCheckUpdate';
+  static const defaultSort = 'defaultSort';
+  static const defaultFilter = 'defaultFilter';
+  static const isSakuraUnlocked = 'isSakuraUnlocked';
+  static const favoriteIds = 'favoriteIds';
 }
 
 /// Thin wrapper around SharedPreferences for typed settings access.
@@ -47,42 +47,46 @@ class SettingsService {
   // ── Read ──────────────────────────────────────────────────────────────────
 
   SettingsModel get settings => SettingsModel(
-        themeMode:           _readEnum(_K.themeMode, AppThemeMode.values, AppThemeMode.system),
-        language:            _readEnum(_K.language, AppLanguage.values, AppLanguage.system),
-        gridColumns:         _prefs.getInt(_K.gridColumns) ?? 3,
-        albumGridColumns:    _prefs.getInt(_K.albumGridColumns) ?? 3,
-        showBadges:          _prefs.getBool(_K.showBadges) ?? true,
-        keepScreenOn:        _prefs.getBool(_K.keepScreenOn) ?? false,
-        enableTrash:         _prefs.getBool(_K.enableTrash) ?? true,
+        themeMode:
+            _readEnum(_K.themeMode, AppThemeMode.values, AppThemeMode.system),
+        language:
+            _readEnum(_K.language, AppLanguage.values, AppLanguage.system),
+        gridColumns: _prefs.getInt(_K.gridColumns) ?? 3,
+        albumGridColumns: _prefs.getInt(_K.albumGridColumns) ?? 3,
+        showBadges: _prefs.getBool(_K.showBadges) ?? true,
+        keepScreenOn: _prefs.getBool(_K.keepScreenOn) ?? false,
+        enableTrash: _prefs.getBool(_K.enableTrash) ?? true,
         hardwareAcceleration: _prefs.getBool(_K.hardwareAccel) ?? true,
-        autoPlayVideo:       _prefs.getBool(_K.autoPlayVideo) ?? false,
-        excludedFolders:     _readStringList(_K.excludedFolders),
-        autoCheckUpdate:     _prefs.getBool(_K.autoCheckUpdate) ?? true,
-        defaultSort:         _readEnum(_K.defaultSort, SortOption.values, SortOption.newest),
-        defaultFilter:       _readEnum(_K.defaultFilter, FilterOption.values, FilterOption.all),
-        isSakuraUnlocked:    _prefs.getBool(_K.isSakuraUnlocked) ?? false,
-        favoriteIds:         _readStringList(_K.favoriteIds),
+        autoPlayVideo: _prefs.getBool(_K.autoPlayVideo) ?? false,
+        excludedFolders: _readStringList(_K.excludedFolders),
+        autoCheckUpdate: _prefs.getBool(_K.autoCheckUpdate) ?? true,
+        defaultSort:
+            _readEnum(_K.defaultSort, SortOption.values, SortOption.newest),
+        defaultFilter:
+            _readEnum(_K.defaultFilter, FilterOption.values, FilterOption.all),
+        isSakuraUnlocked: _prefs.getBool(_K.isSakuraUnlocked) ?? false,
+        favoriteIds: _readStringList(_K.favoriteIds),
       );
 
   // ── Write ─────────────────────────────────────────────────────────────────
 
   Future<void> save(SettingsModel model) async {
     await Future.wait([
-      _prefs.setString(_K.themeMode,       model.themeMode.name),
-      _prefs.setString(_K.language,        model.language.name),
-      _prefs.setInt   (_K.gridColumns,     model.gridColumns),
-      _prefs.setInt   (_K.albumGridColumns, model.albumGridColumns),
-      _prefs.setBool  (_K.showBadges,      model.showBadges),
-      _prefs.setBool  (_K.keepScreenOn,    model.keepScreenOn),
-      _prefs.setBool  (_K.enableTrash,     model.enableTrash),
-      _prefs.setBool  (_K.hardwareAccel,   model.hardwareAcceleration),
-      _prefs.setBool  (_K.autoPlayVideo,   model.autoPlayVideo),
+      _prefs.setString(_K.themeMode, model.themeMode.name),
+      _prefs.setString(_K.language, model.language.name),
+      _prefs.setInt(_K.gridColumns, model.gridColumns),
+      _prefs.setInt(_K.albumGridColumns, model.albumGridColumns),
+      _prefs.setBool(_K.showBadges, model.showBadges),
+      _prefs.setBool(_K.keepScreenOn, model.keepScreenOn),
+      _prefs.setBool(_K.enableTrash, model.enableTrash),
+      _prefs.setBool(_K.hardwareAccel, model.hardwareAcceleration),
+      _prefs.setBool(_K.autoPlayVideo, model.autoPlayVideo),
       _prefs.setString(_K.excludedFolders, jsonEncode(model.excludedFolders)),
-      _prefs.setBool  (_K.autoCheckUpdate, model.autoCheckUpdate),
-      _prefs.setString(_K.defaultSort,     model.defaultSort.name),
-      _prefs.setString(_K.defaultFilter,   model.defaultFilter.name),
-      _prefs.setBool  (_K.isSakuraUnlocked, model.isSakuraUnlocked),
-      _prefs.setString(_K.favoriteIds,      jsonEncode(model.favoriteIds)),
+      _prefs.setBool(_K.autoCheckUpdate, model.autoCheckUpdate),
+      _prefs.setString(_K.defaultSort, model.defaultSort.name),
+      _prefs.setString(_K.defaultFilter, model.defaultFilter.name),
+      _prefs.setBool(_K.isSakuraUnlocked, model.isSakuraUnlocked),
+      _prefs.setString(_K.favoriteIds, jsonEncode(model.favoriteIds)),
     ]);
   }
 

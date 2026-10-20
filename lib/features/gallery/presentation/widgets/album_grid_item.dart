@@ -47,11 +47,10 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
 
   void _initThumbnail() {
     if (ThumbnailService.instance
-            .getMemoryThumbnail(widget.album.coverItem.id) !=
-        null ||
-        ThumbnailService.instance
-            .getCachedFile(widget.album.coverItem.id) !=
-        null) {
+                .getMemoryThumbnail(widget.album.coverItem.id) !=
+            null ||
+        ThumbnailService.instance.getCachedFile(widget.album.coverItem.id) !=
+            null) {
       _thumbFuture = null;
       return;
     }
@@ -74,9 +73,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
   }
 
   Widget _buildCover(ColorScheme cs) {
-    // 1. Fast in-memory lookup (0ms)
-    final mem = ThumbnailService.instance
-        .getMemoryThumbnail(widget.album.coverItem.id);
+    final mem =
+        ThumbnailService.instance.getMemoryThumbnail(widget.album.coverItem.id);
     if (mem != null) {
       return Image.memory(
         mem,
@@ -86,9 +84,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
       );
     }
 
-    // 2. Persistent disk cache hit (Instant on cold start — skips FutureBuilder delay!)
-    final diskFile = ThumbnailService.instance
-        .getCachedFile(widget.album.coverItem.id);
+    final diskFile =
+        ThumbnailService.instance.getCachedFile(widget.album.coverItem.id);
     if (diskFile != null) {
       return Image.file(
         diskFile,
@@ -99,7 +96,6 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
       );
     }
 
-    // 3. Fallback: uncached, fetch asynchronously
     _thumbFuture ??= ThumbnailService.instance.getThumbnail(
       widget.album.coverItem.id,
       filePath: widget.album.coverItem.path,
@@ -169,7 +165,6 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Cover Thumbnail ──────────────────────────────
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(14),
@@ -199,8 +194,6 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
                         ),
                       ),
                     ),
-
-                  // ── Selection overlay ───────────────────────────
                   if (widget.isSelecting)
                     Positioned.fill(
                       child: AnimatedContainer(
@@ -216,7 +209,6 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
                         ),
                       ),
                     ),
-
                   if (widget.isSelecting)
                     Positioned(
                       top: 8,
@@ -243,8 +235,6 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
             ),
           ),
           const SizedBox(height: 7),
-
-          // ── Album Name ──────────────────────────────────────────
           Text(
             widget.album.name,
             maxLines: 1,
@@ -256,8 +246,6 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
             ),
           ),
           const SizedBox(height: 2),
-
-          // ── Item Count ──────────────────────────────────────────
           Text(
             '${widget.album.itemCount} items',
             maxLines: 1,

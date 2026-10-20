@@ -74,7 +74,6 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── 1. Modern Segmented Filter Bar ──────────────────────────────
           Container(
             height: 42,
             padding: const EdgeInsets.all(3.5),
@@ -88,7 +87,6 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
             ),
             child: Stack(
               children: [
-                // ── Sliding Capsule Indicator ────────────────────────────
                 if (pageController != null)
                   AnimatedBuilder(
                     animation: pageController!,
@@ -114,8 +112,6 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                     alignment: Alignment(alignmentX, 0.0),
                     child: capsuleIndicator,
                   ),
-
-                // ── Tab Labels and Tap Interactions ───────────────────────
                 Row(
                   children: options.asMap().entries.map((entry) {
                     final index = entry.key;
@@ -137,13 +133,11 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: selected
-                                  ? cs.onPrimary
-                                  : cs.onSurfaceVariant,
+                              color:
+                                  selected ? cs.onPrimary : cs.onSurfaceVariant,
                               fontSize: 13,
-                              fontWeight: selected
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
+                              fontWeight:
+                                  selected ? FontWeight.w600 : FontWeight.w500,
                             ),
                           );
                         },
@@ -154,13 +148,10 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                         duration: const Duration(milliseconds: 280),
                         curve: Curves.easeOutCubic,
                         style: TextStyle(
-                          color: selected
-                              ? cs.onPrimary
-                              : cs.onSurfaceVariant,
+                          color: selected ? cs.onPrimary : cs.onSurfaceVariant,
                           fontSize: 13,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w500,
+                          fontWeight:
+                              selected ? FontWeight.w600 : FontWeight.w500,
                         ),
                         child: Text(
                           f.localizedLabel(context),
@@ -193,14 +184,10 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
               ],
             ),
           ),
-
           const SizedBox(height: 8),
-
-          // ── 2. Compact Modern Sort Pill ─────────────────────────────────
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              // Modern clickable sort chip
               BouncyTap(
                 scaleDown: 0.94,
                 child: Material(

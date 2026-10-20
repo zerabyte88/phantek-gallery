@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/enums/sort_option.dart';
 import '../../../../core/localization/app_localizations.dart';
 
-/// Modal bottom sheet for selecting media sorting criteria and direction.
-/// Matches Image 2 layout with radio indicators, custom direction pills on ALL options,
-/// and "Restore defaults" action.
+/// Modal bottom sheet for choosing media sorting criteria and direction.
 class SortBottomSheet extends StatefulWidget {
   const SortBottomSheet({
     super.key,
@@ -33,7 +31,7 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
       SortCriterion.name: SortDirection.ascending,
       SortCriterion.size: SortDirection.descending,
     };
-    // Initialize active criterion with the current sort direction
+    // Initialize active criterion with current sort direction.
     _directions[_criterion] = widget.currentSort.direction;
   }
 
@@ -76,7 +74,6 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Top Header: Title "Sort" & Close button "X"
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 14, 8, 4),
               child: Row(
@@ -99,10 +96,7 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                 ],
               ),
             ),
-
             const SizedBox(height: 4),
-
-            // Criteria Options (All 4 options have their direction button & subtitle)
             ...SortCriterion.values.map((c) {
               final isSelected = _criterion == c;
               final currentDirection = _directions[c] ?? c.defaultDirection;
@@ -121,7 +115,6 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                       const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   child: Row(
                     children: [
-                      // Radio circle indicator
                       Container(
                         width: 22,
                         height: 22,
@@ -136,8 +129,6 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                         ),
                       ),
                       const SizedBox(width: 16),
-
-                      // Label + Subtitle
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -154,19 +145,20 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              c.localizedDirectionLabel(context, currentDirection),
+                              c.localizedDirectionLabel(
+                                  context, currentDirection),
                               style: TextStyle(
                                 fontSize: 13,
                                 color: isSelected
                                     ? (isDark ? Colors.white70 : Colors.black87)
-                                    : (isDark ? Colors.white38 : Colors.black45),
+                                    : (isDark
+                                        ? Colors.white38
+                                        : Colors.black45),
                               ),
                             ),
                           ],
                         ),
                       ),
-
-                      // Right direction toggle pill (always present on all options)
                       Container(
                         decoration: BoxDecoration(
                           color: isSelected
@@ -182,7 +174,6 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Ascending (↑)
                             GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _update(c, SortDirection.ascending),
@@ -194,7 +185,8 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                                   color: isAscending
                                       ? (isDark
                                           ? Colors.white.withValues(alpha: 0.28)
-                                          : Colors.black.withValues(alpha: 0.18))
+                                          : Colors.black
+                                              .withValues(alpha: 0.18))
                                       : Colors.transparent,
                                 ),
                                 child: Icon(
@@ -202,12 +194,12 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                                   size: 16,
                                   color: isAscending
                                       ? (isDark ? Colors.white : Colors.black)
-                                      : (isDark ? Colors.white38 : Colors.black38),
+                                      : (isDark
+                                          ? Colors.white38
+                                          : Colors.black38),
                                 ),
                               ),
                             ),
-
-                            // Descending (↓)
                             GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _update(c, SortDirection.descending),
@@ -219,7 +211,8 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                                   color: !isAscending
                                       ? (isDark
                                           ? Colors.white.withValues(alpha: 0.28)
-                                          : Colors.black.withValues(alpha: 0.18))
+                                          : Colors.black
+                                              .withValues(alpha: 0.18))
                                       : Colors.transparent,
                                 ),
                                 child: Icon(
@@ -227,7 +220,9 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                                   size: 16,
                                   color: !isAscending
                                       ? (isDark ? Colors.white : Colors.black)
-                                      : (isDark ? Colors.white38 : Colors.black38),
+                                      : (isDark
+                                          ? Colors.white38
+                                          : Colors.black38),
                                 ),
                               ),
                             ),
@@ -239,10 +234,7 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
                 ),
               );
             }),
-
             const SizedBox(height: 8),
-
-            // Bottom action: "Restore defaults"
             Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 20),
               child: Center(

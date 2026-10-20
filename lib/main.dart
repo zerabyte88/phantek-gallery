@@ -69,9 +69,7 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final settings = ref.read(settingsNotifierProvider);
       if (settings.autoCheckUpdate) {
-        ref
-            .read(updateNotifierProvider.notifier)
-            .checkForUpdate(silent: true);
+        ref.read(updateNotifierProvider.notifier).checkForUpdate(silent: true);
       }
     });
   }
@@ -143,8 +141,7 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
         duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut,
         child: UpdateListener(
-          // Wraps the entire widget tree so update dialogs can appear
-          // over any screen without needing a navigator key.
+          // Global wrapper to display update dialogs over any active screen.
           child: child ?? const SizedBox.shrink(),
         ),
       ),
