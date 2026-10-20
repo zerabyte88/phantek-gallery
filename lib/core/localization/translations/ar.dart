@@ -194,6 +194,11 @@ const Map<String, String> arTranslations = {
   'clearCacheConfirm': 'مسح جميع المصغرات المخزنة مؤقتاً؟',
   'cropAdaptive': 'نسبة تكيّفية',
   'cropSquare': 'مربع (1:1)',
+  'videoDoubleTapAction': 'إجراء النقر المزدوج على الفيديو',
+  'videoDoubleTapActionDesc': 'اختر ما يحدث عند النقر المزدوج على الفيديو',
+  'doubleTapActionSmart': 'ذكي (تقديم/ترجيع على الحواف، تكبير في الوسط)',
+  'doubleTapActionSeekOnly': 'تقديم/ترجيع فقط (ترجيع / تقديم)',
+  'doubleTapActionZoomOnly': 'تكبير فقط (تكبير / إعادة ضبط)',
   'doubleTapSeek': 'فاصل التقديم بالنقر المزدوج',
   'filterSmallImages': 'تصفية الصور الصغيرة',
   'filterSmallImagesDesc':

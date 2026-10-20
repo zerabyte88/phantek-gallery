@@ -199,6 +199,11 @@ const Map<String, String> msTranslations = {
   'clearCacheConfirm': 'Kosongkan semua lakaran kenit dalam cache?',
   'cropAdaptive': 'Nisbah Adaptif',
   'cropSquare': 'Segi Empat (1:1)',
+  'videoDoubleTapAction': 'Tindakan Dwiketik Video',
+  'videoDoubleTapActionDesc': 'Pilih tindakan apabila dwiketik pada video',
+  'doubleTapActionSmart': 'Pintar (Langkau di tepi, Zum di tengah)',
+  'doubleTapActionSeekOnly': 'Langkau Sahaja (Undur / Maju)',
+  'doubleTapActionZoomOnly': 'Zum Sahaja (Zum / Set Semula)',
   'doubleTapSeek': 'Selang Carian Ketik Dua Kali',
   'filterSmallImages': 'Tapis Imej Kecil',
   'filterSmallImagesDesc':

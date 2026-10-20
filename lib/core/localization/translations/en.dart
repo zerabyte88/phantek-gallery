@@ -183,6 +183,8 @@ const Map<String, String> enTranslations = {
   'updateCheckFailed': 'Update check failed: {error}',
   'updates': 'Updates',
   'videos': 'Videos',
+  'whatsNew': "What's New:",
+  'zToA': 'Z to A',
   'browsingAndNavigation': 'Browsing & Navigation',
   'startupScreen': 'Startup Screen',
   'filterSmallImages': 'Filter Small Images',

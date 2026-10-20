@@ -179,6 +179,8 @@ const Map<String, String> idTranslations = {
   'updateCheckFailed': 'Pemeriksaan pembaruan gagal: {error}',
   'updates': 'Pembaruan',
   'videos': 'Video',
+  'whatsNew': 'Yang Baru:',
+  'zToA': 'Z ke A',
   'browsingAndNavigation': 'Navigasi & Penjelajahan',
   'startupScreen': 'Layar Awal',
   'filterSmallImages': 'Saring Gambar Kecil',

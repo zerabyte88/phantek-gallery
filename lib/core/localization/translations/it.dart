@@ -199,6 +199,11 @@ const Map<String, String> itTranslations = {
   'clearCacheConfirm': 'Cancellare tutte le miniature memorizzate nella cache?',
   'cropAdaptive': 'Proporzioni adattive',
   'cropSquare': 'Quadrato (1:1)',
+  'videoDoubleTapAction': 'Azione doppio tocco video',
+  'videoDoubleTapActionDesc': 'Scegli cosa succede al doppio tocco su un video',
+  'doubleTapActionSmart': 'Smart (Scorri ai bordi, Zoom al centro)',
+  'doubleTapActionSeekOnly': 'Solo avanzamento (Indietro / Avanti)',
+  'doubleTapActionZoomOnly': 'Solo zoom (Ingrandisci / Ripristina)',
   'doubleTapSeek': 'Intervallo di avanzamento con doppio tocco',
   'filterSmallImages': 'Filtra immagini piccole',
   'filterSmallImagesDesc':

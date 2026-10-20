@@ -2491,6 +2491,8 @@ void main() {
 
       // Localization test
       final enLoc = AppLocalizations(const Locale('en'));
+      expect(enLoc.aToZ, 'A to Z');
+      expect(enLoc.zToA, 'Z to A');
       expect(enLoc.videoDoubleTapActionLabel(VideoDoubleTapAction.smart),
           'Smart (Seek on edges, Zoom in center)');
       expect(enLoc.videoDoubleTapActionLabel(VideoDoubleTapAction.seekOnly),
@@ -2499,6 +2501,8 @@ void main() {
           'Zoom Only (Zoom / Reset)');
 
       final idLoc = AppLocalizations(const Locale('id'));
+      expect(idLoc.aToZ, 'A ke Z');
+      expect(idLoc.zToA, 'Z ke A');
       expect(idLoc.videoDoubleTapActionLabel(VideoDoubleTapAction.smart),
           'Cerdas (Seek di tepi, Zoom di tengah)');
       expect(idLoc.videoDoubleTapActionLabel(VideoDoubleTapAction.seekOnly),
