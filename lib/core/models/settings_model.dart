@@ -38,7 +38,6 @@ class SettingsModel extends Equatable {
     this.filterSmallImages = false,
     this.showHiddenFiles = false,
     this.secureScreen = false,
-    this.lockedVaultEnabled = false,
   });
 
   final AppThemeMode themeMode;
@@ -116,9 +115,6 @@ class SettingsModel extends Equatable {
   /// Prevent screenshots and hide app previews in recent tasks (FLAG_SECURE).
   final bool secureScreen;
 
-  /// Enable PIN / biometric protection for locked vault.
-  final bool lockedVaultEnabled;
-
   SettingsModel copyWith({
     AppThemeMode? themeMode,
     AppLanguage? language,
@@ -147,7 +143,6 @@ class SettingsModel extends Equatable {
     bool? filterSmallImages,
     bool? showHiddenFiles,
     bool? secureScreen,
-    bool? lockedVaultEnabled,
   }) {
     return SettingsModel(
       themeMode: themeMode ?? this.themeMode,
@@ -178,7 +173,6 @@ class SettingsModel extends Equatable {
       filterSmallImages: filterSmallImages ?? this.filterSmallImages,
       showHiddenFiles: showHiddenFiles ?? this.showHiddenFiles,
       secureScreen: secureScreen ?? this.secureScreen,
-      lockedVaultEnabled: lockedVaultEnabled ?? this.lockedVaultEnabled,
     );
   }
 
@@ -211,7 +205,6 @@ class SettingsModel extends Equatable {
         filterSmallImages,
         showHiddenFiles,
         secureScreen,
-        lockedVaultEnabled,
       ];
 }
 

@@ -17,8 +17,8 @@ const Map<String, String> msTranslations = {
   'alreadyUpToDate': 'Sudah versi terkini',
   'appVersion': 'Versi Aplikasi',
   'appearance': 'Paparan',
-  'architecture': 'Seni Bina',
-  'videoEngine': 'Enjin Video',
+  'gridAndLayout': 'Grid & Susun Atur',
+  'displayAndSlideshow': 'Paparan & Tayangan Slaid',
   'autoCheckUpdate': 'Semak Kemas Kini Automatik',
   'autoPlayVideo': 'Main Auto Video',
   'autoPlayVideoSubtitle':
@@ -211,8 +211,6 @@ const Map<String, String> msTranslations = {
   'groupContinuous': 'Aliran Berterusan',
   'groupDaily': 'Kumpulan mengikut Hari',
   'groupMonthly': 'Kumpulan mengikut Bulan',
-  'lockedVault': 'Bilik Kebal Tersembunyi / Berkunci',
-  'lockedVaultDesc': 'Lindungi album peribadi dengan keselamatan peranti',
   'maxBrightnessOnMedia': 'Kecerahan Maksimum untuk Media',
   'maxBrightnessOnMediaDesc':
       'Tingkatkan kecerahan skrin ke tahap maksimum dalam paparan media',
@@ -235,13 +233,4 @@ const Map<String, String> msTranslations = {
   'today': 'Hari Ini',
   'yesterday': 'Semalam',
   'ok': 'OK',
-  'moveToVault': 'Pindah ke Kebbal',
-  'restoreFromVault': 'Pulihkan dari Kebbal',
-  'vaultEmpty': 'Kebbal kosong',
-  'vaultEmptyDesc': 'Foto dan video yang dipindahkan ke kebbal akan dipaparkan di sini',
-  'authenticateToOpenVault': 'Buka Kunci Kebbal',
-  'deviceLockRequired': 'Kunci Skrin Diperlukan',
-  'deviceLockRequiredDesc': 'Sila sediakan PIN, Corak atau Cap Jari dalam tetapan peranti anda untuk menggunakan kebbal.',
-  'deleteFromVaultPermanently': 'Padam Kekal',
-  'deleteFromVaultConfirm': 'Adakah anda pasti mahu memadam item ini secara kekal dari kebbal?',
 };

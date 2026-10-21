@@ -90,16 +90,6 @@ class DeveloperAboutCard extends ConsumerWidget {
               ),
               _buildDetailRow(
                 theme,
-                context.tr.architecture,
-                'ARM64-v8a',
-              ),
-              _buildDetailRow(
-                theme,
-                context.tr.videoEngine,
-                'MediaKit',
-              ),
-              _buildDetailRow(
-                theme,
                 context.tr.license,
                 'GPLv3',
                 onTap: () {

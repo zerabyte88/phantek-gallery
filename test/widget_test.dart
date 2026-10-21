@@ -553,7 +553,7 @@ void main() {
     });
 
     testWidgets(
-        'DeveloperAboutCard renders Build, Architecture, and Video Engine rows',
+        'DeveloperAboutCard renders Build, App Version, and License rows',
         (tester) async {
       await tester.pumpWidget(
         const ProviderScope(
@@ -566,12 +566,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Architecture'), findsOneWidget);
-      expect(find.text('ARM64-v8a'), findsOneWidget);
-      expect(find.text('Video Engine'), findsOneWidget);
-      expect(find.text('MediaKit'), findsOneWidget);
+      expect(find.text('Architecture'), findsNothing);
+      expect(find.text('ARM64-v8a'), findsNothing);
+      expect(find.text('Video Engine'), findsNothing);
+      expect(find.text('MediaKit'), findsNothing);
       expect(find.text('Build'), findsOneWidget);
-      expect(find.text('43'), findsOneWidget);
+      expect(find.text('46'), findsOneWidget);
+      expect(find.text('GPLv3'), findsOneWidget);
     });
 
     test('MediaListNotifier optimistic removeItems and restoreItems', () async {
@@ -1959,8 +1960,6 @@ void main() {
             reason: '${lang.code} appVersion');
         expect(loc.buildNumberLabel.isNotEmpty, isTrue,
             reason: '${lang.code} buildNumberLabel');
-        expect(loc.architecture.isNotEmpty, isTrue,
-            reason: '${lang.code} architecture');
         expect(loc.license.isNotEmpty, isTrue, reason: '${lang.code} license');
         expect(loc.developerLabel.isNotEmpty, isTrue,
             reason: '${lang.code} developerLabel');

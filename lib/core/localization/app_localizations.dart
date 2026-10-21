@@ -53,6 +53,8 @@ class AppLocalizations {
   String get selected => _t('selected');
   String get settings => _t('settings');
   String get appearance => _t('appearance');
+  String get gridAndLayout => _t('gridAndLayout');
+  String get displayAndSlideshow => _t('displayAndSlideshow');
   String get theme => _t('theme');
   String get language => _t('language');
   String get chooseLanguage => _t('chooseLanguage');
@@ -181,8 +183,6 @@ class AppLocalizations {
   String get offlineGalleryDesc => _t('offlineGalleryDesc');
   String get appVersion => _t('appVersion');
   String get buildNumberLabel => _t('buildNumberLabel');
-  String get architecture => _t('architecture');
-  String get videoEngine => _t('videoEngine');
   String get license => _t('license');
   String get developerLabel => _t('developerLabel');
   String get creatorMaintainer => _t('creatorMaintainer');
@@ -232,17 +232,6 @@ class AppLocalizations {
   String get privacyAndSecurity => _t('privacyAndSecurity');
   String get secureScreen => _t('secureScreen');
   String get secureScreenDesc => _t('secureScreenDesc');
-  String get lockedVault => _t('lockedVault');
-  String get lockedVaultDesc => _t('lockedVaultDesc');
-  String get moveToVault => _t('moveToVault');
-  String get restoreFromVault => _t('restoreFromVault');
-  String get vaultEmpty => _t('vaultEmpty');
-  String get vaultEmptyDesc => _t('vaultEmptyDesc');
-  String get authenticateToOpenVault => _t('authenticateToOpenVault');
-  String get deviceLockRequired => _t('deviceLockRequired');
-  String get deviceLockRequiredDesc => _t('deviceLockRequiredDesc');
-  String get deleteFromVaultPermanently => _t('deleteFromVaultPermanently');
-  String get deleteFromVaultConfirm => _t('deleteFromVaultConfirm');
   String get today => _t('today');
   String get yesterday => _t('yesterday');
 

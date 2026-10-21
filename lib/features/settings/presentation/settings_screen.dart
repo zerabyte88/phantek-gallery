@@ -12,7 +12,6 @@ import '../../../core/enums/startup_screen.dart';
 import '../../../core/enums/video_double_tap_action.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
-import '../../../core/services/auth_service.dart';
 import '../../../core/services/folder_picker_service.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/thumbnail_service.dart';
@@ -88,7 +87,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.tr.settings),
+        title: Text(
+          context.tr.settings,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        centerTitle: false,
       ),
       body: Theme(
         data: Theme.of(context).copyWith(
@@ -98,9 +101,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           hoverColor: Colors.transparent,
         ),
         child: ListView(
-          padding: const EdgeInsets.only(bottom: 24),
+          padding: const EdgeInsets.fromLTRB(0, 8, 0, 32),
           children: [
-            _SectionHeader(context.tr.appearance),
+            // ── Appearance ──
+            _SectionHeader(
+              title: context.tr.appearance,
+              icon: Icons.palette_outlined,
+              color: const Color(0xFF8B5CF6),
+            ),
             _SettingsCard(
               children: [
                 _ModernTile(
@@ -135,7 +143,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     }
                   },
                 ),
-                const _CardDivider(),
+              ],
+            ),
+
+            // ── Grid & Layout ──
+            _SectionHeader(
+              title: context.tr.gridAndLayout,
+              icon: Icons.grid_view_rounded,
+              color: const Color(0xFF3B82F6),
+            ),
+            _SettingsCard(
+              children: [
                 _ModernTile(
                   icon: Icons.grid_view_rounded,
                   iconColor: const Color(0xFF3B82F6),
@@ -253,7 +271,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-            _SectionHeader(context.tr.playback),
+
+            // ── Video Playback ──
+            _SectionHeader(
+              title: context.tr.playback,
+              icon: Icons.play_circle_outline_rounded,
+              color: const Color(0xFF06B6D4),
+            ),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
@@ -362,6 +386,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 const _CardDivider(),
                 _ModernSwitchTile(
+                  icon: Icons.memory_rounded,
+                  iconColor: const Color(0xFF10B981),
+                  title: context.tr.hardwareAcceleration,
+                  subtitle: context.tr.hardwareAccelerationSubtitle,
+                  value: settings.hardwareAcceleration,
+                  onChanged: (v) =>
+                      patch((s) => s.copyWith(hardwareAcceleration: v)),
+                ),
+              ],
+            ),
+
+            // ── Display & Slideshow ──
+            _SectionHeader(
+              title: context.tr.displayAndSlideshow,
+              icon: Icons.slideshow_rounded,
+              color: const Color(0xFF8B5CF6),
+            ),
+            _SettingsCard(
+              children: [
+                _ModernSwitchTile(
                   icon: Icons.brightness_high_rounded,
                   iconColor: const Color(0xFFF59E0B),
                   title: context.tr.maxBrightnessOnMedia,
@@ -416,19 +460,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     }
                   },
                 ),
-                const _CardDivider(),
-                _ModernSwitchTile(
-                  icon: Icons.memory_rounded,
-                  iconColor: const Color(0xFF10B981),
-                  title: context.tr.hardwareAcceleration,
-                  subtitle: context.tr.hardwareAccelerationSubtitle,
-                  value: settings.hardwareAcceleration,
-                  onChanged: (v) =>
-                      patch((s) => s.copyWith(hardwareAcceleration: v)),
-                ),
               ],
             ),
-            _SectionHeader(context.tr.browsingAndNavigation),
+
+            // ── Browsing & Navigation ──
+            _SectionHeader(
+              title: context.tr.browsingAndNavigation,
+              icon: Icons.explore_outlined,
+              color: const Color(0xFF3B82F6),
+            ),
             _SettingsCard(
               children: [
                 _ModernTile(
@@ -504,7 +544,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-            _SectionHeader(context.tr.storageAndCache),
+
+            // ── Storage & Cache ──
+            _SectionHeader(
+              title: context.tr.storageAndCache,
+              icon: Icons.storage_rounded,
+              color: const Color(0xFF14B8A6),
+            ),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
@@ -559,7 +605,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     }
                   },
                 ),
-                const _CardDivider(),
+              ],
+            ),
+
+            // ── Actions ──
+            const SizedBox(height: 4),
+            _SettingsCard(
+              children: [
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: _ModernActionButton(
@@ -655,7 +707,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-            _SectionHeader(context.tr.privacyAndSecurity),
+
+            // ── Privacy & Security ──
+            _SectionHeader(
+              title: context.tr.privacyAndSecurity,
+              icon: Icons.shield_outlined,
+              color: const Color(0xFF10B981),
+            ),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
@@ -666,54 +724,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   value: settings.secureScreen,
                   onChanged: (v) => patch((s) => s.copyWith(secureScreen: v)),
                 ),
-                const _CardDivider(),
-                _ModernSwitchTile(
-                  icon: Icons.lock_outline_rounded,
-                  iconColor: const Color(0xFF6366F1),
-                  title: context.tr.lockedVault,
-                  subtitle: context.tr.lockedVaultDesc,
-                  value: settings.lockedVaultEnabled,
-                  onChanged: (v) async {
-                    if (v) {
-                      final canAuth = await AuthService.instance.canAuthenticate();
-                      if (!canAuth) {
-                        if (context.mounted) {
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              title: Row(
-                                children: [
-                                  const Icon(Icons.shield_outlined, color: Color(0xFFFFB74D)),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: Text(context.tr.deviceLockRequired, style: const TextStyle(fontSize: 18))),
-                                ],
-                              ),
-                              content: Text(context.tr.deviceLockRequiredDesc),
-                              actions: [
-                                FilledButton(
-                                  onPressed: () => Navigator.of(ctx).pop(),
-                                  child: Text(context.tr.ok),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-                        return;
-                      }
-                      if (!context.mounted) return;
-                      final reason = context.tr.authenticateToOpenVault;
-                      final ok = await AuthService.instance.authenticate(
-                        localizedReason: reason,
-                      );
-                      if (!ok) return;
-                    }
-                    patch((s) => s.copyWith(lockedVaultEnabled: v));
-                  },
-                ),
               ],
             ),
-            _SectionHeader(context.tr.updates),
+
+            // ── Updates ──
+            _SectionHeader(
+              title: context.tr.updates,
+              icon: Icons.system_update_outlined,
+              color: const Color(0xFF8B5CF6),
+            ),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
@@ -742,6 +761,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
+
+            // ── About App (untouched) ──
             const DeveloperAboutCard(),
           ],
         ),
@@ -751,20 +772,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.title);
+  const _SectionHeader({
+    required this.title,
+    required this.icon,
+    required this.color,
+  });
+
   final String title;
+  final IconData icon;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 16, 8),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: Theme.of(context).colorScheme.primary,
-        ),
+      padding: const EdgeInsets.fromLTRB(20, 20, 16, 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
