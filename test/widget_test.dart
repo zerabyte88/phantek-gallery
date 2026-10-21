@@ -1083,26 +1083,77 @@ void main() {
       bool isNonFatalWarning(String err) {
         final errLower = err.toLowerCase();
         return errLower.contains('could not open codec') ||
+            errLower.contains('failed to open codec') ||
             errLower.contains('decoder init failed') ||
             errLower.contains('hwdec') ||
+            errLower.contains('mediacodec') ||
             errLower.contains('using software decoding') ||
             errLower.contains('error decoding') ||
             errLower.contains('cannot decode') ||
             errLower.contains('invalid data') ||
             errLower.contains('corrupt') ||
             errLower.contains('missing picture') ||
-            errLower.contains('packet');
+            errLower.contains('packet') ||
+            errLower.contains('audiotrack') ||
+            errLower.contains('underrun') ||
+            errLower.contains('audio device') ||
+            errLower.contains('ao/audiotrack') ||
+            errLower.contains('codec:');
       }
 
       expect(isNonFatalWarning('Could not open codec hevc'), isTrue);
+      expect(isNonFatalWarning('Failed to open codec: h264_mediacodec'), isTrue);
       expect(isNonFatalWarning('hwdec failed, falling back to sw'), isTrue);
+      expect(isNonFatalWarning('MediaCodec error encountered'), isTrue);
       expect(isNonFatalWarning('Decoder init failed for vp9'), isTrue);
+      expect(isNonFatalWarning('AudioTrack write underrun'), isTrue);
+      expect(isNonFatalWarning('ao/audiotrack: audio device busy'), isTrue);
       expect(isNonFatalWarning('Using software decoding'), isTrue);
       expect(isNonFatalWarning('Error decoding video'), isTrue);
       expect(isNonFatalWarning('Cannot decode frame at timestamp'), isTrue);
       expect(isNonFatalWarning('Invalid data found when processing input'),
           isTrue);
       expect(isNonFatalWarning('File not found: /storage/video.mp4'), isFalse);
+    });
+
+    test(
+        'Slideshow mode rule: video items remain paused as preview slides without auto-play',
+        () {
+      // In slideshow mode, shouldPlay must strictly be false even if autoPlayVideo is enabled.
+      bool computeShouldPlay({
+        required bool isSlideshowPlaying,
+        required bool startSlideshow,
+        required bool autoPlayVideo,
+      }) {
+        return !isSlideshowPlaying && !startSlideshow && autoPlayVideo;
+      }
+
+      // Normal playback with auto-play on: should play
+      expect(
+          computeShouldPlay(
+            isSlideshowPlaying: false,
+            startSlideshow: false,
+            autoPlayVideo: true,
+          ),
+          isTrue);
+
+      // Slideshow active: must NEVER auto-play video
+      expect(
+          computeShouldPlay(
+            isSlideshowPlaying: true,
+            startSlideshow: false,
+            autoPlayVideo: true,
+          ),
+          isFalse);
+
+      // Route transition with startSlideshow flag: must NEVER auto-play video
+      expect(
+          computeShouldPlay(
+            isSlideshowPlaying: false,
+            startSlideshow: true,
+            autoPlayVideo: true,
+          ),
+          isFalse);
     });
 
     testWidgets(

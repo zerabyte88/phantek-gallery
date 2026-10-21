@@ -167,6 +167,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   void _startSlideshow() {
     if (!mounted) return;
+    if (_player.state.playing) {
+      _player.pause();
+    }
     setState(() {
       _isSlideshowPlaying = true;
       _showControls = false;
@@ -180,30 +183,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _slideshowTimer = null;
     if (!mounted || !_isSlideshowPlaying || _videos.isEmpty) return;
 
-    final currentItem = _videos[_current];
-    if (currentItem.isVideo) {
-      if (!_player.state.playing) {
-        _player.play();
-      }
-      // Safety fallback timer so slideshow never stalls indefinitely on broken or paused video
-      final dur = _player.state.duration;
-      final safetySeconds = (dur > Duration.zero && dur.inSeconds > 0)
-          ? dur.inSeconds + 1
-          : 30;
-      _slideshowTimer = Timer(Duration(seconds: safetySeconds), () {
-        if (mounted && _isSlideshowPlaying) {
-          _advanceSlideshow();
-        }
-      });
-    } else {
-      // Photo item in slideshow: advance after configured slideshowInterval
-      final interval = ref.read(settingsNotifierProvider).slideshowInterval;
-      _slideshowTimer = Timer(Duration(seconds: interval), () {
-        if (mounted && _isSlideshowPlaying) {
-          _advanceSlideshow();
-        }
-      });
+    // During slideshow, videos are treated as slides and not auto-played.
+    // If the player is currently playing, ensure it is paused.
+    if (_player.state.playing) {
+      _player.pause();
     }
+
+    final interval = ref.read(settingsNotifierProvider).slideshowInterval;
+    _slideshowTimer = Timer(Duration(seconds: interval), () {
+      if (mounted && _isSlideshowPlaying) {
+        _advanceSlideshow();
+      }
+    });
   }
 
   void _advanceSlideshow() {
@@ -347,7 +338,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (!_videos[_current].isVideo) return;
     final settings = ref.read(settingsNotifierProvider);
     final shouldPlay =
-        settings.autoPlayVideo || _isSlideshowPlaying || widget.startSlideshow;
+        !_isSlideshowPlaying && !widget.startSlideshow && settings.autoPlayVideo;
     if (shouldPlay) {
       if (!_player.state.playing) {
         _player.play();
@@ -563,18 +554,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _player.stream.error.listen((err) {
       debugPrint('[VideoPlayer] Playback error: $err');
       // Filter non-fatal MPV warnings that occur during normal HW→SW codec fallback,
-      // keyframe seeking, or stream buffer flushes.
+      // keyframe seeking, stream buffer flushes, or audio device re-negotiation across all SoCs.
       final errLower = err.toString().toLowerCase();
       final isNonFatal = errLower.contains('could not open codec') ||
+          errLower.contains('failed to open codec') ||
           errLower.contains('decoder init failed') ||
           errLower.contains('hwdec') ||
+          errLower.contains('mediacodec') ||
           errLower.contains('using software decoding') ||
           errLower.contains('error decoding') ||
           errLower.contains('cannot decode') ||
           errLower.contains('invalid data') ||
           errLower.contains('corrupt') ||
           errLower.contains('missing picture') ||
-          errLower.contains('packet');
+          errLower.contains('packet') ||
+          errLower.contains('audiotrack') ||
+          errLower.contains('underrun') ||
+          errLower.contains('audio device') ||
+          errLower.contains('ao/audiotrack') ||
+          errLower.contains('codec:');
       if (mounted && !isNonFatal) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -662,9 +660,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         }
       }
 
-      if (settings.startMuted) {
-        await _player.setVolume(0.0);
-      }
+      await _player.setVolume(settings.startMuted ? 0.0 : 100.0);
 
       await _player.open(
         Media(currentPath),
@@ -672,7 +668,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       );
       await _restoreSavedPosition(currentPath);
       final shouldPlay =
-          settings.autoPlayVideo || widget.startSlideshow;
+          !widget.startSlideshow && settings.autoPlayVideo;
       if (_routeTransitionComplete && shouldPlay) {
         _player.play();
         _controller.waitUntilFirstFrameRendered.then((_) {
@@ -776,11 +772,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
             return;
           }
           await _player.stop();
-          final shouldPlay = settings.autoPlayVideo || _isSlideshowPlaying;
+          final shouldPlay = !_isSlideshowPlaying && settings.autoPlayVideo;
           await _player.open(Media(path), play: shouldPlay);
-          if (settings.startMuted) {
-            await _player.setVolume(0.0);
-          }
+          await _player.setVolume(settings.startMuted ? 0.0 : 100.0);
           await _restoreSavedPosition(path);
           if (_isLooping && !_isSlideshowPlaying) {
             _player.setPlaylistMode(PlaylistMode.loop);
@@ -827,11 +821,21 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Auto-pause playback when app transitions to background.
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
-      _player.pause();
+      _stopSlideshow();
+      if (_videos.isNotEmpty && _current < _videos.length) {
+        _saveCurrentPosition(_videos[_current].path);
+      }
+      if (_player.state.playing) {
+        _player.pause();
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      final settings = ref.read(settingsNotifierProvider);
+      if (!settings.startMuted && _player.state.volume == 0.0) {
+        _player.setVolume(100.0);
+      }
     }
   }
 
@@ -873,6 +877,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _dragNotifier.dispose();
     _feedbackToastNotifier.dispose();
     _transformationController.dispose();
+    try {
+      _player.stop();
+    } catch (_) {}
     _player.dispose(); // releases native MPV context
     _pageController.dispose();
     _exitFullscreen();
