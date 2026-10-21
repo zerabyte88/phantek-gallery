@@ -109,7 +109,7 @@ const Map<String, String> arTranslations = {
   'noVideosFound': 'لم يتم العثور على مقاطع فيديو',
   'none': 'لا يوجد',
   'normal': 'عادي',
-  'offlineGalleryDesc': 'معرض ومشغل وسائط بدون إنترنت',
+  'offlineGalleryDesc': 'مشغل وسائط سريع وخفيف وخاص',
   'oldestToNewest': 'من الأقدم إلى الأحدث',
   'openGitHubProfile': 'فتح ملف تعريف GitHub',
   'path': 'المسار',

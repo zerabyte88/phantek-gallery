@@ -174,6 +174,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _isSlideshowPlaying = true;
       _showControls = false;
     });
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     ScreenKeeperService.setKeepScreenOn(true);
     _scheduleNextSlideshowStep();
   }
@@ -219,7 +220,21 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _slideshowTimer?.cancel();
     _slideshowTimer = null;
     if (_isSlideshowPlaying && mounted) {
-      setState(() => _isSlideshowPlaying = false);
+      setState(() {
+        _isSlideshowPlaying = false;
+        _showControls = true;
+      });
+      if (!_isFullscreen) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+        SystemChrome.setSystemUIOverlayStyle(
+          const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarIconBrightness: Brightness.light,
+          ),
+        );
+      }
     }
     final settings = ref.read(settingsNotifierProvider);
     if (!settings.keepScreenOn) {
@@ -294,6 +309,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       ScreenKeeperService.setMaxBrightness(true);
     }
     _precacheAdjacentVideos(_current);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _videos.isNotEmpty) {
         _activeMediaNotifier = ref.read(activeViewerMediaIdProvider.notifier);
@@ -883,6 +907,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _player.dispose(); // releases native MPV context
     _pageController.dispose();
     _exitFullscreen();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
@@ -979,7 +1004,19 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (_showControls) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness: Brightness.light,
+        ),
+      );
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
     setState(() => _isFullscreen = false);
   }
 
@@ -1463,12 +1500,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 },
               ),
             ),
-            SafeArea(
-              top: !_isFullscreen,
-              bottom: !_isFullscreen,
-              left: !_isFullscreen,
-              right: !_isFullscreen,
-              child: Listener(
+            Listener(
                 onPointerDown: (e) {
                   _activePointers.add(e.pointer);
                   _settle.stop(); // grab a returning video mid-flight
@@ -1633,7 +1665,26 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         _stopSlideshow();
                         return;
                       }
-                      setState(() => _showControls = !_showControls);
+                      final next = !_showControls;
+                      setState(() => _showControls = next);
+                      if (!_isFullscreen) {
+                        if (next) {
+                          SystemChrome.setEnabledSystemUIMode(
+                              SystemUiMode.edgeToEdge);
+                          SystemChrome.setSystemUIOverlayStyle(
+                            const SystemUiOverlayStyle(
+                              statusBarColor: Colors.transparent,
+                              statusBarIconBrightness: Brightness.light,
+                              systemNavigationBarColor: Colors.transparent,
+                              systemNavigationBarIconBrightness:
+                                  Brightness.light,
+                            ),
+                          );
+                        } else {
+                          SystemChrome.setEnabledSystemUIMode(
+                              SystemUiMode.immersiveSticky);
+                        }
+                      }
                     }
                   },
                   onDoubleTapDown: (details) {
@@ -1986,30 +2037,27 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               top: 0,
                               left: 0,
                               right: 0,
-                              child: SafeArea(
-                                bottom: false,
-                                child: _TopBar(
-                                  item: item,
-                                  currentIndex: _current,
-                                  totalVideos: _videos.length,
-                                  isTrash: widget.isTrash,
-                                  onRestore: _restoreItem,
-                                  onBack: () {
-                                    if (_isFullscreen) {
-                                      _exitFullscreen();
-                                    } else {
-                                      _videoSurfaceVisible.value = false;
-                                      _player.pause();
-                                      _activeMediaNotifier?.state =
-                                          _videos[_current].id;
-                                      Navigator.of(context).pop();
-                                    }
-                                  },
-                                  onInfo: () => showMediaInfoSheet(
-                                      context, item,
-                                      player: _player),
-                                  onDelete: _deleteItem,
-                                ),
+                              child: _TopBar(
+                                item: item,
+                                currentIndex: _current,
+                                totalVideos: _videos.length,
+                                isTrash: widget.isTrash,
+                                onRestore: _restoreItem,
+                                onBack: () {
+                                  if (_isFullscreen) {
+                                    _exitFullscreen();
+                                  } else {
+                                    _videoSurfaceVisible.value = false;
+                                    _player.pause();
+                                    _activeMediaNotifier?.state =
+                                        _videos[_current].id;
+                                    Navigator.of(context).pop();
+                                  }
+                                },
+                                onInfo: () => showMediaInfoSheet(
+                                    context, item,
+                                    player: _player),
+                                onDelete: _deleteItem,
                               ),
                             ),
                             // Bottom controls
@@ -2017,38 +2065,35 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               bottom: 0,
                               left: 0,
                               right: 0,
-                              child: SafeArea(
-                                top: false,
-                                child: _BottomBar(
-                                  player: _player,
-                                  item: item,
-                                  isVertical: _isCurrentVideoPortrait(),
-                                  isTrash: widget.isTrash,
-                                  onRestore: _restoreItem,
-                                  isFullscreen: _isFullscreen,
-                                  isLooping: _isLooping,
-                                  playbackSpeed: _playbackSpeed,
-                                  isSlideshowPlaying: _isSlideshowPlaying,
-                                  onStartSlideshow: _startSlideshow,
-                                  onStopSlideshow: _stopSlideshow,
-                                  cropToFit: _cropToFit,
-                                  onToggleCropToFit: _toggleCropToFit,
-                                  onToggleFullscreen: _toggleFullscreen,
-                                  onToggleLoop: _toggleLoop,
-                                  onSelectSpeed: _showPlaybackSpeedSheet,
-                                  onDelete: _deleteItem,
-                                  onRename: _renameCurrentItem,
-                                  onToggleOrientation: _toggleOrientation,
-                                  onScrubbingChanged: (scrubbing) {
-                                    if (_isScrubbing != scrubbing) {
-                                      setState(() => _isScrubbing = scrubbing);
-                                      if (!scrubbing &&
-                                          !_videoSurfaceVisible.value) {
-                                        _videoSurfaceVisible.value = true;
-                                      }
+                              child: _BottomBar(
+                                player: _player,
+                                item: item,
+                                isVertical: _isCurrentVideoPortrait(),
+                                isTrash: widget.isTrash,
+                                onRestore: _restoreItem,
+                                isFullscreen: _isFullscreen,
+                                isLooping: _isLooping,
+                                playbackSpeed: _playbackSpeed,
+                                isSlideshowPlaying: _isSlideshowPlaying,
+                                onStartSlideshow: _startSlideshow,
+                                onStopSlideshow: _stopSlideshow,
+                                cropToFit: _cropToFit,
+                                onToggleCropToFit: _toggleCropToFit,
+                                onToggleFullscreen: _toggleFullscreen,
+                                onToggleLoop: _toggleLoop,
+                                onSelectSpeed: _showPlaybackSpeedSheet,
+                                onDelete: _deleteItem,
+                                onRename: _renameCurrentItem,
+                                onToggleOrientation: _toggleOrientation,
+                                onScrubbingChanged: (scrubbing) {
+                                  if (_isScrubbing != scrubbing) {
+                                    setState(() => _isScrubbing = scrubbing);
+                                    if (!scrubbing &&
+                                        !_videoSurfaceVisible.value) {
+                                      _videoSurfaceVisible.value = true;
                                     }
-                                  },
-                                ),
+                                  }
+                                },
                               ),
                             ),
                           ],
@@ -2062,7 +2107,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -2430,58 +2474,68 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Colors.black87, Colors.transparent],
+          colors: [
+            Colors.black87,
+            Colors.black54,
+            Colors.transparent,
+          ],
+          stops: [0.0, 0.7, 1.0],
         ),
       ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_ios_new,
-                color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  MediaUtils.formatViewerDate(item.date),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_ios_new,
+                    color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      MediaUtils.formatViewerDate(item.date),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      MediaUtils.formatViewerTime(item.date),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  MediaUtils.formatViewerTime(item.date),
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              ),
+              if (!isTrash)
+                IconButton(
+                  icon:
+                      const Icon(Icons.info_outline, color: Colors.white, size: 22),
+                  tooltip: context.tr.details,
+                  onPressed: onInfo,
                 ),
-              ],
-            ),
+            ],
           ),
-          if (!isTrash)
-            IconButton(
-              icon:
-                  const Icon(Icons.info_outline, color: Colors.white, size: 22),
-              tooltip: context.tr.details,
-              onPressed: onInfo,
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -3016,311 +3070,6 @@ class _BottomBarState extends State<_BottomBar> {
     );
   }
 
-  void _showMoreOptions(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
-          ),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: Icon(
-                    widget.isSlideshowPlaying
-                        ? Icons.pause_circle_outline_rounded
-                        : Icons.slideshow_rounded,
-                    color: Colors.white,
-                  ),
-                  title: Text(
-                    widget.isSlideshowPlaying
-                        ? context.tr.pause
-                        : context.tr.slideshow,
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    if (widget.isSlideshowPlaying) {
-                      widget.onStopSlideshow?.call();
-                    } else {
-                      widget.onStartSlideshow?.call();
-                    }
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.speed, color: Colors.white),
-                  title: Text(
-                    '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    widget.onSelectSpeed();
-                  },
-                ),
-                ListTile(
-                  leading: Icon(
-                    widget.isLooping ? Icons.repeat_one : Icons.repeat,
-                    color: widget.isLooping
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.white,
-                  ),
-                  title: Text(
-                    widget.isLooping ? context.tr.loopOn : context.tr.loopOff,
-                    style: TextStyle(
-                      color: widget.isLooping
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.white,
-                      fontSize: 15,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    widget.onToggleLoop();
-                  },
-                ),
-                if (widget.onRename != null)
-                  ListTile(
-                    leading:
-                        const Icon(Icons.edit_outlined, color: Colors.white),
-                    title: Text(context.tr.rename,
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 15)),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      widget.onRename?.call();
-                    },
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showHorizontalMoreOptions(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
-          ),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (widget.isTrash) ...[
-                  ListTile(
-                    leading: const Icon(Icons.restore, color: Colors.white),
-                    title: Text(context.tr.restore,
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 15)),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      widget.onRestore?.call();
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.delete_forever,
-                        color: Colors.redAccent),
-                    title: Text(context.tr.delete,
-                        style: const TextStyle(
-                            color: Colors.redAccent, fontSize: 15)),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      widget.onDelete();
-                    },
-                  ),
-                ] else ...[
-                  ListTile(
-                    leading: Icon(
-                      widget.isSlideshowPlaying
-                          ? Icons.pause_circle_outline_rounded
-                          : Icons.slideshow_rounded,
-                      color: Colors.white,
-                    ),
-                    title: Text(
-                      widget.isSlideshowPlaying
-                          ? context.tr.pause
-                          : context.tr.slideshow,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 15),
-                    ),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      if (widget.isSlideshowPlaying) {
-                        widget.onStopSlideshow?.call();
-                      } else {
-                        widget.onStartSlideshow?.call();
-                      }
-                    },
-                  ),
-                  Consumer(
-                    builder: (context, ref, _) {
-                      final isFav = ref.watch(
-                        settingsNotifierProvider.select(
-                          (s) => s.favoriteIds.contains(widget.item.id),
-                        ),
-                      );
-                      return ListTile(
-                        leading: Icon(
-                          isFav ? Icons.favorite : Icons.favorite_border,
-                          color: isFav ? Colors.redAccent : Colors.white,
-                        ),
-                        title: Text(
-                          context.tr.favorite,
-                          style: TextStyle(
-                            color: isFav ? Colors.redAccent : Colors.white,
-                            fontSize: 15,
-                          ),
-                        ),
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          final currentFavs = Set<String>.from(
-                            ref.read(settingsNotifierProvider).favoriteIds,
-                          );
-                          if (currentFavs.contains(widget.item.id)) {
-                            currentFavs.remove(widget.item.id);
-                          } else {
-                            currentFavs.add(widget.item.id);
-                          }
-                          ref.read(settingsNotifierProvider.notifier).update(
-                                (s) => s.copyWith(
-                                    favoriteIds: currentFavs.toList()),
-                              );
-                          Navigator.pop(sheetContext);
-                        },
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading:
-                        const Icon(Icons.share_outlined, color: Colors.white),
-                    title: Text(context.tr.share,
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 15)),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      ShareService.shareSingle(widget.item.path, isVideo: true);
-                    },
-                  ),
-                  if (widget.onRename != null)
-                    ListTile(
-                      leading:
-                          const Icon(Icons.edit_outlined, color: Colors.white),
-                      title: Text(context.tr.rename,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 15)),
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        widget.onRename!();
-                      },
-                    ),
-                  ListTile(
-                    leading:
-                        const Icon(Icons.delete_outline, color: Colors.white),
-                    title: Text(context.tr.delete,
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 15)),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      widget.onDelete();
-                    },
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showPhotoMoreOptions(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  widget.isSlideshowPlaying
-                      ? Icons.pause_circle_outline_rounded
-                      : Icons.slideshow_rounded,
-                  color: Colors.white,
-                ),
-                title: Text(
-                  widget.isSlideshowPlaying
-                      ? context.tr.pause
-                      : context.tr.slideshow,
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  if (widget.isSlideshowPlaying) {
-                    widget.onStopSlideshow?.call();
-                  } else {
-                    widget.onStartSlideshow?.call();
-                  }
-                },
-              ),
-              if (widget.onRename != null)
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined, color: Colors.white),
-                  title: Text(context.tr.rename,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 15)),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    widget.onRename?.call();
-                  },
-                ),
-              ListTile(
-                leading:
-                    const Icon(Icons.wallpaper_outlined, color: Colors.white),
-                title: Text(context.tr.setAsWallpaper,
-                    style: const TextStyle(color: Colors.white, fontSize: 15)),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  ShareService.setAsWallpaper(widget.item.path);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isLandscape =
@@ -3328,15 +3077,23 @@ class _BottomBarState extends State<_BottomBar> {
 
     if (!widget.item.isVideo) {
       return Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
-            colors: [Colors.black87, Colors.transparent],
+            colors: [
+              Colors.black87,
+              Colors.black54,
+              Colors.transparent,
+            ],
+            stops: [0.0, 0.7, 1.0],
           ),
         ),
-        child: widget.isTrash
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+            child: widget.isTrash
             ? Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -3408,62 +3165,148 @@ class _BottomBarState extends State<_BottomBar> {
                     label: context.tr.delete,
                     onTap: widget.onDelete,
                   ),
-                  _ViewerActionButton(
-                    icon: const Icon(Icons.more_vert,
-                        color: Colors.white, size: 22),
-                    label: context.tr.more,
-                    onTap: () => _showPhotoMoreOptions(context),
+                  PopupMenuButton<String>(
+                    tooltip: context.tr.moreOptions,
+                    color: const Color(0xFF222222),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    onSelected: (value) {
+                      if (value == 'slideshow') {
+                        if (widget.isSlideshowPlaying) {
+                          widget.onStopSlideshow?.call();
+                        } else {
+                          widget.onStartSlideshow?.call();
+                        }
+                      } else if (value == 'rename') {
+                        widget.onRename?.call();
+                      } else if (value == 'wallpaper') {
+                        ShareService.setAsWallpaper(widget.item.path);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'slideshow',
+                        child: Row(
+                          children: [
+                            Icon(
+                              widget.isSlideshowPlaying
+                                  ? Icons.pause_circle_outline_rounded
+                                  : Icons.slideshow_rounded,
+                              size: 20,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              widget.isSlideshowPlaying
+                                  ? context.tr.pause
+                                  : context.tr.slideshow,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (widget.onRename != null)
+                        PopupMenuItem(
+                          value: 'rename',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.edit_outlined,
+                                  size: 20, color: Colors.white),
+                              const SizedBox(width: 12),
+                              Text(
+                                context.tr.rename,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+                      PopupMenuItem(
+                        value: 'wallpaper',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.wallpaper_outlined,
+                                size: 20, color: Colors.white),
+                            const SizedBox(width: 12),
+                            Text(
+                              context.tr.setAsWallpaper,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    child: _ViewerActionButton(
+                      icon: const Icon(Icons.more_vert,
+                          color: Colors.white, size: 22),
+                      label: context.tr.more,
+                    ),
                   ),
                 ],
               ),
+          ),
+        ),
       );
     }
 
     return Container(
-      padding: EdgeInsets.fromLTRB(8, 0, 8, isLandscape ? 2 : 8),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
-          colors: [Colors.black87, Colors.transparent],
+          colors: [
+            Colors.black87,
+            Colors.black54,
+            Colors.transparent,
+          ],
+          stops: [0.0, 0.7, 1.0],
         ),
       ),
-      child: StreamBuilder<Duration>(
-        stream: widget.player.stream.position,
-        builder: (_, posSnap) {
-          return StreamBuilder<Duration>(
-            stream: widget.player.stream.duration,
-            builder: (_, durSnap) {
-              final pos = posSnap.data ?? Duration.zero;
-              final dur = durSnap.data ?? widget.item.duration ?? Duration.zero;
-              final displayPos = (_isDragging &&
-                      _dragFraction != null &&
-                      dur.inMilliseconds > 0)
-                  ? Duration(
-                      milliseconds:
-                          (_dragFraction! * dur.inMilliseconds).round())
-                  : pos;
-              final frac = dur.inMilliseconds > 0
-                  ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))
-                  : 0.0;
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(8, 0, 8, isLandscape ? 2 : 8),
+          child: StreamBuilder<Duration>(
+            stream: widget.player.stream.position,
+            builder: (_, posSnap) {
+              return StreamBuilder<Duration>(
+                stream: widget.player.stream.duration,
+                builder: (_, durSnap) {
+                  final pos = posSnap.data ?? Duration.zero;
+                  final dur = durSnap.data ?? widget.item.duration ?? Duration.zero;
+                  final displayPos = (_isDragging &&
+                          _dragFraction != null &&
+                          dur.inMilliseconds > 0)
+                      ? Duration(
+                          milliseconds:
+                              (_dragFraction! * dur.inMilliseconds).round())
+                      : pos;
+                  final frac = dur.inMilliseconds > 0
+                      ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))
+                      : 0.0;
 
-              if (isLandscape) {
-                return _buildLandscapeLayout(
-                  context,
-                  displayPos: displayPos,
-                  dur: dur,
-                  frac: frac,
-                );
-              }
-              return _buildPortraitLayout(
-                context,
-                displayPos: displayPos,
-                dur: dur,
-                frac: frac,
+                  if (isLandscape) {
+                    return _buildLandscapeLayout(
+                      context,
+                      displayPos: displayPos,
+                      dur: dur,
+                      frac: frac,
+                    );
+                  }
+                  return _buildPortraitLayout(
+                    context,
+                    displayPos: displayPos,
+                    dur: dur,
+                    frac: frac,
+                  );
+                },
               );
             },
-          );
-        },
+          ),
+        ),
       ),
     );
   }
@@ -3603,14 +3446,179 @@ class _BottomBarState extends State<_BottomBar> {
                   ),
                   const SizedBox(width: 4),
                   // More (⋮)
-                  BouncyTap(
-                    onTap: () => _showHorizontalMoreOptions(context),
-                    child: const Padding(
-                      padding: EdgeInsets.all(6),
-                      child: Icon(
-                        Icons.more_vert_rounded,
-                        color: Colors.white,
-                        size: 22,
+                  Consumer(
+                    builder: (context, ref, _) => PopupMenuButton<String>(
+                      tooltip: context.tr.moreOptions,
+                      color: const Color(0xFF222222),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      offset: const Offset(0, 36),
+                      onSelected: (value) {
+                        if (value == 'restore') {
+                          widget.onRestore?.call();
+                        } else if (value == 'delete') {
+                          widget.onDelete();
+                        } else if (value == 'slideshow') {
+                          if (widget.isSlideshowPlaying) {
+                            widget.onStopSlideshow?.call();
+                          } else {
+                            widget.onStartSlideshow?.call();
+                          }
+                        } else if (value == 'favorite') {
+                          HapticFeedback.lightImpact();
+                          final currentFavs = Set<String>.from(
+                            ref.read(settingsNotifierProvider).favoriteIds,
+                          );
+                          if (currentFavs.contains(widget.item.id)) {
+                            currentFavs.remove(widget.item.id);
+                          } else {
+                            currentFavs.add(widget.item.id);
+                          }
+                          ref.read(settingsNotifierProvider.notifier).update(
+                                (s) => s.copyWith(
+                                    favoriteIds: currentFavs.toList()),
+                              );
+                        } else if (value == 'share') {
+                          ShareService.shareSingle(widget.item.path,
+                              isVideo: true);
+                        } else if (value == 'rename') {
+                          widget.onRename?.call();
+                        }
+                      },
+                      itemBuilder: (context) {
+                        if (widget.isTrash) {
+                          return [
+                            PopupMenuItem(
+                              value: 'restore',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.restore,
+                                      size: 20, color: Colors.white),
+                                  const SizedBox(width: 12),
+                                  Text(context.tr.restore,
+                                      style: const TextStyle(
+                                          color: Colors.white, fontSize: 14)),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.delete_forever,
+                                      size: 20, color: Colors.redAccent),
+                                  const SizedBox(width: 12),
+                                  Text(context.tr.delete,
+                                      style: const TextStyle(
+                                          color: Colors.redAccent,
+                                          fontSize: 14)),
+                                ],
+                              ),
+                            ),
+                          ];
+                        }
+                        final isFav = ref.watch(
+                          settingsNotifierProvider.select(
+                            (s) => s.favoriteIds.contains(widget.item.id),
+                          ),
+                        );
+                        return [
+                          PopupMenuItem(
+                            value: 'slideshow',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  widget.isSlideshowPlaying
+                                      ? Icons.pause_circle_outline_rounded
+                                      : Icons.slideshow_rounded,
+                                  size: 20,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  widget.isSlideshowPlaying
+                                      ? context.tr.pause
+                                      : context.tr.slideshow,
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'favorite',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isFav
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  size: 20,
+                                  color:
+                                      isFav ? Colors.redAccent : Colors.white,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  context.tr.favorite,
+                                  style: TextStyle(
+                                    color:
+                                        isFav ? Colors.redAccent : Colors.white,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'share',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.share_outlined,
+                                    size: 20, color: Colors.white),
+                                const SizedBox(width: 12),
+                                Text(context.tr.share,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 14)),
+                              ],
+                            ),
+                          ),
+                          if (widget.onRename != null)
+                            PopupMenuItem(
+                              value: 'rename',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.edit_outlined,
+                                      size: 20, color: Colors.white),
+                                  const SizedBox(width: 12),
+                                  Text(context.tr.rename,
+                                      style: const TextStyle(
+                                          color: Colors.white, fontSize: 14)),
+                                ],
+                              ),
+                            ),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.delete_outline,
+                                    size: 20, color: Colors.white),
+                                const SizedBox(width: 12),
+                                Text(context.tr.delete,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 14)),
+                              ],
+                            ),
+                          ),
+                        ];
+                      },
+                      child: const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: Icon(
+                          Icons.more_vert_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
                       ),
                     ),
                   ),
@@ -3803,12 +3811,116 @@ class _BottomBarState extends State<_BottomBar> {
                     label: context.tr.delete,
                     onTap: widget.onDelete,
                   ),
-                  // 5. More (Bottom sheet)
-                  _ViewerActionButton(
-                    icon: const Icon(Icons.more_vert,
-                        color: Colors.white, size: 22),
-                    label: context.tr.more,
-                    onTap: () => _showMoreOptions(context),
+                  // 5. More (Popup menu)
+                  PopupMenuButton<String>(
+                    tooltip: context.tr.moreOptions,
+                    color: const Color(0xFF222222),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    onSelected: (value) {
+                      if (value == 'slideshow') {
+                        if (widget.isSlideshowPlaying) {
+                          widget.onStopSlideshow?.call();
+                        } else {
+                          widget.onStartSlideshow?.call();
+                        }
+                      } else if (value == 'speed') {
+                        widget.onSelectSpeed();
+                      } else if (value == 'loop') {
+                        widget.onToggleLoop();
+                      } else if (value == 'rename') {
+                        widget.onRename?.call();
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'slideshow',
+                        child: Row(
+                          children: [
+                            Icon(
+                              widget.isSlideshowPlaying
+                                  ? Icons.pause_circle_outline_rounded
+                                  : Icons.slideshow_rounded,
+                              size: 20,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              widget.isSlideshowPlaying
+                                  ? context.tr.pause
+                                  : context.tr.slideshow,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'speed',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.speed,
+                                size: 20, color: Colors.white),
+                            const SizedBox(width: 12),
+                            Text(
+                              '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'loop',
+                        child: Row(
+                          children: [
+                            Icon(
+                              widget.isLooping
+                                  ? Icons.repeat_one
+                                  : Icons.repeat,
+                              size: 20,
+                              color: widget.isLooping
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Colors.white,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              widget.isLooping
+                                  ? context.tr.loopOn
+                                  : context.tr.loopOff,
+                              style: TextStyle(
+                                color: widget.isLooping
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.white,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (widget.onRename != null)
+                        PopupMenuItem(
+                          value: 'rename',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.edit_outlined,
+                                  size: 20, color: Colors.white),
+                              const SizedBox(width: 12),
+                              Text(
+                                context.tr.rename,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                    child: _ViewerActionButton(
+                      icon: const Icon(Icons.more_vert,
+                          color: Colors.white, size: 22),
+                      label: context.tr.more,
+                    ),
                   ),
                 ],
               ),
@@ -3821,35 +3933,37 @@ class _ViewerActionButton extends StatelessWidget {
   const _ViewerActionButton({
     required this.icon,
     required this.label,
-    required this.onTap,
+    this.onTap,
   });
 
   final Widget icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return BouncyTap(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            icon,
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          icon,
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+    if (onTap == null) return content;
+    return BouncyTap(
+      onTap: onTap!,
+      child: content,
     );
   }
 }

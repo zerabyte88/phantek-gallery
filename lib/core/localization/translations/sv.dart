@@ -114,7 +114,7 @@ const Map<String, String> svTranslations = {
   'noVideosFound': 'Inga videor hittades',
   'none': 'Ingen',
   'normal': 'Normal',
-  'offlineGalleryDesc': 'Offlinegalleri och mediespelare',
+  'offlineGalleryDesc': 'Snabb, lätt och privat mediespelare',
   'oldestToNewest': 'Äldsta först',
   'openGitHubProfile': 'Öppna GitHub-profil',
   'path': 'Sökväg',

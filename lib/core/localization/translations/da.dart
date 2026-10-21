@@ -114,7 +114,7 @@ const Map<String, String> daTranslations = {
   'noVideosFound': 'Ingen videoer fundet',
   'none': 'Ingen',
   'normal': 'Normal',
-  'offlineGalleryDesc': 'Offline galleri og medieafspiller',
+  'offlineGalleryDesc': 'Hurtig, let og privat medieafspiller',
   'oldestToNewest': 'Ældste først',
   'openGitHubProfile': 'Åbn GitHub-profil',
   'path': 'Sti',

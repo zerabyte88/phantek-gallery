@@ -115,7 +115,7 @@ const Map<String, String> enTranslations = {
   'noVideosFound': 'No videos found',
   'none': 'None',
   'normal': 'Normal',
-  'offlineGalleryDesc': 'Offline Gallery & Media Player',
+  'offlineGalleryDesc': 'Fast, Lightweight & Private Media Player',
   'oldestToNewest': 'Oldest to newest',
   'openGitHubProfile': 'Open GitHub Profile',
   'path': 'Path',

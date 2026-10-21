@@ -116,7 +116,7 @@ const Map<String, String> deTranslations = {
   'noVideosFound': 'Keine Videos gefunden',
   'none': 'Keine',
   'normal': 'Normal',
-  'offlineGalleryDesc': 'Offline-Galerie & Mediaplayer',
+  'offlineGalleryDesc': 'Schneller, leichtgewichtiger & privater Mediaplayer',
   'oldestToNewest': 'Älteste zuerst',
   'openGitHubProfile': 'GitHub-Profil öffnen',
   'path': 'Pfad',

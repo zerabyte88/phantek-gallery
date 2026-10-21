@@ -112,7 +112,7 @@ const Map<String, String> idTranslations = {
   'noVideosFound': 'Tidak ada video',
   'none': 'Tidak ada',
   'normal': 'Normal',
-  'offlineGalleryDesc': 'Galeri & Pemutar Media Offline',
+  'offlineGalleryDesc': 'Pemutar Media Cepat, Ringan & Privat',
   'oldestToNewest': 'Terlama ke terbaru',
   'openGitHubProfile': 'Buka Profil GitHub',
   'path': 'Lokasi Path',

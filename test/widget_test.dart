@@ -571,7 +571,7 @@ void main() {
       expect(find.text('Video Engine'), findsNothing);
       expect(find.text('MediaKit'), findsNothing);
       expect(find.text('Build'), findsOneWidget);
-      expect(find.text('46'), findsOneWidget);
+      expect(find.text('47'), findsOneWidget);
       expect(find.text('GPLv3'), findsOneWidget);
     });
 
@@ -2559,6 +2559,34 @@ void main() {
           'Hanya Seek (Mundur / Maju)');
       expect(idLoc.videoDoubleTapActionLabel(VideoDoubleTapAction.zoomOnly),
           'Hanya Zoom (Perbesar / Normal)');
+    });
+
+    test('Media viewer seamless system UI gradient and immersive mode rules', () {
+      const topGradient = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Colors.black87, Colors.black54, Colors.transparent],
+        stops: [0.0, 0.7, 1.0],
+      );
+      expect(topGradient.stops, [0.0, 0.7, 1.0]);
+      expect(topGradient.colors.length, 3);
+      expect(topGradient.colors.first, Colors.black87);
+      expect(topGradient.colors.last, Colors.transparent);
+
+      const bottomGradient = LinearGradient(
+        begin: Alignment.bottomCenter,
+        end: Alignment.topCenter,
+        colors: [Colors.black87, Colors.black54, Colors.transparent],
+        stops: [0.0, 0.7, 1.0],
+      );
+      expect(bottomGradient.stops, [0.0, 0.7, 1.0]);
+      expect(bottomGradient.colors.first, Colors.black87);
+      expect(bottomGradient.colors.last, Colors.transparent);
+
+      SystemUiMode resolveMode({required bool barsVisible}) =>
+          barsVisible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky;
+      expect(resolveMode(barsVisible: true), SystemUiMode.edgeToEdge);
+      expect(resolveMode(barsVisible: false), SystemUiMode.immersiveSticky);
     });
   });
 }

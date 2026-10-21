@@ -106,7 +106,7 @@ const Map<String, String> zhTranslations = {
   'noVideosFound': '未找到视频',
   'none': '无',
   'normal': '正常',
-  'offlineGalleryDesc': '离线相册与媒体播放器',
+  'offlineGalleryDesc': '快速、轻量且私密的媒体播放器',
   'oldestToNewest': '从旧到新',
   'openGitHubProfile': '打开 GitHub 主页',
   'path': '路径',

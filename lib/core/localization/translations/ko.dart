@@ -107,7 +107,7 @@ const Map<String, String> koTranslations = {
   'noVideosFound': '동영상이 없습니다',
   'none': '없음',
   'normal': '보통',
-  'offlineGalleryDesc': '오프라인 갤러리 및 미디어 플레이어',
+  'offlineGalleryDesc': '빠르고 가벼운 비공개 미디어 플레이어',
   'oldestToNewest': '오래된 순',
   'openGitHubProfile': 'GitHub 프로필 열기',
   'path': '경로',

@@ -114,7 +114,7 @@ const Map<String, String> msTranslations = {
   'noVideosFound': 'Tiada video dijumpai',
   'none': 'Tiada',
   'normal': 'Biasa',
-  'offlineGalleryDesc': 'Galeri & Pemain Media Luar Talian',
+  'offlineGalleryDesc': 'Pemain Media Pantas, Ringan & Peribadi',
   'oldestToNewest': 'Paling lama ke paling baharu',
   'openGitHubProfile': 'Buka Profil GitHub',
   'path': 'Laluan',

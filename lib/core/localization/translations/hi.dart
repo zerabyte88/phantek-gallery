@@ -111,7 +111,7 @@ const Map<String, String> hiTranslations = {
   'noVideosFound': 'कोई वीडियो नहीं मिला',
   'none': 'कोई नहीं',
   'normal': 'सामान्य',
-  'offlineGalleryDesc': 'ऑफ़लाइन गैलरी और मीडिया प्लेयर',
+  'offlineGalleryDesc': 'तेज़, हल्का और निजी मीडिया प्लेयर',
   'oldestToNewest': 'पुराने से नया',
   'openGitHubProfile': 'GitHub प्रोफ़ाइल खोलें',
   'path': 'पथ',

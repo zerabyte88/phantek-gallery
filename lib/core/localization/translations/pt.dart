@@ -116,7 +116,7 @@ const Map<String, String> ptTranslations = {
   'noVideosFound': 'Nenhum vídeo encontrado',
   'none': 'Nenhum',
   'normal': 'Normal',
-  'offlineGalleryDesc': 'Galeria e reprodutor de mídia offline',
+  'offlineGalleryDesc': 'Reprodutor de mídia rápido, leve e privado',
   'oldestToNewest': 'Do mais antigo ao mais recente',
   'openGitHubProfile': 'Abrir perfil no GitHub',
   'path': 'Caminho',

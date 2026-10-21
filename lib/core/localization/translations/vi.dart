@@ -112,7 +112,7 @@ const Map<String, String> viTranslations = {
   'noVideosFound': 'Không tìm thấy video nào',
   'none': 'Không có',
   'normal': 'Bình thường',
-  'offlineGalleryDesc': 'Thư viện & trình phát đa phương tiện ngoại tuyến',
+  'offlineGalleryDesc': 'Trình phát đa phương tiện nhanh, nhẹ & riêng tư',
   'oldestToNewest': 'Cũ nhất trước',
   'openGitHubProfile': 'Mở hồ sơ GitHub',
   'path': 'Đường dẫn',

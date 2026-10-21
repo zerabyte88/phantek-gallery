@@ -110,7 +110,7 @@ const Map<String, String> thTranslations = {
   'noVideosFound': 'ไม่พบวิดีโอ',
   'none': 'ไม่มี',
   'normal': 'ปกติ',
-  'offlineGalleryDesc': 'แกลเลอรีและเครื่องเล่นสื่อออฟไลน์',
+  'offlineGalleryDesc': 'เครื่องเล่นสื่อที่รวดเร็ว น้ำหนักเบา และเป็นส่วนตัว',
   'oldestToNewest': 'เก่าที่สุดไปใหม่ที่สุด',
   'openGitHubProfile': 'เปิดโปรไฟล์ GitHub',
   'path': 'เส้นทาง',

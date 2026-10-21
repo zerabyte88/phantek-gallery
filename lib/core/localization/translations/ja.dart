@@ -106,7 +106,7 @@ const Map<String, String> jaTranslations = {
   'noVideosFound': '動画が見つかりません',
   'none': 'なし',
   'normal': '標準',
-  'offlineGalleryDesc': 'オフラインギャラリー＆メディアプレーヤー',
+  'offlineGalleryDesc': '高速・軽量・プライベートなメディアプレーヤー',
   'oldestToNewest': '古い順',
   'openGitHubProfile': 'GitHub プロフィールを開く',
   'path': 'パス',

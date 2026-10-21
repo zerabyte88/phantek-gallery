@@ -110,7 +110,7 @@ const Map<String, String> ruTranslations = {
   'noVideosFound': 'Видео не найдены',
   'none': 'Нет',
   'normal': 'Обычная',
-  'offlineGalleryDesc': 'Офлайн-галерея и медиаплеер',
+  'offlineGalleryDesc': 'Быстрый, легкий и приватный медиаплеер',
   'oldestToNewest': 'Сначала старые',
   'openGitHubProfile': 'Открыть профиль GitHub',
   'path': 'Путь',

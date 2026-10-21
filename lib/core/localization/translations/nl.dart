@@ -114,7 +114,7 @@ const Map<String, String> nlTranslations = {
   'noVideosFound': 'Geen video\'s gevonden',
   'none': 'Geen',
   'normal': 'Normaal',
-  'offlineGalleryDesc': 'Offline galerij & mediaspeler',
+  'offlineGalleryDesc': 'Snelle, lichte & veilige mediaspeler',
   'oldestToNewest': 'Oudste eerst',
   'openGitHubProfile': 'GitHub-profiel openen',
   'path': 'Pad',

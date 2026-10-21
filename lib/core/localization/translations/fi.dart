@@ -114,7 +114,7 @@ const Map<String, String> fiTranslations = {
   'noVideosFound': 'Videoita ei löytynyt',
   'none': 'Ei mitään',
   'normal': 'Normaali',
-  'offlineGalleryDesc': 'Offline-galleria ja mediasoitin',
+  'offlineGalleryDesc': 'Nopea, kevyt ja yksityinen mediasoitin',
   'oldestToNewest': 'Vanhin ensin',
   'openGitHubProfile': 'Avaa GitHub-profiili',
   'path': 'Polku',

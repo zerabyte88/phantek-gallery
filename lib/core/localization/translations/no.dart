@@ -114,7 +114,7 @@ const Map<String, String> noTranslations = {
   'noVideosFound': 'Ingen videoer funnet',
   'none': 'Ingen',
   'normal': 'Normal',
-  'offlineGalleryDesc': 'Frakoblet galleri og mediespiller',
+  'offlineGalleryDesc': 'Rask, lett og privat mediespiller',
   'oldestToNewest': 'Eldste først',
   'openGitHubProfile': 'Åpne GitHub-profil',
   'path': 'Sti',

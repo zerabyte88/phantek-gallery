@@ -117,7 +117,7 @@ const Map<String, String> itTranslations = {
   'noVideosFound': 'Nessun video trovato',
   'none': 'Nessuna',
   'normal': 'Normale',
-  'offlineGalleryDesc': 'Galleria & Lettore Multimediale Offline',
+  'offlineGalleryDesc': 'Lettore multimediale veloce, leggero e privato',
   'oldestToNewest': 'Meno recenti prima',
   'openGitHubProfile': 'Apri Profilo GitHub',
   'path': 'Percorso',

@@ -170,6 +170,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       _isSlideshowPlaying = true;
       _barsVisible = false;
     });
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     final interval = ref.read(settingsNotifierProvider).slideshowInterval;
     _slideshowTimer?.cancel();
     _slideshowTimer = Timer.periodic(Duration(seconds: interval), (_) {
@@ -193,7 +194,19 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _slideshowTimer?.cancel();
     _slideshowTimer = null;
     if (_isSlideshowPlaying && mounted) {
-      setState(() => _isSlideshowPlaying = false);
+      setState(() {
+        _isSlideshowPlaying = false;
+        _barsVisible = true;
+      });
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness: Brightness.light,
+        ),
+      );
     }
   }
 
@@ -221,7 +234,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           _setDrag(Offset.zero);
         }
       });
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
     final settings = ref.read(settingsNotifierProvider);
     if (settings.keepScreenOn) {
       ScreenKeeperService.setKeepScreenOn(true);
@@ -325,7 +346,21 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       return;
     }
     if (!_isCurrentlyZoomed && !_isPinching) {
-      setState(() => _barsVisible = !_barsVisible);
+      final nextVisible = !_barsVisible;
+      setState(() => _barsVisible = nextVisible);
+      if (nextVisible) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+        SystemChrome.setSystemUIOverlayStyle(
+          const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarIconBrightness: Brightness.light,
+          ),
+        );
+      } else {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      }
     }
   }
 
@@ -622,72 +657,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       });
       _page.jumpToPage(_current);
     }
-  }
-
-  void _showMoreOptions(MediaItem item) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  _isSlideshowPlaying
-                      ? Icons.pause_circle_outline_rounded
-                      : Icons.slideshow_rounded,
-                  color: Colors.white,
-                ),
-                title: Text(
-                  _isSlideshowPlaying ? context.tr.pause : context.tr.slideshow,
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  if (_isSlideshowPlaying) {
-                    _stopSlideshow();
-                  } else {
-                    _startSlideshow();
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined, color: Colors.white),
-                title: Text(context.tr.rename,
-                    style: const TextStyle(color: Colors.white, fontSize: 15)),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  final updated =
-                      await showRenameMediaDialog(context, item, ref);
-                  if (updated != null && mounted) {
-                    setState(() {
-                      widget.items[_current] = updated;
-                    });
-                  }
-                },
-              ),
-              ListTile(
-                leading:
-                    const Icon(Icons.wallpaper_outlined, color: Colors.white),
-                title: Text(context.tr.setAsWallpaper,
-                    style: const TextStyle(color: Colors.white, fontSize: 15)),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  ShareService.setAsWallpaper(item.path);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildStaggeredBar({
@@ -1043,66 +1012,73 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 child: _buildStaggeredBar(
                   context: context,
                   showBars: showBars,
-                  child: SafeArea(
-                    bottom: false,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 4),
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Colors.black87, Colors.transparent],
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back_ios_new,
-                                color: Colors.white, size: 20),
-                            onPressed: () {
-                              _activeMediaNotifier?.state = _currentItem.id;
-                              Navigator.of(context).pop();
-                            },
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  MediaUtils.formatViewerDate(item.date),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  MediaUtils.formatViewerTime(item.date),
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (!widget.isTrash)
-                            IconButton(
-                              icon: const Icon(Icons.info_outline,
-                                  color: Colors.white, size: 22),
-                              tooltip: context.tr.details,
-                              onPressed: () =>
-                                  showMediaInfoSheet(context, item),
-                            ),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black87,
+                          Colors.black54,
+                          Colors.transparent,
                         ],
+                        stops: [0.0, 0.7, 1.0],
+                      ),
+                    ),
+                    child: SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 4),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back_ios_new,
+                                  color: Colors.white, size: 20),
+                              onPressed: () {
+                                _activeMediaNotifier?.state = _currentItem.id;
+                                Navigator.of(context).pop();
+                              },
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    MediaUtils.formatViewerDate(item.date),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    MediaUtils.formatViewerTime(item.date),
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (!widget.isTrash)
+                              IconButton(
+                                icon: const Icon(Icons.info_outline,
+                                    color: Colors.white, size: 22),
+                                tooltip: context.tr.details,
+                                onPressed: () =>
+                                    showMediaInfoSheet(context, item),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1115,109 +1091,199 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 child: _buildStaggeredBar(
                   context: context,
                   showBars: showBars,
-                  child: SafeArea(
-                    top: false,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [Colors.black87, Colors.transparent],
-                        ),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Colors.black87,
+                          Colors.black54,
+                          Colors.transparent,
+                        ],
+                        stops: [0.0, 0.7, 1.0],
                       ),
-                      child: widget.isTrash
-                          ? Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _ViewerActionButton(
-                                  icon: const Icon(Icons.restore,
-                                      color: Colors.white, size: 22),
-                                  label: context.tr.restore,
-                                  onTap: _restoreCurrentItem,
-                                ),
-                                _ViewerActionButton(
-                                  icon: const Icon(Icons.info_outline,
-                                      color: Colors.white, size: 22),
-                                  label: context.tr.details,
-                                  onTap: () =>
-                                      showMediaInfoSheet(context, item),
-                                ),
-                                _ViewerActionButton(
-                                  icon: const Icon(Icons.delete_forever,
-                                      color: Colors.white, size: 22),
-                                  label: context.tr.delete,
-                                  onTap: _deleteCurrentItem,
-                                ),
-                              ],
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _ViewerActionButton(
-                                  icon: const Icon(Icons.share_outlined,
-                                      color: Colors.white, size: 22),
-                                  label: context.tr.share,
-                                  onTap: () => ShareService.shareSingle(
-                                      item.path,
-                                      isVideo: false),
-                                ),
-                                Consumer(
-                                  builder: (context, ref, _) {
-                                    final isFav = ref.watch(
-                                      settingsNotifierProvider.select(
-                                        (s) => s.favoriteIds.contains(item.id),
-                                      ),
-                                    );
-                                    return _ViewerActionButton(
-                                      icon: Icon(
-                                        isFav
-                                            ? Icons.favorite
-                                            : Icons.favorite_border,
-                                        color: isFav
-                                            ? Colors.redAccent
-                                            : Colors.white,
-                                        size: 22,
-                                      ),
-                                      label: context.tr.favorite,
-                                      onTap: () {
-                                        HapticFeedback.lightImpact();
-                                        final currentFavs = Set<String>.from(
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: widget.isTrash
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  _ViewerActionButton(
+                                    icon: const Icon(Icons.restore,
+                                        color: Colors.white, size: 22),
+                                    label: context.tr.restore,
+                                    onTap: _restoreCurrentItem,
+                                  ),
+                                  _ViewerActionButton(
+                                    icon: const Icon(Icons.info_outline,
+                                        color: Colors.white, size: 22),
+                                    label: context.tr.details,
+                                    onTap: () =>
+                                        showMediaInfoSheet(context, item),
+                                  ),
+                                  _ViewerActionButton(
+                                    icon: const Icon(Icons.delete_forever,
+                                        color: Colors.white, size: 22),
+                                    label: context.tr.delete,
+                                    onTap: _deleteCurrentItem,
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  _ViewerActionButton(
+                                    icon: const Icon(Icons.share_outlined,
+                                        color: Colors.white, size: 22),
+                                    label: context.tr.share,
+                                    onTap: () => ShareService.shareSingle(
+                                        item.path,
+                                        isVideo: false),
+                                  ),
+                                  Consumer(
+                                    builder: (context, ref, _) {
+                                      final isFav = ref.watch(
+                                        settingsNotifierProvider.select(
+                                          (s) => s.favoriteIds.contains(item.id),
+                                        ),
+                                      );
+                                      return _ViewerActionButton(
+                                        icon: Icon(
+                                          isFav
+                                              ? Icons.favorite
+                                              : Icons.favorite_border,
+                                          color: isFav
+                                              ? Colors.redAccent
+                                              : Colors.white,
+                                          size: 22,
+                                        ),
+                                        label: context.tr.favorite,
+                                        onTap: () {
+                                          HapticFeedback.lightImpact();
+                                          final currentFavs = Set<String>.from(
+                                            ref
+                                                .read(settingsNotifierProvider)
+                                                .favoriteIds,
+                                          );
+                                          if (currentFavs.contains(item.id)) {
+                                            currentFavs.remove(item.id);
+                                          } else {
+                                            currentFavs.add(item.id);
+                                          }
                                           ref
-                                              .read(settingsNotifierProvider)
-                                              .favoriteIds,
-                                        );
-                                        if (currentFavs.contains(item.id)) {
-                                          currentFavs.remove(item.id);
+                                              .read(settingsNotifierProvider
+                                                  .notifier)
+                                              .update(
+                                                (s) => s.copyWith(
+                                                    favoriteIds:
+                                                        currentFavs.toList()),
+                                              );
+                                        },
+                                      );
+                                    },
+                                  ),
+                                  _ViewerActionButton(
+                                    icon: const Icon(Icons.delete_outline,
+                                        color: Colors.white, size: 22),
+                                    label: context.tr.delete,
+                                    onTap: _deleteCurrentItem,
+                                  ),
+                                  PopupMenuButton<String>(
+                                    tooltip: context.tr.moreOptions,
+                                    color: const Color(0xFF222222),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    onSelected: (value) async {
+                                      if (value == 'slideshow') {
+                                        if (_isSlideshowPlaying) {
+                                          _stopSlideshow();
                                         } else {
-                                          currentFavs.add(item.id);
+                                          _startSlideshow();
                                         }
-                                        ref
-                                            .read(settingsNotifierProvider
-                                                .notifier)
-                                            .update(
-                                              (s) => s.copyWith(
-                                                  favoriteIds:
-                                                      currentFavs.toList()),
-                                            );
-                                      },
-                                    );
-                                  },
-                                ),
-                                _ViewerActionButton(
-                                  icon: const Icon(Icons.delete_outline,
-                                      color: Colors.white, size: 22),
-                                  label: context.tr.delete,
-                                  onTap: _deleteCurrentItem,
-                                ),
-                                _ViewerActionButton(
-                                  icon: const Icon(Icons.more_vert,
-                                      color: Colors.white, size: 22),
-                                  label: context.tr.more,
-                                  onTap: () => _showMoreOptions(item),
-                                ),
-                              ],
-                            ),
+                                      } else if (value == 'rename') {
+                                        final updated =
+                                            await showRenameMediaDialog(
+                                                context, item, ref);
+                                        if (updated != null && mounted) {
+                                          setState(() {
+                                            widget.items[_current] = updated;
+                                          });
+                                        }
+                                      } else if (value == 'wallpaper') {
+                                        ShareService.setAsWallpaper(item.path);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      PopupMenuItem(
+                                        value: 'slideshow',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              _isSlideshowPlaying
+                                                  ? Icons.pause_circle_outline_rounded
+                                                  : Icons.slideshow_rounded,
+                                              size: 20,
+                                              color: Colors.white,
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              _isSlideshowPlaying
+                                                  ? context.tr.pause
+                                                  : context.tr.slideshow,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 14),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'rename',
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.edit_outlined,
+                                                size: 20, color: Colors.white),
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              context.tr.rename,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 14),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'wallpaper',
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.wallpaper_outlined,
+                                                size: 20, color: Colors.white),
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              context.tr.setAsWallpaper,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 14),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                    child: _ViewerActionButton(
+                                      icon: const Icon(Icons.more_vert,
+                                          color: Colors.white, size: 22),
+                                      label: context.tr.more,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
                     ),
                   ),
                 ),
@@ -1234,35 +1300,37 @@ class _ViewerActionButton extends StatelessWidget {
   const _ViewerActionButton({
     required this.icon,
     required this.label,
-    required this.onTap,
+    this.onTap,
   });
 
   final Widget icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return BouncyTap(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            icon,
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          icon,
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+    if (onTap == null) return content;
+    return BouncyTap(
+      onTap: onTap!,
+      child: content,
     );
   }
 }
