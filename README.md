@@ -1,7 +1,7 @@
 # Phantek Gallery
 
 <p align="center">
-  <img src="assets/app_icon.jpg" alt="Phantek Gallery Icon" width="108" style="border-radius: 22px; box-shadow: 0 6px 20px rgba(0,0,0,0.25);" />
+  <img src="assets/app_icon.png" alt="Phantek Gallery Icon" width="108" style="box-shadow: 0 6px 20px rgba(0,0,0,0.25);" />
 </p>
 
 <div align="center">
