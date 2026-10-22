@@ -185,7 +185,18 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     final mediaAsync = ref.watch(mediaListProvider);
     final settings = ref.watch(settingsNotifierProvider);
 
-    final allItems = mediaAsync.value ?? [];
+    var allItems = mediaAsync.value ?? [];
+    if (!settings.showHiddenFiles) {
+      allItems = allItems.where((e) {
+        final segments = e.path.split(RegExp(r'[/\\]'));
+        return !segments
+            .any((s) => s.isNotEmpty && s.startsWith('.') && s != '.');
+      }).toList();
+    }
+    if (settings.filterSmallImages) {
+      allItems =
+          allItems.where((e) => e.isVideo || e.size >= 50 * 1024).toList();
+    }
     final albumItems = widget.albumName == 'Favorites'
         ? allItems.where((e) => settings.favoriteIds.contains(e.id)).toList()
         : allItems.where((e) => e.albumName == widget.albumName).toList();

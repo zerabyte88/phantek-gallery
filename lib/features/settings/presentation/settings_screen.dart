@@ -1643,7 +1643,7 @@ class _ThemeOptionCard extends StatelessWidget {
         ),
       AppThemeMode.cleanLight => (
           Icons.wb_sunny_outlined,
-          const Color(0xFF2563EB),
+          const Color(0xFF0EA5E9),
           const LinearGradient(
             colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFC)],
           ),
@@ -1658,16 +1658,16 @@ class _ThemeOptionCard extends StatelessWidget {
           context.tr.themeDarkDesc,
         ),
       AppThemeMode.amoledMidnight => (
-          Icons.phone_android_rounded,
-          const Color(0xFF38BDF8),
+          Icons.nights_stay_rounded,
+          const Color(0xFF818CF8),
           const LinearGradient(
             colors: [Color(0xFF000000), Color(0xFF0A0A0A)],
           ),
           context.tr.themeAmoledDesc,
         ),
       AppThemeMode.amoledPure => (
-          Icons.dark_mode_rounded,
-          const Color(0xFF2563EB),
+          Icons.brightness_2_outlined,
+          const Color(0xFF60A5FA),
           const LinearGradient(
             colors: [Color(0xFF000000), Color(0xFF121214)],
           ),

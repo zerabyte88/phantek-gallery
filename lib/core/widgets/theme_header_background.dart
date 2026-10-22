@@ -9,12 +9,12 @@ import '../providers/settings_provider.dart';
 /// Themes:
 /// - [AppThemeMode.amoledMidnight]: Pitch-black night sky with a glowing crescent moon,
 ///   twinkling stars, and shooting meteor streaks.
-/// - [AppThemeMode.amoledPure]: Pure pitch-black night sky with twinkling stars and meteors.
+/// - [AppThemeMode.amoledPure]: Pure pitch-black static AMOLED background without animations (only Phantek title animated).
 /// - [AppThemeMode.amoledSakura]: OLED black with an artistic sakura tree branch
 ///   with fresh leaves, abundant blossoms, and fluttering pink cherry blossom petals.
 /// - [AppThemeMode.amoledSnowfall]: AMOLED Nordic Winter Village with snow-capped hills, glowing cabins, pine trees, and falling crystalline snowflakes.
 /// - [AppThemeMode.light]: Prismatic morning breeze with flowing pastel silk waves, floating pearlescent glass orbs, and diamond prism sparkles.
-/// - [AppThemeMode.cleanLight]: Minimal clean bright morning breeze with smooth animated waves.
+/// - [AppThemeMode.cleanLight]: Minimal clean bright static light background without animations (only Phantek title animated).
 /// - [AppThemeMode.system]: Dynamically follows the system brightness (AMOLED Pure in dark, Clean Light in light).
 class ThemeHeaderBackground extends ConsumerStatefulWidget {
   const ThemeHeaderBackground({super.key});
@@ -57,6 +57,20 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
       _ => themeMode,
     };
 
+    final isStatic = effectiveMode == AppThemeMode.amoledPure ||
+        effectiveMode == AppThemeMode.cleanLight;
+
+    if (isStatic) {
+      if (_controller.isAnimating) {
+        _controller.stop();
+      }
+      return const SizedBox.shrink();
+    } else {
+      if (!_controller.isAnimating) {
+        _controller.repeat();
+      }
+    }
+
     return IgnorePointer(
       child: ClipRect(
         child: AnimatedBuilder(
@@ -64,17 +78,15 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
           builder: (context, _) {
             final progress = _controller.value;
             final painter = switch (effectiveMode) {
-              AppThemeMode.amoledMidnight ||
-              AppThemeMode.amoledPure =>
+              AppThemeMode.amoledMidnight =>
                 _AmoledHeaderPainter(progress: progress),
               AppThemeMode.amoledSakura =>
                 _SakuraHeaderPainter(progress: progress),
               AppThemeMode.amoledSnowfall =>
                 _DarkHeaderPainter(progress: progress),
-              AppThemeMode.light ||
-              AppThemeMode.cleanLight =>
+              AppThemeMode.light =>
                 _LightHeaderPainter(progress: progress),
-              AppThemeMode.system => _AmoledHeaderPainter(progress: progress),
+              _ => _AmoledHeaderPainter(progress: progress),
             };
 
             return CustomPaint(
@@ -1036,101 +1048,185 @@ class _DarkHeaderPainter extends CustomPainter {
     canvas.drawRect(Offset.zero & size, skyWashPaint);
 
     final backHillPath = Path();
-    final backHillBaseY = size.height * 0.76;
-    backHillPath.moveTo(0, backHillBaseY + 12);
+    final backHillBaseY = size.height * 0.83;
+    backHillPath.moveTo(0, backHillBaseY + 14);
     backHillPath.cubicTo(
-      size.width * 0.28,
-      backHillBaseY - 18,
-      size.width * 0.64,
-      backHillBaseY + 15,
+      size.width * 0.30,
+      backHillBaseY - 24,
+      size.width * 0.65,
+      backHillBaseY + 20,
       size.width,
-      backHillBaseY - 10,
+      backHillBaseY - 12,
     );
-    backHillPath.lineTo(size.width, size.height);
-    backHillPath.lineTo(0, size.height);
-    backHillPath.close();
+
+    // Fill path
+    final backHillFill = Path.from(backHillPath)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
 
     final backHillPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFF1E293B).withValues(alpha: 0.50),
-          const Color(0xFF0A0F1D).withValues(alpha: 0.85),
+          const Color(0xFF0F172A).withValues(alpha: 0.47),
+          Colors.black.withValues(alpha: 0.94),
         ],
       ).createShader(Offset.zero & size);
-    canvas.drawPath(backHillPath, backHillPaint);
+    canvas.drawPath(backHillFill, backHillPaint);
 
+    // Snow cap
     final backHillSnowPaint = Paint()
-      ..strokeWidth = 1.6
+      ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke
-      ..color = const Color(0xFF94A3B8).withValues(alpha: 0.30);
+      ..color = const Color(0xFF94A3B8).withValues(alpha: 0.22);
     canvas.drawPath(backHillPath, backHillSnowPaint);
 
+    // Distant pines
     _drawSnowyPine(
-        canvas, Offset(size.width * 0.08, backHillBaseY + 8), 16, 26);
+      canvas,
+      Offset(size.width * 0.07, backHillBaseY + 10),
+      22,
+      38,
+      isDistant: true,
+    );
     _drawSnowyPine(
-        canvas, Offset(size.width * 0.52, backHillBaseY + 13), 18, 30);
+      canvas,
+      Offset(size.width * 0.40, backHillBaseY + 18),
+      20,
+      34,
+      isDistant: true,
+    );
+    _drawSnowyPine(
+      canvas,
+      Offset(size.width * 0.90, backHillBaseY - 14),
+      24,
+      40,
+      isDistant: true,
+    );
 
+    // Distant cabins
+    _drawSnowyCabin(
+      canvas,
+      Offset(size.width * 0.20, backHillBaseY + 6),
+      22.0,
+      20.0,
+      chimneyXOffset: 4,
+      hasChimney: true,
+      isDistant: true,
+    );
+    _drawSnowyCabin(
+      canvas,
+      Offset(size.width * 0.64, backHillBaseY + 18),
+      24.0,
+      22.0,
+      chimneyXOffset: -5,
+      hasChimney: true,
+      isDistant: true,
+    );
+
+    // Foreground hill
     final hillPath = Path();
-    final hillBaseY = size.height * 0.86;
-    hillPath.moveTo(0, hillBaseY - 8);
+    final hillBaseY = size.height * 0.88;
+    hillPath.moveTo(0, hillBaseY - 10);
     hillPath.cubicTo(
       size.width * 0.32,
-      hillBaseY + 14,
+      hillBaseY + 18,
       size.width * 0.68,
-      hillBaseY - 18,
+      hillBaseY - 28,
       size.width,
-      hillBaseY + 6,
+      hillBaseY + 8,
     );
-    hillPath.lineTo(size.width, size.height);
-    hillPath.lineTo(0, size.height);
-    hillPath.close();
+
+    // Fill path
+    final hillFill = Path.from(hillPath)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
 
     final hillPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFF0F172A).withValues(alpha: 0.95),
+          const Color(0xFF0C1322).withValues(alpha: 0.86),
           Colors.black,
         ],
       ).createShader(Offset.zero & size);
-    canvas.drawPath(hillPath, hillPaint);
+    canvas.drawPath(hillFill, hillPaint);
 
+    // Snow ridge
     final snowRidgePaint = Paint()
-      ..strokeWidth = 2.4
+      ..strokeWidth = 3.0
       ..style = PaintingStyle.stroke
       ..shader = LinearGradient(
         colors: [
-          const Color(0xFFCFF0FF).withValues(alpha: 0.50),
-          const Color(0xFFBAE6FD).withValues(alpha: 0.85),
-          const Color(0xFFCFF0FF).withValues(alpha: 0.40),
+          const Color(0xFFCFF0FF).withValues(alpha: 0.35),
+          const Color(0xFFBAE6FD).withValues(alpha: 0.63),
+          const Color(0xFFCFF0FF).withValues(alpha: 0.27),
         ],
       ).createShader(Offset.zero & size);
     canvas.drawPath(hillPath, snowRidgePaint);
 
-    _drawSnowyPine(canvas, Offset(size.width * 0.38, hillBaseY + 8), 16, 24);
-    _drawSnowyPine(canvas, Offset(size.width * 0.92, hillBaseY - 3), 18, 27);
+    // Foreground pines
+    _drawSnowyPine(canvas, Offset(size.width * 0.04, hillBaseY - 8), 22, 36);
+    _drawSnowyPine(canvas, Offset(size.width * 0.34, hillBaseY + 14), 20, 32);
+    _drawSnowyPine(canvas, Offset(size.width * 0.60, hillBaseY - 14), 22, 35);
+    _drawSnowyPine(canvas, Offset(size.width * 0.95, hillBaseY - 2), 24, 38);
 
+    // Village cabins
+    // Cabin 1
     _drawSnowyCabin(
       canvas,
-      Offset(size.width * 0.22, hillBaseY + 5),
+      Offset(size.width * 0.16, hillBaseY + 6),
+      34.0,
+      30.0,
+      chimneyXOffset: -7,
+      hasChimney: true,
+    );
+
+    // Cabin 2
+    _drawSnowyCabin(
+      canvas,
+      Offset(size.width * 0.25, hillBaseY + 12),
       28.0,
-      24.0,
+      25.0,
+      chimneyXOffset: 5,
+      hasChimney: true,
+    );
+
+    // Cabin 3
+    _drawSnowyCabin(
+      canvas,
+      Offset(size.width * 0.46, hillBaseY + 22),
+      32.0,
+      28.0,
       chimneyXOffset: 6,
       hasChimney: true,
     );
 
+    // Cabin 4
     _drawSnowyCabin(
       canvas,
-      Offset(size.width * 0.74, hillBaseY - 13),
-      34.0,
-      29.0,
-      chimneyXOffset: -8,
+      Offset(size.width * 0.74, hillBaseY - 18),
+      42.0,
+      36.0,
+      chimneyXOffset: -10,
       hasChimney: true,
     );
 
+    // Cabin 5
+    _drawSnowyCabin(
+      canvas,
+      Offset(size.width * 0.84, hillBaseY - 10),
+      30.0,
+      26.0,
+      chimneyXOffset: 5,
+      hasChimney: true,
+    );
+
+    // Snowflakes
     final snowBaseColor = const Color(0xFFCFF0FF);
     for (int i = 0; i < _snowParticles.length; i++) {
       final p = _snowParticles[i];
@@ -1138,7 +1234,7 @@ class _DarkHeaderPainter extends CustomPainter {
       final yPos = currentProgress * size.height;
 
       final sway = math.sin(progress * 2 * math.pi * p.swayFreq + p.phase) *
-          (p.swayAmplitude * 1.2);
+          (p.swayAmplitude * 1.3);
       final xPos = (p.x * size.width + sway) % size.width;
 
       final edgeFade = math.sin(currentProgress * math.pi);
@@ -1181,7 +1277,13 @@ class _DarkHeaderPainter extends CustomPainter {
     }
   }
 
-  void _drawSnowyPine(Canvas canvas, Offset base, double width, double height) {
+  void _drawSnowyPine(
+    Canvas canvas,
+    Offset base,
+    double width,
+    double height, {
+    bool isDistant = false,
+  }) {
     final trunkHeight = height * 0.22;
     final trunkWidth = width * 0.18;
     final trunkRect = Rect.fromCenter(
@@ -1189,7 +1291,27 @@ class _DarkHeaderPainter extends CustomPainter {
       width: trunkWidth,
       height: trunkHeight,
     );
-    canvas.drawRect(trunkRect, Paint()..color = const Color(0xFF1E293B));
+    // Trunk
+    canvas.drawRect(
+      trunkRect,
+      Paint()
+        ..color = isDistant
+            ? const Color(0xFF2C1E18).withValues(alpha: 0.70)
+            : const Color(0xFF3E2723),
+    );
+
+    // Foliage layers
+    final tierColors = isDistant
+        ? [
+            const Color(0xFF0F291E).withValues(alpha: 0.75),
+            const Color(0xFF143628).withValues(alpha: 0.78),
+            const Color(0xFF194432).withValues(alpha: 0.82),
+          ]
+        : [
+            const Color(0xFF143628), // Deep base pine
+            const Color(0xFF1B4332), // Rich evergreen green
+            const Color(0xFF22543D), // Vibrant pine crown
+          ];
 
     for (int tier = 0; tier < 3; tier++) {
       final tierBottom = base.dy - trunkHeight * 0.8 - (tier * height * 0.26);
@@ -1202,25 +1324,25 @@ class _DarkHeaderPainter extends CustomPainter {
       foliagePath.lineTo(base.dx - tierW / 2, tierBottom);
       foliagePath.close();
 
-      canvas.drawPath(
-        foliagePath,
-        Paint()..color = const Color(0xFF0F172A).withValues(alpha: 0.95),
-      );
+      canvas.drawPath(foliagePath, Paint()..color = tierColors[tier]);
 
+      // Branch snow
       final snowPath = Path();
       snowPath.moveTo(base.dx - tierW / 2, tierBottom);
       snowPath.quadraticBezierTo(
         base.dx,
-        tierBottom - 3,
+        tierBottom - 4,
         base.dx + tierW / 2,
         tierBottom,
       );
       canvas.drawPath(
         snowPath,
         Paint()
-          ..strokeWidth = 1.8
+          ..strokeWidth = isDistant ? 1.4 : 2.0
           ..style = PaintingStyle.stroke
-          ..color = const Color(0xFFCFF0FF).withValues(alpha: 0.75),
+          ..color = isDistant
+              ? const Color(0xFFCFF0FF).withValues(alpha: 0.47)
+              : const Color(0xFFCFF0FF).withValues(alpha: 0.75),
       );
     }
   }
@@ -1232,6 +1354,7 @@ class _DarkHeaderPainter extends CustomPainter {
     double height, {
     required double chimneyXOffset,
     required bool hasChimney,
+    bool isDistant = false,
   }) {
     final bodyHeight = height * 0.58;
     final bodyRect = Rect.fromLTWH(
@@ -1240,8 +1363,29 @@ class _DarkHeaderPainter extends CustomPainter {
       width,
       bodyHeight,
     );
-    canvas.drawRect(bodyRect, Paint()..color = const Color(0xFF1E293B));
 
+    // Cabin wall
+    final wallColor = isDistant
+        ? const Color(0xFF1A2230).withValues(alpha: 0.75)
+        : const Color(0xFF27211D); // Warm dark medieval wood
+    canvas.drawRect(bodyRect, Paint()..color = wallColor);
+
+    // Timber frame
+    if (!isDistant && width >= 26) {
+      final timberPaint = Paint()
+        ..color = const Color(0xFF16120F)
+        ..strokeWidth = 1.2
+        ..style = PaintingStyle.stroke;
+
+      canvas.drawRect(bodyRect, timberPaint);
+      canvas.drawLine(
+        Offset(base.dx, base.dy - bodyHeight),
+        Offset(base.dx, base.dy),
+        timberPaint,
+      );
+    }
+
+    // Window glow
     final winW = width * 0.32;
     final winH = bodyHeight * 0.44;
     final winRect = Rect.fromCenter(
@@ -1252,40 +1396,50 @@ class _DarkHeaderPainter extends CustomPainter {
 
     final windowGlowPulse =
         (math.sin(progress * 2 * math.pi + base.dx) + 1) / 2;
+    final haloRadius = isDistant ? winW * 1.3 : winW * 1.8;
+    final haloAlpha = isDistant
+        ? (55 + 20 * windowGlowPulse) / 255.0
+        : (90 + 35 * windowGlowPulse) / 255.0;
+
     final haloPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFFFDE047)
-              .withValues(alpha: 0.35 + 0.15 * windowGlowPulse),
-          const Color(0xFFFEF08A).withValues(alpha: 0.10),
+          const Color(0xFFFDE047).withValues(alpha: haloAlpha),
+          const Color(0xFFFEF08A).withValues(alpha: isDistant ? 0.05 : 0.10),
           Colors.transparent,
         ],
         stops: const [0.0, 0.55, 1.0],
       ).createShader(
-        Rect.fromCircle(center: winRect.center, radius: winW * 1.8),
+        Rect.fromCircle(center: winRect.center, radius: haloRadius),
       );
-    canvas.drawCircle(winRect.center, winW * 1.8, haloPaint);
+    canvas.drawCircle(winRect.center, haloRadius, haloPaint);
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(winRect, const Radius.circular(2)),
-      Paint()..color = const Color(0xFFFDE047).withValues(alpha: 0.92),
+      Paint()
+        ..color = const Color(0xFFFDE047)
+            .withValues(alpha: isDistant ? 0.70 : 0.92),
     );
 
-    final framePaint = Paint()
-      ..color = const Color(0xFF0F172A)
-      ..strokeWidth = 1.1
-      ..style = PaintingStyle.stroke;
-    canvas.drawLine(
-      Offset(winRect.left, winRect.center.dy),
-      Offset(winRect.right, winRect.center.dy),
-      framePaint,
-    );
-    canvas.drawLine(
-      Offset(winRect.center.dx, winRect.top),
-      Offset(winRect.center.dx, winRect.bottom),
-      framePaint,
-    );
+    // Window frame
+    if (!isDistant) {
+      final framePaint = Paint()
+        ..color = const Color(0xFF16120F)
+        ..strokeWidth = 1.1
+        ..style = PaintingStyle.stroke;
+      canvas.drawLine(
+        Offset(winRect.left, winRect.center.dy),
+        Offset(winRect.right, winRect.center.dy),
+        framePaint,
+      );
+      canvas.drawLine(
+        Offset(winRect.center.dx, winRect.top),
+        Offset(winRect.center.dx, winRect.bottom),
+        framePaint,
+      );
+    }
 
+    // Chimney
     if (hasChimney) {
       final chW = width * 0.16;
       final chH = height * 0.34;
@@ -1293,7 +1447,7 @@ class _DarkHeaderPainter extends CustomPainter {
       final chY = base.dy - bodyHeight - height * 0.22;
       canvas.drawRect(
         Rect.fromLTWH(chX - chW / 2, chY, chW, chH),
-        Paint()..color = const Color(0xFF0F172A),
+        Paint()..color = const Color(0xFF1E293B), // Stone chimney
       );
 
       canvas.drawRRect(
@@ -1304,14 +1458,18 @@ class _DarkHeaderPainter extends CustomPainter {
         Paint()..color = const Color(0xFFCFF0FF),
       );
 
+      // Smoke puffs
       for (int s = 0; s < 4; s++) {
         final smokeProgress = (progress + s * 0.25) % 1.0;
-        final smokeY = chY - smokeProgress * 36.0;
-        final smokeSway = math.sin(smokeProgress * math.pi * 3 + s) * 5.0 +
-            (smokeProgress * 6.0);
+        final smokeY = chY - smokeProgress * (isDistant ? 26.0 : 42.0);
+        final smokeSway = math.sin(smokeProgress * math.pi * 3 + s) *
+                (isDistant ? 3.5 : 6.0) +
+            (smokeProgress * (isDistant ? 4.0 : 7.0));
         final smokeX = chX + smokeSway;
-        final smokeRadius = 1.8 + smokeProgress * 5.0;
-        final smokeAlpha = ((1.0 - smokeProgress) * 0.30).clamp(0.0, 1.0);
+        final smokeRadius = (isDistant ? 1.6 : 2.4) +
+            smokeProgress * (isDistant ? 3.8 : 6.5);
+        final maxAlpha = isDistant ? 0.18 : 0.30;
+        final smokeAlpha = ((1.0 - smokeProgress) * maxAlpha).clamp(0.0, 1.0);
 
         canvas.drawCircle(
           Offset(smokeX, smokeY),
@@ -1322,29 +1480,40 @@ class _DarkHeaderPainter extends CustomPainter {
       }
     }
 
+    // Roof
     final roofPeak = Offset(base.dx, base.dy - height);
-    final roofLeft = Offset(base.dx - width * 0.64, base.dy - bodyHeight + 2);
-    final roofRight = Offset(base.dx + width * 0.64, base.dy - bodyHeight + 2);
+    final roofLeft = Offset(base.dx - width * 0.68, base.dy - bodyHeight + 2);
+    final roofRight = Offset(base.dx + width * 0.68, base.dy - bodyHeight + 2);
 
     final roofPath = Path();
     roofPath.moveTo(roofPeak.dx, roofPeak.dy);
     roofPath.lineTo(roofRight.dx, roofRight.dy);
     roofPath.lineTo(roofLeft.dx, roofLeft.dy);
     roofPath.close();
-    canvas.drawPath(roofPath, Paint()..color = const Color(0xFF0F172A));
+    canvas.drawPath(
+      roofPath,
+      Paint()
+        ..color = isDistant
+            ? const Color(0xFF0F172A).withValues(alpha: 0.78)
+            : const Color(0xFF1E1712),
+    );
 
+    // Roof snow
     final snowRoofPath = Path();
-    snowRoofPath.moveTo(roofPeak.dx, roofPeak.dy - 2.5);
+    snowRoofPath.moveTo(roofPeak.dx, roofPeak.dy - 3);
     snowRoofPath.lineTo(roofRight.dx + 2, roofRight.dy - 1);
-    snowRoofPath.lineTo(roofRight.dx - 2, roofRight.dy + 2.5);
+    snowRoofPath.lineTo(roofRight.dx - 2, roofRight.dy + 3);
     snowRoofPath.lineTo(roofPeak.dx, roofPeak.dy + 2);
-    snowRoofPath.lineTo(roofLeft.dx + 2, roofLeft.dy + 2.5);
+    snowRoofPath.lineTo(roofLeft.dx + 2, roofLeft.dy + 3);
     snowRoofPath.lineTo(roofLeft.dx - 2, roofLeft.dy - 1);
     snowRoofPath.close();
 
     canvas.drawPath(
       snowRoofPath,
-      Paint()..color = const Color(0xFFCFF0FF).withValues(alpha: 0.95),
+      Paint()
+        ..color = isDistant
+            ? const Color(0xFFCFF0FF).withValues(alpha: 0.70)
+            : const Color(0xFFCFF0FF).withValues(alpha: 0.94),
     );
   }
 

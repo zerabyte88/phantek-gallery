@@ -148,9 +148,14 @@ class SettingsService {
 
   // ── Video Resume Position ──────────────────────────────────────────────────
 
+  String _posKey(String path) =>
+      'playback_pos_${base64Url.encode(utf8.encode(path))}';
+
   Duration? getVideoPlaybackPosition(String path) {
     if (!settings.resumeVideoPlayback) return null;
-    final posMs = _prefs.getInt('playback_pos_${path.hashCode}');
+    final key = _posKey(path);
+    final posMs =
+        _prefs.getInt(key) ?? _prefs.getInt('playback_pos_${path.hashCode}');
     if (posMs != null && posMs > 2000) {
       return Duration(milliseconds: posMs);
     }
@@ -160,17 +165,23 @@ class SettingsService {
   void saveVideoPlaybackPosition(
       String path, Duration position, Duration duration) {
     if (!settings.resumeVideoPlayback) return;
-    final key = 'playback_pos_${path.hashCode}';
+    final key = _posKey(path);
+    final legacyKey = 'playback_pos_${path.hashCode}';
     final posMs = position.inMilliseconds;
     final durMs = duration.inMilliseconds;
     if (durMs > 0 && durMs - posMs < 3000) {
       _prefs.remove(key);
+      _prefs.remove(legacyKey);
     } else if (posMs > 2000) {
       _prefs.setInt(key, posMs);
+    } else {
+      _prefs.remove(key);
+      _prefs.remove(legacyKey);
     }
   }
 
   void clearVideoPlaybackPosition(String path) {
+    _prefs.remove(_posKey(path));
     _prefs.remove('playback_pos_${path.hashCode}');
   }
 

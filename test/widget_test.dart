@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -581,7 +582,7 @@ void main() {
       expect(find.text('Video Engine'), findsNothing);
       expect(find.text('MediaKit'), findsNothing);
       expect(find.text('Build'), findsOneWidget);
-      expect(find.text('48'), findsOneWidget);
+      expect(find.text('49'), findsOneWidget);
       expect(find.text('GPLv3'), findsOneWidget);
     });
 
@@ -1575,12 +1576,12 @@ void main() {
         // Verify corresponding icon in AnimatedFlameTitle
         final expectedIcon = switch (mode) {
           AppThemeMode.amoledMidnight => Icons.nights_stay_rounded,
-          AppThemeMode.amoledPure => Icons.dark_mode_rounded,
+          AppThemeMode.amoledPure => Icons.brightness_2_outlined,
           AppThemeMode.amoledSakura => Icons.local_florist_rounded,
-          AppThemeMode.cleanLight => Icons.light_mode_rounded,
+          AppThemeMode.cleanLight => Icons.wb_sunny_outlined,
           AppThemeMode.amoledSnowfall => Icons.ac_unit_rounded,
           AppThemeMode.light => Icons.wb_sunny_rounded,
-          AppThemeMode.system => Icons.dark_mode_rounded, // in dark theme, defaults to pure amoled
+          AppThemeMode.system => Icons.brightness_2_outlined, // in dark theme, defaults to pure amoled
         };
         expect(find.byIcon(expectedIcon), findsOneWidget);
       }
@@ -2629,6 +2630,8 @@ void main() {
       final service = await SettingsService.init();
 
       const testVideo = '/storage/emulated/0/DCIM/Camera/VID_100.mp4';
+      final expectedDeterministicKey =
+          'playback_pos_${base64Url.encode(utf8.encode(testVideo))}';
 
       // 1. Position <= 2000ms is not stored (starts from beginning)
       service.saveVideoPlaybackPosition(
@@ -2638,7 +2641,7 @@ void main() {
       );
       expect(service.getVideoPlaybackPosition(testVideo), isNull);
 
-      // 2. Position > 2000ms is successfully saved and retrieved
+      // 2. Position > 2000ms is successfully saved with deterministic key and retrieved
       service.saveVideoPlaybackPosition(
         testVideo,
         const Duration(milliseconds: 15400),
@@ -2648,16 +2651,35 @@ void main() {
         service.getVideoPlaybackPosition(testVideo),
         const Duration(milliseconds: 15400),
       );
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getInt(expectedDeterministicKey), 15400);
 
-      // 3. Near-end position (< 3000ms remaining) automatically clears position
+      // 3. Exiting near the start (<= 2000ms) clears previous saved position
+      service.saveVideoPlaybackPosition(
+        testVideo,
+        const Duration(milliseconds: 1000),
+        const Duration(milliseconds: 60000),
+      );
+      expect(service.getVideoPlaybackPosition(testVideo), isNull);
+      expect(prefs.getInt(expectedDeterministicKey), isNull);
+
+      // 4. Legacy fallback: reads from old hashCode key if present
+      await prefs.setInt('playback_pos_${testVideo.hashCode}', 18200);
+      expect(
+        service.getVideoPlaybackPosition(testVideo),
+        const Duration(milliseconds: 18200),
+      );
+
+      // 5. Near-end position (< 3000ms remaining) automatically clears position and legacy key
       service.saveVideoPlaybackPosition(
         testVideo,
         const Duration(milliseconds: 58500),
         const Duration(milliseconds: 60000),
       );
       expect(service.getVideoPlaybackPosition(testVideo), isNull);
+      expect(prefs.getInt('playback_pos_${testVideo.hashCode}'), isNull);
 
-      // 4. Explicit clear removes saved position
+      // 6. Explicit clear removes saved position
       service.saveVideoPlaybackPosition(
         testVideo,
         const Duration(milliseconds: 25000),
@@ -2670,7 +2692,7 @@ void main() {
       service.clearVideoPlaybackPosition(testVideo);
       expect(service.getVideoPlaybackPosition(testVideo), isNull);
 
-      // 5. When resumeVideoPlayback setting is disabled, saving and reading are disabled
+      // 7. When resumeVideoPlayback setting is disabled, saving and reading are disabled
       await service.save(service.settings.copyWith(resumeVideoPlayback: false));
       service.saveVideoPlaybackPosition(
         testVideo,
@@ -2733,6 +2755,137 @@ void main() {
 
       await service.save(service.settings.copyWith(slideshowInterval: 10));
       expect(service.settings.slideshowInterval, 10);
+    });
+
+    test('filterSmallImages excludes photos under 50KB while retaining videos and large photos', () {
+      final items = [
+        MediaItem(
+          id: 'small_photo',
+          path: '/test/small.jpg',
+          name: 'small.jpg',
+          date: DateTime.now(),
+          size: 40 * 1024, // 40KB (< 50KB)
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'large_photo',
+          path: '/test/large.jpg',
+          name: 'large.jpg',
+          date: DateTime.now(),
+          size: 60 * 1024, // 60KB (>= 50KB)
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'small_video',
+          path: '/test/small.mp4',
+          name: 'small.mp4',
+          date: DateTime.now(),
+          size: 10 * 1024, // 10KB, but isVideo == true
+          isVideo: true,
+        ),
+      ];
+
+      final filtered = items.where((e) => e.isVideo || e.size >= 50 * 1024).toList();
+      expect(filtered.map((e) => e.id).toList(), ['large_photo', 'small_video']);
+      expect(items.length, 3);
+    });
+
+    testWidgets('GalleryScreen grid and slideshow respect filterSmallImages', (tester) async {
+      final mockItems = [
+        MediaItem(
+          id: 'photo_small',
+          path: '/test/small.jpg',
+          name: 'small.jpg',
+          date: DateTime.now(),
+          size: 30 * 1024,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'photo_large',
+          path: '/test/large.jpg',
+          name: 'large.jpg',
+          date: DateTime.now(),
+          size: 80 * 1024,
+          isVideo: false,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsNotifierProvider.overrideWith(
+              () => _TestSettingsNotifier(
+                const SettingsModel(filterSmallImages: true),
+              ),
+            ),
+            mediaListProvider.overrideWith(() => _SpecificMockMediaNotifier(mockItems)),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            home: GalleryScreen(),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Small photo (30KB) should not be displayed in grid
+      expect(find.text('small.jpg'), findsNothing);
+      // Large photo (80KB) should be present in grid
+      expect(find.byType(MediaGridItem), findsOneWidget);
+    });
+
+    testWidgets('AlbumDetailScreen respects filterSmallImages', (tester) async {
+      final mockItems = [
+        MediaItem(
+          id: 'photo_small',
+          path: '/test/Camera/small.jpg',
+          name: 'small.jpg',
+          date: DateTime.now(),
+          size: 20 * 1024,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'photo_large',
+          path: '/test/Camera/large.jpg',
+          name: 'large.jpg',
+          date: DateTime.now(),
+          size: 100 * 1024,
+          isVideo: false,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsNotifierProvider.overrideWith(
+              () => _TestSettingsNotifier(
+                const SettingsModel(filterSmallImages: true),
+              ),
+            ),
+            mediaListProvider.overrideWith(() => _SpecificMockMediaNotifier(mockItems)),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            home: AlbumDetailScreen(albumName: 'Camera'),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Small photo should be filtered out, only 1 item shown
+      expect(find.byType(MediaGridItem), findsOneWidget);
     });
   });
 }
@@ -2800,5 +2953,18 @@ class _MockMediaListNotifier extends MediaListNotifier {
     ];
     state =
         AsyncData(mockItems.where((e) => !deletedIds.contains(e.id)).toList());
+  }
+}
+
+class _SpecificMockMediaNotifier extends MediaListNotifier {
+  final List<MediaItem> items;
+  _SpecificMockMediaNotifier(this.items);
+
+  @override
+  Future<List<MediaItem>> build() async => items;
+
+  @override
+  Future<void> refresh() async {
+    state = AsyncData(items);
   }
 }

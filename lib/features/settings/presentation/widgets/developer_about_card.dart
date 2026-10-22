@@ -30,8 +30,8 @@ class DeveloperAboutCard extends ConsumerWidget {
       builder: (context, snapshot) {
         final theme = Theme.of(context);
         final cs = theme.colorScheme;
-        final version = snapshot.data?.version ?? '2.11.1';
-        final buildNumber = snapshot.data?.buildNumber ?? '48';
+        final version = snapshot.data?.version ?? '2.11.2';
+        final buildNumber = snapshot.data?.buildNumber ?? '49';
 
         final isDark = theme.brightness == Brightness.dark;
 

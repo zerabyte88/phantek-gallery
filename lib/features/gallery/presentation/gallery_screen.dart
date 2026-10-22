@@ -136,6 +136,21 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     );
   }
 
+  List<MediaItem> get _currentTabItems {
+    if (_currentPage >= 0 && _currentPage < _tabs.length) {
+      switch (_tabs[_currentPage]) {
+        case FilterOption.photosOnly:
+          return _memoizedPhotos;
+        case FilterOption.videosOnly:
+          return _memoizedVideos;
+        case FilterOption.all:
+        case FilterOption.albums:
+          return _memoizedAll;
+      }
+    }
+    return _memoizedAll;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -538,6 +553,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     final mediaAsync = ref.watch(mediaListProvider);
     final settings = ref.watch(settingsNotifierProvider);
     final isAlbums = _tabs[_currentPage] == FilterOption.albums;
+    if (mediaAsync.hasValue) {
+      _updateMemoizedTabs(mediaAsync.value!, settings);
+    }
 
     return PopScope(
       canPop: !_selecting && !_isSearching,
@@ -889,11 +907,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                 icon: const Icon(Icons.select_all),
                 tooltip: context.tr.selectAll,
                 onPressed: () {
-                  final all = applyFiltersAndSort(
-                    mediaAsync.value ?? [],
-                    sort: settings.defaultSort,
-                    filter: _tabs[_currentPage],
-                  );
+                  final all = _currentTabItems;
                   setState(() {
                     if (_selected.length == all.length) {
                       _selected.clear();
@@ -944,17 +958,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           offset: const Offset(0, 48),
           onSelected: (value) {
             if (value == 'slideshow') {
-              final raw = mediaAsync.value ?? [];
-              List<MediaItem> items;
-              if (isAlbums) {
-                items = raw;
-              } else {
-                items = applyFiltersAndSort(
-                  raw,
-                  sort: settings.defaultSort,
-                  filter: _tabs[_currentPage],
-                );
-              }
+              final items = _currentTabItems;
               if (items.isNotEmpty) {
                 final hasVideos = items.any((e) => e.isVideo);
                 if (hasVideos) {
