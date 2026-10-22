@@ -57,6 +57,24 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
     Color(0xFF0284C7),
   ];
 
+  static const _cleanLightColors = [
+    Color(0xFF2563EB), // Sapphire Blue
+    Color(0xFF0284C7), // Sky Blue
+    Color(0xFF38BDF8), // Light Cyan
+    Color(0xFF0F172A), // Deep Slate
+    Color(0xFF60A5FA), // Soft Blue
+    Color(0xFF2563EB),
+  ];
+
+  static const _amoledPureColors = [
+    Color(0xFF2563EB), // Sapphire Blue
+    Color(0xFF3B82F6), // Royal Blue
+    Color(0xFF60A5FA), // Light Blue
+    Color(0xFFFAFAFA), // Zinc White
+    Color(0xFF93C5FD), // Soft Blue
+    Color(0xFF2563EB),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -81,18 +99,24 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
 
     final effectiveMode = switch (themeMode) {
       AppThemeMode.system => theme.brightness == Brightness.dark
-          ? AppThemeMode.dark
-          : AppThemeMode.light,
+          ? AppThemeMode.amoledPure
+          : AppThemeMode.cleanLight,
       _ => themeMode,
     };
 
     final (colors, icon, iconStartColor, iconEndColor) =
         switch (effectiveMode) {
-      AppThemeMode.amoled => (
+      AppThemeMode.amoledMidnight => (
           _amoledColors,
           Icons.nights_stay_rounded,
           const Color(0xFF818CF8),
           const Color(0xFF38BDF8),
+        ),
+      AppThemeMode.amoledPure => (
+          _amoledPureColors,
+          Icons.dark_mode_rounded,
+          const Color(0xFF2563EB),
+          const Color(0xFF60A5FA),
         ),
       AppThemeMode.amoledSakura => (
           _sakuraColors,
@@ -100,7 +124,13 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
           const Color(0xFFFF7597),
           const Color(0xFFFFB7C5),
         ),
-      AppThemeMode.dark => (
+      AppThemeMode.cleanLight => (
+          _cleanLightColors,
+          Icons.light_mode_rounded,
+          const Color(0xFF2563EB),
+          const Color(0xFF0284C7),
+        ),
+      AppThemeMode.amoledSnowfall => (
           _darkNordicFrostColors,
           Icons.ac_unit_rounded,
           const Color(0xFF38BDF8),
@@ -113,10 +143,10 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
           const Color(0xFF8B5CF6),
         ),
       AppThemeMode.system => (
-          _darkNordicFrostColors,
-          Icons.ac_unit_rounded,
-          const Color(0xFF38BDF8),
-          const Color(0xFFBAE6FD),
+          _amoledPureColors,
+          Icons.dark_mode_rounded,
+          const Color(0xFF2563EB),
+          const Color(0xFF60A5FA),
         ),
     };
 

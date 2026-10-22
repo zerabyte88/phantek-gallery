@@ -63,11 +63,17 @@ class SettingsService {
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
-  SettingsModel get settings => SettingsModel(
-        themeMode:
-            _readEnum(_K.themeMode, AppThemeMode.values, AppThemeMode.system),
-        language:
-            _readEnum(_K.language, AppLanguage.values, AppLanguage.system),
+  SettingsModel get settings {
+    final rawTheme = _prefs.getString(_K.themeMode);
+    final themeMode = switch (rawTheme) {
+      'dark' => AppThemeMode.amoledSnowfall,
+      'amoled' => AppThemeMode.amoledMidnight,
+      _ => _readEnum(_K.themeMode, AppThemeMode.values, AppThemeMode.system),
+    };
+    return SettingsModel(
+      themeMode: themeMode,
+      language:
+          _readEnum(_K.language, AppLanguage.values, AppLanguage.system),
         gridColumns: _prefs.getInt(_K.gridColumns) ?? 3,
         albumGridColumns: _prefs.getInt(_K.albumGridColumns) ?? 3,
         showBadges: _prefs.getBool(_K.showBadges) ?? true,
@@ -101,6 +107,7 @@ class SettingsService {
         showHiddenFiles: _prefs.getBool(_K.showHiddenFiles) ?? false,
         secureScreen: _prefs.getBool(_K.secureScreen) ?? false,
       );
+  }
 
   // ── Write ─────────────────────────────────────────────────────────────────
 

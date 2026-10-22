@@ -169,6 +169,8 @@ class AppLocalizations {
   String get themeLightDesc => _t('themeLightDesc');
   String get themeDarkDesc => _t('themeDarkDesc');
   String get themeAmoledDesc => _t('themeAmoledDesc');
+  String get themeAmoledPureDesc => _t('themeAmoledPureDesc');
+  String get themeCleanLightDesc => _t('themeCleanLightDesc');
   String get themeSakuraDesc => _t('themeSakuraDesc');
   String get selectGridColumns => _t('selectGridColumns');
   String get selectAlbumsGridColumns => _t('selectAlbumsGridColumns');
@@ -309,8 +311,10 @@ class AppLocalizations {
   String themeModeLabel(AppThemeMode mode) => switch (mode) {
         AppThemeMode.system => _t('themeModeSystem'),
         AppThemeMode.light => _t('themeModeLight'),
-        AppThemeMode.dark => _t('themeModeDark'),
-        AppThemeMode.amoled => _t('themeModeAmoled'),
+        AppThemeMode.cleanLight => _t('themeModeCleanLight'),
+        AppThemeMode.amoledSnowfall => _t('themeModeDark'),
+        AppThemeMode.amoledMidnight => _t('themeModeAmoled'),
+        AppThemeMode.amoledPure => _t('themeModeAmoledPure'),
         AppThemeMode.amoledSakura => _t('themeModeSakura'),
       };
 

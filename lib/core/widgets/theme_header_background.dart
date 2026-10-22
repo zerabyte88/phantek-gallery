@@ -7,13 +7,15 @@ import '../providers/settings_provider.dart';
 /// A sleek, high-performance animated header background that adapts to the active theme.
 ///
 /// Themes:
-/// - [AppThemeMode.amoled]: Pitch-black night sky with a glowing crescent moon,
+/// - [AppThemeMode.amoledMidnight]: Pitch-black night sky with a glowing crescent moon,
 ///   twinkling stars, and shooting meteor streaks.
+/// - [AppThemeMode.amoledPure]: Pure pitch-black night sky with twinkling stars and meteors.
 /// - [AppThemeMode.amoledSakura]: OLED black with an artistic sakura tree branch
 ///   with fresh leaves, abundant blossoms, and fluttering pink cherry blossom petals.
-/// - [AppThemeMode.dark]: AMOLED Nordic Winter Village with snow-capped hills, glowing cabins, pine trees, and falling crystalline snowflakes.
+/// - [AppThemeMode.amoledSnowfall]: AMOLED Nordic Winter Village with snow-capped hills, glowing cabins, pine trees, and falling crystalline snowflakes.
 /// - [AppThemeMode.light]: Prismatic morning breeze with flowing pastel silk waves, floating pearlescent glass orbs, and diamond prism sparkles.
-/// - [AppThemeMode.system]: Dynamically follows the system brightness.
+/// - [AppThemeMode.cleanLight]: Minimal clean bright morning breeze with smooth animated waves.
+/// - [AppThemeMode.system]: Dynamically follows the system brightness (AMOLED Pure in dark, Clean Light in light).
 class ThemeHeaderBackground extends ConsumerStatefulWidget {
   const ThemeHeaderBackground({super.key});
 
@@ -49,8 +51,9 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
     final brightness = Theme.of(context).brightness;
 
     final effectiveMode = switch (themeMode) {
-      AppThemeMode.system =>
-        brightness == Brightness.dark ? AppThemeMode.dark : AppThemeMode.light,
+      AppThemeMode.system => brightness == Brightness.dark
+          ? AppThemeMode.amoledPure
+          : AppThemeMode.cleanLight,
       _ => themeMode,
     };
 
@@ -61,12 +64,17 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
           builder: (context, _) {
             final progress = _controller.value;
             final painter = switch (effectiveMode) {
-              AppThemeMode.amoled => _AmoledHeaderPainter(progress: progress),
+              AppThemeMode.amoledMidnight ||
+              AppThemeMode.amoledPure =>
+                _AmoledHeaderPainter(progress: progress),
               AppThemeMode.amoledSakura =>
                 _SakuraHeaderPainter(progress: progress),
-              AppThemeMode.dark => _DarkHeaderPainter(progress: progress),
-              AppThemeMode.light => _LightHeaderPainter(progress: progress),
-              AppThemeMode.system => _DarkHeaderPainter(progress: progress),
+              AppThemeMode.amoledSnowfall =>
+                _DarkHeaderPainter(progress: progress),
+              AppThemeMode.light ||
+              AppThemeMode.cleanLight =>
+                _LightHeaderPainter(progress: progress),
+              AppThemeMode.system => _AmoledHeaderPainter(progress: progress),
             };
 
             return CustomPaint(

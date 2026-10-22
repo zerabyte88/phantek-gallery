@@ -27,35 +27,53 @@ class AppTheme {
         ),
       );
 
-  static ThemeData get dark => ThemeData(
+  static const Color _snowfallSeed = Color(0xFF38BDF8);
+
+  static ThemeData get amoledSnowfall => ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: _seed,
+          seedColor: _snowfallSeed,
           brightness: Brightness.dark,
-          surface: Colors.black,
+          surface: const Color(0xFF0C1322),
+          primary: const Color(0xFF38BDF8),
+          secondary: const Color(0xFF0284C7),
+          outline: const Color(0xFF1E293B),
+          outlineVariant: const Color(0xFF1E293B),
         ),
         brightness: Brightness.dark,
         splashFactory: InkSparkle.splashFactory,
         switchTheme: _switchTheme,
         scaffoldBackgroundColor: Colors.black,
+        canvasColor: Colors.black,
         appBarTheme: const AppBarTheme(
           centerTitle: false,
           elevation: 0,
           backgroundColor: Colors.black,
         ),
-        cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero),
+        cardTheme: const CardThemeData(
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          color: Color(0xFF0C1322),
+        ),
+        dialogTheme: const DialogThemeData(
+          backgroundColor: Color(0xFF0C1322),
+        ),
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: Colors.black,
+        ),
         snackBarTheme: SnackBarThemeData(
-          backgroundColor: const Color(0xFF1E293B),
-          contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+          backgroundColor: const Color(0xFF0C1322),
+          contentTextStyle:
+              const TextStyle(color: Color(0xFFF8FAFC), fontSize: 14),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+            side: const BorderSide(color: Color(0xFF1E293B)),
           ),
         ),
       );
 
-  static ThemeData get amoled => ThemeData(
+  static ThemeData get amoledMidnight => ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
           seedColor: _seed,
@@ -93,6 +111,9 @@ class AppTheme {
           ),
         ),
       );
+
+  static ThemeData get dark => amoledSnowfall;
+  static ThemeData get amoled => amoledMidnight;
 
   static const Color _sakuraSeed = Color(0xFFFF7597);
 
@@ -134,6 +155,93 @@ class AppTheme {
             side: BorderSide(
               color: const Color(0xFFFF7597).withValues(alpha: 0.35),
             ),
+          ),
+        ),
+      );
+
+  static const Color _toolkitSeed = Color(0xFF2563EB);
+
+  static ThemeData get amoledPure => ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: _toolkitSeed,
+          brightness: Brightness.dark,
+          surface: const Color(0xFF121214),
+          primary: const Color(0xFF2563EB),
+          outline: const Color(0xFF27272A),
+          outlineVariant: const Color(0xFF18181B),
+        ),
+        brightness: Brightness.dark,
+        splashFactory: InkSparkle.splashFactory,
+        switchTheme: _switchTheme,
+        scaffoldBackgroundColor: Colors.black,
+        canvasColor: Colors.black,
+        appBarTheme: const AppBarTheme(
+          centerTitle: false,
+          elevation: 0,
+          backgroundColor: Colors.black,
+        ),
+        cardTheme: const CardThemeData(
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          color: Color(0xFF121214),
+        ),
+        dialogTheme: const DialogThemeData(
+          backgroundColor: Color(0xFF121214),
+        ),
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: Colors.black,
+        ),
+        snackBarTheme: SnackBarThemeData(
+          backgroundColor: const Color(0xFF121214),
+          contentTextStyle:
+              const TextStyle(color: Color(0xFFFAFAFA), fontSize: 14),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: Color(0xFF27272A)),
+          ),
+        ),
+      );
+
+  static ThemeData get cleanLight => ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: _toolkitSeed,
+          brightness: Brightness.light,
+          surface: const Color(0xFFFFFFFF),
+          primary: const Color(0xFF2563EB),
+          outline: const Color(0xFFE2E8F0),
+          outlineVariant: const Color(0xFFF1F5F9),
+        ),
+        brightness: Brightness.light,
+        splashFactory: InkSparkle.splashFactory,
+        switchTheme: _switchTheme,
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        canvasColor: const Color(0xFFFFFFFF),
+        appBarTheme: const AppBarTheme(
+          centerTitle: false,
+          elevation: 0,
+          backgroundColor: Color(0xFFFFFFFF),
+        ),
+        cardTheme: const CardThemeData(
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          color: Color(0xFFFFFFFF),
+        ),
+        dialogTheme: const DialogThemeData(
+          backgroundColor: Color(0xFFFFFFFF),
+        ),
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: Color(0xFFFFFFFF),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          backgroundColor: const Color(0xFF0F172A),
+          contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: Color(0xFFE2E8F0)),
           ),
         ),
       );

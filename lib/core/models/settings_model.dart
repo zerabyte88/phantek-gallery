@@ -211,8 +211,10 @@ class SettingsModel extends Equatable {
 enum AppThemeMode {
   system,
   light,
-  dark,
-  amoled,
+  cleanLight,
+  amoledSnowfall,
+  amoledMidnight,
+  amoledPure,
   amoledSakura,
 }
 
@@ -220,8 +222,10 @@ extension AppThemeModeLabel on AppThemeMode {
   String get label => switch (this) {
         AppThemeMode.system => 'System',
         AppThemeMode.light => 'Sunburst',
-        AppThemeMode.dark => 'Snowfall',
-        AppThemeMode.amoled => 'Midnight',
+        AppThemeMode.cleanLight => 'Clean Light',
+        AppThemeMode.amoledSnowfall => 'Snowfall',
+        AppThemeMode.amoledMidnight => 'Midnight',
+        AppThemeMode.amoledPure => 'AMOLED Pure',
         AppThemeMode.amoledSakura => 'Sakura',
       };
 }

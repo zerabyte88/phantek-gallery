@@ -507,10 +507,17 @@ void main() {
     });
 
     test('AppThemeMode labels and AppTheme amoled definitions', () {
-      expect(AppThemeMode.amoled.label, 'Midnight');
+      expect(AppThemeMode.amoledMidnight.label, 'Midnight');
+      expect(AppThemeMode.amoledSnowfall.label, 'Snowfall');
+      expect(AppThemeMode.amoledPure.label, 'AMOLED Pure');
+      expect(AppThemeMode.cleanLight.label, 'Clean Light');
       expect(AppThemeMode.amoledSakura.label, 'Sakura');
-      expect(AppTheme.amoled.scaffoldBackgroundColor, Colors.black);
+      expect(AppTheme.amoledMidnight.scaffoldBackgroundColor, Colors.black);
+      expect(AppTheme.amoledSnowfall.scaffoldBackgroundColor, Colors.black);
+      expect(AppTheme.amoledPure.scaffoldBackgroundColor, Colors.black);
       expect(AppTheme.amoledSakura.scaffoldBackgroundColor, Colors.black);
+      expect(AppTheme.cleanLight.scaffoldBackgroundColor,
+          const Color(0xFFF8FAFC));
     });
 
     testWidgets('AMOLED Sakura theme is available by default in Theme dialog',
@@ -538,11 +545,14 @@ void main() {
       await tester.tap(find.text('Theme'));
       await tester.pumpAndSettle();
 
-      // Both Midnight and Sakura are available directly
+      // Verify themes are in dialog
       expect(find.text('Midnight'), findsOneWidget);
+      expect(find.text('AMOLED Pure'), findsOneWidget);
+      expect(find.text('Clean Light'), findsOneWidget);
       expect(find.text('Sakura'), findsOneWidget);
 
       // Select Sakura theme
+      await tester.ensureVisible(find.text('Sakura'));
       await tester.tap(find.text('Sakura'));
       await tester.pumpAndSettle();
 
@@ -1524,9 +1534,11 @@ void main() {
       await SettingsService.init();
 
       for (final mode in [
-        AppThemeMode.amoled,
+        AppThemeMode.amoledMidnight,
+        AppThemeMode.amoledPure,
         AppThemeMode.amoledSakura,
-        AppThemeMode.dark,
+        AppThemeMode.cleanLight,
+        AppThemeMode.amoledSnowfall,
         AppThemeMode.light,
         AppThemeMode.system,
       ]) {
@@ -1540,7 +1552,9 @@ void main() {
             ],
             child: MaterialApp(
               theme:
-                  mode == AppThemeMode.light ? AppTheme.light : AppTheme.dark,
+                  mode == AppThemeMode.light || mode == AppThemeMode.cleanLight
+                      ? AppTheme.light
+                      : AppTheme.amoledSnowfall,
               home: Scaffold(
                 appBar: AppBar(
                   flexibleSpace: const ThemeHeaderBackground(),
@@ -1560,11 +1574,13 @@ void main() {
 
         // Verify corresponding icon in AnimatedFlameTitle
         final expectedIcon = switch (mode) {
-          AppThemeMode.amoled => Icons.nights_stay_rounded,
+          AppThemeMode.amoledMidnight => Icons.nights_stay_rounded,
+          AppThemeMode.amoledPure => Icons.dark_mode_rounded,
           AppThemeMode.amoledSakura => Icons.local_florist_rounded,
-          AppThemeMode.dark => Icons.ac_unit_rounded,
+          AppThemeMode.cleanLight => Icons.light_mode_rounded,
+          AppThemeMode.amoledSnowfall => Icons.ac_unit_rounded,
           AppThemeMode.light => Icons.wb_sunny_rounded,
-          AppThemeMode.system => Icons.ac_unit_rounded, // in dark theme
+          AppThemeMode.system => Icons.dark_mode_rounded, // in dark theme, defaults to pure amoled
         };
         expect(find.byIcon(expectedIcon), findsOneWidget);
       }
@@ -1729,8 +1745,8 @@ void main() {
         'ThemeHeaderBackground renders AMOLED, Dark, and Light themes fluidly without exceptions',
         (tester) async {
       for (final mode in [
-        AppThemeMode.amoled,
-        AppThemeMode.dark,
+        AppThemeMode.amoledMidnight,
+        AppThemeMode.amoledSnowfall,
         AppThemeMode.light
       ]) {
         await tester.pumpWidget(

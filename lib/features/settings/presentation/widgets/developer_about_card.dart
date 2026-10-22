@@ -33,23 +33,20 @@ class DeveloperAboutCard extends ConsumerWidget {
         final version = snapshot.data?.version ?? '2.11.1';
         final buildNumber = snapshot.data?.buildNumber ?? '48';
 
+        final isDark = theme.brightness == Brightness.dark;
+
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest.withValues(alpha: 0.60),
-            borderRadius: BorderRadius.circular(20),
+            color: isDark
+                ? cs.surfaceContainerHighest.withValues(alpha: 0.35)
+                : cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: cs.outline.withValues(alpha: 0.12),
-              width: 1,
+              color: cs.outline.withValues(alpha: isDark ? 0.08 : 0.12),
+              width: 0.8,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: cs.shadow.withValues(alpha: 0.06),
-                blurRadius: 12,
-                offset: const Offset(0, 2),
-              ),
-            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

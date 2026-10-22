@@ -119,16 +119,25 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
     );
 
     final darkTheme = switch (themeMode) {
-      AppThemeMode.amoled => AppTheme.amoled,
+      AppThemeMode.amoledMidnight => AppTheme.amoledMidnight,
+      AppThemeMode.amoledSnowfall => AppTheme.amoledSnowfall,
       AppThemeMode.amoledSakura => AppTheme.amoledSakura,
-      _ => AppTheme.dark,
+      AppThemeMode.amoledPure || AppThemeMode.system || _ =>
+        AppTheme.amoledPure,
+    };
+
+    final lightTheme = switch (themeMode) {
+      AppThemeMode.light => AppTheme.light,
+      AppThemeMode.cleanLight || AppThemeMode.system || _ =>
+        AppTheme.cleanLight,
     };
 
     final flutterThemeMode = switch (themeMode) {
-      AppThemeMode.light => ThemeMode.light,
+      AppThemeMode.light || AppThemeMode.cleanLight => ThemeMode.light,
       AppThemeMode.system => ThemeMode.system,
-      AppThemeMode.dark ||
-      AppThemeMode.amoled ||
+      AppThemeMode.amoledSnowfall ||
+      AppThemeMode.amoledMidnight ||
+      AppThemeMode.amoledPure ||
       AppThemeMode.amoledSakura =>
         ThemeMode.dark,
     };
@@ -145,7 +154,7 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: AppTheme.light,
+      theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: flutterThemeMode,
       onGenerateRoute: generateRoute,

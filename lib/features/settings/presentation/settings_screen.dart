@@ -79,9 +79,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
     const availableThemeModes = [
       AppThemeMode.system,
+      AppThemeMode.cleanLight,
       AppThemeMode.light,
-      AppThemeMode.dark,
-      AppThemeMode.amoled,
+      AppThemeMode.amoledPure,
+      AppThemeMode.amoledSnowfall,
+      AppThemeMode.amoledMidnight,
       AppThemeMode.amoledSakura,
     ];
 
@@ -92,6 +94,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         centerTitle: false,
+        scrolledUnderElevation: 0,
       ),
       body: Theme(
         data: Theme.of(context).copyWith(
@@ -562,105 +565,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     }
                   },
                 ),
-              ],
-            ),
-
-            // ── Actions ──
-            const SizedBox(height: 4),
-            _SettingsCard(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: _ModernActionButton(
-                    icon: Icons.cleaning_services_rounded,
-                    iconColor: const Color(0xFFF97316),
-                    title: context.tr.clearThumbnailCache,
-                    subtitle: context.tr.diskSize(_cacheSizeStr),
-                    onTap: () async {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          title: Text(context.tr.clearThumbnailCache),
-                          content: Text(
-                            '${context.tr.clearCacheConfirm}\n\n${context.tr.diskSize(_cacheSizeStr)}',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: Text(context.tr.cancel),
-                            ),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: Text(context.tr.clearThumbnailCache),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirmed == true) {
-                        await ThumbnailService.instance.clearAll();
-                        await _loadCacheSize();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                context.tr.cacheCleared,
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          );
-                        }
-                      }
-                    },
-                  ),
-                ),
                 const _CardDivider(),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: _ModernActionButton(
-                    icon: _hasManageStorage
-                        ? Icons.verified_user_rounded
-                        : Icons.security_rounded,
-                    iconColor: _hasManageStorage
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFFEF4444),
-                    title: context.tr.allFilesAccess,
-                    subtitle: _hasManageStorage
-                        ? context.tr.allFilesGranted
-                        : context.tr.allFilesAccessSubtitle,
-                    onTap: () async {
-                      if (_hasManageStorage) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                context.tr.allFilesGranted,
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          );
-                        }
-                        return;
-                      }
-                      final granted = await PermissionService.instance
-                          .requestManageStorage();
-                      await _checkManageStoragePermission();
+                _ModernTile(
+                  icon: Icons.cleaning_services_rounded,
+                  iconColor: const Color(0xFFF97316),
+                  title: context.tr.clearThumbnailCache,
+                  subtitle: context.tr.diskSize(_cacheSizeStr),
+                  onTap: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        title: Text(context.tr.clearThumbnailCache),
+                        content: Text(
+                          '${context.tr.clearCacheConfirm}\n\n${context.tr.diskSize(_cacheSizeStr)}',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: Text(context.tr.cancel),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: Text(context.tr.clearThumbnailCache),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      await ThumbnailService.instance.clearAll();
+                      await _loadCacheSize();
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              granted
-                                  ? context.tr.allFilesGranted
-                                  : context.tr.allFilesNotGranted,
+                              context.tr.cacheCleared,
                               textAlign: TextAlign.center,
                             ),
                           ),
                         );
                       }
-                    },
-                  ),
+                    }
+                  },
                 ),
               ],
             ),
@@ -680,6 +628,68 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   subtitle: context.tr.secureScreenDesc,
                   value: settings.secureScreen,
                   onChanged: (v) => patch((s) => s.copyWith(secureScreen: v)),
+                ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: _hasManageStorage
+                      ? Icons.verified_user_rounded
+                      : Icons.folder_shared_rounded,
+                  iconColor: _hasManageStorage
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFF3B82F6),
+                  title: context.tr.allFilesAccess,
+                  subtitle: _hasManageStorage
+                      ? context.tr.allFilesGranted
+                      : context.tr.allFilesAccessSubtitle,
+                  trailing: _hasManageStorage
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981)
+                                .withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            context.tr.allFilesGranted,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF10B981),
+                            ),
+                          ),
+                        )
+                      : null,
+                  onTap: () async {
+                    if (_hasManageStorage) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              context.tr.allFilesGranted,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+                      return;
+                    }
+                    final granted = await PermissionService.instance
+                        .requestManageStorage();
+                    await _checkManageStoragePermission();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            granted
+                                ? context.tr.allFilesGranted
+                                : context.tr.allFilesNotGranted,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      );
+                    }
+                  },
                 ),
               ],
             ),
@@ -702,24 +712,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       patch((s) => s.copyWith(autoCheckUpdate: v)),
                 ),
                 const _CardDivider(),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: _ModernActionButton(
-                    icon: Icons.system_update_alt_rounded,
-                    iconColor: const Color(0xFF8B5CF6),
-                    title: context.tr.checkUpdateNow,
-                    subtitle: context.tr.checkGitHubReleasesSubtitle,
-                    isLoading: update.isLoading,
-                    enabled: !update.isLoading,
-                    onTap: () => ref
-                        .read(updateNotifierProvider.notifier)
-                        .checkForUpdate(silent: false),
-                  ),
+                _ModernTile(
+                  icon: Icons.system_update_alt_rounded,
+                  iconColor: const Color(0xFF8B5CF6),
+                  title: context.tr.checkUpdateNow,
+                  subtitle: context.tr.checkGitHubReleasesSubtitle,
+                  trailing: update.isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
+                  onTap: update.isLoading
+                      ? null
+                      : () => ref
+                          .read(updateNotifierProvider.notifier)
+                          .checkForUpdate(silent: false),
                 ),
               ],
             ),
 
-            // ── About App (untouched) ──
+            // ── About App ──
             const DeveloperAboutCard(),
           ],
         ),
@@ -741,18 +755,20 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 16, 8),
+      padding: const EdgeInsets.fromLTRB(22, 18, 16, 6),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: color),
+          Icon(icon, size: 15, color: cs.primary),
           const SizedBox(width: 8),
           Text(
             title,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: FontWeight.w700,
-              color: color,
+              letterSpacing: 0.2,
+              color: cs.primary,
             ),
           ),
         ],
@@ -767,121 +783,27 @@ class _SettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.60),
-        borderRadius: BorderRadius.circular(20),
+        color: isDark
+            ? cs.surfaceContainerHighest.withValues(alpha: 0.35)
+            : cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: cs.outline.withValues(alpha: 0.14),
-          width: 1,
+          color: cs.outline.withValues(alpha: isDark ? 0.08 : 0.12),
+          width: 0.8,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: children,
-        ),
-      ),
-    );
-  }
-}
-
-class _ModernActionButton extends StatelessWidget {
-  const _ModernActionButton({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    this.subtitle,
-    this.isLoading = false,
-    this.onTap,
-    this.enabled = true,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String? subtitle;
-  final bool isLoading;
-  final VoidCallback? onTap;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isClickable = enabled && !isLoading && onTap != null;
-
-    return BouncyTap(
-      scaleDown: isClickable ? 0.96 : 1.0,
-      onTap: isClickable ? onTap : null,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: iconColor.withValues(alpha: 0.28),
-            width: 1,
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (isLoading)
-                  SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      color: iconColor,
-                    ),
-                  )
-                else
-                  Icon(icon, color: iconColor, size: 20),
-                const SizedBox(width: 10),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: enabled
-                        ? (cs.brightness == Brightness.dark
-                            ? Colors.white
-                            : cs.onSurface)
-                        : cs.onSurface.withValues(alpha: 0.5),
-                  ),
-                ),
-              ],
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                subtitle!,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ],
         ),
       ),
     );
@@ -894,6 +816,7 @@ class _ModernTile extends StatelessWidget {
     required this.iconColor,
     required this.title,
     this.subtitle,
+    this.trailing,
     this.onTap,
   });
 
@@ -901,26 +824,27 @@ class _ModernTile extends StatelessWidget {
   final Color iconColor;
   final String title;
   final String? subtitle;
+  final Widget? trailing;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return BouncyTap(
-      scaleDown: onTap != null ? 0.98 : 1.0,
+      scaleDown: onTap != null ? 0.985 : 1.0,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.15),
+                color: iconColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: iconColor, size: 20),
+              child: Icon(icon, color: iconColor, size: 19),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -931,7 +855,7 @@ class _ModernTile extends StatelessWidget {
                   Text(
                     title,
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 14.5,
                       fontWeight: FontWeight.w600,
                       color: cs.onSurface,
                     ),
@@ -943,18 +867,22 @@ class _ModernTile extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         color: cs.onSurfaceVariant,
+                        height: 1.25,
                       ),
                     ),
                   ],
                 ],
               ),
             ),
-            if (onTap != null) ...[
+            if (trailing != null) ...[
+              const SizedBox(width: 8),
+              trailing!,
+            ] else if (onTap != null) ...[
               const SizedBox(width: 8),
               Icon(
                 Icons.chevron_right_rounded,
                 size: 20,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                color: cs.onSurfaceVariant.withValues(alpha: 0.45),
               ),
             ],
           ],
@@ -988,17 +916,17 @@ class _ModernSwitchTile extends StatelessWidget {
       scaleDown: 0.99,
       onTap: () => onChanged(!value),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.15),
+                color: iconColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: iconColor, size: 20),
+              child: Icon(icon, color: iconColor, size: 19),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -1008,9 +936,10 @@ class _ModernSwitchTile extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      fontSize: 15,
+                    style: TextStyle(
+                      fontSize: 14.5,
                       fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -1019,6 +948,7 @@ class _ModernSwitchTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       color: cs.onSurfaceVariant,
+                      height: 1.25,
                     ),
                   ),
                 ],
@@ -1062,42 +992,42 @@ class _ModernSliderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.15),
+                  color: iconColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: iconColor, size: 20),
+                child: Icon(icon, color: iconColor, size: 19),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.15),
+                  color: iconColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   valueLabel,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
                     color: iconColor,
                   ),
@@ -1105,16 +1035,16 @@ class _ModernSliderTile extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
               activeTrackColor: iconColor,
               inactiveTrackColor: iconColor.withValues(alpha: 0.2),
               thumbColor: iconColor,
               overlayColor: iconColor.withValues(alpha: 0.15),
-              trackHeight: 4,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+              trackHeight: 3.5,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
             ),
             child: Slider(
               value: value.clamp(min, max),
@@ -1138,10 +1068,10 @@ class _CardDivider extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Divider(
       height: 1,
-      thickness: 1,
-      indent: 68,
+      thickness: 0.8,
+      indent: 66,
       endIndent: 16,
-      color: cs.outline.withValues(alpha: 0.08),
+      color: cs.outline.withValues(alpha: 0.07),
     );
   }
 }
@@ -1695,9 +1625,9 @@ class _ThemeOptionCard extends StatelessWidget {
     final (icon, iconColor, bgPreview, description) = switch (mode) {
       AppThemeMode.system => (
           Icons.brightness_auto_rounded,
-          const Color(0xFF6B48FF),
-          LinearGradient(
-            colors: [Colors.grey.shade300, Colors.grey.shade900],
+          const Color(0xFF2563EB),
+          const LinearGradient(
+            colors: [Color(0xFFF8FAFC), Color(0xFF000000)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -1711,21 +1641,37 @@ class _ThemeOptionCard extends StatelessWidget {
           ),
           context.tr.themeLightDesc,
         ),
-      AppThemeMode.dark => (
+      AppThemeMode.cleanLight => (
+          Icons.wb_sunny_outlined,
+          const Color(0xFF2563EB),
+          const LinearGradient(
+            colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFC)],
+          ),
+          context.tr.themeCleanLightDesc,
+        ),
+      AppThemeMode.amoledSnowfall => (
           Icons.ac_unit_rounded,
           const Color(0xFF38BDF8),
           const LinearGradient(
-            colors: [Color(0xFF000000), Color(0xFF0F172A)],
+            colors: [Color(0xFF000000), Color(0xFF0C1322)],
           ),
           context.tr.themeDarkDesc,
         ),
-      AppThemeMode.amoled => (
+      AppThemeMode.amoledMidnight => (
           Icons.phone_android_rounded,
           const Color(0xFF38BDF8),
           const LinearGradient(
             colors: [Color(0xFF000000), Color(0xFF0A0A0A)],
           ),
           context.tr.themeAmoledDesc,
+        ),
+      AppThemeMode.amoledPure => (
+          Icons.dark_mode_rounded,
+          const Color(0xFF2563EB),
+          const LinearGradient(
+            colors: [Color(0xFF000000), Color(0xFF121214)],
+          ),
+          context.tr.themeAmoledPureDesc,
         ),
       AppThemeMode.amoledSakura => (
           Icons.local_florist_rounded,
