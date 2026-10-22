@@ -30,8 +30,8 @@ class DeveloperAboutCard extends ConsumerWidget {
       builder: (context, snapshot) {
         final theme = Theme.of(context);
         final cs = theme.colorScheme;
-        final version = snapshot.data?.version ?? '2.11.0';
-        final buildNumber = snapshot.data?.buildNumber ?? '47';
+        final version = snapshot.data?.version ?? '2.11.1';
+        final buildNumber = snapshot.data?.buildNumber ?? '48';
 
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -241,26 +241,13 @@ class DeveloperAboutCard extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: onTap != null ? _cyan : theme.colorScheme.onSurface,
-                ),
-              ),
-              if (onTap != null) ...[
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 14,
-                  color: _cyan,
-                ),
-              ],
-            ],
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: onTap != null ? _cyan : theme.colorScheme.onSurface,
+            ),
           ),
         ],
       ),

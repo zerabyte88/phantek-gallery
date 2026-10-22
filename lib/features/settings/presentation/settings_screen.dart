@@ -337,41 +337,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   },
                 ),
                 const _CardDivider(),
-                _ModernTile(
+                _ModernSliderTile(
                   icon: Icons.fast_forward_rounded,
                   iconColor: const Color(0xFF38BDF8),
                   title: context.tr.doubleTapSeek,
-                  subtitle:
+                  valueLabel:
                       context.tr.secondsCount(settings.doubleTapSeekInterval),
-                  onTap: () async {
-                    final chosen = await _showModernOptionDialog<int>(
-                      context,
-                      title: context.tr.doubleTapSeek,
-                      subtitle: context.tr.playback,
-                      headerIcon: Icons.fast_forward_rounded,
-                      headerColor: const Color(0xFF38BDF8),
-                      currentValue: settings.doubleTapSeekInterval,
-                      options: [
-                        _OptionItem(
-                          value: 5,
-                          title: context.tr.secondsCount(5),
-                          icon: Icons.replay_5_rounded,
-                        ),
-                        _OptionItem(
-                          value: 10,
-                          title: context.tr.secondsCount(10),
-                          icon: Icons.replay_10_rounded,
-                        ),
-                        _OptionItem(
-                          value: 15,
-                          title: context.tr.secondsCount(15),
-                          icon: Icons.replay_30_rounded,
-                        ),
-                      ],
-                    );
-                    if (chosen != null) {
-                      patch((s) => s.copyWith(doubleTapSeekInterval: chosen));
-                    }
+                  value: settings.doubleTapSeekInterval.toDouble(),
+                  min: 5,
+                  max: 60,
+                  divisions: 11,
+                  onChanged: (v) {
+                    HapticFeedback.selectionClick();
+                    patch((s) => s.copyWith(doubleTapSeekInterval: v.round()));
                   },
                 ),
                 const _CardDivider(),
@@ -424,40 +402,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   onChanged: (v) => patch((s) => s.copyWith(keepScreenOn: v)),
                 ),
                 const _CardDivider(),
-                _ModernTile(
+                _ModernSliderTile(
                   icon: Icons.slideshow_rounded,
                   iconColor: const Color(0xFF8B5CF6),
                   title: context.tr.slideshowInterval,
-                  subtitle: context.tr.secondsCount(settings.slideshowInterval),
-                  onTap: () async {
-                    final chosen = await _showModernOptionDialog<int>(
-                      context,
-                      title: context.tr.slideshowInterval,
-                      subtitle: context.tr.playback,
-                      headerIcon: Icons.slideshow_rounded,
-                      headerColor: const Color(0xFF8B5CF6),
-                      currentValue: settings.slideshowInterval,
-                      options: [
-                        _OptionItem(
-                          value: 3,
-                          title: context.tr.secondsCount(3),
-                          icon: Icons.timer_outlined,
-                        ),
-                        _OptionItem(
-                          value: 5,
-                          title: context.tr.secondsCount(5),
-                          icon: Icons.timer_outlined,
-                        ),
-                        _OptionItem(
-                          value: 10,
-                          title: context.tr.secondsCount(10),
-                          icon: Icons.timer_outlined,
-                        ),
-                      ],
-                    );
-                    if (chosen != null) {
-                      patch((s) => s.copyWith(slideshowInterval: chosen));
-                    }
+                  valueLabel:
+                      context.tr.secondsCount(settings.slideshowInterval),
+                  value: settings.slideshowInterval.toDouble(),
+                  min: 1,
+                  max: 10,
+                  divisions: 9,
+                  onChanged: (v) {
+                    HapticFeedback.selectionClick();
+                    patch((s) => s.copyWith(slideshowInterval: v.round()));
                   },
                 ),
               ],
@@ -1074,6 +1031,100 @@ class _ModernSwitchTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ModernSliderTile extends StatelessWidget {
+  const _ModernSliderTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.valueLabel,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String valueLabel;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  valueLabel,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: iconColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: iconColor,
+              inactiveTrackColor: iconColor.withValues(alpha: 0.2),
+              thumbColor: iconColor,
+              overlayColor: iconColor.withValues(alpha: 0.15),
+              trackHeight: 4,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+            ),
+            child: Slider(
+              value: value.clamp(min, max),
+              min: min,
+              max: max,
+              divisions: divisions,
+              onChanged: onChanged,
+            ),
+          ),
+        ],
       ),
     );
   }

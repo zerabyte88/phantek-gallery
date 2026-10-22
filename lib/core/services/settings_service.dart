@@ -139,6 +139,34 @@ class SettingsService {
 
   Future<void> reset() => save(const SettingsModel());
 
+  // ── Video Resume Position ──────────────────────────────────────────────────
+
+  Duration? getVideoPlaybackPosition(String path) {
+    if (!settings.resumeVideoPlayback) return null;
+    final posMs = _prefs.getInt('playback_pos_${path.hashCode}');
+    if (posMs != null && posMs > 2000) {
+      return Duration(milliseconds: posMs);
+    }
+    return null;
+  }
+
+  void saveVideoPlaybackPosition(
+      String path, Duration position, Duration duration) {
+    if (!settings.resumeVideoPlayback) return;
+    final key = 'playback_pos_${path.hashCode}';
+    final posMs = position.inMilliseconds;
+    final durMs = duration.inMilliseconds;
+    if (durMs > 0 && durMs - posMs < 3000) {
+      _prefs.remove(key);
+    } else if (posMs > 2000) {
+      _prefs.setInt(key, posMs);
+    }
+  }
+
+  void clearVideoPlaybackPosition(String path) {
+    _prefs.remove('playback_pos_${path.hashCode}');
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   T _readEnum<T extends Enum>(String key, List<T> values, T fallback) {

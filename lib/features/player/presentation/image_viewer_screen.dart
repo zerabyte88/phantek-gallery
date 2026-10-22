@@ -181,11 +181,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           curve: Curves.easeInOut,
         );
       } else {
-        _page.animateToPage(
-          0,
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeInOut,
-        );
+        _stopSlideshow();
       }
     });
   }
@@ -1230,15 +1226,18 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                               size: 20,
                                               color: Colors.white,
                                             ),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              _isSlideshowPlaying
-                                                  ? context.tr.pause
-                                                  : context.tr.slideshow,
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 14),
+                                            Expanded(
+                                              child: Text(
+                                                _isSlideshowPlaying
+                                                    ? context.tr.pause
+                                                    : context.tr.slideshow,
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 14),
+                                              ),
                                             ),
+                                            const SizedBox(width: 20),
                                           ],
                                         ),
                                       ),
@@ -1248,13 +1247,16 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                           children: [
                                             const Icon(Icons.edit_outlined,
                                                 size: 20, color: Colors.white),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              context.tr.rename,
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 14),
+                                            Expanded(
+                                              child: Text(
+                                                context.tr.rename,
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 14),
+                                              ),
                                             ),
+                                            const SizedBox(width: 20),
                                           ],
                                         ),
                                       ),
@@ -1264,13 +1266,16 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                           children: [
                                             const Icon(Icons.wallpaper_outlined,
                                                 size: 20, color: Colors.white),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              context.tr.setAsWallpaper,
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 14),
+                                            Expanded(
+                                              child: Text(
+                                                context.tr.setAsWallpaper,
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 14),
+                                              ),
                                             ),
+                                            const SizedBox(width: 20),
                                           ],
                                         ),
                                       ),

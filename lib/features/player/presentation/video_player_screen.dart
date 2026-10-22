@@ -10,7 +10,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/enums/video_double_tap_action.dart';
 import '../../../core/models/media_item.dart';
@@ -19,6 +18,7 @@ import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/screen_keeper_service.dart';
+import '../../../core/services/settings_service.dart';
 import '../../../core/services/share_service.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../../core/utils/media_utils.dart';
@@ -208,11 +208,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         curve: Curves.easeInOut,
       );
     } else {
-      _pageController.animateToPage(
-        0,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-      );
+      _stopSlideshow();
     }
   }
 
@@ -347,6 +343,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     } else if (status == AnimationStatus.reverse) {
       // Hide video texture surface and pause playback during pop exit transition.
       _videoSurfaceVisible.value = false;
+      if (_videos.isNotEmpty &&
+          _current < _videos.length &&
+          _videos[_current].isVideo) {
+        _saveCurrentPosition(_videos[_current].path);
+      }
       if (_player.state.playing) {
         _player.pause();
       }
@@ -621,6 +622,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
             _hasStartedPlaying = true;
           });
         }
+      } else if (!playing &&
+          _videos.isNotEmpty &&
+          _current < _videos.length &&
+          _videos[_current].isVideo) {
+        _saveCurrentPosition(_videos[_current].path);
       }
     });
 
@@ -633,6 +639,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     });
 
     _player.stream.completed.listen((completed) {
+      if (completed &&
+          _videos.isNotEmpty &&
+          _current < _videos.length &&
+          _videos[_current].isVideo) {
+        SettingsService.instance
+            .clearVideoPlaybackPosition(_videos[_current].path);
+      }
       if (completed && mounted && _isSlideshowPlaying) {
         _slideshowTimer?.cancel();
         _slideshowTimer = Timer(const Duration(milliseconds: 300), () {
@@ -686,11 +699,27 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
       await _player.setVolume(settings.startMuted ? 0.0 : 100.0);
 
+      final savedPos =
+          SettingsService.instance.getVideoPlaybackPosition(currentPath);
+
       await _player.open(
-        Media(currentPath),
+        Media(currentPath, start: savedPos),
         play: false,
       );
-      await _restoreSavedPosition(currentPath);
+      if (savedPos != null) {
+        _controller.waitUntilFirstFrameRendered.then((_) {
+          if (mounted &&
+              _videos.isNotEmpty &&
+              _current < _videos.length &&
+              _videos[_current].path == currentPath) {
+            final curPos = _player.state.position;
+            if (curPos.inMilliseconds < 1000 &&
+                savedPos.inMilliseconds > 2000) {
+              _player.seek(savedPos);
+            }
+          }
+        });
+      }
       final shouldPlay =
           !widget.startSlideshow && settings.autoPlayVideo;
       if (_routeTransitionComplete && shouldPlay) {
@@ -713,34 +742,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
   }
 
-  Future<void> _restoreSavedPosition(String path) async {
-    final settings = ref.read(settingsNotifierProvider);
-    if (!settings.resumeVideoPlayback) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = 'playback_pos_${path.hashCode}';
-      final posMs = prefs.getInt(key);
-      if (posMs != null && posMs > 2000) {
-        await _player.seek(Duration(milliseconds: posMs));
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _saveCurrentPosition(String path) async {
-    final settings = ref.read(settingsNotifierProvider);
-    if (!settings.resumeVideoPlayback) return;
-    try {
-      final pos = _player.state.position;
-      final dur = _player.state.duration;
-      final prefs = await SharedPreferences.getInstance();
-      final key = 'playback_pos_${path.hashCode}';
-      if (dur.inMilliseconds > 0 &&
-          dur.inMilliseconds - pos.inMilliseconds < 3000) {
-        await prefs.remove(key);
-      } else if (pos.inMilliseconds > 2000) {
-        await prefs.setInt(key, pos.inMilliseconds);
-      }
-    } catch (_) {}
+  void _saveCurrentPosition(String path) {
+    if (_videos.isEmpty ||
+        _current >= _videos.length ||
+        !_videos[_current].isVideo) {
+      return;
+    }
+    final pos = _player.state.position;
+    final dur = _player.state.duration;
+    SettingsService.instance.saveVideoPlaybackPosition(path, pos, dur);
   }
 
   void _changeToVideo(int index) {
@@ -797,9 +807,28 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           }
           await _player.stop();
           final shouldPlay = !_isSlideshowPlaying && settings.autoPlayVideo;
-          await _player.open(Media(path), play: shouldPlay);
+          final savedPos =
+              SettingsService.instance.getVideoPlaybackPosition(path);
+          await _player.open(
+            Media(path, start: savedPos),
+            play: shouldPlay,
+          );
           await _player.setVolume(settings.startMuted ? 0.0 : 100.0);
-          await _restoreSavedPosition(path);
+          if (savedPos != null) {
+            _controller.waitUntilFirstFrameRendered.then((_) {
+              if (mounted &&
+                  _videos.isNotEmpty &&
+                  _current == index &&
+                  thisGen == _videoLoadGeneration &&
+                  _videos[_current].path == path) {
+                final curPos = _player.state.position;
+                if (curPos.inMilliseconds < 1000 &&
+                    savedPos.inMilliseconds > 2000) {
+                  _player.seek(savedPos);
+                }
+              }
+            });
+          }
           if (_isLooping && !_isSlideshowPlaying) {
             _player.setPlaylistMode(PlaylistMode.loop);
           } else {
@@ -1342,7 +1371,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         });
         _pageController.jumpToPage(_current);
         if (_videos[_current].isVideo) {
-          _player.open(Media(_videos[_current].path), play: false);
+          final p = _videos[_current].path;
+          final s = SettingsService.instance.getVideoPlaybackPosition(p);
+          _player.open(Media(p, start: s), play: false);
         }
       }
     }
@@ -1378,7 +1409,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         });
         _pageController.jumpToPage(_current);
         if (_videos[_current].isVideo) {
-          _player.open(Media(_videos[_current].path), play: false);
+          final p = _videos[_current].path;
+          final s = SettingsService.instance.getVideoPlaybackPosition(p);
+          _player.open(Media(p, start: s), play: false);
         }
       }
       return;
@@ -1457,7 +1490,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       });
       _pageController.jumpToPage(_current);
       if (_videos[_current].isVideo) {
-        _player.open(Media(_videos[_current].path), play: false);
+        final p = _videos[_current].path;
+        final s = SettingsService.instance.getVideoPlaybackPosition(p);
+        _player.open(Media(p, start: s), play: false);
       }
     }
   }
@@ -1469,7 +1504,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     return PopScope(
       canPop: !_isFullscreen,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _isFullscreen) {
+        if (didPop) {
+          if (_videos.isNotEmpty &&
+              _current < _videos.length &&
+              _videos[_current].isVideo) {
+            _saveCurrentPosition(_videos[_current].path);
+          }
+        } else if (_isFullscreen) {
           _exitFullscreen();
         }
       },
@@ -1629,6 +1670,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         d.dy > 0 &&
                         (d.dy > 85 || (vy > 550 && d.dy > 20))) {
                       _videoSurfaceVisible.value = false;
+                      if (_videos.isNotEmpty &&
+                          _current < _videos.length &&
+                          _videos[_current].isVideo) {
+                        _saveCurrentPosition(_videos[_current].path);
+                      }
                       _player.pause();
                       _activeMediaNotifier?.state = _videos[_current].id;
                       Navigator.of(context).pop();
@@ -1992,8 +2038,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                           if (_videoLoadDebounce?.isActive ==
                                               true) {
                                             _videoLoadDebounce?.cancel();
+                                            final curPath =
+                                                _videos[_current].path;
+                                            final saved = SettingsService
+                                                .instance
+                                                .getVideoPlaybackPosition(
+                                                    curPath);
                                             _player.open(
-                                                Media(_videos[_current].path),
+                                                Media(curPath, start: saved),
                                                 play: true);
                                           } else {
                                             _player.play();
@@ -2048,6 +2100,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     _exitFullscreen();
                                   } else {
                                     _videoSurfaceVisible.value = false;
+                                    if (_videos.isNotEmpty &&
+                                        _current < _videos.length &&
+                                        _videos[_current].isVideo) {
+                                      _saveCurrentPosition(
+                                          _videos[_current].path);
+                                    }
                                     _player.pause();
                                     _activeMediaNotifier?.state =
                                         _videos[_current].id;
@@ -3196,14 +3254,17 @@ class _BottomBarState extends State<_BottomBar> {
                               size: 20,
                               color: Colors.white,
                             ),
-                            const SizedBox(width: 12),
-                            Text(
-                              widget.isSlideshowPlaying
-                                  ? context.tr.pause
-                                  : context.tr.slideshow,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 14),
+                            Expanded(
+                              child: Text(
+                                widget.isSlideshowPlaying
+                                    ? context.tr.pause
+                                    : context.tr.slideshow,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 14),
+                              ),
                             ),
+                            const SizedBox(width: 20),
                           ],
                         ),
                       ),
@@ -3214,12 +3275,15 @@ class _BottomBarState extends State<_BottomBar> {
                             children: [
                               const Icon(Icons.edit_outlined,
                                   size: 20, color: Colors.white),
-                              const SizedBox(width: 12),
-                              Text(
-                                context.tr.rename,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 14),
+                              Expanded(
+                                child: Text(
+                                  context.tr.rename,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 14),
+                                ),
                               ),
+                              const SizedBox(width: 20),
                             ],
                           ),
                         ),
@@ -3229,12 +3293,15 @@ class _BottomBarState extends State<_BottomBar> {
                           children: [
                             const Icon(Icons.wallpaper_outlined,
                                 size: 20, color: Colors.white),
-                            const SizedBox(width: 12),
-                            Text(
-                              context.tr.setAsWallpaper,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 14),
+                            Expanded(
+                              child: Text(
+                                context.tr.setAsWallpaper,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 14),
+                              ),
                             ),
+                            const SizedBox(width: 20),
                           ],
                         ),
                       ),
@@ -3495,10 +3562,15 @@ class _BottomBarState extends State<_BottomBar> {
                                 children: [
                                   const Icon(Icons.restore,
                                       size: 20, color: Colors.white),
-                                  const SizedBox(width: 12),
-                                  Text(context.tr.restore,
+                                  Expanded(
+                                    child: Text(
+                                      context.tr.restore,
+                                      textAlign: TextAlign.center,
                                       style: const TextStyle(
-                                          color: Colors.white, fontSize: 14)),
+                                          color: Colors.white, fontSize: 14),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
                                 ],
                               ),
                             ),
@@ -3508,11 +3580,16 @@ class _BottomBarState extends State<_BottomBar> {
                                 children: [
                                   const Icon(Icons.delete_forever,
                                       size: 20, color: Colors.redAccent),
-                                  const SizedBox(width: 12),
-                                  Text(context.tr.delete,
+                                  Expanded(
+                                    child: Text(
+                                      context.tr.delete,
+                                      textAlign: TextAlign.center,
                                       style: const TextStyle(
                                           color: Colors.redAccent,
-                                          fontSize: 14)),
+                                          fontSize: 14),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
                                 ],
                               ),
                             ),
@@ -3535,14 +3612,17 @@ class _BottomBarState extends State<_BottomBar> {
                                   size: 20,
                                   color: Colors.white,
                                 ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  widget.isSlideshowPlaying
-                                      ? context.tr.pause
-                                      : context.tr.slideshow,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 14),
+                                Expanded(
+                                  child: Text(
+                                    widget.isSlideshowPlaying
+                                        ? context.tr.pause
+                                        : context.tr.slideshow,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 14),
+                                  ),
                                 ),
+                                const SizedBox(width: 20),
                               ],
                             ),
                           ),
@@ -3558,15 +3638,18 @@ class _BottomBarState extends State<_BottomBar> {
                                   color:
                                       isFav ? Colors.redAccent : Colors.white,
                                 ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  context.tr.favorite,
-                                  style: TextStyle(
-                                    color:
-                                        isFav ? Colors.redAccent : Colors.white,
-                                    fontSize: 14,
+                                Expanded(
+                                  child: Text(
+                                    context.tr.favorite,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color:
+                                          isFav ? Colors.redAccent : Colors.white,
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ),
+                                const SizedBox(width: 20),
                               ],
                             ),
                           ),
@@ -3576,10 +3659,15 @@ class _BottomBarState extends State<_BottomBar> {
                               children: [
                                 const Icon(Icons.share_outlined,
                                     size: 20, color: Colors.white),
-                                const SizedBox(width: 12),
-                                Text(context.tr.share,
+                                Expanded(
+                                  child: Text(
+                                    context.tr.share,
+                                    textAlign: TextAlign.center,
                                     style: const TextStyle(
-                                        color: Colors.white, fontSize: 14)),
+                                        color: Colors.white, fontSize: 14),
+                                  ),
+                                ),
+                                const SizedBox(width: 20),
                               ],
                             ),
                           ),
@@ -3590,10 +3678,15 @@ class _BottomBarState extends State<_BottomBar> {
                                 children: [
                                   const Icon(Icons.edit_outlined,
                                       size: 20, color: Colors.white),
-                                  const SizedBox(width: 12),
-                                  Text(context.tr.rename,
+                                  Expanded(
+                                    child: Text(
+                                      context.tr.rename,
+                                      textAlign: TextAlign.center,
                                       style: const TextStyle(
-                                          color: Colors.white, fontSize: 14)),
+                                          color: Colors.white, fontSize: 14),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
                                 ],
                               ),
                             ),
@@ -3603,10 +3696,15 @@ class _BottomBarState extends State<_BottomBar> {
                               children: [
                                 const Icon(Icons.delete_outline,
                                     size: 20, color: Colors.white),
-                                const SizedBox(width: 12),
-                                Text(context.tr.delete,
+                                Expanded(
+                                  child: Text(
+                                    context.tr.delete,
+                                    textAlign: TextAlign.center,
                                     style: const TextStyle(
-                                        color: Colors.white, fontSize: 14)),
+                                        color: Colors.white, fontSize: 14),
+                                  ),
+                                ),
+                                const SizedBox(width: 20),
                               ],
                             ),
                           ),
@@ -3845,14 +3943,17 @@ class _BottomBarState extends State<_BottomBar> {
                               size: 20,
                               color: Colors.white,
                             ),
-                            const SizedBox(width: 12),
-                            Text(
-                              widget.isSlideshowPlaying
-                                  ? context.tr.pause
-                                  : context.tr.slideshow,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 14),
+                            Expanded(
+                              child: Text(
+                                widget.isSlideshowPlaying
+                                    ? context.tr.pause
+                                    : context.tr.slideshow,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 14),
+                              ),
                             ),
+                            const SizedBox(width: 20),
                           ],
                         ),
                       ),
@@ -3862,12 +3963,15 @@ class _BottomBarState extends State<_BottomBar> {
                           children: [
                             const Icon(Icons.speed,
                                 size: 20, color: Colors.white),
-                            const SizedBox(width: 12),
-                            Text(
-                              '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 14),
+                            Expanded(
+                              child: Text(
+                                '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 14),
+                              ),
                             ),
+                            const SizedBox(width: 20),
                           ],
                         ),
                       ),
@@ -3884,18 +3988,21 @@ class _BottomBarState extends State<_BottomBar> {
                                   ? Theme.of(context).colorScheme.primary
                                   : Colors.white,
                             ),
-                            const SizedBox(width: 12),
-                            Text(
-                              widget.isLooping
-                                  ? context.tr.loopOn
-                                  : context.tr.loopOff,
-                              style: TextStyle(
-                                color: widget.isLooping
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Colors.white,
-                                fontSize: 14,
+                            Expanded(
+                              child: Text(
+                                widget.isLooping
+                                    ? context.tr.loopOn
+                                    : context.tr.loopOff,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: widget.isLooping
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Colors.white,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
+                            const SizedBox(width: 20),
                           ],
                         ),
                       ),
@@ -3906,12 +4013,15 @@ class _BottomBarState extends State<_BottomBar> {
                             children: [
                               const Icon(Icons.edit_outlined,
                                   size: 20, color: Colors.white),
-                              const SizedBox(width: 12),
-                              Text(
-                                context.tr.rename,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 14),
+                              Expanded(
+                                child: Text(
+                                  context.tr.rename,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 14),
+                                ),
                               ),
+                              const SizedBox(width: 20),
                             ],
                           ),
                         ),

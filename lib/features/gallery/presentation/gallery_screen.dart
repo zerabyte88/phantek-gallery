@@ -980,10 +980,15 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                 children: [
                   const Icon(Icons.slideshow_rounded,
                       size: 20, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Text(context.tr.slideshow,
+                  Expanded(
+                    child: Text(
+                      context.tr.slideshow,
+                      textAlign: TextAlign.center,
                       style:
-                          const TextStyle(color: Colors.white, fontSize: 14)),
+                          const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ),
+                  const SizedBox(width: 20),
                 ],
               ),
             ),
@@ -993,10 +998,15 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                 children: [
                   const Icon(Icons.checklist_rounded,
                       size: 20, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Text(context.tr.select,
+                  Expanded(
+                    child: Text(
+                      context.tr.select,
+                      textAlign: TextAlign.center,
                       style:
-                          const TextStyle(color: Colors.white, fontSize: 14)),
+                          const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ),
+                  const SizedBox(width: 20),
                 ],
               ),
             ),
@@ -1006,10 +1016,15 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                 children: [
                   const Icon(Icons.delete_sweep_outlined,
                       size: 20, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Text(context.tr.trashBin,
+                  Expanded(
+                    child: Text(
+                      context.tr.trashBin,
+                      textAlign: TextAlign.center,
                       style:
-                          const TextStyle(color: Colors.white, fontSize: 14)),
+                          const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ),
+                  const SizedBox(width: 20),
                 ],
               ),
             ),
@@ -1019,10 +1034,15 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                 children: [
                   const Icon(Icons.settings_outlined,
                       size: 20, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Text(context.tr.settings,
+                  Expanded(
+                    child: Text(
+                      context.tr.settings,
+                      textAlign: TextAlign.center,
                       style:
-                          const TextStyle(color: Colors.white, fontSize: 14)),
+                          const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ),
+                  const SizedBox(width: 20),
                 ],
               ),
             ),

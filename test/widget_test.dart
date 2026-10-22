@@ -571,7 +571,7 @@ void main() {
       expect(find.text('Video Engine'), findsNothing);
       expect(find.text('MediaKit'), findsNothing);
       expect(find.text('Build'), findsOneWidget);
-      expect(find.text('47'), findsOneWidget);
+      expect(find.text('48'), findsOneWidget);
       expect(find.text('GPLv3'), findsOneWidget);
     });
 
@@ -1154,6 +1154,23 @@ void main() {
             autoPlayVideo: true,
           ),
           isFalse);
+    });
+
+    test(
+        'Slideshow mode rule: stops at end of playlist and restores bars instead of looping to 0',
+        () {
+      bool shouldAdvanceOrStop({
+        required int currentIndex,
+        required int totalItems,
+      }) {
+        return currentIndex < totalItems - 1;
+      }
+
+      expect(shouldAdvanceOrStop(currentIndex: 0, totalItems: 5), isTrue);
+      expect(shouldAdvanceOrStop(currentIndex: 2, totalItems: 5), isTrue);
+      expect(shouldAdvanceOrStop(currentIndex: 3, totalItems: 5), isTrue);
+      expect(shouldAdvanceOrStop(currentIndex: 4, totalItems: 5), isFalse);
+      expect(shouldAdvanceOrStop(currentIndex: 0, totalItems: 1), isFalse);
     });
 
     testWidgets(
@@ -2587,6 +2604,119 @@ void main() {
           barsVisible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky;
       expect(resolveMode(barsVisible: true), SystemUiMode.edgeToEdge);
       expect(resolveMode(barsVisible: false), SystemUiMode.immersiveSticky);
+    });
+
+    test('Video resume playback position rules save, retrieve, clear, and respect toggle', () async {
+      SharedPreferences.setMockInitialValues({
+        'resumeVideoPlayback': true,
+      });
+      final service = await SettingsService.init();
+
+      const testVideo = '/storage/emulated/0/DCIM/Camera/VID_100.mp4';
+
+      // 1. Position <= 2000ms is not stored (starts from beginning)
+      service.saveVideoPlaybackPosition(
+        testVideo,
+        const Duration(milliseconds: 1500),
+        const Duration(milliseconds: 60000),
+      );
+      expect(service.getVideoPlaybackPosition(testVideo), isNull);
+
+      // 2. Position > 2000ms is successfully saved and retrieved
+      service.saveVideoPlaybackPosition(
+        testVideo,
+        const Duration(milliseconds: 15400),
+        const Duration(milliseconds: 60000),
+      );
+      expect(
+        service.getVideoPlaybackPosition(testVideo),
+        const Duration(milliseconds: 15400),
+      );
+
+      // 3. Near-end position (< 3000ms remaining) automatically clears position
+      service.saveVideoPlaybackPosition(
+        testVideo,
+        const Duration(milliseconds: 58500),
+        const Duration(milliseconds: 60000),
+      );
+      expect(service.getVideoPlaybackPosition(testVideo), isNull);
+
+      // 4. Explicit clear removes saved position
+      service.saveVideoPlaybackPosition(
+        testVideo,
+        const Duration(milliseconds: 25000),
+        const Duration(milliseconds: 60000),
+      );
+      expect(
+        service.getVideoPlaybackPosition(testVideo),
+        const Duration(milliseconds: 25000),
+      );
+      service.clearVideoPlaybackPosition(testVideo);
+      expect(service.getVideoPlaybackPosition(testVideo), isNull);
+
+      // 5. When resumeVideoPlayback setting is disabled, saving and reading are disabled
+      await service.save(service.settings.copyWith(resumeVideoPlayback: false));
+      service.saveVideoPlaybackPosition(
+        testVideo,
+        const Duration(milliseconds: 30000),
+        const Duration(milliseconds: 60000),
+      );
+      expect(service.getVideoPlaybackPosition(testVideo), isNull);
+    });
+
+    test('Double tap seek interval slider values step by 5 between 5s and 60s', () async {
+      SharedPreferences.setMockInitialValues({
+        'doubleTapSeekInterval': 10,
+      });
+      final service = await SettingsService.init();
+      expect(service.settings.doubleTapSeekInterval, 10);
+
+      const min = 5.0;
+      const max = 60.0;
+      const divisions = 11;
+      const step = (max - min) / divisions;
+      expect(step, 5.0);
+
+      for (int i = 0; i <= divisions; i++) {
+        final val = (min + i * step).round();
+        expect(val % 5, 0);
+        expect(val >= 5 && val <= 60, isTrue);
+      }
+
+      await service.save(service.settings.copyWith(doubleTapSeekInterval: 25));
+      expect(service.settings.doubleTapSeekInterval, 25);
+
+      await service.save(service.settings.copyWith(doubleTapSeekInterval: 60));
+      expect(service.settings.doubleTapSeekInterval, 60);
+    });
+
+    test('Slideshow interval slider values step by 1 between 1s and 10s', () async {
+      SharedPreferences.setMockInitialValues({
+        'slideshowInterval': 3,
+      });
+      final service = await SettingsService.init();
+      expect(service.settings.slideshowInterval, 3);
+
+      const min = 1.0;
+      const max = 10.0;
+      const divisions = 9;
+      const step = (max - min) / divisions;
+      expect(step, 1.0);
+
+      for (int i = 0; i <= divisions; i++) {
+        final val = (min + i * step).round();
+        expect(val, i + 1);
+        expect(val >= 1 && val <= 10, isTrue);
+      }
+
+      await service.save(service.settings.copyWith(slideshowInterval: 1));
+      expect(service.settings.slideshowInterval, 1);
+
+      await service.save(service.settings.copyWith(slideshowInterval: 7));
+      expect(service.settings.slideshowInterval, 7);
+
+      await service.save(service.settings.copyWith(slideshowInterval: 10));
+      expect(service.settings.slideshowInterval, 10);
     });
   });
 }
