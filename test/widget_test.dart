@@ -2700,6 +2700,44 @@ void main() {
         const Duration(milliseconds: 60000),
       );
       expect(service.getVideoPlaybackPosition(testVideo), isNull);
+
+      // 8. Duration.zero (player stop/unload) does NOT wipe an existing saved position
+      await service.save(service.settings.copyWith(resumeVideoPlayback: true));
+      service.saveVideoPlaybackPosition(
+        testVideo,
+        const Duration(milliseconds: 22000),
+        const Duration(milliseconds: 60000),
+      );
+      expect(
+        service.getVideoPlaybackPosition(testVideo),
+        const Duration(milliseconds: 22000),
+      );
+      service.saveVideoPlaybackPosition(
+        testVideo,
+        Duration.zero,
+        const Duration(milliseconds: 60000),
+      );
+      expect(
+        service.getVideoPlaybackPosition(testVideo),
+        const Duration(milliseconds: 22000),
+      );
+
+      // 9. Path normalization: forward slashes and backslashes resolve to same position
+      const winPath = r'C:\Storage\DCIM\Camera\VID_100.mp4';
+      const unixPath = 'C:/Storage/DCIM/Camera/VID_100.mp4';
+      service.saveVideoPlaybackPosition(
+        winPath,
+        const Duration(milliseconds: 35000),
+        const Duration(milliseconds: 90000),
+      );
+      expect(
+        service.getVideoPlaybackPosition(unixPath),
+        const Duration(milliseconds: 35000),
+      );
+      expect(
+        service.getVideoPlaybackPosition(winPath),
+        const Duration(milliseconds: 35000),
+      );
     });
 
     test('Double tap seek interval slider values step by 5 between 5s and 60s', () async {

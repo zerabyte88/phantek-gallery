@@ -159,6 +159,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   String? _lastSize;
   String? _activeVideoParamsPath;
   String? _activeLoadedVideoPath;
+  Duration _lastPlaybackPosition = Duration.zero;
+  DateTime? _lastPositionSaveTime;
   bool _routeTransitionComplete = false;
   Animation<double>? _routeAnimation;
   StateController<String?>? _activeMediaNotifier;
@@ -633,12 +635,24 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     });
 
     _player.stream.position.listen((pos) {
-      if (pos > Duration.zero &&
-          mounted &&
-          _videos[_current].isVideo &&
-          _routeTransitionComplete) {
-        if (!_videoSurfaceVisible.value) {
-          _videoSurfaceVisible.value = true;
+      if (pos > Duration.zero) {
+        _lastPlaybackPosition = pos;
+        if (mounted &&
+            _videos.isNotEmpty &&
+            _current < _videos.length &&
+            _videos[_current].isVideo &&
+            _routeTransitionComplete) {
+          if (!_videoSurfaceVisible.value) {
+            _videoSurfaceVisible.value = true;
+          }
+          final now = DateTime.now();
+          if (_lastPositionSaveTime == null ||
+              now.difference(_lastPositionSaveTime!) >=
+                  const Duration(seconds: 2)) {
+            _lastPositionSaveTime = now;
+            _saveCurrentPosition(
+                _activeLoadedVideoPath ?? _videos[_current].path);
+          }
         }
       }
     });
@@ -648,6 +662,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           _videos.isNotEmpty &&
           _current < _videos.length &&
           _videos[_current].isVideo) {
+        _lastPlaybackPosition = Duration.zero;
+        _lastPositionSaveTime = null;
         SettingsService.instance
             .clearVideoPlaybackPosition(_videos[_current].path);
       }
@@ -737,32 +753,31 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }) async {
     final savedPos =
         SettingsService.instance.getVideoPlaybackPosition(path);
-    await _player.open(Media(path), play: false);
+    final knownDur =
+        _current < _videos.length ? _videos[_current].duration : null;
+    final effectiveStart = (savedPos != null &&
+            knownDur != null &&
+            knownDur > Duration.zero &&
+            savedPos >= knownDur)
+        ? null
+        : savedPos;
+
+    _lastPlaybackPosition = effectiveStart ?? Duration.zero;
+    _lastPositionSaveTime = null;
+
+    await _player.open(
+      Media(path, start: effectiveStart),
+      play: autoPlay,
+    );
     if (!mounted || generation != _videoLoadGeneration) return;
     _activeLoadedVideoPath = path;
-
-    if (savedPos != null) {
-      if (_player.state.duration == Duration.zero) {
-        try {
-          await _player.stream.duration
-              .firstWhere((d) => d > Duration.zero)
-              .timeout(const Duration(milliseconds: 1200));
-        } catch (_) {}
-      }
-      if (mounted && generation == _videoLoadGeneration) {
-        await _player.seek(savedPos);
-      }
-    }
-
-    if (!mounted || generation != _videoLoadGeneration) return;
-    if (autoPlay) {
-      await _player.play();
-    }
   }
 
   void _saveCurrentPosition(String path) {
     if (_videos.isEmpty) return;
-    final pos = _player.state.position;
+    final statePos = _player.state.position;
+    final pos = statePos > Duration.zero ? statePos : _lastPlaybackPosition;
+    if (pos <= const Duration(seconds: 2)) return;
     final activeDur = _player.state.duration;
     final dur = activeDur > Duration.zero
         ? activeDur
@@ -778,6 +793,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _saveCurrentPosition(_activeLoadedVideoPath ?? _videos[_current].path);
     }
     _activeLoadedVideoPath = null;
+    _lastPlaybackPosition = Duration.zero;
+    _lastPositionSaveTime = null;
     _videoLoadDebounce?.cancel();
     _activeVideoParamsPath = null;
     final thisGen = ++_videoLoadGeneration;
@@ -884,7 +901,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
       _stopSlideshow();
@@ -927,6 +945,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (_videos.isNotEmpty && _current < _videos.length) {
       _saveCurrentPosition(_activeLoadedVideoPath ?? _videos[_current].path);
     }
+    _activeLoadedVideoPath = null;
     ScreenKeeperService.setKeepScreenOn(false);
     if (_didSetMaxBrightness) {
       ScreenKeeperService.setMaxBrightness(false);

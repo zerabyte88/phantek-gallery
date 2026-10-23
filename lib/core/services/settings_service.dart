@@ -148,14 +148,18 @@ class SettingsService {
 
   // ── Video Resume Position ──────────────────────────────────────────────────
 
-  String _posKey(String path) =>
-      'playback_pos_${base64Url.encode(utf8.encode(path))}';
+  String _posKey(String path) {
+    final normalized = path.replaceAll(r'\', '/');
+    return 'playback_pos_${base64Url.encode(utf8.encode(normalized))}';
+  }
 
   Duration? getVideoPlaybackPosition(String path) {
     if (!settings.resumeVideoPlayback) return null;
-    final key = _posKey(path);
-    final posMs =
-        _prefs.getInt(key) ?? _prefs.getInt('playback_pos_${path.hashCode}');
+    final normalized = path.replaceAll(r'\', '/');
+    final key = _posKey(normalized);
+    final posMs = _prefs.getInt(key) ??
+        _prefs.getInt('playback_pos_${normalized.hashCode}') ??
+        _prefs.getInt('playback_pos_${path.hashCode}');
     if (posMs != null && posMs > 2000) {
       return Duration(milliseconds: posMs);
     }
@@ -165,23 +169,30 @@ class SettingsService {
   void saveVideoPlaybackPosition(
       String path, Duration position, Duration duration) {
     if (!settings.resumeVideoPlayback) return;
-    final key = _posKey(path);
-    final legacyKey = 'playback_pos_${path.hashCode}';
     final posMs = position.inMilliseconds;
+    if (posMs <= 0) return;
+    final normalized = path.replaceAll(r'\', '/');
+    final key = _posKey(normalized);
+    final legacyKey = 'playback_pos_${normalized.hashCode}';
+    final rawLegacyKey = 'playback_pos_${path.hashCode}';
     final durMs = duration.inMilliseconds;
     if (durMs > 0 && durMs - posMs < 3000) {
       _prefs.remove(key);
       _prefs.remove(legacyKey);
+      _prefs.remove(rawLegacyKey);
     } else if (posMs > 2000) {
       _prefs.setInt(key, posMs);
-    } else {
+    } else if (posMs > 0 && posMs <= 2000) {
       _prefs.remove(key);
       _prefs.remove(legacyKey);
+      _prefs.remove(rawLegacyKey);
     }
   }
 
   void clearVideoPlaybackPosition(String path) {
-    _prefs.remove(_posKey(path));
+    final normalized = path.replaceAll(r'\', '/');
+    _prefs.remove(_posKey(normalized));
+    _prefs.remove('playback_pos_${normalized.hashCode}');
     _prefs.remove('playback_pos_${path.hashCode}');
   }
 
