@@ -955,6 +955,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
+          constraints: const BoxConstraints(minWidth: 130, maxWidth: 195),
           offset: const Offset(0, 48),
           onSelected: (value) {
             if (value == 'slideshow') {
@@ -980,73 +981,81 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           itemBuilder: (context) => [
             PopupMenuItem(
               value: 'slideshow',
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Row(
                 children: [
                   const Icon(Icons.slideshow_rounded,
-                      size: 20, color: Colors.white),
+                      size: 18, color: Colors.white),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       context.tr.slideshow,
-                      textAlign: TextAlign.center,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 14),
+                      style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 20),
                 ],
               ),
             ),
             PopupMenuItem(
               value: 'select',
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Row(
                 children: [
                   const Icon(Icons.checklist_rounded,
-                      size: 20, color: Colors.white),
+                      size: 18, color: Colors.white),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       context.tr.select,
-                      textAlign: TextAlign.center,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 14),
+                      style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 20),
                 ],
               ),
             ),
             PopupMenuItem(
               value: 'trash',
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Row(
                 children: [
                   const Icon(Icons.delete_sweep_outlined,
-                      size: 20, color: Colors.white),
+                      size: 18, color: Colors.white),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       context.tr.trashBin,
-                      textAlign: TextAlign.center,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 14),
+                      style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 20),
                 ],
               ),
             ),
             PopupMenuItem(
               value: 'settings',
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Row(
                 children: [
                   const Icon(Icons.settings_outlined,
-                      size: 20, color: Colors.white),
+                      size: 18, color: Colors.white),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       context.tr.settings,
-                      textAlign: TextAlign.center,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 14),
+                      style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 20),
                 ],
               ),
             ),

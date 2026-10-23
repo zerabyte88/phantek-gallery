@@ -582,7 +582,7 @@ void main() {
       expect(find.text('Video Engine'), findsNothing);
       expect(find.text('MediaKit'), findsNothing);
       expect(find.text('Build'), findsOneWidget);
-      expect(find.text('50'), findsOneWidget);
+      expect(find.text('51'), findsOneWidget);
       expect(find.text('GPLv3'), findsOneWidget);
     });
 

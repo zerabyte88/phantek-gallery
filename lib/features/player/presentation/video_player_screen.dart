@@ -3258,6 +3258,7 @@ class _BottomBarState extends State<_BottomBar> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
+                    constraints: const BoxConstraints(minWidth: 130, maxWidth: 195),
                     onSelected: (value) {
                       if (value == 'slideshow') {
                         if (widget.isSlideshowPlaying) {
@@ -3274,63 +3275,72 @@ class _BottomBarState extends State<_BottomBar> {
                     itemBuilder: (context) => [
                       PopupMenuItem(
                         value: 'slideshow',
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
                         child: Row(
                           children: [
                             Icon(
                               widget.isSlideshowPlaying
                                   ? Icons.pause_circle_outline_rounded
                                   : Icons.slideshow_rounded,
-                              size: 20,
+                              size: 18,
                               color: Colors.white,
                             ),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                widget.isSlideshowPlaying
-                                    ? context.tr.pause
-                                    : context.tr.slideshow,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 14),
+                              widget.isSlideshowPlaying
+                                  ? context.tr.pause
+                                  : context.tr.slideshow,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 13.5),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 20),
                           ],
                         ),
                       ),
                       if (widget.onRename != null)
                         PopupMenuItem(
                           value: 'rename',
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           child: Row(
                             children: [
                               const Icon(Icons.edit_outlined,
-                                  size: 20, color: Colors.white),
+                                  size: 18, color: Colors.white),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  context.tr.rename,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 14),
+                                context.tr.rename,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 13.5),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: 20),
                             ],
                           ),
                         ),
                       PopupMenuItem(
                         value: 'wallpaper',
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
                         child: Row(
                           children: [
                             const Icon(Icons.wallpaper_outlined,
-                                size: 20, color: Colors.white),
+                                size: 18, color: Colors.white),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                context.tr.setAsWallpaper,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 14),
+                              context.tr.setAsWallpaper,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 13.5),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 20),
                           ],
                         ),
                       ),
@@ -3549,6 +3559,7 @@ class _BottomBarState extends State<_BottomBar> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
+                      constraints: const BoxConstraints(minWidth: 130, maxWidth: 195),
                       offset: const Offset(0, 36),
                       onSelected: (value) {
                         if (value == 'restore') {
@@ -3587,38 +3598,44 @@ class _BottomBarState extends State<_BottomBar> {
                           return [
                             PopupMenuItem(
                               value: 'restore',
+                              height: 40,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
                               child: Row(
                                 children: [
                                   const Icon(Icons.restore,
-                                      size: 20, color: Colors.white),
+                                      size: 18, color: Colors.white),
+                                  const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                      context.tr.restore,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 14),
+                                    context.tr.restore,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 13.5),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  const SizedBox(width: 20),
                                 ],
                               ),
                             ),
                             PopupMenuItem(
                               value: 'delete',
+                              height: 40,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
                               child: Row(
                                 children: [
                                   const Icon(Icons.delete_forever,
-                                      size: 20, color: Colors.redAccent),
+                                      size: 18, color: Colors.redAccent),
+                                  const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                      context.tr.delete,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                          color: Colors.redAccent,
-                                          fontSize: 14),
+                                    context.tr.delete,
+                                    style: const TextStyle(
+                                        color: Colors.redAccent,
+                                        fontSize: 13.5),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  const SizedBox(width: 20),
                                 ],
                               ),
                             ),
@@ -3632,108 +3649,123 @@ class _BottomBarState extends State<_BottomBar> {
                         return [
                           PopupMenuItem(
                             value: 'slideshow',
+                            height: 40,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
                             child: Row(
                               children: [
                                 Icon(
                                   widget.isSlideshowPlaying
                                       ? Icons.pause_circle_outline_rounded
                                       : Icons.slideshow_rounded,
-                                  size: 20,
+                                  size: 18,
                                   color: Colors.white,
                                 ),
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    widget.isSlideshowPlaying
-                                        ? context.tr.pause
-                                        : context.tr.slideshow,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 14),
+                                  widget.isSlideshowPlaying
+                                      ? context.tr.pause
+                                      : context.tr.slideshow,
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 13.5),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const SizedBox(width: 20),
                               ],
                             ),
                           ),
                           PopupMenuItem(
                             value: 'favorite',
+                            height: 40,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
                             child: Row(
                               children: [
                                 Icon(
                                   isFav
                                       ? Icons.favorite
                                       : Icons.favorite_border,
-                                  size: 20,
+                                  size: 18,
                                   color:
                                       isFav ? Colors.redAccent : Colors.white,
                                 ),
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    context.tr.favorite,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color:
-                                          isFav ? Colors.redAccent : Colors.white,
-                                      fontSize: 14,
-                                    ),
+                                  context.tr.favorite,
+                                  style: TextStyle(
+                                    color:
+                                        isFav ? Colors.redAccent : Colors.white,
+                                    fontSize: 13.5,
+                                  ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const SizedBox(width: 20),
                               ],
                             ),
                           ),
                           PopupMenuItem(
                             value: 'share',
+                            height: 40,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
                             child: Row(
                               children: [
                                 const Icon(Icons.share_outlined,
-                                    size: 20, color: Colors.white),
+                                    size: 18, color: Colors.white),
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    context.tr.share,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 14),
+                                  context.tr.share,
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 13.5),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const SizedBox(width: 20),
                               ],
                             ),
                           ),
                           if (widget.onRename != null)
                             PopupMenuItem(
                               value: 'rename',
+                              height: 40,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
                               child: Row(
                                 children: [
                                   const Icon(Icons.edit_outlined,
-                                      size: 20, color: Colors.white),
+                                      size: 18, color: Colors.white),
+                                  const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                      context.tr.rename,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 14),
+                                    context.tr.rename,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 13.5),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  const SizedBox(width: 20),
                                 ],
                               ),
                             ),
                           PopupMenuItem(
                             value: 'delete',
+                            height: 40,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
                             child: Row(
                               children: [
                                 const Icon(Icons.delete_outline,
-                                    size: 20, color: Colors.white),
+                                    size: 18, color: Colors.white),
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    context.tr.delete,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 14),
+                                  context.tr.delete,
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 13.5),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const SizedBox(width: 20),
                               ],
                             ),
                           ),
@@ -3945,6 +3977,7 @@ class _BottomBarState extends State<_BottomBar> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
+                    constraints: const BoxConstraints(minWidth: 130, maxWidth: 200),
                     onSelected: (value) {
                       if (value == 'slideshow') {
                         if (widget.isSlideshowPlaying) {
@@ -3963,94 +3996,106 @@ class _BottomBarState extends State<_BottomBar> {
                     itemBuilder: (context) => [
                       PopupMenuItem(
                         value: 'slideshow',
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
                         child: Row(
                           children: [
                             Icon(
                               widget.isSlideshowPlaying
                                   ? Icons.pause_circle_outline_rounded
                                   : Icons.slideshow_rounded,
-                              size: 20,
+                              size: 18,
                               color: Colors.white,
                             ),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                widget.isSlideshowPlaying
-                                    ? context.tr.pause
-                                    : context.tr.slideshow,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 14),
+                              widget.isSlideshowPlaying
+                                  ? context.tr.pause
+                                  : context.tr.slideshow,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 13.5),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 20),
                           ],
                         ),
                       ),
                       PopupMenuItem(
                         value: 'speed',
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
                         child: Row(
                           children: [
                             const Icon(Icons.speed,
-                                size: 20, color: Colors.white),
+                                size: 18, color: Colors.white),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 14),
+                              '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 13.5),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 20),
                           ],
                         ),
                       ),
                       PopupMenuItem(
                         value: 'loop',
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
                         child: Row(
                           children: [
                             Icon(
                               widget.isLooping
                                   ? Icons.repeat_one
                                   : Icons.repeat,
-                              size: 20,
+                              size: 18,
                               color: widget.isLooping
                                   ? Theme.of(context).colorScheme.primary
                                   : Colors.white,
                             ),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                widget.isLooping
-                                    ? context.tr.loopOn
-                                    : context.tr.loopOff,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: widget.isLooping
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Colors.white,
-                                  fontSize: 14,
-                                ),
+                              widget.isLooping
+                                  ? context.tr.loopOn
+                                  : context.tr.loopOff,
+                              style: TextStyle(
+                                color: widget.isLooping
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.white,
+                                fontSize: 13.5,
+                              ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 20),
                           ],
                         ),
                       ),
                       if (widget.onRename != null)
                         PopupMenuItem(
                           value: 'rename',
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           child: Row(
                             children: [
                               const Icon(Icons.edit_outlined,
-                                  size: 20, color: Colors.white),
+                                  size: 18, color: Colors.white),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  context.tr.rename,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 14),
+                                context.tr.rename,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 13.5),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: 20),
                             ],
                           ),
                         ),

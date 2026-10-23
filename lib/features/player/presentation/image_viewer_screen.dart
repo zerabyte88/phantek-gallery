@@ -1194,6 +1194,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(14),
                                     ),
+                                    constraints: const BoxConstraints(minWidth: 130, maxWidth: 195),
                                     onSelected: (value) async {
                                       if (value == 'slideshow') {
                                         if (_isSlideshowPlaying) {
@@ -1217,65 +1218,62 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                     itemBuilder: (context) => [
                                       PopupMenuItem(
                                         value: 'slideshow',
+                                        height: 40,
+                                        padding: const EdgeInsets.symmetric(horizontal: 14),
                                         child: Row(
                                           children: [
                                             Icon(
                                               _isSlideshowPlaying
                                                   ? Icons.pause_circle_outline_rounded
                                                   : Icons.slideshow_rounded,
-                                              size: 20,
+                                              size: 18,
                                               color: Colors.white,
                                             ),
-                                            Expanded(
-                                              child: Text(
-                                                _isSlideshowPlaying
-                                                    ? context.tr.pause
-                                                    : context.tr.slideshow,
-                                                textAlign: TextAlign.center,
-                                                style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 14),
-                                              ),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              _isSlideshowPlaying
+                                                  ? context.tr.pause
+                                                  : context.tr.slideshow,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 13.5),
                                             ),
-                                            const SizedBox(width: 20),
                                           ],
                                         ),
                                       ),
                                       PopupMenuItem(
                                         value: 'rename',
+                                        height: 40,
+                                        padding: const EdgeInsets.symmetric(horizontal: 14),
                                         child: Row(
                                           children: [
                                             const Icon(Icons.edit_outlined,
-                                                size: 20, color: Colors.white),
-                                            Expanded(
-                                              child: Text(
-                                                context.tr.rename,
-                                                textAlign: TextAlign.center,
-                                                style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 14),
-                                              ),
+                                                size: 18, color: Colors.white),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              context.tr.rename,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 13.5),
                                             ),
-                                            const SizedBox(width: 20),
                                           ],
                                         ),
                                       ),
                                       PopupMenuItem(
                                         value: 'wallpaper',
+                                        height: 40,
+                                        padding: const EdgeInsets.symmetric(horizontal: 14),
                                         child: Row(
                                           children: [
                                             const Icon(Icons.wallpaper_outlined,
-                                                size: 20, color: Colors.white),
-                                            Expanded(
-                                              child: Text(
-                                                context.tr.setAsWallpaper,
-                                                textAlign: TextAlign.center,
-                                                style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 14),
-                                              ),
+                                                size: 18, color: Colors.white),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              context.tr.setAsWallpaper,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 13.5),
                                             ),
-                                            const SizedBox(width: 20),
                                           ],
                                         ),
                                       ),
