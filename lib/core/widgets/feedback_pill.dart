@@ -187,13 +187,13 @@ class _FeedbackPillOverlayState extends State<_FeedbackPillWidget>
                 ),
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xEE1E1E1E),
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: Colors.white.withValues(alpha: 0.14),
-                      width: 0.8,
+                      width: 1.0,
                     ),
                     boxShadow: const [
                       BoxShadow(
@@ -211,7 +211,7 @@ class _FeedbackPillOverlayState extends State<_FeedbackPillWidget>
                         size: 18,
                         color: Colors.white,
                       ),
-                      const SizedBox(width: 7),
+                      const SizedBox(width: 8),
                       Flexible(
                         child: Text(
                           _message,
@@ -221,7 +221,7 @@ class _FeedbackPillOverlayState extends State<_FeedbackPillWidget>
                             color: Colors.white,
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
-                            letterSpacing: 0.2,
+                            letterSpacing: 0,
                           ),
                         ),
                       ),

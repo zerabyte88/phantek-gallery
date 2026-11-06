@@ -44,6 +44,9 @@ const Map<String, String> idTranslations = {
   'date': 'Tanggal',
   'daysLeft': 'Sisa {count} hari',
   'delete': 'Hapus',
+  'deleted': 'Dihapus',
+  'itemDeleted': '"{name}" dihapus',
+  'itemsDeletedCount': '{count} item dihapus',
   'deletePermanentlyConfirm': 'Hapus permanen "{name}"?',
   'deletePermanentlyItemDesc':
       '"{name}" akan dihapus secara permanen dari perangkat ini. Tindakan ini tidak dapat dibatalkan.',
@@ -95,6 +98,9 @@ const Map<String, String> idTranslations = {
   'more': 'Lainnya',
   'moreOptions': 'Opsi lainnya',
   'moveToTrash': 'Pindahkan ke Sampah',
+  'movedToTrash': 'Dipindahkan ke sampah',
+  'itemMovedToTrash': '"{name}" dipindahkan ke tempat sampah',
+  'itemsMovedToTrashCount': '{count} item dipindahkan ke tempat sampah',
   'moveToTrashConfirm': 'Pindahkan "{name}" ke tempat sampah?',
   'moveToTrashItemDesc':
       '"{name}" akan dipindahkan ke tempat sampah dan dihapus permanen setelah 30 hari.',
@@ -115,7 +121,7 @@ const Map<String, String> idTranslations = {
   'offlineGalleryDesc': 'Pemutar Media Cepat, Ringan & Privat',
   'oldestToNewest': 'Terlama ke terbaru',
   'openGitHubProfile': 'Buka Profil GitHub',
-  'path': 'Lokasi Path',
+  'path': 'Jalur file',
   'pathCopied': 'Path disalin ke papan klip',
   'pause': 'Jeda',
   'permanentlyDeleteAllTitle': 'Hapus permanen semua item?',

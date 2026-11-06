@@ -129,7 +129,9 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     if (mounted) {
       showFeedbackPill(
         context,
-        message: context.tr.itemRestored(context.tr.itemsCount(count)),
+        message: count == 1
+            ? context.tr.itemsRestoredCountSingular
+            : context.tr.itemsRestoredCount(count),
         icon: Icons.restore_rounded,
       );
     }
@@ -160,7 +162,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     if (mounted) {
       showFeedbackPill(
         context,
-        message: context.tr.delete,
+        message:
+            count == 1 ? context.tr.deleted : context.tr.itemsDeletedCount(count),
         icon: Icons.delete_outline_rounded,
       );
     }

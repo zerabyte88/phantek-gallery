@@ -58,25 +58,18 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
         decoration: BoxDecoration(
           color: cs.primary,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: cs.primary.withValues(alpha: 0.25),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
       ),
     );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            height: 42,
-            padding: const EdgeInsets.all(3.5),
+            height: 40,
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(24),

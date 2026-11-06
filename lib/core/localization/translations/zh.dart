@@ -225,4 +225,10 @@ const Map<String, String> zhTranslations = {
   'today': '今天',
   'yesterday': '昨天',
   'ok': '确定',
+  'deleted': '已删除',
+  'itemDeleted': '已删除“{name}”',
+  'itemsDeletedCount': '已删除 {count} 个项目',
+  'movedToTrash': '已移至回收站',
+  'itemMovedToTrash': '已将“{name}”移至回收站',
+  'itemsMovedToTrashCount': '已将 {count} 个项目移至回收站',
 };

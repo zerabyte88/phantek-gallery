@@ -45,6 +45,9 @@ const Map<String, String> msTranslations = {
   'date': 'Tarikh',
   'daysLeft': 'Tinggal {count} hari',
   'delete': 'Padam',
+  'deleted': 'Dipadamkan',
+  'itemDeleted': '"{name}" dipadamkan',
+  'itemsDeletedCount': '{count} item dipadamkan',
   'deletePermanentlyConfirm': 'Padam kekal "{name}"?',
   'deletePermanentlyItemDesc':
       '"{name}" akan dipadamkan secara kekal dari peranti ini. Tindakan ini tidak boleh dibuat asal.',
@@ -97,6 +100,9 @@ const Map<String, String> msTranslations = {
   'more': 'Lagi',
   'moreOptions': 'Pilihan lain',
   'moveToTrash': 'Pindahkan ke Tong Sampah',
+  'movedToTrash': 'Dialihkan ke tong sampah',
+  'itemMovedToTrash': '"{name}" dialihkan ke tong sampah',
+  'itemsMovedToTrashCount': '{count} item dialihkan ke tong sampah',
   'moveToTrashConfirm': 'Pindahkan "{name}" ke tong sampah?',
   'moveToTrashItemDesc':
       '"{name}" akan dipindahkan ke tong sampah dan dipadam kekal selepas 30 hari.',

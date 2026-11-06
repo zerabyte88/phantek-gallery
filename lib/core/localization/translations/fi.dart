@@ -232,4 +232,10 @@ const Map<String, String> fiTranslations = {
   'today': 'Tänään',
   'yesterday': 'Eilen',
   'ok': 'OK',
+  'deleted': 'Poistettu',
+  'itemDeleted': '"{name}" poistettu',
+  'itemsDeletedCount': '{count} kohdetta poistettu',
+  'movedToTrash': 'Siirretty roskakoriin',
+  'itemMovedToTrash': '"{name}" siirretty roskakoriin',
+  'itemsMovedToTrashCount': '{count} kohdetta siirretty roskakoriin',
 };

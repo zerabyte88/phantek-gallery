@@ -46,6 +46,9 @@ const Map<String, String> enTranslations = {
   'daysLeft': '{count} days left',
   'daysLeftSingular': '1 day left',
   'delete': 'Delete',
+  'deleted': 'Deleted',
+  'itemDeleted': '"{name}" deleted',
+  'itemsDeletedCount': '{count} items deleted',
   'deletePermanentlyConfirm': 'Permanently delete "{name}"?',
   'deletePermanentlyItemDesc':
       '"{name}" will be permanently deleted from this device. This action cannot be undone.',
@@ -98,6 +101,9 @@ const Map<String, String> enTranslations = {
   'more': 'More',
   'moreOptions': 'More options',
   'moveToTrash': 'Move to Trash',
+  'movedToTrash': 'Moved to trash',
+  'itemMovedToTrash': '"{name}" moved to trash',
+  'itemsMovedToTrashCount': '{count} items moved to trash',
   'moveToTrashConfirm': 'Move "{name}" to trash?',
   'moveToTrashItemDesc':
       '"{name}" will be moved to trash and permanently deleted after 30 days.',

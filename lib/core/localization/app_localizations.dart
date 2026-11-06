@@ -236,6 +236,21 @@ class AppLocalizations {
   String get secureScreenDesc => _t('secureScreenDesc');
   String get today => _t('today');
   String get yesterday => _t('yesterday');
+  String get deleted => _t('deleted');
+  String get movedToTrash => _t('movedToTrash');
+  String get itemsRestoredCountSingular => _t('itemsRestoredCountSingular');
+
+  String itemDeleted(String name) =>
+      _t('itemDeleted').replaceAll('{name}', name);
+
+  String itemsDeletedCount(int count) =>
+      _t('itemsDeletedCount').replaceAll('{count}', '$count');
+
+  String itemMovedToTrash(String name) =>
+      _t('itemMovedToTrash').replaceAll('{name}', name);
+
+  String itemsMovedToTrashCount(int count) =>
+      _t('itemsMovedToTrashCount').replaceAll('{count}', '$count');
 
   String renamedTo(String name) => _t('renamedTo').replaceAll('{name}', name);
 

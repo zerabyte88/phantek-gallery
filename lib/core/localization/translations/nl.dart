@@ -233,4 +233,10 @@ const Map<String, String> nlTranslations = {
   'today': 'Vandaag',
   'yesterday': 'Gisteren',
   'ok': 'OK',
+  'deleted': 'Verwijderd',
+  'itemDeleted': '"{name}" verwijderd',
+  'itemsDeletedCount': '{count} items verwijderd',
+  'movedToTrash': 'Verplaatst naar prullenbak',
+  'itemMovedToTrash': '"{name}" verplaatst naar prullenbak',
+  'itemsMovedToTrashCount': '{count} items verplaatst naar prullenbak',
 };

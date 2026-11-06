@@ -230,4 +230,10 @@ const Map<String, String> arTranslations = {
   'today': 'اليوم',
   'yesterday': 'أمس',
   'ok': 'حسناً',
+  'deleted': 'تم الحذف',
+  'itemDeleted': 'تم حذف "{name}"',
+  'itemsDeletedCount': 'تم حذف {count} عنصر',
+  'movedToTrash': 'تم النقل إلى سلة المهملات',
+  'itemMovedToTrash': 'تم نقل "{name}" إلى سلة المهملات',
+  'itemsMovedToTrashCount': 'تم نقل {count} عنصر إلى سلة المهملات',
 };

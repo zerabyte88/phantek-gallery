@@ -44,7 +44,7 @@ void showMediaInfoSheet(
               Text(
                 context.tr.details,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                     ),
               ),
               const SizedBox(height: 16),
@@ -92,8 +92,10 @@ void showMediaInfoSheet(
                 label: context.tr.path,
                 value: item.path,
                 trailing: IconButton(
-                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  icon: const Icon(Icons.copy_outlined, size: 20),
                   tooltip: context.tr.copyPath,
+                  constraints:
+                      const BoxConstraints(minWidth: 48, minHeight: 48),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: item.path));
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -140,11 +142,12 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+          Icon(icon,
+              size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

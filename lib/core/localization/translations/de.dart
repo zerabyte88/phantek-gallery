@@ -234,4 +234,10 @@ const Map<String, String> deTranslations = {
   'today': 'Heute',
   'yesterday': 'Gestern',
   'ok': 'OK',
+  'deleted': 'Gelöscht',
+  'itemDeleted': '"{name}" gelöscht',
+  'itemsDeletedCount': '{count} Elemente gelöscht',
+  'movedToTrash': 'In den Papierkorb verschoben',
+  'itemMovedToTrash': '"{name}" in den Papierkorb verschoben',
+  'itemsMovedToTrashCount': '{count} Elemente in den Papierkorb verschoben',
 };

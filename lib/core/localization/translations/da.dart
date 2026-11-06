@@ -231,4 +231,10 @@ const Map<String, String> daTranslations = {
   'today': 'I dag',
   'yesterday': 'I går',
   'ok': 'OK',
+  'deleted': 'Slettet',
+  'itemDeleted': '"{name}" slettet',
+  'itemsDeletedCount': '{count} elementer slettet',
+  'movedToTrash': 'Flyttet til papirkurv',
+  'itemMovedToTrash': '"{name}" flyttet til papirkurv',
+  'itemsMovedToTrashCount': '{count} elementer flyttet til papirkurv',
 };

@@ -233,4 +233,10 @@ const Map<String, String> ruTranslations = {
   'today': 'Сегодня',
   'yesterday': 'Вчера',
   'ok': 'ОК',
+  'deleted': 'Удалено',
+  'itemDeleted': '"{name}" удален',
+  'itemsDeletedCount': 'Удалено {count} элементов',
+  'movedToTrash': 'Перемещено в корзину',
+  'itemMovedToTrash': '"{name}" перемещен в корзину',
+  'itemsMovedToTrashCount': 'Перемещено в корзину {count} элементов',
 };

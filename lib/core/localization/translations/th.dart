@@ -230,4 +230,10 @@ const Map<String, String> thTranslations = {
   'today': 'วันนี้',
   'yesterday': 'เมื่อวาน',
   'ok': 'ตกลง',
+  'deleted': 'ลบแล้ว',
+  'itemDeleted': 'ลบ "{name}" แล้ว',
+  'itemsDeletedCount': 'ลบ {count} รายการแล้ว',
+  'movedToTrash': 'ย้ายไปที่ถังขยะแล้ว',
+  'itemMovedToTrash': 'ย้าย "{name}" ไปที่ถังขยะแล้ว',
+  'itemsMovedToTrashCount': 'ย้าย {count} รายการไปที่ถังขยะแล้ว',
 };

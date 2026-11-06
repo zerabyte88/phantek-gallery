@@ -151,8 +151,12 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
         showFeedbackPill(
           context,
           message: settings.enableTrash
-              ? context.tr.moveToTrash
-              : context.tr.delete,
+              ? (successCount == 1
+                  ? context.tr.itemMovedToTrash(toDelete.first.name)
+                  : context.tr.itemsMovedToTrashCount(successCount))
+              : (successCount == 1
+                  ? context.tr.itemDeleted(toDelete.first.name)
+                  : context.tr.itemsDeletedCount(successCount)),
           icon: settings.enableTrash
               ? Icons.delete_outline_rounded
               : Icons.delete_forever_rounded,

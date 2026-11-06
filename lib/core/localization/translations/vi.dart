@@ -234,4 +234,10 @@ const Map<String, String> viTranslations = {
   'today': 'Hôm nay',
   'yesterday': 'Hôm qua',
   'ok': 'OK',
+  'deleted': 'Đã xóa',
+  'itemDeleted': 'Đã xóa "{name}"',
+  'itemsDeletedCount': 'Đã xóa {count} mục',
+  'movedToTrash': 'Đã chuyển vào thùng rác',
+  'itemMovedToTrash': 'Đã chuyển "{name}" vào thùng rác',
+  'itemsMovedToTrashCount': 'Đã chuyển {count} mục vào thùng rác',
 };

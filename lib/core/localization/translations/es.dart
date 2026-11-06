@@ -238,4 +238,10 @@ const Map<String, String> esTranslations = {
   'today': 'Hoy',
   'yesterday': 'Ayer',
   'ok': 'Aceptar',
+  'deleted': 'Eliminado',
+  'itemDeleted': '"{name}" eliminado',
+  'itemsDeletedCount': '{count} elementos eliminados',
+  'movedToTrash': 'Movido a la papelera',
+  'itemMovedToTrash': '"{name}" movido a la papelera',
+  'itemsMovedToTrashCount': '{count} elementos movidos a la papelera',
 };

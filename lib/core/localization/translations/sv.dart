@@ -232,4 +232,10 @@ const Map<String, String> svTranslations = {
   'today': 'Idag',
   'yesterday': 'Igår',
   'ok': 'OK',
+  'deleted': 'Raderad',
+  'itemDeleted': '"{name}" raderades',
+  'itemsDeletedCount': '{count} objekt raderades',
+  'movedToTrash': 'Flyttad till papperskorgen',
+  'itemMovedToTrash': '"{name}" flyttades till papperskorgen',
+  'itemsMovedToTrashCount': '{count} objekt flyttades till papperskorgen',
 };

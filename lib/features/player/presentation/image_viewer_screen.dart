@@ -667,7 +667,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       if (mounted) {
         showFeedbackPill(
           context,
-          message: context.tr.delete,
+          message: context.tr.itemDeleted(item.name),
           icon: Icons.delete_outline_rounded,
         );
         if (widget.items.length <= 1) {
@@ -742,7 +742,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     if (!mounted) return;
     showFeedbackPill(
       context,
-      message: isTrash ? context.tr.moveToTrash : context.tr.delete,
+      message: isTrash
+          ? context.tr.itemMovedToTrash(item.name)
+          : context.tr.itemDeleted(item.name),
       icon:
           isTrash ? Icons.delete_outline_rounded : Icons.delete_forever_rounded,
     );

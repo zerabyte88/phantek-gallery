@@ -235,4 +235,10 @@ const Map<String, String> ptTranslations = {
   'today': 'Hoje',
   'yesterday': 'Ontem',
   'ok': 'OK',
+  'deleted': 'Excluído',
+  'itemDeleted': '"{name}" excluído',
+  'itemsDeletedCount': '{count} itens excluídos',
+  'movedToTrash': 'Movido para a lixeira',
+  'itemMovedToTrash': '"{name}" movido para a lixeira',
+  'itemsMovedToTrashCount': '{count} itens movidos para a lixeira',
 };

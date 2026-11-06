@@ -234,4 +234,10 @@ const Map<String, String> frTranslations = {
   'today': 'Aujourd’hui',
   'yesterday': 'Hier',
   'ok': 'OK',
+  'deleted': 'Supprimé',
+  'itemDeleted': '"{name}" supprimé',
+  'itemsDeletedCount': '{count} éléments supprimés',
+  'movedToTrash': 'Déplacé vers la corbeille',
+  'itemMovedToTrash': '"{name}" déplacé vers la corbeille',
+  'itemsMovedToTrashCount': '{count} éléments déplacés vers la corbeille',
 };

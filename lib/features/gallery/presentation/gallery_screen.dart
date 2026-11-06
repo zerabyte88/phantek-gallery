@@ -415,9 +415,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       } else {
         showFeedbackPill(
           context,
-          message: settings.enableTrash
-              ? context.tr.moveToTrash
-              : context.tr.delete,
+          message:
+              settings.enableTrash ? context.tr.moveToTrash : context.tr.delete,
           icon: settings.enableTrash
               ? Icons.delete_outline_rounded
               : Icons.delete_forever_rounded,
@@ -533,7 +532,13 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       } else {
         showFeedbackPill(
           context,
-          message: isTrash ? context.tr.moveToTrash : context.tr.delete,
+          message: isTrash
+              ? (successCount == 1
+                  ? context.tr.itemMovedToTrash(toDelete.first.name)
+                  : context.tr.itemsMovedToTrashCount(successCount))
+              : (successCount == 1
+                  ? context.tr.itemDeleted(toDelete.first.name)
+                  : context.tr.itemsDeletedCount(successCount)),
           icon: isTrash
               ? Icons.delete_outline_rounded
               : Icons.delete_forever_rounded,
@@ -963,9 +968,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               if (items.isNotEmpty) {
                 final hasVideos = items.any((e) => e.isVideo);
                 if (hasVideos) {
-                  Navigator.of(context).openVideo(items, 0, startSlideshow: true);
+                  Navigator.of(context)
+                      .openVideo(items, 0, startSlideshow: true);
                 } else {
-                  Navigator.of(context).openImage(items, 0, startSlideshow: true);
+                  Navigator.of(context)
+                      .openImage(items, 0, startSlideshow: true);
                 }
               }
             } else if (value == 'select') {
@@ -991,7 +998,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                   Expanded(
                     child: Text(
                       context.tr.slideshow,
-                      style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 13.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1011,7 +1019,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                   Expanded(
                     child: Text(
                       context.tr.select,
-                      style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 13.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1031,7 +1040,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                   Expanded(
                     child: Text(
                       context.tr.trashBin,
-                      style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 13.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1051,7 +1061,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                   Expanded(
                     child: Text(
                       context.tr.settings,
-                      style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 13.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

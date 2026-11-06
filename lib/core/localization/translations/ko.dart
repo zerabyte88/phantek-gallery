@@ -226,4 +226,10 @@ const Map<String, String> koTranslations = {
   'today': '오늘',
   'yesterday': '어제',
   'ok': '확인',
+  'deleted': '삭제됨',
+  'itemDeleted': '"{name}" 삭제됨',
+  'itemsDeletedCount': '{count}개 항목 삭제됨',
+  'movedToTrash': '휴지통으로 이동됨',
+  'itemMovedToTrash': '"{name}" 휴지통으로 이동됨',
+  'itemsMovedToTrashCount': '{count}개 항목 휴지통으로 이동됨',
 };

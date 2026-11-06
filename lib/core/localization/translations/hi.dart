@@ -234,4 +234,10 @@ const Map<String, String> hiTranslations = {
   'today': 'आज',
   'yesterday': 'कल',
   'ok': 'ठीक है',
+  'deleted': 'हटा दिया गया',
+  'itemDeleted': '"{name}" हटा दिया गया',
+  'itemsDeletedCount': '{count} आइटम हटाए गए',
+  'movedToTrash': 'ट्रैश में भेजा गया',
+  'itemMovedToTrash': '"{name}" ट्रैश में भेजा गया',
+  'itemsMovedToTrashCount': '{count} आइटम ट्रैश में भेजे गए',
 };

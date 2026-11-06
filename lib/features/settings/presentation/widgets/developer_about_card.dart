@@ -127,15 +127,8 @@ class DeveloperAboutCard extends ConsumerWidget {
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: _cyan,
-                        width: 1.8,
+                        width: 1.0,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _cyan.withValues(alpha: 0.35),
-                          blurRadius: 6,
-                          spreadRadius: 1,
-                        ),
-                      ],
                     ),
                     child: ClipOval(
                       child: Image.network(

@@ -232,4 +232,10 @@ const Map<String, String> noTranslations = {
   'today': 'I dag',
   'yesterday': 'I går',
   'ok': 'OK',
+  'deleted': 'Slettet',
+  'itemDeleted': '"{name}" slettet',
+  'itemsDeletedCount': '{count} elementer slettet',
+  'movedToTrash': 'Flyttet til papirkurven',
+  'itemMovedToTrash': '"{name}" flyttet til papirkurven',
+  'itemsMovedToTrashCount': '{count} elementer flyttet til papirkurven',
 };

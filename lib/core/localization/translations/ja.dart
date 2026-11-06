@@ -225,4 +225,10 @@ const Map<String, String> jaTranslations = {
   'today': '今日',
   'yesterday': '昨日',
   'ok': 'OK',
+  'deleted': '削除しました',
+  'itemDeleted': '「{name}」を削除しました',
+  'itemsDeletedCount': '{count} 件を削除しました',
+  'movedToTrash': 'ゴミ箱に移動しました',
+  'itemMovedToTrash': '「{name}」をゴミ箱に移動しました',
+  'itemsMovedToTrashCount': '{count} 件をゴミ箱に移動しました',
 };

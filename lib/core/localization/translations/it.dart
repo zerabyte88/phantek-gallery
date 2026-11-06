@@ -239,4 +239,10 @@ const Map<String, String> itTranslations = {
   'today': 'Oggi',
   'yesterday': 'Ieri',
   'ok': 'OK',
+  'deleted': 'Eliminato',
+  'itemDeleted': '"{name}" eliminato',
+  'itemsDeletedCount': '{count} elementi eliminati',
+  'movedToTrash': 'Spostato nel cestino',
+  'itemMovedToTrash': '"{name}" spostato nel cestino',
+  'itemsMovedToTrashCount': '{count} elementi spostati nel cestino',
 };

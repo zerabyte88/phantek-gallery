@@ -646,8 +646,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF10B981)
-                                .withValues(alpha: 0.15),
+                            color:
+                                const Color(0xFF10B981).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -674,8 +674,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       }
                       return;
                     }
-                    final granted = await PermissionService.instance
-                        .requestManageStorage();
+                    final granted =
+                        await PermissionService.instance.requestManageStorage();
                     await _checkManageStoragePermission();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1018,8 +1018,7 @@ class _ModernSliderTile extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 decoration: BoxDecoration(
                   color: iconColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
@@ -1123,7 +1122,7 @@ Future<void> _showExcludedFoldersDialog(
                 child: Text(
                   context.tr.excludedFolders,
                   style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold),
+                      fontSize: 18, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -1377,7 +1376,7 @@ Future<AppLanguage?> _showModernLanguageDialog(
                         context.tr.chooseLanguage,
                         style: const TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       Text(
@@ -1573,7 +1572,7 @@ Future<AppThemeMode?> _showModernThemeDialog(
                           context.tr.selectTheme,
                           style: const TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         Text(
@@ -1684,7 +1683,7 @@ class _ThemeOptionCard extends StatelessWidget {
     };
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 8),
       child: BouncyTap(
         scaleDown: 0.96,
         onTap: onTap,
@@ -1819,7 +1818,7 @@ Future<int?> _showModernGridColumnsDialog(
                           title,
                           style: const TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         Text(
@@ -1880,7 +1879,7 @@ class _ColumnOptionCard extends StatelessWidget {
     };
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 8),
       child: BouncyTap(
         scaleDown: 0.96,
         onTap: onTap,
@@ -2043,7 +2042,7 @@ Future<T?> _showModernOptionDialog<T>(
                   title,
                   style: const TextStyle(
                     fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 if (subtitle != null) ...[
