@@ -40,6 +40,7 @@ class ThumbnailService {
   final Map<String, Completer<Uint8List?>> _highResInFlight = {};
   final Map<String, AssetEntity> _entityCache = {};
   final Queue<_ThumbnailRequest> _queue = Queue();
+  final Set<String> _diskCachedIds = {};
   int _activeWorkers = 0;
   Directory? _cacheDir;
   String? _cacheDirPath;
@@ -47,11 +48,38 @@ class ThumbnailService {
 
   /// Pre-initializes the persistent cache directory at application launch.
   static Future<void> init() async {
-    await instance._getCacheDirectory();
+    final dir = await instance._getCacheDirectory();
+    await instance._populateDiskCacheIndex(dir);
   }
+
+  Future<void> _populateDiskCacheIndex(Directory dir) async {
+    try {
+      if (await dir.exists()) {
+        await for (final entity
+            in dir.list(recursive: false, followLinks: false)) {
+          if (entity is File) {
+            final name = p.basename(entity.path);
+            if (name.startsWith('thumb_') && name.endsWith('.bin')) {
+              final content = name.substring(6, name.length - 4);
+              final idx = content.indexOf('_');
+              if (idx != -1) {
+                _diskCachedIds.add(content.substring(idx + 1));
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[ThumbnailService] Error indexing disk cache: $e');
+    }
+  }
+
+  /// Returns true if the thumbnail for [assetId] is known to exist on disk.
+  bool hasDiskCache(String assetId) => _diskCachedIds.contains(assetId);
 
   /// Synchronously returns the cached File on disk if it already exists, or null.
   File? getCachedFile(String assetId) {
+    if (!hasDiskCache(assetId)) return null;
     final dirPath = _cacheDirPath ?? _cacheDir?.path;
     if (dirPath == null) return null;
     final file = File(p.join(dirPath, _cacheFileName(assetId)));
@@ -242,11 +270,12 @@ class ThumbnailService {
     return null;
   }
 
-  Future<Uint8List?> _extractNativeVideoThumbnail(String filePath) async {
+  Future<Uint8List?> _extractNativeVideoThumbnail(String filePath,
+      {String? assetId}) async {
     try {
       final bytes = await _nativeChannel.invokeMethod<Uint8List>(
         'getVideoThumbnail',
-        {'path': filePath, 'size': _thumbnailSize},
+        {'path': filePath, 'assetId': assetId, 'size': _thumbnailSize},
       );
       return bytes;
     } catch (e) {
@@ -256,11 +285,12 @@ class ThumbnailService {
     }
   }
 
-  Future<Uint8List?> _extractNativeImageThumbnail(String filePath) async {
+  Future<Uint8List?> _extractNativeImageThumbnail(String filePath,
+      {String? assetId}) async {
     try {
       final bytes = await _nativeChannel.invokeMethod<Uint8List>(
         'getImageThumbnail',
-        {'path': filePath, 'size': _thumbnailSize},
+        {'path': filePath, 'assetId': assetId, 'size': _thumbnailSize},
       );
       return bytes;
     } catch (e) {
@@ -551,7 +581,8 @@ class ThumbnailService {
 
         if (targetPath != null && targetPath.isNotEmpty) {
           try {
-            bytes = await _extractNativeVideoThumbnail(targetPath)
+            bytes = await _extractNativeVideoThumbnail(targetPath,
+                    assetId: req.id)
                 .timeout(const Duration(seconds: 4), onTimeout: () => null);
           } catch (_) {}
         }
@@ -590,7 +621,8 @@ class ThumbnailService {
         // Subsample large images natively before falling back to Dart decoding.
         if (req.filePath != null && req.filePath!.isNotEmpty) {
           try {
-            bytes = await _extractNativeImageThumbnail(req.filePath!)
+            bytes = await _extractNativeImageThumbnail(req.filePath!,
+                    assetId: req.id)
                 .timeout(const Duration(seconds: 4), onTimeout: () => null);
           } catch (_) {}
         }
@@ -646,6 +678,7 @@ class ThumbnailService {
   }
 
   void _saveToDisk(String assetId, Uint8List bytes) async {
+    _diskCachedIds.add(assetId);
     try {
       final dir = await _getCacheDirectory();
       final targetPath = p.join(dir.path, _cacheFileName(assetId));
@@ -708,6 +741,7 @@ class ThumbnailService {
 
   /// Remove a single entry from memory and disk (e.g., after deletion).
   Future<void> invalidate(String assetId) async {
+    _diskCachedIds.remove(assetId);
     _memoryCache.remove(assetId);
     _highResVideoCache.remove(assetId);
     _thumbnailAspectRatioCache.remove(assetId);
@@ -738,6 +772,7 @@ class ThumbnailService {
 
   /// Wipes both in-memory cache and persistent disk cache.
   Future<void> clearAll() async {
+    _diskCachedIds.clear();
     _memoryCache.clear();
     _highResVideoCache.clear();
     _thumbnailAspectRatioCache.clear();

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 zerabyte88
 
+import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -43,10 +45,36 @@ class PsdLayerInfo {
       'PsdLayerInfo(index: $index, name: $name, isVisible: $isVisible, opacity: $opacity, isFolder: $isFolder)';
 }
 
+class _AsyncGate {
+  final int maxConcurrent;
+  int _active = 0;
+  final Queue<Completer<void>> _waiters = Queue();
+
+  _AsyncGate([this.maxConcurrent = 1]);
+
+  Future<T> run<T>(Future<T> Function() action) async {
+    while (_active >= maxConcurrent) {
+      final completer = Completer<void>();
+      _waiters.add(completer);
+      await completer.future;
+    }
+    _active++;
+    try {
+      return await action();
+    } finally {
+      _active--;
+      if (_waiters.isNotEmpty) {
+        _waiters.removeFirst().complete();
+      }
+    }
+  }
+}
+
 /// Service for decoding, inspecting layers, and rendering Adobe Photoshop (.psd) files.
 class PsdService {
   PsdService._();
   static final PsdService instance = PsdService._();
+  final _AsyncGate _isolateGate = _AsyncGate(1);
 
   /// Returns true if [pathOrExt] has a .psd extension (case-insensitive).
   static bool isPsd(String pathOrExt) {
@@ -59,6 +87,104 @@ class PsdService {
     return ext == '.psd';
   }
 
+  /// Extracts the embedded JPEG thumbnail (resource 0x040C or 0x0409) if present.
+  Future<Uint8List?> extractEmbeddedThumbnail(String filePath) async {
+    RandomAccessFile? raf;
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) return null;
+      raf = await file.open(mode: FileMode.read);
+      final fileLen = await raf.length();
+      if (fileLen < 34) return null;
+
+      // 1. Read 26-byte header, verify signature 0x38425053 ('8BPS')
+      final header = await raf.read(26);
+      if (header.length < 26) return null;
+      if (header[0] != 0x38 ||
+          header[1] != 0x42 ||
+          header[2] != 0x50 ||
+          header[3] != 0x53) {
+        return null;
+      }
+
+      // 2. Read 4-byte Color Mode Data length, seek past it
+      final colorDataLenBytes = await raf.read(4);
+      if (colorDataLenBytes.length < 4) return null;
+      final colorDataLen = ByteData.sublistView(colorDataLenBytes).getUint32(0);
+
+      final resourcesSectionStart = 26 + 4 + colorDataLen;
+      if (resourcesSectionStart + 4 > fileLen) return null;
+      await raf.setPosition(resourcesSectionStart);
+
+      // 3. Read 4-byte Image Resources length
+      final resLenBytes = await raf.read(4);
+      if (resLenBytes.length < 4) return null;
+      final resLen = ByteData.sublistView(resLenBytes).getUint32(0);
+
+      final resourcesSectionEnd =
+          (resourcesSectionStart + 4 + resLen).clamp(0, fileLen);
+
+      // 4. Iterate resource blocks while within resource length
+      while ((await raf.position()) + 10 <= resourcesSectionEnd) {
+        final blockHead = await raf.read(6);
+        if (blockHead.length < 6) break;
+
+        // 4 bytes signature: 0x3842494d ('8BIM')
+        final sig = ByteData.sublistView(blockHead).getUint32(0);
+        if (sig != 0x3842494d) break;
+
+        // 2 bytes resource ID
+        final resourceId = ByteData.sublistView(blockHead).getUint16(4);
+
+        // Pascal string: 1 byte length + ASCII chars, padded to even length
+        final nameLenByte = await raf.read(1);
+        if (nameLenByte.isEmpty) break;
+        final nameLen = nameLenByte[0];
+        final nameSkip = nameLen + ((nameLen % 2 == 0) ? 1 : 0);
+        await raf.setPosition(await raf.position() + nameSkip);
+
+        // 4 bytes data size
+        final sizeBytes = await raf.read(4);
+        if (sizeBytes.length < 4) break;
+        final dataSize = ByteData.sublistView(sizeBytes).getUint32(0);
+        if (dataSize <= 0 || (await raf.position()) + dataSize > fileLen) break;
+
+        // If ID is 0x040C (Photoshop 5.0) or 0x0409 (Photoshop 4.0)
+        if (resourceId == 0x040C || resourceId == 0x0409) {
+          if (dataSize >= 28) {
+            final thumbHead = await raf.read(28);
+            if (thumbHead.length == 28) {
+              final format = ByteData.sublistView(thumbHead).getUint32(0);
+              if (format == 1) {
+                final jpegSize = dataSize - 28;
+                if (jpegSize > 0) {
+                  final jpegBytes = await raf.read(jpegSize);
+                  if (jpegBytes.length == jpegSize &&
+                      jpegBytes.length >= 4 &&
+                      jpegBytes[0] == 0xFF &&
+                      jpegBytes[1] == 0xD8) {
+                    return jpegBytes;
+                  }
+                }
+              }
+            }
+          }
+          break;
+        } else {
+          final paddedSize = dataSize + (dataSize % 2);
+          await raf.setPosition(await raf.position() + paddedSize);
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    } finally {
+      try {
+        await raf?.close();
+      } catch (_) {}
+    }
+  }
+
   /// Decodes a fast thumbnail of the PSD file in an isolate.
   Future<Uint8List?> decodeThumbnail(
     String filePath, {
@@ -68,10 +194,15 @@ class PsdService {
       final file = File(filePath);
       if (!await file.exists()) return null;
 
-      return await compute(
+      final embedded = await extractEmbeddedThumbnail(filePath);
+      if (embedded != null && embedded.isNotEmpty) {
+        return embedded;
+      }
+
+      return await _isolateGate.run(() => compute(
         _isolateDecodeThumbnail,
         _DecodeThumbnailParams(filePath, maxDimension),
-      );
+      ));
     } catch (e) {
       debugPrint('[PsdService] decodeThumbnail error for $filePath: $e');
       return null;
@@ -127,7 +258,7 @@ Uint8List? _isolateDecodeThumbnail(_DecodeThumbnailParams params) {
     final bytes = File(params.filePath).readAsBytesSync();
     if (bytes.isEmpty) return null;
 
-    final decoder = img.PsdDecoder();
+    final decoder = img.PsdDecoder(maxPixels: 2048 * 2048);
     if (!decoder.isValidFile(bytes)) return null;
 
     img.Image? image;
@@ -164,7 +295,7 @@ List<PsdLayerInfo> _isolateGetLayers(String filePath) {
     final bytes = File(filePath).readAsBytesSync();
     if (bytes.isEmpty) return [];
 
-    final decoder = img.PsdDecoder();
+    final decoder = img.PsdDecoder(maxPixels: 2048 * 2048);
     final psd = decoder.decodePsd(bytes);
     if (psd == null || psd.layers.isEmpty) return [];
 
@@ -215,7 +346,7 @@ Uint8List? _isolateRenderWithLayers(_RenderWithLayersParams params) {
     final bytes = File(params.filePath).readAsBytesSync();
     if (bytes.isEmpty) return null;
 
-    final decoder = img.PsdDecoder();
+    final decoder = img.PsdDecoder(maxPixels: 2048 * 2048);
     final psd = decoder.decodePsd(bytes);
     if (psd == null) return null;
 

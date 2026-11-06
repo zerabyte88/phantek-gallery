@@ -33,8 +33,8 @@ ImageProvider displayImage(String path, {int maxDimension = 4096}) =>
       policy: ResizeImagePolicy.fit,
     );
 
-/// Screen-fit provider (~2048px) for smooth page swiping.
-ImageProvider screenDisplayImage(String path, [int maxDim = 2048]) =>
+/// Screen-fit provider (~1440px) for smooth page swiping.
+ImageProvider screenDisplayImage(String path, [int maxDim = 1440]) =>
     ResizeImage(
       FileImage(File(path)),
       width: maxDim,

@@ -29,6 +29,9 @@ void main() {
     });
 
     test('PsdService gracefully handles non-existent or invalid files', () async {
+      final embedded = await PsdService.instance.extractEmbeddedThumbnail('non_existent_file.psd');
+      expect(embedded, isNull);
+
       final thumb = await PsdService.instance.decodeThumbnail('non_existent_file.psd');
       expect(thumb, isNull);
 

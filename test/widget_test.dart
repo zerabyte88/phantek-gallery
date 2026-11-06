@@ -1392,12 +1392,12 @@ void main() {
     });
 
     test(
-        'screenDisplayImage bounds photos to 2048px for fluid sliding and low memory',
+        'screenDisplayImage bounds photos to 1440px for fluid sliding and low memory',
         () {
       final a = screenDisplayImage('/dcim/hasselblad.jpg') as ResizeImage;
       final b = screenDisplayImage('/dcim/hasselblad.jpg');
-      expect(a.width, 2048);
-      expect(a.height, 2048);
+      expect(a.width, 1440);
+      expect(a.height, 1440);
       expect(a.policy, ResizeImagePolicy.fit);
       expect(a, equals(b));
       expect(screenDisplayImage('/dcim/other.jpg'), isNot(equals(a)));

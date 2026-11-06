@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/enums/thumbnail_crop_style.dart';
 import '../../../../core/models/media_item.dart';
+import '../../../../core/services/psd_service.dart';
 import '../../../../core/services/thumbnail_service.dart';
 import '../../../../core/utils/media_utils.dart';
 import 'shimmer_loading_tile.dart';
@@ -54,7 +55,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
   void _initThumbnail() {
     // Skip queue if already available in memory or disk cache.
     if (ThumbnailService.instance.getMemoryThumbnail(widget.item.id) != null ||
-        ThumbnailService.instance.getCachedFile(widget.item.id) != null) {
+        ThumbnailService.instance.hasDiskCache(widget.item.id)) {
       _thumbFuture = null;
       return;
     }
@@ -95,7 +96,9 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
     }
 
     // 2. Disk cache lookup.
-    final diskFile = ThumbnailService.instance.getCachedFile(widget.item.id);
+    final diskFile = ThumbnailService.instance.hasDiskCache(widget.item.id)
+        ? ThumbnailService.instance.getCachedFile(widget.item.id)
+        : null;
     if (diskFile != null) {
       return Image.file(
         diskFile,
@@ -136,7 +139,9 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
             );
           }
           final currentDisk =
-              ThumbnailService.instance.getCachedFile(widget.item.id);
+              ThumbnailService.instance.hasDiskCache(widget.item.id)
+                  ? ThumbnailService.instance.getCachedFile(widget.item.id)
+                  : null;
           if (currentDisk != null) {
             return Image.file(
               currentDisk,
@@ -147,7 +152,7 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
             );
           }
 
-          if (!widget.item.isVideo) {
+          if (!widget.item.isVideo && !PsdService.isPsd(widget.item.path)) {
             final file = File(widget.item.path);
             if (file.existsSync()) {
               return Image.file(

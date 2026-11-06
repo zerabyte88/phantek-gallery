@@ -76,6 +76,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   List<MediaItem> _memoizedVideos = const [];
   List<Album> _memoizedAlbums = const [];
 
+  final Map<FilterOption, List<MediaItem>> _cachedGroupItems = {};
+  final Map<FilterOption, TimelineGrouping> _cachedGroupTimelineGrouping = {};
+  final Map<FilterOption, int> _cachedGroupDay = {};
+  final Map<FilterOption, Map<String, List<int>>> _cachedGroupResult = {};
+
   void _updateMemoizedTabs(List<MediaItem> allItems, SettingsModel settings) {
     if (identical(_cachedAllItemsRef, allItems) &&
         _cachedSort == settings.defaultSort &&
@@ -1146,11 +1151,24 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       );
     }
 
-    final groups = <String, List<int>>{};
-    for (var i = 0; i < items.length; i++) {
-      final key =
-          _formatTimelineGroupKey(items[i].date, settings.timelineGrouping);
-      groups.putIfAbsent(key, () => []).add(i);
+    final today = DateTime.now().day;
+    Map<String, List<int>> groups;
+    if (identical(_cachedGroupItems[tab], items) &&
+        _cachedGroupTimelineGrouping[tab] == settings.timelineGrouping &&
+        _cachedGroupDay[tab] == today &&
+        _cachedGroupResult[tab] != null) {
+      groups = _cachedGroupResult[tab]!;
+    } else {
+      groups = <String, List<int>>{};
+      for (var i = 0; i < items.length; i++) {
+        final key =
+            _formatTimelineGroupKey(items[i].date, settings.timelineGrouping);
+        groups.putIfAbsent(key, () => []).add(i);
+      }
+      _cachedGroupItems[tab] = items;
+      _cachedGroupTimelineGrouping[tab] = settings.timelineGrouping;
+      _cachedGroupDay[tab] = today;
+      _cachedGroupResult[tab] = groups;
     }
 
     final cs = Theme.of(context).colorScheme;

@@ -173,15 +173,16 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                 }
             } else if (call.method == "getImageThumbnail") {
+                val assetId = call.argument<String>("assetId")
                 val path = call.argument<String>("path")
                 val size = call.argument<Int>("size") ?: 512
-                if (path == null) {
-                    result.error("INVALID_PATH", "Path is null", null)
+                if (path == null && assetId == null) {
+                    result.error("INVALID_ARGS", "Both path and assetId are null", null)
                     return@setMethodCallHandler
                 }
                 executor.execute {
                     try {
-                        val bytes = extractImageThumbnail(path, size)
+                        val bytes = extractImageThumbnail(path ?: "", assetId, size)
                         runOnUiThread {
                             result.success(bytes)
                         }
@@ -218,42 +219,44 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    private fun extractImageThumbnail(path: String, targetSize: Int): ByteArray? {
-        val file = File(path)
-        if (!file.exists() || !file.canRead()) return null
+    private fun extractImageThumbnail(path: String, assetId: String?, targetSize: Int): ByteArray? {
+        val file = if (path.isNotEmpty()) File(path) else null
+        if (file != null && (!file.exists() || !file.canRead()) && assetId == null) return null
 
         var bitmap: android.graphics.Bitmap? = null
-        val cleanPath = file.absolutePath
-        val canonicalPath = try { file.canonicalPath } catch (_: Throwable) { cleanPath }
+        val cleanPath = file?.absolutePath ?: ""
+        val canonicalPath = try { file?.canonicalPath ?: cleanPath } catch (_: Throwable) { cleanPath }
 
         // 1. Android Q+ (API 29+) MediaStore contentResolver.loadThumbnail (Fastest system cache)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
-                val projection = arrayOf(android.provider.MediaStore.Images.Media._ID)
-                var id: Long? = null
-                val cursor = contentResolver.query(
-                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    projection,
-                    "${android.provider.MediaStore.Images.Media.DATA} = ? OR ${android.provider.MediaStore.Images.Media.DATA} = ?",
-                    arrayOf(cleanPath, canonicalPath),
-                    null
-                )
-                cursor?.use {
-                    if (it.moveToFirst()) {
-                        id = it.getLong(it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media._ID))
-                    }
-                }
-                if (id == null) {
-                    val nameCursor = contentResolver.query(
+                var id: Long? = assetId?.toLongOrNull()
+                if (id == null && file != null) {
+                    val projection = arrayOf(android.provider.MediaStore.Images.Media._ID)
+                    val cursor = contentResolver.query(
                         android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                         projection,
-                        "${android.provider.MediaStore.Images.Media.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.Images.Media.SIZE} = ?",
-                        arrayOf(file.name, file.length().toString()),
+                        "${android.provider.MediaStore.Images.Media.DATA} = ? OR ${android.provider.MediaStore.Images.Media.DATA} = ?",
+                        arrayOf(cleanPath, canonicalPath),
                         null
                     )
-                    nameCursor?.use {
+                    cursor?.use {
                         if (it.moveToFirst()) {
                             id = it.getLong(it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media._ID))
+                        }
+                    }
+                    if (id == null) {
+                        val nameCursor = contentResolver.query(
+                            android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                            projection,
+                            "${android.provider.MediaStore.Images.Media.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.Images.Media.SIZE} = ?",
+                            arrayOf(file.name, file.length().toString()),
+                            null
+                        )
+                        nameCursor?.use {
+                            if (it.moveToFirst()) {
+                                id = it.getLong(it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media._ID))
+                            }
                         }
                     }
                 }
@@ -268,7 +271,7 @@ class MainActivity : FlutterFragmentActivity() {
         }
 
         // 2. High-performance native downsampled decoding via BitmapFactory.Options.inSampleSize
-        if (bitmap == null) {
+        if (bitmap == null && cleanPath.isNotEmpty()) {
             try {
                 val boundsOptions = android.graphics.BitmapFactory.Options().apply {
                     inJustDecodeBounds = true
@@ -390,105 +393,119 @@ class MainActivity : FlutterFragmentActivity() {
             )
         } else null
 
-        // 1. Primary extractor: MediaMetadataRetriever (guarantees native aspect ratio, full resolution, accurate frames)
-        val retriever = android.media.MediaMetadataRetriever()
-        var pfd: android.os.ParcelFileDescriptor? = null
-        var fis: java.io.FileInputStream? = null
-        try {
-            var sourceSet = false
+        // 1. Android Q+ (API 29+): prioritize contentResolver.loadThumbnail in <2ms when !needHighRes and uri != null
+        if (!needHighRes && uri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                bitmap = contentResolver.loadThumbnail(uri, android.util.Size(targetSize, targetSize), null)
+            } catch (_: Throwable) {}
+        }
 
-            // Primary source: MediaStore ParcelFileDescriptor (bypasses Scoped Storage restrictions)
-            if (uri != null) {
-                try {
-                    pfd = contentResolver.openFileDescriptor(uri, "r")
-                    if (pfd != null) {
-                        retriever.setDataSource(pfd.fileDescriptor)
-                        sourceSet = true
-                    }
-                } catch (_: Throwable) {}
-                if (!sourceSet) {
+        // 2. MediaMetadataRetriever (for high-res or when system cache is absent)
+        if (bitmap == null) {
+            val retriever = android.media.MediaMetadataRetriever()
+            var pfd: android.os.ParcelFileDescriptor? = null
+            var fis: java.io.FileInputStream? = null
+            try {
+                var sourceSet = false
+
+                // Primary source: MediaStore ParcelFileDescriptor (bypasses Scoped Storage restrictions)
+                if (uri != null) {
                     try {
-                        retriever.setDataSource(applicationContext, uri)
-                        sourceSet = true
-                    } catch (_: Throwable) {}
-                }
-            }
-
-            // Secondary source: direct file path / FileInputStream
-            if (!sourceSet && path.isNotEmpty()) {
-                try {
-                    retriever.setDataSource(path)
-                    sourceSet = true
-                } catch (_: Throwable) {
-                    if (file != null && file.exists()) {
-                        try {
-                            fis = java.io.FileInputStream(file)
-                            retriever.setDataSource(fis.fd, 0, file.length())
+                        pfd = contentResolver.openFileDescriptor(uri, "r")
+                        if (pfd != null) {
+                            retriever.setDataSource(pfd.fileDescriptor)
                             sourceSet = true
-                        } catch (_: Throwable) {
+                        }
+                    } catch (_: Throwable) {}
+                    if (!sourceSet) {
+                        try {
+                            retriever.setDataSource(applicationContext, uri)
+                            sourceSet = true
+                        } catch (_: Throwable) {}
+                    }
+                }
+
+                // Secondary source: direct file path / FileInputStream
+                if (!sourceSet && path.isNotEmpty()) {
+                    try {
+                        retriever.setDataSource(path)
+                        sourceSet = true
+                    } catch (_: Throwable) {
+                        if (file != null && file.exists()) {
                             try {
-                                fis?.close()
                                 fis = java.io.FileInputStream(file)
-                                retriever.setDataSource(fis.fd)
+                                retriever.setDataSource(fis.fd, 0, file.length())
                                 sourceSet = true
-                            } catch (_: Throwable) {}
+                            } catch (_: Throwable) {
+                                try {
+                                    fis?.close()
+                                    fis = java.io.FileInputStream(file)
+                                    retriever.setDataSource(fis.fd)
+                                    sourceSet = true
+                                } catch (_: Throwable) {}
+                            }
                         }
                     }
                 }
-            }
 
-            if (sourceSet) {
-                val rotationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
-                val rotation = rotationStr?.toIntOrNull() ?: 0
+                if (sourceSet) {
+                    val rotationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+                    val rotation = rotationStr?.toIntOrNull() ?: 0
 
-                val streamW = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
-                val streamH = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                    val streamW = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                    val streamH = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
 
-                val attempts = arrayOf(
-                    Pair(-1L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC),
-                    Pair(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC),
-                    Pair(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST),
-                    Pair(500000L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                )
+                    val attempts = arrayOf(
+                        Pair(-1L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC),
+                        Pair(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC),
+                        Pair(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST),
+                        Pair(500000L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    )
 
-                for (att in attempts) {
-                    if (bitmap != null) break
-                    try {
-                        bitmap = retriever.getFrameAtTime(att.first, att.second)
-                    } catch (_: Throwable) {}
-                }
+                    for (att in attempts) {
+                        if (bitmap != null) break
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                                bitmap = retriever.getScaledFrameAtTime(att.first, att.second, targetSize, targetSize)
+                            }
+                            if (bitmap == null) {
+                                bitmap = retriever.getFrameAtTime(att.first, att.second)
+                            }
+                        } catch (_: Throwable) {}
+                    }
 
-                // Correct rotation if needed (API 27+ getFrameAtTime may or may not apply rotation depending on OEM)
-                if (bitmap != null && rotation != 0) {
-                    val alreadyRotated = if (rotation == 90 || rotation == 270) {
-                        if (streamW > 0 && streamH > 0 && streamW != streamH) {
-                            bitmap!!.width == streamH && bitmap!!.height == streamW
+                    // Correct rotation if needed (API 27+ getFrameAtTime may or may not apply rotation depending on OEM)
+                    if (bitmap != null && rotation != 0) {
+                        val alreadyRotated = if (rotation == 90 || rotation == 270) {
+                            if (streamW > 0 && streamH > 0 && streamW != streamH) {
+                                bitmap!!.width == streamH && bitmap!!.height == streamW
+                            } else {
+                                false
+                            }
                         } else {
                             false
                         }
-                    } else {
-                        false
-                    }
-                    if (!alreadyRotated) {
-                        val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
-                        val rotated = android.graphics.Bitmap.createBitmap(
-                            bitmap!!, 0, 0, bitmap!!.width, bitmap!!.height, matrix, true
-                        )
-                        if (rotated != bitmap) {
-                            bitmap?.recycle()
-                            bitmap = rotated
+                        if (!alreadyRotated) {
+                            val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
+                            val rotated = android.graphics.Bitmap.createBitmap(
+                                bitmap!!, 0, 0, bitmap!!.width, bitmap!!.height, matrix, true
+                            )
+                            if (rotated != bitmap) {
+                                bitmap?.recycle()
+                                bitmap = rotated
+                            }
                         }
                     }
                 }
+            } catch (_: Throwable) {
+            } finally {
+                try { retriever.release() } catch (_: Throwable) {}
+                try { pfd?.close() } catch (_: Throwable) {}
+                try { fis?.close() } catch (_: Throwable) {}
             }
-        } catch (_: Throwable) {
-        } finally {
-            try { retriever.release() } catch (_: Throwable) {}
-            try { pfd?.close() } catch (_: Throwable) {}
-            try { fis?.close() } catch (_: Throwable) {}
         }
 
-        // 2. Fallbacks if MediaMetadataRetriever failed to get a bitmap
+        // 3. Fallbacks if MediaMetadataRetriever failed to get a bitmap
         if (bitmap == null && uri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 bitmap = contentResolver.loadThumbnail(uri, android.util.Size(targetSize, targetSize), null)

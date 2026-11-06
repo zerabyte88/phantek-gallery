@@ -42,8 +42,8 @@ Future<void> main() async {
   }
 
   // High-capacity imageCache for fast swiping.
-  PaintingBinding.instance.imageCache.maximumSizeBytes = 512 * 1024 * 1024;
-  PaintingBinding.instance.imageCache.maximumSize = 150;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 192 * 1024 * 1024;
+  PaintingBinding.instance.imageCache.maximumSize = 100;
 
   runApp(const ProviderScope(child: PhantekGalleryApp()));
 }
