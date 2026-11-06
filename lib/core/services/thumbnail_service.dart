@@ -25,10 +25,8 @@ class ThumbnailService {
   ThumbnailService._();
   static final ThumbnailService instance = ThumbnailService._();
 
-  static const int _thumbnailSize =
-      512; // px — high-DPI physical pixels for ultra-sharp full-screen preview & crisp gallery grid
-  static const int _thumbnailQuality =
-      90; // 90% quality (fast encode, zero pixelation / artifacts)
+  static const int _thumbnailSize = 512;
+  static const int _thumbnailQuality = 90;
   static const int _maxMemoryEntries = 500;
   static const int _maxConcurrent = 6;
   static const MethodChannel _nativeChannel =
@@ -88,7 +86,6 @@ class ThumbnailService {
       _highResVideoCache[assetId];
 
   /// Returns the visual aspect ratio (width / height) of the cached thumbnail.
-  /// Reads directly from memory or extracts from cached JPEG bytes in <1µs.
   double? getThumbnailAspectRatio(String assetId) {
     if (_thumbnailAspectRatioCache.containsKey(assetId)) {
       return _thumbnailAspectRatioCache[assetId];
@@ -129,8 +126,7 @@ class ThumbnailService {
     }
   }
 
-  /// Extracts an ultra-sharp high-resolution video thumbnail (1080p/1920p target)
-  /// for crystal-clear full-screen preview prior to playback.
+  /// Extracts a high-resolution video thumbnail.
   Future<Uint8List?> getHighResVideoThumbnail(
     String assetId, {
     required String filePath,
@@ -223,9 +219,7 @@ class ThumbnailService {
     return null;
   }
 
-  /// Extracts physical pixel dimensions (width, height) directly from JPEG
-  /// markers (SOF0 = 0xC0 baseline, SOF2 = 0xC2 progressive).
-  /// Ultra-fast: parses ~10 bytes from memory without decoding pixel bitmaps.
+  /// Parses physical pixel dimensions directly from JPEG markers (SOF0/SOF2).
   static ui.Size? parseJpegDimensions(Uint8List bytes) {
     if (bytes.length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) return null;
     var i = 2;
@@ -277,8 +271,6 @@ class ThumbnailService {
   }
 
   /// Extracts a video frame at a specific timestamp for seekbar preview.
-  /// Uses native Android MediaMetadataRetriever running on background executor
-  /// with an LRU bucket cache.
   Future<Uint8List?> getVideoFrame({
     required String filePath,
     required Duration time,
@@ -328,7 +320,6 @@ class ThumbnailService {
     if (_cacheDir != null && await _cacheDir!.exists()) return _cacheDir!;
     String? basePath;
 
-    // 1. Prioritize external cache in /storage/emulated/0/Android/data/com.phantek.virgo.spica/cache
     try {
       final extDirs = await getExternalCacheDirectories();
       if (extDirs != null && extDirs.isNotEmpty) {
@@ -341,7 +332,6 @@ class ThumbnailService {
       }
     } catch (_) {}
 
-    // 2. Application cache in /data/user/0/com.phantek.virgo.spica/cache
     if (basePath == null) {
       try {
         final appCache = await getApplicationCacheDirectory();
@@ -362,7 +352,6 @@ class ThumbnailService {
     final dir = Directory(p.join(basePath, 'thumbnails_v3'));
     if (!await dir.exists()) {
       await dir.create(recursive: true);
-      // Clean up legacy distorted thumbnail cache
       try {
         final oldDir = Directory(p.join(basePath, 'thumbnails'));
         if (await oldDir.exists()) {
@@ -373,7 +362,6 @@ class ThumbnailService {
     _cacheDir = dir;
     _cacheDirPath = dir.path;
 
-    // Smoothly migrate legacy files from supportDir if different
     _migrateLegacyThumbnails(dir);
 
     return dir;
@@ -416,15 +404,12 @@ class ThumbnailService {
     String? filePath,
     bool isVideo = false,
   }) async {
-    // 1. Fast in-memory lookup (0ms)
     final cached = _memoryCache[assetId];
     if (cached != null) return cached;
 
-    // 2. Check if request is already in-flight
     final inFlight = _inFlight[assetId];
     if (inFlight != null) return inFlight.future;
 
-    // 3. Fast persistent disk cache lookup (SKIPS the generator queue entirely!)
     final diskFile = getCachedFile(assetId);
     if (diskFile != null) {
       final completer = Completer<Uint8List?>();
@@ -490,8 +475,7 @@ class ThumbnailService {
   Future<void> _runWorker() async {
     try {
       while (_queue.isNotEmpty) {
-        // FIFO: ensures all visible tiles at the top of the grid are processed in order.
-        // Prevents cold-start starvation where earlier visible items waited behind endless LIFO requests.
+        // FIFO order prevents cold-start starvation for visible grid tiles.
         final req = _queue.removeFirst();
         if (req.completer.isCompleted) {
           _inFlight.remove(req.id);
@@ -509,7 +493,6 @@ class ThumbnailService {
         }
       }
     } finally {
-      // Guaranteed worker slot release — prevents worker queue deadlock under high load
       _activeWorkers--;
       if (_queue.isNotEmpty && _activeWorkers < _maxConcurrent) {
         _processQueue();
@@ -518,7 +501,6 @@ class ThumbnailService {
   }
 
   Future<void> _processRequest(_ThumbnailRequest req) async {
-    // Check persistent disk cache first
     try {
       final diskFile = await _fileForAsset(req.id);
       if (await diskFile.exists()) {
@@ -567,7 +549,6 @@ class ThumbnailService {
           }
         }
 
-        // 1. Direct native extractor (fast MediaStore cache + MediaMetadataRetriever for 4K/2K/1080p, HEVC, VP9)
         if (targetPath != null && targetPath.isNotEmpty) {
           try {
             bytes = await _extractNativeVideoThumbnail(targetPath)
@@ -575,7 +556,6 @@ class ThumbnailService {
           } catch (_) {}
         }
 
-        // 2. If native extractor returned null, try photo_manager thumbnailDataWithSize
         if (bytes == null || bytes.isEmpty) {
           final entity =
               _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
@@ -607,9 +587,7 @@ class ThumbnailService {
           }
         }
       } else {
-        // Photo / image:
-        // 1. Fast native subsampling (BitmapFactory.inSampleSize + MediaStore loadThumbnail)
-        //    Decodes huge photos (24MP-108MP) in ~20-40ms instead of loading full MBs into Dart.
+        // Subsample large images natively before falling back to Dart decoding.
         if (req.filePath != null && req.filePath!.isNotEmpty) {
           try {
             bytes = await _extractNativeImageThumbnail(req.filePath!)
@@ -617,7 +595,6 @@ class ThumbnailService {
           } catch (_) {}
         }
 
-        // 2. Try photo_manager thumbnailDataWithSize (Glide-backed) if native returned null
         if (bytes == null || bytes.isEmpty) {
           final entity =
               _entityCache[req.id] ?? await AssetEntity.fromId(req.id);
@@ -633,7 +610,6 @@ class ThumbnailService {
           }
         }
 
-        // 3. Fallback: decode directly from local image file if photo_manager returned null or timed out
         if ((bytes == null || bytes.isEmpty) && req.filePath != null) {
           try {
             final file = File(req.filePath!);
@@ -683,7 +659,7 @@ class ThumbnailService {
         }
         await tmpFile.rename(targetPath);
       } catch (_) {
-        // Fallback if atomic rename encounters filesystem locking
+        // Fallback if atomic rename encounters filesystem locking.
         await targetFile.writeAsBytes(bytes, flush: true);
         try {
           if (await tmpFile.exists()) await tmpFile.delete();

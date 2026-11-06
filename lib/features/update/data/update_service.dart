@@ -48,8 +48,6 @@ final class UpdateCheckFailed extends UpdateResult {
 }
 
 /// Handles checking GitHub Releases and downloading the APK.
-///
-/// Internet access is used ONLY for GitHub Releases – no telemetry.
 class UpdateService {
   UpdateService._();
   static final UpdateService instance = UpdateService._();
@@ -76,7 +74,6 @@ class UpdateService {
           DateTime.tryParse(json['published_at'] as String? ?? '') ??
               DateTime.now();
 
-      // Look for .apk assets in release assets and pick the matching ABI variant
       final assets =
           (json['assets'] as List? ?? []).cast<Map<String, dynamic>>();
       final apkAssets = assets
@@ -127,11 +124,9 @@ class UpdateService {
     required String localVer,
     required int localCode,
   }) {
-    // If build numbers are present, compare them first
     if (remoteCode > 0 && localCode > 0) {
       return remoteCode > localCode;
     }
-    // Fallback: SemVer comparison (e.g., 1.0.1 > 1.0.0)
     final rParts =
         remoteVer.split('.').map((e) => int.tryParse(e) ?? 0).toList();
     final lParts =
@@ -157,15 +152,14 @@ class UpdateService {
     if (apkAssets.isEmpty) return <String, dynamic>{};
     if (apkAssets.length == 1) return apkAssets.first;
 
-    // Read device ABI via Android shell property (works on all Android versions).
-    // ponytail: synchronous Process.run is fine here — only called once during update check.
+    // Resolve device ABI via Android getprop.
     String deviceAbi = overrideAbi ?? '';
     if (deviceAbi.isEmpty) {
       try {
         final result = Process.runSync('getprop', ['ro.product.cpu.abi']);
         deviceAbi = (result.stdout as String).trim();
       } catch (_) {
-        deviceAbi = 'arm64-v8a'; // safe default for modern Android devices
+        deviceAbi = 'arm64-v8a';
       }
     }
 
@@ -211,16 +205,12 @@ class UpdateService {
 
   /// Downloads the APK to the public Downloads folder.
   /// Reports progress [0.0 – 1.0] via [onProgress].
-  ///
-  /// SAFETY: only creates/deletes ONE specific file path – never touches
-  /// any other file in Downloads.
   Future<File> downloadApk(
     UpdateInfo info, {
     required void Function(double) onProgress,
   }) async {
     final apkFile = await _apkFile(info.version);
 
-    // Clean up a stale partial download.
     if (await apkFile.exists()) await apkFile.delete();
 
     final client = http.Client();
@@ -230,9 +220,7 @@ class UpdateService {
       final total = response.contentLength ?? 0;
       var received = 0;
 
-      // Collect all bytes before writing – ensures the file is complete
-      // before we return it. The old listener+onDone approach was not awaited
-      // properly and produced truncated APKs.
+      // Collect all bytes before writing to prevent truncated APK files.
       final builder = BytesBuilder(copy: false);
       await for (final chunk in response.stream) {
         builder.add(chunk);
@@ -241,7 +229,6 @@ class UpdateService {
       }
       await apkFile.writeAsBytes(builder.takeBytes());
     } catch (e) {
-      // Clean up incomplete file on error.
       if (await apkFile.exists()) await apkFile.delete();
       client.close();
       rethrow;
@@ -251,9 +238,6 @@ class UpdateService {
   }
 
   /// Deletes any previously downloaded APK for the given version.
-  ///
-  /// PROTEKSI: ONLY deletes the exact path returned by [_apkFile].
-  /// Never deletes directories or other user files.
   Future<void> cleanupApk(String version) async {
     final apkFile = await _apkFile(version);
     if (await apkFile.exists()) await apkFile.delete();
@@ -269,7 +253,6 @@ class UpdateService {
       return name.startsWith('Phantek_Gallery_v') && name.endsWith('.apk');
     });
     for (final apk in apks) {
-      // Extra guard: only delete if the path starts with our expected dir.
       if (apk.path.startsWith(dir.path)) {
         await apk.delete();
       }
@@ -283,11 +266,9 @@ class UpdateService {
   }
 
   Future<Directory> _downloadsDir() async {
-    // Android public Downloads directory.
     const downloadsPath = '/storage/emulated/0/Download';
     final d = Directory(downloadsPath);
     if (await d.exists()) return d;
-    // Fallback to app-specific external dir (no extra permissions needed).
     final ext = await getExternalStorageDirectory();
     return Directory('${ext?.path ?? (await _appDocDir()).path}/downloads');
   }

@@ -130,8 +130,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   bool _isFullscreen = false;
   bool _isLooping = false;
   double _playbackSpeed = 1.0;
-  // Drag-to-dismiss offset lives in a notifier so pointer-move never rebuilds
-  // the PageView / InteractiveViewer hierarchy.
+  // Drag offset notifier avoids rebuilding the player hierarchy.
   final ValueNotifier<Offset> _dragNotifier = ValueNotifier(Offset.zero);
   final ValueNotifier<bool> _isDraggingDown = ValueNotifier(false);
   bool _isSwipingHorizontal = false;
@@ -143,9 +142,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   double? _startDragX;
   TapDownDetails? _doubleTapDetails;
   bool _isSwiping = false;
-  // Controls the visibility of the active Video() texture surface.
   final ValueNotifier<bool> _videoSurfaceVisible = ValueNotifier(false);
-  // Controls the opacity of the center play button during horizontal page swipe.
   final ValueNotifier<bool> _isSwipingPage = ValueNotifier(false);
   int _videoLoadGeneration = 0;
   Timer? _videoLoadDebounce;
@@ -185,8 +182,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _slideshowTimer = null;
     if (!mounted || !_isSlideshowPlaying || _videos.isEmpty) return;
 
-    // During slideshow, videos are treated as slides and not auto-played.
-    // If the player is currently playing, ensure it is paused.
     if (_isPlaying) {
       _controller?.pause();
     }
@@ -342,7 +337,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _routeTransitionComplete = true;
       _startPlaybackAfterTransition();
     } else if (status == AnimationStatus.reverse) {
-      // Hide video texture surface and pause playback during pop exit transition.
       _videoSurfaceVisible.value = false;
       if (_videos.isNotEmpty &&
           _current < _videos.length &&
@@ -384,7 +378,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
   }
 
-  /// Spring the dragged video back to center, carrying release velocity.
   void _springBack(double vy) {
     _settleFrom = _dragNotifier.value;
     if (_settleFrom == Offset.zero || _settleFrom.distance < 1.0) {
@@ -498,7 +491,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         if (target >= 0 && target < _videos.length) {
           final item = _videos[target];
           if (item.isVideo) {
-            // Pre-fetch high-res preview frame for instant crispness on swipe
             ThumbnailService.instance
                 .getHighResVideoThumbnail(
               item.id,
@@ -763,7 +755,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
 
     if (nextItem.isVideo) {
-      // Debounce loading native player so fast swipes are 100% fluid
+      // Debounce native player initialization for fluid swipes.
       _videoLoadDebounce = Timer(const Duration(milliseconds: 250), () async {
         if (!mounted || _current != index || thisGen != _videoLoadGeneration) {
           return;
@@ -894,13 +886,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         return size.height > size.width;
       }
     }
-    // Visual thumbnail aspect ratio accounts for native EXIF/MP4 rotation matrix
+    // Aspect ratio accounts for EXIF/MP4 rotation matrix.
     final thumbRatio =
         ThumbnailService.instance.getThumbnailAspectRatio(item.id);
     if (thumbRatio != null && thumbRatio > 0) {
       return thumbRatio < 0.95;
     }
-    // Item width and height from scanner
     if (item.width != null &&
         item.height != null &&
         item.width! > 0 &&
@@ -1107,7 +1098,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     final screenWidth = MediaQuery.sizeOf(context).width;
     final settings = ref.read(settingsNotifierProvider);
 
-    // 1. If currently zoomed in, double-tap anywhere immediately resets zoom
     final currentScale = _transformationController.value.getMaxScaleOnAxis();
     if (_isVideoZoomed || currentScale > 1.05) {
       HapticFeedback.lightImpact();
@@ -1154,7 +1144,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
             doSeek(true);
             return;
           }
-          // Center 35% - 65% falls through to zoom
           break;
       }
     }
@@ -4114,7 +4103,6 @@ class _DeviceRotatePainter extends CustomPainter {
 
     final center = Offset(size.width / 2, size.height / 2);
 
-    // 1. Draw tilted smartphone outline in center (~ -33 degrees)
     canvas.save();
     canvas.translate(center.dx, center.dy);
     canvas.rotate(-0.58);
@@ -4132,7 +4120,6 @@ class _DeviceRotatePainter extends CustomPainter {
     canvas.drawRRect(phoneRect, paint);
     canvas.restore();
 
-    // 2. Draw curved arrows on opposite corners
     final arcPaint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -4149,12 +4136,10 @@ class _DeviceRotatePainter extends CustomPainter {
     final arcRadius = size.width * 0.44;
     final arcRect = Rect.fromCircle(center: center, radius: arcRadius);
 
-    // Top-right arc (clockwise)
     const sweepAngle = 0.70;
     const startAngle1 = -0.85;
     canvas.drawArc(arcRect, startAngle1, sweepAngle, false, arcPaint);
 
-    // Arrowhead at end of arc 1
     final endAngle1 = startAngle1 + sweepAngle;
     final arrowTip1 = Offset(
       center.dx + arcRadius * math.cos(endAngle1),
@@ -4177,11 +4162,9 @@ class _DeviceRotatePainter extends CustomPainter {
       ..lineTo(w1b.dx, w1b.dy);
     canvas.drawPath(path1, arrowPaint);
 
-    // Bottom-left arc (clockwise)
     const startAngle2 = startAngle1 + math.pi;
     canvas.drawArc(arcRect, startAngle2, sweepAngle, false, arcPaint);
 
-    // Arrowhead at end of arc 2
     final endAngle2 = startAngle2 + sweepAngle;
     final arrowTip2 = Offset(
       center.dx + arcRadius * math.cos(endAngle2),
@@ -4326,7 +4309,6 @@ class _ScrubberTrackPainter extends CustomPainter {
       inactivePaint,
     );
 
-    // 2. Active track (left / progress)
     if (thumbX > startX) {
       final activePaint = Paint()
         ..color = Colors.white
@@ -4342,25 +4324,21 @@ class _ScrubberTrackPainter extends CustomPainter {
       );
     }
 
-    // 3. Thumb circle with subtle shadow & glow halo
     final thumbRadius =
         isDragging ? (isLandscape ? 7.5 : 8.5) : (isLandscape ? 5.5 : 6.5);
 
     if (isDragging) {
-      // Glow ripple halo when dragging
       final haloPaint = Paint()
         ..color = Colors.white.withValues(alpha: 0.22)
         ..style = PaintingStyle.fill;
       canvas.drawCircle(Offset(thumbX, centerY), thumbRadius + 5.0, haloPaint);
     }
 
-    // Shadow under thumb
     final shadowPaint = Paint()
       ..color = Colors.black45
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
     canvas.drawCircle(Offset(thumbX, centerY + 1.0), thumbRadius, shadowPaint);
 
-    // Solid white thumb
     final thumbPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.fill;

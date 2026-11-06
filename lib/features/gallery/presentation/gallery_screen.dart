@@ -63,7 +63,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     FilterOption.videosOnly: ScrollController(),
   };
 
-  // Memoize lists per tab for smooth tab transitions without recalculation.
+  // Memoized tab items for smooth tab transitions.
   List<MediaItem>? _cachedAllItemsRef;
   SortOption? _cachedSort;
   String? _cachedSearchQuery;
@@ -392,7 +392,6 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               .read(trashProvider.notifier)
               .moveToTrash(id: item.id, path: item.path, isVideo: item.isVideo);
         } else {
-          // Direct permanent delete.
           final f = File(item.path);
           if (await f.exists()) await f.delete();
           try {
@@ -1434,7 +1433,7 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-/// Keeps PageView children alive in memory for instant, zero-rebuild swiping.
+/// Keeps PageView children alive in memory.
 class _KeepAlivePage extends StatefulWidget {
   const _KeepAlivePage({required this.child});
   final Widget child;
@@ -1455,8 +1454,7 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
   }
 }
 
-/// Detects 2-finger pinch gestures to dynamically change grid columns (2 to 5)
-/// without blocking single-finger vertical scroll or horizontal page swipe.
+/// Detects 2-finger pinch gestures to dynamically change grid columns (2 to 5).
 class _PinchZoomGridListener extends ConsumerStatefulWidget {
   const _PinchZoomGridListener({required this.child});
   final Widget child;

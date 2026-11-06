@@ -22,7 +22,6 @@ class UpdateListener extends ConsumerWidget {
       if (state is UpdateFound) {
         _showUpdateDialog(context, ref, state.info);
       }
-      // Show snackbar for error / already up-to-date.
       if (next.hasError) {
         final targetContext = rootNavigatorKey.currentContext ?? context;
         final msg = next.error == 'already_up_to_date'
@@ -98,9 +97,7 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
   }
 
   Future<void> _launchInstaller(File apkFile) async {
-    // Use Android Intent to trigger system package installer.
-    // We rely on the platform channel exposed by the OS; no extra plugin needed.
-    // The FileProvider authority must match AndroidManifest.
+    // Trigger system package installer via platform channel.
     try {
       // ignore: deprecated_member_use
       await _installApk(apkFile.path);
@@ -116,7 +113,6 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // Track download progress from provider.
     final state = ref.watch(updateNotifierProvider).value;
     if (state is UpdateDownloading) {
       _progress = state.progress;
@@ -184,9 +180,7 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
 }
 
 Future<void> _installApk(String apkPath) async {
-  // Delegates to Android's ACTION_VIEW intent via MethodChannel.
-  // This requires FileProvider authority: com.phantek.virgo.spica.fileprovider
-  // and android.permission.REQUEST_INSTALL_PACKAGES (already in manifest).
+  // Delegates to Android ACTION_VIEW intent via MethodChannel.
   const channel = MethodChannel('com.phantek.gallery/install');
   await channel.invokeMethod<void>('installApk', {'path': apkPath});
 }

@@ -106,7 +106,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         child: ListView(
           padding: const EdgeInsets.fromLTRB(0, 8, 0, 32),
           children: [
-            // ── Appearance ──
             _SectionHeader(
               title: context.tr.appearance,
               icon: Icons.palette_outlined,
@@ -148,8 +147,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ── Grid & Layout ──
             _SectionHeader(
               title: context.tr.gridAndLayout,
               icon: Icons.grid_view_rounded,
@@ -274,8 +271,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ── Video Playback ──
             _SectionHeader(
               title: context.tr.playback,
               icon: Icons.play_circle_outline_rounded,
@@ -377,8 +372,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ── Display & Slideshow ──
             _SectionHeader(
               title: context.tr.displayAndSlideshow,
               icon: Icons.slideshow_rounded,
@@ -422,8 +415,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ── Browsing & Navigation ──
             _SectionHeader(
               title: context.tr.browsingAndNavigation,
               icon: Icons.explore_outlined,
@@ -504,8 +495,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ── Storage & Cache ──
             _SectionHeader(
               title: context.tr.storageAndCache,
               icon: Icons.storage_rounded,
@@ -612,8 +601,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ── Privacy & Security ──
             _SectionHeader(
               title: context.tr.privacyAndSecurity,
               icon: Icons.shield_outlined,
@@ -693,8 +680,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ── Updates ──
             _SectionHeader(
               title: context.tr.updates,
               icon: Icons.system_update_outlined,
@@ -732,8 +717,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-
-            // ── About App ──
             const DeveloperAboutCard(),
           ],
         ),
@@ -1083,7 +1066,6 @@ Future<void> _showExcludedFoldersDialog(
   final current = List<String>.from(settings.excludedFolders);
   final cs = Theme.of(context).colorScheme;
 
-  // Retrieve unique folder paths from media items currently loaded in memory.
   final mediaItems = ref.read(mediaListProvider).valueOrNull ?? [];
   final detectedFolders = mediaItems
       .map((e) => p.dirname(e.path))

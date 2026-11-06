@@ -24,34 +24,24 @@ import 'features/update/presentation/update_dialog.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock orientation to portrait on launch; video player overrides per-screen.
+  // Lock portrait orientation by default.
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // Boot order matters:
-  //  1. Register application and native component licenses.
   LicenseService.registerLicenses();
-
-  //  2. Persisted settings (synchronous after first init).
   await SettingsService.init();
-
-  //  3. Pre-warm thumbnail persistent disk cache directory.
   await ThumbnailService.init();
-
-  //  3. Clean up any leftover OTA APK from a previous update.
-  //     SAFETY: only deletes files matching "Phantek_Gallery_v*.apk" pattern.
   await UpdateService.instance.cleanupAllApks();
 
-  //  5. Clean up expired items in trash based on autoTrashCleanup setting.
   final initialCleanup =
       SettingsService.instance.settings.autoTrashCleanup.inDays;
   if (initialCleanup != null) {
     TrashService().purgeExpired(maxDays: initialCleanup).catchError((_) {});
   }
 
-  //  6. High-capacity imageCache: 512 MB and 150 entries for instant crisp swiping.
+  // High-capacity imageCache for fast swiping.
   PaintingBinding.instance.imageCache.maximumSizeBytes = 512 * 1024 * 1024;
   PaintingBinding.instance.imageCache.maximumSize = 150;
 
@@ -71,7 +61,6 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Auto-check for OTA update once on launch and apply secureScreen flag.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final settings = ref.read(settingsNotifierProvider);
       if (settings.secureScreen) {
@@ -92,7 +81,6 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
 
   @override
   void didHaveMemoryPressure() {
-    // Only purge decoded images and memory cache when OS reports actual RAM pressure
     ThumbnailService.instance.trimMemory();
     PaintingBinding.instance.imageCache.clear();
     super.didHaveMemoryPressure();
@@ -122,13 +110,17 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
       AppThemeMode.amoledMidnight => AppTheme.amoledMidnight,
       AppThemeMode.amoledSnowfall => AppTheme.amoledSnowfall,
       AppThemeMode.amoledSakura => AppTheme.amoledSakura,
-      AppThemeMode.amoledPure || AppThemeMode.system || _ =>
+      AppThemeMode.amoledPure ||
+      AppThemeMode.system ||
+      _ =>
         AppTheme.amoledPure,
     };
 
     final lightTheme = switch (themeMode) {
       AppThemeMode.light => AppTheme.light,
-      AppThemeMode.cleanLight || AppThemeMode.system || _ =>
+      AppThemeMode.cleanLight ||
+      AppThemeMode.system ||
+      _ =>
         AppTheme.cleanLight,
     };
 
@@ -164,7 +156,6 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
         duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut,
         child: UpdateListener(
-          // Global wrapper to display update dialogs over any active screen.
           child: child ?? const SizedBox.shrink(),
         ),
       ),

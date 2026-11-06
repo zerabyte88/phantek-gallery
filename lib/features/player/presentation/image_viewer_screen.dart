@@ -24,9 +24,7 @@ import 'widgets/rename_dialog.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
 import '../../../core/widgets/feedback_pill.dart';
 
-/// A 100MP photo decodes to ~50 MB instead of ~408 MB, so it fits imageCache.
-// ponytail: fixed 4096px cap, sharp to ~3x zoom on 1080p. Swap to full-res
-// FileImage on deep zoom if pixel-peeping beyond 3x matters.
+// 4096px cap fits imageCache while staying sharp up to 3x zoom.
 ImageProvider displayImage(String path, {int maxDimension = 4096}) =>
     ResizeImage(
       FileImage(File(path)),
@@ -35,8 +33,7 @@ ImageProvider displayImage(String path, {int maxDimension = 4096}) =>
       policy: ResizeImagePolicy.fit,
     );
 
-/// Adaptive screen-fit image provider (~2048px max bounding box)
-/// keeps memory down to ~12 MB per photo, ensuring silky-smooth 60/120 fps sliding.
+/// Screen-fit provider (~2048px) for smooth page swiping.
 ImageProvider screenDisplayImage(String path, [int maxDim = 2048]) =>
     ResizeImage(
       FileImage(File(path)),
@@ -144,12 +141,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   late final PageController _page;
   late int _current;
   bool _barsVisible = true;
-  // Drag-to-dismiss translation lives in a notifier: pointer-move repaints only
-  // the Transform, never the gallery/bars hierarchy.
+  // Drag translation notifier avoids rebuilding the viewer hierarchy.
   final ValueNotifier<Offset> _drag = ValueNotifier(Offset.zero);
   final ValueNotifier<bool> _isDraggingDown = ValueNotifier(false);
   bool _isSwipingHorizontal = false;
-  late final AnimationController _settle; // 1 -> 0 spring, scales _settleFrom
+  late final AnimationController _settle;
   Offset _settleFrom = Offset.zero;
   VelocityTracker _vt = VelocityTracker.withKind(PointerDeviceKind.touch);
   double? _startDragY;
@@ -335,8 +331,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   void _precacheAdjacent(int index) {
     if (!mounted) return;
-    // Pre-cache ±2 neighbors (prioritize immediate ±1 first):
-    // 5 × ~12 MB = ~60 MB, easily accommodated by the 512 MB imageCache.
+    // Pre-cache ±2 neighbor images.
     for (final offset in const [-1, 1, -2, 2]) {
       final target = index + offset;
       if (target >= 0 && target < widget.items.length) {
@@ -387,7 +382,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
   }
 
-  /// Spring the dragged image back to center, carrying the release velocity.
   void _springBack(double vy) {
     _settleFrom = _drag.value;
     if (_settleFrom == Offset.zero || _settleFrom.distance < 1.0) {
@@ -751,7 +745,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     if (widget.items.length <= 1) {
       Navigator.of(context).pop();
     } else {
-      // Remove from local list and move page.
       widget.items.removeAt(_current);
       setState(() {
         _current = _current.clamp(0, widget.items.length - 1);
@@ -811,7 +804,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       body: Listener(
         onPointerDown: (e) {
           _activePointers.add(e.pointer);
-          _settle.stop(); // grab a returning image mid-flight
+          _settle.stop();
           _zoomAnimController?.stop();
           _isSwipingHorizontal = false;
           if (_activePointers.length == 1) {
@@ -824,7 +817,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             }
           }
           if (_activePointers.length >= 2 || _isCurrentlyZoomed) {
-            // Abort drag-to-dismiss during multi-touch, pinch, or zoom.
             _isMultiTouch = true;
             _isPinching = true;
             _startDragY = null;
@@ -838,7 +830,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           _vt.addPosition(e.timeStamp, e.position);
         },
         onPointerMove: (e) {
-          // While zoomed in, pinching, or multi-touching, NEVER pull-to-dismiss
           if (_startDragY == null ||
               _startDragX == null ||
               _isCurrentlyZoomed ||
@@ -854,7 +845,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           final adx = dx.abs();
           final ady = dy.abs();
 
-          // Detect horizontal swipe intent early to lock out pull-to-dismiss
           if (!_isSwipingHorizontal && _drag.value == Offset.zero) {
             if (adx > 6 && adx >= ady) {
               _isSwipingHorizontal = true;
@@ -866,7 +856,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
           _vt.addPosition(e.timeStamp, e.position);
 
-          // Intentional vertical swipe deadzone: natural downward drag
           if (_drag.value != Offset.zero || (dy > 24 && dy > adx * 1.8)) {
             final dampedDx = dx * 0.45;
             final dragY = (dy - 24).clamp(0.0, 650.0);
