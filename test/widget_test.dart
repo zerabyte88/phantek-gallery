@@ -579,7 +579,7 @@ void main() {
       expect(find.text('ARM64-v8a'), findsNothing);
       expect(find.text('Video Engine'), findsNothing);
       expect(find.text('Build'), findsOneWidget);
-      expect(find.text('52'), findsOneWidget);
+      expect(find.text('53'), findsOneWidget);
       expect(find.text('MIT'), findsOneWidget);
     });
 
