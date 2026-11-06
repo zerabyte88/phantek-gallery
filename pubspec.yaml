@@ -28,9 +28,6 @@ dependencies:
   # ── Video player (AndroidX Media3 ExoPlayer) ──────────────────────────────
   video_player: ^2.9.2
 
-
-  # ── OTA update (GitHub Releases) ─────────────────────────────────────────
-  http: ^1.2.2
   package_info_plus: ^8.0.2
   path_provider: ^2.1.4
 

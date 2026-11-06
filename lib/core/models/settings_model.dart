@@ -21,7 +21,6 @@ class SettingsModel extends Equatable {
     this.autoPlayVideo = false,
     this.keepScreenOn = false,
     this.excludedFolders = const [],
-    this.autoCheckUpdate = true,
     this.defaultSort = SortOption.newest,
     this.defaultFilter = FilterOption.all,
     this.favoriteIds = const [],
@@ -66,9 +65,6 @@ class SettingsModel extends Equatable {
 
   /// List of folder paths to exclude from the gallery scan.
   final List<String> excludedFolders;
-
-  /// Automatically check GitHub Releases for updates on launch.
-  final bool autoCheckUpdate;
 
   final SortOption defaultSort;
   final FilterOption defaultFilter;
@@ -126,7 +122,6 @@ class SettingsModel extends Equatable {
     bool? hardwareAcceleration,
     bool? autoPlayVideo,
     List<String>? excludedFolders,
-    bool? autoCheckUpdate,
     SortOption? defaultSort,
     FilterOption? defaultFilter,
     List<String>? favoriteIds,
@@ -155,7 +150,6 @@ class SettingsModel extends Equatable {
       hardwareAcceleration: hardwareAcceleration ?? this.hardwareAcceleration,
       autoPlayVideo: autoPlayVideo ?? this.autoPlayVideo,
       excludedFolders: excludedFolders ?? this.excludedFolders,
-      autoCheckUpdate: autoCheckUpdate ?? this.autoCheckUpdate,
       defaultSort: defaultSort ?? this.defaultSort,
       defaultFilter: defaultFilter ?? this.defaultFilter,
       favoriteIds: favoriteIds ?? this.favoriteIds,
@@ -188,7 +182,6 @@ class SettingsModel extends Equatable {
         hardwareAcceleration,
         autoPlayVideo,
         excludedFolders,
-        autoCheckUpdate,
         defaultSort,
         defaultFilter,
         favoriteIds,

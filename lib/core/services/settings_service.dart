@@ -22,7 +22,6 @@ class _K {
   static const autoPlayVideo = 'autoPlayVideo';
   static const keepScreenOn = 'keepScreenOn';
   static const excludedFolders = 'excludedFolders';
-  static const autoCheckUpdate = 'autoCheckUpdate';
   static const defaultSort = 'defaultSort';
   static const defaultFilter = 'defaultFilter';
   static const favoriteIds = 'favoriteIds';
@@ -82,7 +81,6 @@ class SettingsService {
         hardwareAcceleration: _prefs.getBool(_K.hardwareAccel) ?? true,
         autoPlayVideo: _prefs.getBool(_K.autoPlayVideo) ?? false,
         excludedFolders: _readStringList(_K.excludedFolders),
-        autoCheckUpdate: _prefs.getBool(_K.autoCheckUpdate) ?? true,
         defaultSort:
             _readEnum(_K.defaultSort, SortOption.values, SortOption.newest),
         defaultFilter:
@@ -123,7 +121,6 @@ class SettingsService {
       _prefs.setBool(_K.hardwareAccel, model.hardwareAcceleration),
       _prefs.setBool(_K.autoPlayVideo, model.autoPlayVideo),
       _prefs.setString(_K.excludedFolders, jsonEncode(model.excludedFolders)),
-      _prefs.setBool(_K.autoCheckUpdate, model.autoCheckUpdate),
       _prefs.setString(_K.defaultSort, model.defaultSort.name),
       _prefs.setString(_K.defaultFilter, model.defaultFilter.name),
       _prefs.setString(_K.favoriteIds, jsonEncode(model.favoriteIds)),

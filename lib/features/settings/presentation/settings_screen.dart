@@ -16,7 +16,6 @@ import '../../../core/services/folder_picker_service.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../../core/widgets/bouncy_tap.dart';
-import '../../../features/update/data/update_provider.dart';
 import 'widgets/developer_about_card.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -71,7 +70,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsNotifierProvider);
-    final update = ref.watch(updateNotifierProvider);
 
     void patch(SettingsModel Function(SettingsModel) fn) {
       ref.read(settingsNotifierProvider.notifier).update(fn);
@@ -677,43 +675,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       );
                     }
                   },
-                ),
-              ],
-            ),
-            _SectionHeader(
-              title: context.tr.updates,
-              icon: Icons.system_update_outlined,
-              color: const Color(0xFF8B5CF6),
-            ),
-            _SettingsCard(
-              children: [
-                _ModernSwitchTile(
-                  icon: Icons.update_rounded,
-                  iconColor: const Color(0xFF10B981),
-                  title: context.tr.autoCheckUpdate,
-                  subtitle: context.tr.checkUpdateOnLaunchSubtitle,
-                  value: settings.autoCheckUpdate,
-                  onChanged: (v) =>
-                      patch((s) => s.copyWith(autoCheckUpdate: v)),
-                ),
-                const _CardDivider(),
-                _ModernTile(
-                  icon: Icons.system_update_alt_rounded,
-                  iconColor: const Color(0xFF8B5CF6),
-                  title: context.tr.checkUpdateNow,
-                  subtitle: context.tr.checkGitHubReleasesSubtitle,
-                  trailing: update.isLoading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : null,
-                  onTap: update.isLoading
-                      ? null
-                      : () => ref
-                          .read(updateNotifierProvider.notifier)
-                          .checkForUpdate(silent: false),
                 ),
               ],
             ),

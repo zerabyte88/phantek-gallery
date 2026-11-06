@@ -115,7 +115,6 @@ void main() {
 
         expect(loc.aToZ.isNotEmpty, isTrue, reason: '$code aToZ');
         expect(loc.zToA.isNotEmpty, isTrue, reason: '$code zToA');
-        expect(loc.whatsNew.isNotEmpty, isTrue, reason: '$code whatsNew');
         expect(loc.videoDoubleTapAction.isNotEmpty, isTrue, reason: '$code videoDoubleTapAction');
         expect(loc.doubleTapActionSmart.isNotEmpty, isTrue, reason: '$code doubleTapActionSmart');
         expect(loc.doubleTapActionSeekOnly.isNotEmpty, isTrue, reason: '$code doubleTapActionSeekOnly');

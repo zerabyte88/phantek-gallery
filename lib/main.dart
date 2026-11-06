@@ -17,9 +17,6 @@ import 'core/services/screen_keeper_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/services/thumbnail_service.dart';
 import 'core/services/trash_service.dart';
-import 'features/update/data/update_provider.dart';
-import 'features/update/data/update_service.dart';
-import 'features/update/presentation/update_dialog.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +30,6 @@ Future<void> main() async {
   LicenseService.registerLicenses();
   await SettingsService.init();
   await ThumbnailService.init();
-  await UpdateService.instance.cleanupAllApks();
 
   final initialCleanup =
       SettingsService.instance.settings.autoTrashCleanup.inDays;
@@ -66,17 +62,7 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
       if (settings.secureScreen) {
         ScreenKeeperService.setSecure(true);
       }
-      if (settings.autoCheckUpdate) {
-        ref.read(updateNotifierProvider.notifier).checkForUpdate(silent: true);
-      }
     });
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      UpdateService.instance.cleanupAllApks();
-    }
   }
 
   @override
@@ -155,9 +141,7 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
         data: Theme.of(context),
         duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut,
-        child: UpdateListener(
-          child: child ?? const SizedBox.shrink(),
-        ),
+        child: child ?? const SizedBox.shrink(),
       ),
     );
   }

@@ -1,11 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- OTA: downloaded APK in public Downloads folder (/storage/emulated/0/Download/) -->
-    <external-path name="ota_downloads" path="Download/" />
     <!-- App-specific external cache fallback -->
     <external-cache-path name="external_cache" path="." />
     <!-- External storage files for sharing -->
     <external-path name="external_files" path="." />
-    <!-- App-specific internal cache fallback -->
-    <cache-path name="ota_apk" path="ota/" />
 </paths>

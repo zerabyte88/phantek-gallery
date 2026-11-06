@@ -34,9 +34,6 @@ import 'package:phantek_gallery/features/player/presentation/image_viewer_screen
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
 import 'package:phantek_gallery/features/settings/presentation/widgets/developer_about_card.dart';
 import 'package:phantek_gallery/core/services/share_service.dart';
-import 'package:phantek_gallery/app/router.dart' show rootNavigatorKey;
-import 'package:phantek_gallery/features/update/data/update_service.dart';
-import 'package:phantek_gallery/features/update/presentation/update_dialog.dart';
 import 'package:phantek_gallery/core/widgets/animated_flame_title.dart';
 import 'package:phantek_gallery/core/widgets/theme_header_background.dart';
 import 'package:phantek_gallery/core/providers/settings_provider.dart';
@@ -224,7 +221,6 @@ void main() {
       expect(settings.albumGridColumns, 3);
       expect(settings.enableTrash, isTrue);
       expect(settings.hardwareAcceleration, isTrue);
-      expect(settings.autoCheckUpdate, isTrue);
       expect(settings.keepScreenOn, isFalse);
       expect(settings.defaultSort, SortOption.newest);
       expect(settings.defaultFilter, FilterOption.all);
@@ -624,44 +620,6 @@ void main() {
       expect(afterRefresh.any((e) => e.id == 'item_2'), isFalse);
     });
 
-    test(
-        'UpdateService selectBestApkAsset picks correct 64-bit and 32-bit variant',
-        () {
-      final assets = [
-        {
-          'name': 'Phantek-Gallery-armeabi-v7a.apk',
-          'browser_download_url': 'https://example.com/v7a.apk'
-        },
-        {
-          'name': 'Phantek-Gallery-arm64-v8a.apk',
-          'browser_download_url': 'https://example.com/arm64.apk'
-        },
-      ];
-
-      // On 64-bit ARM device:
-      final selected64 = UpdateService.selectBestApkAsset(assets, 'arm64-v8a');
-      expect(selected64['name'], 'Phantek-Gallery-arm64-v8a.apk');
-      expect(
-          selected64['browser_download_url'], 'https://example.com/arm64.apk');
-
-      // On 32-bit ARM device:
-      final selected32 =
-          UpdateService.selectBestApkAsset(assets, 'armeabi-v7a');
-      expect(selected32['name'], 'Phantek-Gallery-armeabi-v7a.apk');
-      expect(selected32['browser_download_url'], 'https://example.com/v7a.apk');
-
-      // Fallback to universal when specific ABI is missing:
-      final universalAssets = [
-        {
-          'name': 'app-release.apk',
-          'browser_download_url': 'https://example.com/app-release.apk'
-        },
-      ];
-      final selectedUniversal =
-          UpdateService.selectBestApkAsset(universalAssets, 'arm64-v8a');
-      expect(selectedUniversal['name'], 'app-release.apk');
-    });
-
     test('ThumbnailService clearAll wipes cache and formats size properly',
         () async {
       await ThumbnailService.instance.clearAll();
@@ -981,27 +939,6 @@ void main() {
       expect(isLandscape, isFalse);
       expect(portraitVideo.resolution, '1080x1920');
       expect(landscapeVideo.resolution, '3840x2160');
-    });
-
-    testWidgets(
-        'UpdateListener mounts with rootNavigatorKey and has valid navigator context',
-        (tester) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            navigatorKey: rootNavigatorKey,
-            home: const Scaffold(body: Text('Home Screen')),
-            builder: (context, child) => UpdateListener(
-              child: child!,
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Home Screen'), findsOneWidget);
-      expect(rootNavigatorKey.currentContext, isNotNull);
-      expect(Navigator.of(rootNavigatorKey.currentContext!), isNotNull);
     });
 
     test(
@@ -2061,19 +1998,6 @@ void main() {
             reason: '${lang.code} creatorMaintainer');
         expect(loc.openGitHubProfile.isNotEmpty, isTrue,
             reason: '${lang.code} openGitHubProfile');
-        expect(loc.newVersionAvailable.isNotEmpty, isTrue,
-            reason: '${lang.code} newVersionAvailable');
-        expect(loc.whatsNew.isNotEmpty, isTrue,
-            reason: '${lang.code} whatsNew');
-        expect(loc.downloadAndInstall.isNotEmpty, isTrue,
-            reason: '${lang.code} downloadAndInstall');
-        expect(loc.later.isNotEmpty, isTrue, reason: '${lang.code} later');
-        expect(loc.downloading.isNotEmpty, isTrue,
-            reason: '${lang.code} downloading');
-        expect(loc.alreadyUpToDate.isNotEmpty, isTrue,
-            reason: '${lang.code} alreadyUpToDate');
-        expect(loc.downloadFailed.isNotEmpty, isTrue,
-            reason: '${lang.code} downloadFailed');
       }
 
       // Verify previously missing languages produce real non-English translations

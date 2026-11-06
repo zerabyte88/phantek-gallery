@@ -24,10 +24,7 @@
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
-    <!-- OTA update: download APK from GitHub Releases -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Install downloaded APK (OTA update) -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Used for thumbnail generation via MediaStore -->
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION"
@@ -59,7 +56,7 @@
             </intent-filter>
         </activity>
 
-        <!-- FileProvider: exposes APK file URI for REQUEST_INSTALL_PACKAGES (OTA) -->
+        <!-- FileProvider: exposes file URIs for sharing media and wallpaper -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -79,11 +76,6 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
-        </intent>
-        <!-- Allow querying package installer for OTA APK install -->
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:mimeType="application/vnd.android.package-archive" />
         </intent>
     </queries>
 </manifest>

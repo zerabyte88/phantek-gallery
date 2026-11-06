@@ -79,9 +79,6 @@ class AppLocalizations {
   String get none => _t('none');
   String get allFilesAccess => _t('allFilesAccess');
   String get allFilesAccessSubtitle => _t('allFilesAccessSubtitle');
-  String get updates => _t('updates');
-  String get autoCheckUpdate => _t('autoCheckUpdate');
-  String get checkUpdateNow => _t('checkUpdateNow');
   String get about => _t('about');
   String get resetAllSettings => _t('resetAllSettings');
   String get cancel => _t('cancel');
@@ -158,8 +155,6 @@ class AppLocalizations {
   String get trashRetentionNote => _t('trashRetentionNote');
   String get noRecentlyDeleted => _t('noRecentlyDeleted');
   String get permanentlyDeleteAllTitle => _t('permanentlyDeleteAllTitle');
-  String get checkUpdateOnLaunchSubtitle => _t('checkUpdateOnLaunchSubtitle');
-  String get checkGitHubReleasesSubtitle => _t('checkGitHubReleasesSubtitle');
   String get allFilesGranted => _t('allFilesGranted');
   String get allFilesNotGranted => _t('allFilesNotGranted');
   String get supportedLanguagesCount => _t('supportedLanguagesCount');
@@ -189,13 +184,6 @@ class AppLocalizations {
   String get developerLabel => _t('developerLabel');
   String get creatorMaintainer => _t('creatorMaintainer');
   String get openGitHubProfile => _t('openGitHubProfile');
-  String get newVersionAvailable => _t('newVersionAvailable');
-  String get whatsNew => _t('whatsNew');
-  String get downloadAndInstall => _t('downloadAndInstall');
-  String get later => _t('later');
-  String get downloading => _t('downloading');
-  String get alreadyUpToDate => _t('alreadyUpToDate');
-  String get downloadFailed => _t('downloadFailed');
 
   String get browsingAndNavigation => _t('browsingAndNavigation');
   String get startupScreen => _t('startupScreen');
@@ -368,18 +356,6 @@ class AppLocalizations {
 
   String secondsCount(int count) =>
       _t('secondsCount').replaceAll('{count}', '$count');
-
-  String downloadingPercent(int percent) =>
-      _t('downloadingPercent').replaceAll('{percent}', '$percent');
-
-  String updateAvailableVersion(String version) =>
-      _t('updateAvailableVersion').replaceAll('{version}', version);
-
-  String updateCheckFailed(String error) =>
-      _t('updateCheckFailed').replaceAll('{error}', error);
-
-  String installFailed(String error) =>
-      _t('installFailed').replaceAll('{error}', error);
 }
 
 class _AppLocalizationsDelegate

@@ -62,9 +62,6 @@
 - **Theme Modes:** System default, Sunburst, Snowfall, Midnight, and Sakura themes with artistic custom headers.
 - **Languages:** Complete multilingual localization across 22 languages.
 
-### Over-The-Air (OTA) Updates
-- **GitHub Releases Integration:** Check for updates, download releases in the background, and install updates directly from within the app.
-
 ---
 
 ## Supported Formats
@@ -82,7 +79,7 @@
 | :--- | :--- |
 | **Operating System** | Android 8.0 (API 26) or higher |
 | **Architecture** | 64-bit ARM (`arm64-v8a`) |
-| **Internet Access** | Optional (used solely for OTA updates from GitHub Releases) |
+| **Internet Access** | Optional (used solely for loading external avatars in developer about card) |
 
 ---
 
@@ -120,8 +117,7 @@ build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 | `READ_EXTERNAL_STORAGE` / `WRITE_EXTERNAL_STORAGE` | Storage access on Android 12 and below |
 | `MANAGE_EXTERNAL_STORAGE` | Direct file manipulation for `.trash` recycle bin management |
 | `ACCESS_MEDIA_LOCATION` | Read location metadata from EXIF tags |
-| `INTERNET` | Check and download OTA updates via GitHub Releases |
-| `REQUEST_INSTALL_PACKAGES` | Prompt to install downloaded update APKs |
+| `INTERNET` | Optional network access for developer about card |
 
 ---
 
