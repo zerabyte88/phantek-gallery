@@ -71,40 +71,39 @@ class SettingsService {
     };
     return SettingsModel(
       themeMode: themeMode,
-      language:
-          _readEnum(_K.language, AppLanguage.values, AppLanguage.system),
-        gridColumns: _prefs.getInt(_K.gridColumns) ?? 3,
-        albumGridColumns: _prefs.getInt(_K.albumGridColumns) ?? 3,
-        showBadges: _prefs.getBool(_K.showBadges) ?? true,
-        keepScreenOn: _prefs.getBool(_K.keepScreenOn) ?? false,
-        enableTrash: _prefs.getBool(_K.enableTrash) ?? true,
-        hardwareAcceleration: _prefs.getBool(_K.hardwareAccel) ?? true,
-        autoPlayVideo: _prefs.getBool(_K.autoPlayVideo) ?? false,
-        excludedFolders: _readStringList(_K.excludedFolders),
-        defaultSort:
-            _readEnum(_K.defaultSort, SortOption.values, SortOption.newest),
-        defaultFilter:
-            _readEnum(_K.defaultFilter, FilterOption.values, FilterOption.all),
-        favoriteIds: _readStringList(_K.favoriteIds),
-        thumbnailCropStyle: _readEnum(_K.thumbnailCropStyle,
-            ThumbnailCropStyle.values, ThumbnailCropStyle.square),
-        timelineGrouping: _readEnum(_K.timelineGrouping,
-            TimelineGrouping.values, TimelineGrouping.daily),
-        startupScreen: _readEnum(
-            _K.startupScreen, StartupScreen.values, StartupScreen.all),
-        autoTrashCleanup: _readEnum(_K.autoTrashCleanup,
-            TrashCleanupInterval.values, TrashCleanupInterval.never),
-        maxBrightnessOnMedia: _prefs.getBool(_K.maxBrightnessOnMedia) ?? false,
-        slideshowInterval: _prefs.getInt(_K.slideshowInterval) ?? 3,
-        startMuted: _prefs.getBool(_K.startMuted) ?? false,
-        doubleTapSeekInterval: _prefs.getInt(_K.doubleTapSeekInterval) ?? 10,
-        videoDoubleTapAction: _readEnum(_K.videoDoubleTapAction,
-            VideoDoubleTapAction.values, VideoDoubleTapAction.smart),
-        resumeVideoPlayback: _prefs.getBool(_K.resumeVideoPlayback) ?? false,
-        filterSmallImages: _prefs.getBool(_K.filterSmallImages) ?? false,
-        showHiddenFiles: _prefs.getBool(_K.showHiddenFiles) ?? false,
-        secureScreen: _prefs.getBool(_K.secureScreen) ?? false,
-      );
+      language: _readEnum(_K.language, AppLanguage.values, AppLanguage.system),
+      gridColumns: _prefs.getInt(_K.gridColumns) ?? 3,
+      albumGridColumns: _prefs.getInt(_K.albumGridColumns) ?? 3,
+      showBadges: _prefs.getBool(_K.showBadges) ?? true,
+      keepScreenOn: _prefs.getBool(_K.keepScreenOn) ?? false,
+      enableTrash: _prefs.getBool(_K.enableTrash) ?? true,
+      hardwareAcceleration: _prefs.getBool(_K.hardwareAccel) ?? true,
+      autoPlayVideo: _prefs.getBool(_K.autoPlayVideo) ?? false,
+      excludedFolders: _readStringList(_K.excludedFolders),
+      defaultSort:
+          _readEnum(_K.defaultSort, SortOption.values, SortOption.newest),
+      defaultFilter:
+          _readEnum(_K.defaultFilter, FilterOption.values, FilterOption.all),
+      favoriteIds: _readStringList(_K.favoriteIds),
+      thumbnailCropStyle: _readEnum(_K.thumbnailCropStyle,
+          ThumbnailCropStyle.values, ThumbnailCropStyle.square),
+      timelineGrouping: _readEnum(
+          _K.timelineGrouping, TimelineGrouping.values, TimelineGrouping.daily),
+      startupScreen:
+          _readEnum(_K.startupScreen, StartupScreen.values, StartupScreen.all),
+      autoTrashCleanup: _readEnum(_K.autoTrashCleanup,
+          TrashCleanupInterval.values, TrashCleanupInterval.never),
+      maxBrightnessOnMedia: _prefs.getBool(_K.maxBrightnessOnMedia) ?? false,
+      slideshowInterval: _prefs.getInt(_K.slideshowInterval) ?? 3,
+      startMuted: _prefs.getBool(_K.startMuted) ?? false,
+      doubleTapSeekInterval: _prefs.getInt(_K.doubleTapSeekInterval) ?? 10,
+      videoDoubleTapAction: _readEnum(_K.videoDoubleTapAction,
+          VideoDoubleTapAction.values, VideoDoubleTapAction.smart),
+      resumeVideoPlayback: _prefs.getBool(_K.resumeVideoPlayback) ?? false,
+      filterSmallImages: _prefs.getBool(_K.filterSmallImages) ?? false,
+      showHiddenFiles: _prefs.getBool(_K.showHiddenFiles) ?? false,
+      secureScreen: _prefs.getBool(_K.secureScreen) ?? false,
+    );
   }
 
   // ── Write ─────────────────────────────────────────────────────────────────

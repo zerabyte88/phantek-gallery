@@ -149,8 +149,10 @@ const Map<String, String> ruTranslations = {
   'supportedLanguagesCount': 'Поддерживается 22 языка',
   'theme': 'Тема',
   'themeAmoledDesc': 'Глубокий черный для OLED-экранов',
-  'themeAmoledPureDesc': 'Глубокий черный OLED с минималистичными цинковыми поверхностями',
-  'themeCleanLightDesc': 'Четкая сланцевая эстетика со светлыми чистыми поверхностями',
+  'themeAmoledPureDesc':
+      'Глубокий черный OLED с минималистичными цинковыми поверхностями',
+  'themeCleanLightDesc':
+      'Четкая сланцевая эстетика со светлыми чистыми поверхностями',
   'themeDarkDesc': 'Элегантный угольный темный режим',
   'themeLightDesc': 'Чистая и светлая дневная палитра',
   'themeModeAmoled': 'Midnight',

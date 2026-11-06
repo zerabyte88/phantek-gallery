@@ -162,8 +162,9 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     if (mounted) {
       showFeedbackPill(
         context,
-        message:
-            count == 1 ? context.tr.deleted : context.tr.itemsDeletedCount(count),
+        message: count == 1
+            ? context.tr.deleted
+            : context.tr.itemsDeletedCount(count),
         icon: Icons.delete_outline_rounded,
       );
     }

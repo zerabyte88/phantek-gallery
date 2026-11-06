@@ -169,7 +169,8 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
             // Content
             if (widget.layers.isEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
                 child: Center(
                   child: Text(
                     'This file has only a single base layer',
@@ -263,4 +264,3 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
     );
   }
 }
-

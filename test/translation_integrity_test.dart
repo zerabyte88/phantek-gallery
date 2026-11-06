@@ -86,13 +86,14 @@ void main() {
         }
       }
 
-
       expect(missingKeysByLang, isEmpty,
           reason: 'Some languages are missing keys defined in enTranslations');
       expect(extraKeysByLang, isEmpty,
-          reason: 'Some languages have extra keys not defined in enTranslations');
+          reason:
+              'Some languages have extra keys not defined in enTranslations');
       expect(placeholderMismatches, isEmpty,
-          reason: 'Some translations have mismatched {placeholder} parameter names');
+          reason:
+              'Some translations have mismatched {placeholder} parameter names');
     });
 
     test('Check for empty translation values', () {
@@ -109,16 +110,24 @@ void main() {
           reason: 'Found empty translation values in: $emptyValues');
     });
 
-    test('Verify AppLocalizations getters and enum switches across all 22 languages', () {
+    test(
+        'Verify AppLocalizations getters and enum switches across all 22 languages',
+        () {
       for (final code in ['en', ...allLangs]) {
-        final loc = AppLocalizations(Locale(code.contains('_') ? code.split('_')[0] : code, code.contains('_') ? code.split('_')[1] : null));
+        final loc = AppLocalizations(Locale(
+            code.contains('_') ? code.split('_')[0] : code,
+            code.contains('_') ? code.split('_')[1] : null));
 
         expect(loc.aToZ.isNotEmpty, isTrue, reason: '$code aToZ');
         expect(loc.zToA.isNotEmpty, isTrue, reason: '$code zToA');
-        expect(loc.videoDoubleTapAction.isNotEmpty, isTrue, reason: '$code videoDoubleTapAction');
-        expect(loc.doubleTapActionSmart.isNotEmpty, isTrue, reason: '$code doubleTapActionSmart');
-        expect(loc.doubleTapActionSeekOnly.isNotEmpty, isTrue, reason: '$code doubleTapActionSeekOnly');
-        expect(loc.doubleTapActionZoomOnly.isNotEmpty, isTrue, reason: '$code doubleTapActionZoomOnly');
+        expect(loc.videoDoubleTapAction.isNotEmpty, isTrue,
+            reason: '$code videoDoubleTapAction');
+        expect(loc.doubleTapActionSmart.isNotEmpty, isTrue,
+            reason: '$code doubleTapActionSmart');
+        expect(loc.doubleTapActionSeekOnly.isNotEmpty, isTrue,
+            reason: '$code doubleTapActionSeekOnly');
+        expect(loc.doubleTapActionZoomOnly.isNotEmpty, isTrue,
+            reason: '$code doubleTapActionZoomOnly');
 
         for (final action in VideoDoubleTapAction.values) {
           expect(loc.videoDoubleTapActionLabel(action).isNotEmpty, isTrue,

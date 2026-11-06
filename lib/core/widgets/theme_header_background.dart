@@ -84,8 +84,7 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
                 _SakuraHeaderPainter(progress: progress),
               AppThemeMode.amoledSnowfall =>
                 _DarkHeaderPainter(progress: progress),
-              AppThemeMode.light =>
-                _LightHeaderPainter(progress: progress),
+              AppThemeMode.light => _LightHeaderPainter(progress: progress),
               _ => _AmoledHeaderPainter(progress: progress),
             };
 
@@ -1417,8 +1416,8 @@ class _DarkHeaderPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(winRect, const Radius.circular(2)),
       Paint()
-        ..color = const Color(0xFFFDE047)
-            .withValues(alpha: isDistant ? 0.70 : 0.92),
+        ..color =
+            const Color(0xFFFDE047).withValues(alpha: isDistant ? 0.70 : 0.92),
     );
 
     // Window frame
@@ -1466,8 +1465,8 @@ class _DarkHeaderPainter extends CustomPainter {
                 (isDistant ? 3.5 : 6.0) +
             (smokeProgress * (isDistant ? 4.0 : 7.0));
         final smokeX = chX + smokeSway;
-        final smokeRadius = (isDistant ? 1.6 : 2.4) +
-            smokeProgress * (isDistant ? 3.8 : 6.5);
+        final smokeRadius =
+            (isDistant ? 1.6 : 2.4) + smokeProgress * (isDistant ? 3.8 : 6.5);
         final maxAlpha = isDistant ? 0.18 : 0.30;
         final smokeAlpha = ((1.0 - smokeProgress) * maxAlpha).clamp(0.0, 1.0);
 

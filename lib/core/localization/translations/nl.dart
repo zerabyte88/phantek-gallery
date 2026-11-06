@@ -154,7 +154,8 @@ const Map<String, String> nlTranslations = {
   'theme': 'Thema',
   'themeAmoledDesc': 'Zuiver zwart voor OLED-schermen',
   'themeAmoledPureDesc': 'Pikzwart OLED met minimalistische zinkoppervlakken',
-  'themeCleanLightDesc': 'Fris leisteen-design met heldere, schone oppervlakken',
+  'themeCleanLightDesc':
+      'Fris leisteen-design met heldere, schone oppervlakken',
   'themeDarkDesc': 'Stijlvol donker thema',
   'themeLightDesc': 'Helder en fris dagthema',
   'themeModeAmoled': 'Midnight',
@@ -184,7 +185,8 @@ const Map<String, String> nlTranslations = {
   'cropAdaptive': 'Aanpasbare verhouding',
   'cropSquare': 'Vierkant (1:1)',
   'videoDoubleTapAction': 'Actie bij dubbeltikken op video',
-  'videoDoubleTapActionDesc': 'Kies wat er gebeurt bij dubbeltikken op een video',
+  'videoDoubleTapActionDesc':
+      'Kies wat er gebeurt bij dubbeltikken op een video',
   'doubleTapActionSmart': 'Slim (Spoelen aan randen, Zoomen in midden)',
   'doubleTapActionSeekOnly': 'Alleen spoelen (Terug / Vooruit)',
   'doubleTapActionZoomOnly': 'Alleen zoomen (Inzoomen / Herstellen)',

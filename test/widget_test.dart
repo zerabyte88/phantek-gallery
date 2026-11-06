@@ -515,8 +515,8 @@ void main() {
       expect(AppTheme.amoledSnowfall.scaffoldBackgroundColor, Colors.black);
       expect(AppTheme.amoledPure.scaffoldBackgroundColor, Colors.black);
       expect(AppTheme.amoledSakura.scaffoldBackgroundColor, Colors.black);
-      expect(AppTheme.cleanLight.scaffoldBackgroundColor,
-          const Color(0xFFF8FAFC));
+      expect(
+          AppTheme.cleanLight.scaffoldBackgroundColor, const Color(0xFFF8FAFC));
     });
 
     testWidgets('AMOLED Sakura theme is available by default in Theme dialog',
@@ -583,7 +583,9 @@ void main() {
       expect(find.text('MIT'), findsOneWidget);
     });
 
-    test('LicenseService registers phantek_gallery and androidx.media3 licenses', () async {
+    test(
+        'LicenseService registers phantek_gallery and androidx.media3 licenses',
+        () async {
       LicenseService.registerLicenses();
       final licenses = await LicenseRegistry.licenses.toList();
       final allPackages = licenses.expand((e) => e.packages).toSet();
@@ -1059,7 +1061,8 @@ void main() {
       }
 
       expect(isNonFatalWarning('Could not open codec hevc'), isTrue);
-      expect(isNonFatalWarning('Failed to open codec: h264_mediacodec'), isTrue);
+      expect(
+          isNonFatalWarning('Failed to open codec: h264_mediacodec'), isTrue);
       expect(isNonFatalWarning('hwdec failed, falling back to sw'), isTrue);
       expect(isNonFatalWarning('MediaCodec error encountered'), isTrue);
       expect(isNonFatalWarning('Decoder init failed for vp9'), isTrue);
@@ -1527,7 +1530,8 @@ void main() {
           AppThemeMode.cleanLight => Icons.wb_sunny_outlined,
           AppThemeMode.amoledSnowfall => Icons.ac_unit_rounded,
           AppThemeMode.light => Icons.wb_sunny_rounded,
-          AppThemeMode.system => Icons.brightness_2_outlined, // in dark theme, defaults to pure amoled
+          AppThemeMode.system => Icons
+              .brightness_2_outlined, // in dark theme, defaults to pure amoled
         };
         expect(find.byIcon(expectedIcon), findsOneWidget);
       }
@@ -2454,7 +2458,9 @@ void main() {
       expect(find.text('Slideshow'), findsOneWidget);
     });
 
-    test('Vertical video aspect ratio priority preserves portrait layout when encoded dimensions are landscape', () {
+    test(
+        'Vertical video aspect ratio priority preserves portrait layout when encoded dimensions are landscape',
+        () {
       // Many smartphone camera videos are physically 1920x1080 with 90° EXIF rotation.
       // Thumbnail aspect ratio reflects the rotated physical frame (1080 / 1920 = 0.5625).
       const encodedWidth = 1920;
@@ -2469,7 +2475,9 @@ void main() {
       expect(encodedHeight > encodedWidth, isFalse);
     });
 
-    test('Horizontal video with encoded portrait dimensions resolves to horizontal layout via thumbnail and video ratio cache', () {
+    test(
+        'Horizontal video with encoded portrait dimensions resolves to horizontal layout via thumbnail and video ratio cache',
+        () {
       // Videos like 720x1280 or 1080x1170 with 90° rotation play horizontally.
       const encodedWidth = 720;
       const encodedHeight = 1280;
@@ -2479,8 +2487,10 @@ void main() {
       const effectiveH = isRotated90or270 ? encodedWidth : encodedHeight;
       const realRatio = effectiveW / effectiveH; // 1280 / 720 = 1.777
 
-      ThumbnailService.instance.setThumbnailAspectRatio('rot_video_test', realRatio);
-      final cachedRatio = ThumbnailService.instance.getThumbnailAspectRatio('rot_video_test');
+      ThumbnailService.instance
+          .setThumbnailAspectRatio('rot_video_test', realRatio);
+      final cachedRatio =
+          ThumbnailService.instance.getThumbnailAspectRatio('rot_video_test');
       expect(cachedRatio, closeTo(1.777, 0.01));
 
       // With thumbRatio >= 0.95, it correctly resolves as horizontal (not portrait)
@@ -2528,7 +2538,8 @@ void main() {
           'Hanya Zoom (Perbesar / Normal)');
     });
 
-    test('Media viewer seamless system UI gradient and immersive mode rules', () {
+    test('Media viewer seamless system UI gradient and immersive mode rules',
+        () {
       const topGradient = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
@@ -2556,7 +2567,9 @@ void main() {
       expect(resolveMode(barsVisible: false), SystemUiMode.immersiveSticky);
     });
 
-    test('Video resume playback position rules save, retrieve, clear, and respect toggle', () async {
+    test(
+        'Video resume playback position rules save, retrieve, clear, and respect toggle',
+        () async {
       SharedPreferences.setMockInitialValues({
         'resumeVideoPlayback': true,
       });
@@ -2673,7 +2686,8 @@ void main() {
       );
     });
 
-    test('Double tap seek interval slider values step by 5 between 5s and 60s', () async {
+    test('Double tap seek interval slider values step by 5 between 5s and 60s',
+        () async {
       SharedPreferences.setMockInitialValues({
         'doubleTapSeekInterval': 10,
       });
@@ -2699,7 +2713,8 @@ void main() {
       expect(service.settings.doubleTapSeekInterval, 60);
     });
 
-    test('Slideshow interval slider values step by 1 between 1s and 10s', () async {
+    test('Slideshow interval slider values step by 1 between 1s and 10s',
+        () async {
       SharedPreferences.setMockInitialValues({
         'slideshowInterval': 3,
       });
@@ -2728,7 +2743,9 @@ void main() {
       expect(service.settings.slideshowInterval, 10);
     });
 
-    test('filterSmallImages excludes photos under 50KB while retaining videos and large photos', () {
+    test(
+        'filterSmallImages excludes photos under 50KB while retaining videos and large photos',
+        () {
       final items = [
         MediaItem(
           id: 'small_photo',
@@ -2756,12 +2773,15 @@ void main() {
         ),
       ];
 
-      final filtered = items.where((e) => e.isVideo || e.size >= 50 * 1024).toList();
-      expect(filtered.map((e) => e.id).toList(), ['large_photo', 'small_video']);
+      final filtered =
+          items.where((e) => e.isVideo || e.size >= 50 * 1024).toList();
+      expect(
+          filtered.map((e) => e.id).toList(), ['large_photo', 'small_video']);
       expect(items.length, 3);
     });
 
-    testWidgets('GalleryScreen grid and slideshow respect filterSmallImages', (tester) async {
+    testWidgets('GalleryScreen grid and slideshow respect filterSmallImages',
+        (tester) async {
       final mockItems = [
         MediaItem(
           id: 'photo_small',
@@ -2789,7 +2809,8 @@ void main() {
                 const SettingsModel(filterSmallImages: true),
               ),
             ),
-            mediaListProvider.overrideWith(() => _SpecificMockMediaNotifier(mockItems)),
+            mediaListProvider
+                .overrideWith(() => _SpecificMockMediaNotifier(mockItems)),
           ],
           child: const MaterialApp(
             localizationsDelegates: [
@@ -2839,7 +2860,8 @@ void main() {
                 const SettingsModel(filterSmallImages: true),
               ),
             ),
-            mediaListProvider.overrideWith(() => _SpecificMockMediaNotifier(mockItems)),
+            mediaListProvider
+                .overrideWith(() => _SpecificMockMediaNotifier(mockItems)),
           ],
           child: const MaterialApp(
             localizationsDelegates: [

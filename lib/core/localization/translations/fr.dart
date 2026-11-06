@@ -154,7 +154,8 @@ const Map<String, String> frTranslations = {
   'theme': 'Thème',
   'themeAmoledDesc': 'Noir absolu pour écrans OLED',
   'themeAmoledPureDesc': 'Noir absolu OLED avec surfaces en zinc minimalistes',
-  'themeCleanLightDesc': 'Esthétique ardoise épurée avec surfaces claires et lumineuses',
+  'themeCleanLightDesc':
+      'Esthétique ardoise épurée avec surfaces claires et lumineuses',
   'themeDarkDesc': 'Mode sombre anthracite élégant',
   'themeLightDesc': 'Palette diurne épurée et lumineuse',
   'themeModeAmoled': 'Midnight',
@@ -183,7 +184,8 @@ const Map<String, String> frTranslations = {
   'cropAdaptive': 'Ratio adaptatif',
   'cropSquare': 'Carré (1:1)',
   'videoDoubleTapAction': 'Action du double appui vidéo',
-  'videoDoubleTapActionDesc': 'Choisir l\'action lors d\'un double appui sur une vidéo',
+  'videoDoubleTapActionDesc':
+      'Choisir l\'action lors d\'un double appui sur une vidéo',
   'doubleTapActionSmart': 'Intelligent (Avancer sur les bords, Zoom au centre)',
   'doubleTapActionSeekOnly': 'Recherche uniquement (Reculer / Avancer)',
   'doubleTapActionZoomOnly': 'Zoom uniquement (Zoomer / Réinitialiser)',

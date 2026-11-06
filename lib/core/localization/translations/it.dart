@@ -158,8 +158,10 @@ const Map<String, String> itTranslations = {
   'supportedLanguagesCount': '22 lingue supportate',
   'theme': 'Tema',
   'themeAmoledDesc': 'Nero assoluto per display OLED',
-  'themeAmoledPureDesc': 'Nero assoluto OLED con superfici in zinco minimaliste',
-  'themeCleanLightDesc': 'Estetica ardesia nitida con superfici chiare e pulite',
+  'themeAmoledPureDesc':
+      'Nero assoluto OLED con superfici in zinco minimaliste',
+  'themeCleanLightDesc':
+      'Estetica ardesia nitida con superfici chiare e pulite',
   'themeDarkDesc': 'Modalità scura antracite elegante',
   'themeLightDesc': 'Tavolozza diurna chiara e luminosa',
   'themeModeAmoled': 'Midnight',

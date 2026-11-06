@@ -156,8 +156,10 @@ const Map<String, String> deTranslations = {
   'supportedLanguagesCount': '22 Sprachen unterstützt',
   'theme': 'Design',
   'themeAmoledDesc': 'Tiefschwarz für OLED-Displays',
-  'themeAmoledPureDesc': 'Tiefschwarzes OLED mit minimalistischen Zink-Oberflächen',
-  'themeCleanLightDesc': 'Klares Schiefer-Design mit hellen, sauberen Oberflächen',
+  'themeAmoledPureDesc':
+      'Tiefschwarzes OLED mit minimalistischen Zink-Oberflächen',
+  'themeCleanLightDesc':
+      'Klares Schiefer-Design mit hellen, sauberen Oberflächen',
   'themeDarkDesc': 'Elegantes anthrazitfarbenes Dunkel-Design',
   'themeLightDesc': 'Helles, klares Tages-Design',
   'themeModeAmoled': 'Midnight',

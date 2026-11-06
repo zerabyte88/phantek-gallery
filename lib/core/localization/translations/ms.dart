@@ -159,7 +159,8 @@ const Map<String, String> msTranslations = {
   'theme': 'Tema',
   'themeAmoledDesc': 'Langit malam bertabur bintang dan kilauan meteor',
   'themeAmoledPureDesc': 'Hitam pekat OLED dengan aksen zink minimalis',
-  'themeCleanLightDesc': 'Estetika batu loh bersih dengan latar terang minimalis',
+  'themeCleanLightDesc':
+      'Estetika batu loh bersih dengan latar terang minimalis',
   'themeDarkDesc': 'Suasana nyaman dengan hembusan salji Nordik',
   'themeLightDesc': 'Cerah hangat dengan pancaran fajar keemasan',
   'themeModeAmoled': 'Midnight',

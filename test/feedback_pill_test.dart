@@ -3,7 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:phantek_gallery/core/widgets/feedback_pill.dart';
 
 void main() {
-  testWidgets('showFeedbackPill displays message, icon, and dismisses automatically',
+  testWidgets(
+      'showFeedbackPill displays message, icon, and dismisses automatically',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(

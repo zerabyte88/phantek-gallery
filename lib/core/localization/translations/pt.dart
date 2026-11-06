@@ -156,8 +156,10 @@ const Map<String, String> ptTranslations = {
   'supportedLanguagesCount': '22 idiomas suportados',
   'theme': 'Tema',
   'themeAmoledDesc': 'Preto puro para telas OLED',
-  'themeAmoledPureDesc': 'Preto absoluto OLED com superfícies de zinco minimalistas',
-  'themeCleanLightDesc': 'Estética de ardósia nítida com superfícies claras e limpas',
+  'themeAmoledPureDesc':
+      'Preto absoluto OLED com superfícies de zinco minimalistas',
+  'themeCleanLightDesc':
+      'Estética de ardósia nítida com superfícies claras e limpas',
   'themeDarkDesc': 'Modo escuro carvão elegante',
   'themeLightDesc': 'Paleta diurna limpa e brilhante',
   'themeModeAmoled': 'Midnight',
@@ -186,7 +188,8 @@ const Map<String, String> ptTranslations = {
   'cropAdaptive': 'Proporção adaptável',
   'cropSquare': 'Quadrado (1:1)',
   'videoDoubleTapAction': 'Ação de toque duplo no vídeo',
-  'videoDoubleTapActionDesc': 'Escolha o que acontece ao tocar duas vezes num vídeo',
+  'videoDoubleTapActionDesc':
+      'Escolha o que acontece ao tocar duas vezes num vídeo',
   'doubleTapActionSmart': 'Inteligente (Avançar nas bordas, Zoom no centro)',
   'doubleTapActionSeekOnly': 'Apenas avançar (Retroceder / Avançar)',
   'doubleTapActionZoomOnly': 'Apenas zoom (Aproximar / Redefinir)',

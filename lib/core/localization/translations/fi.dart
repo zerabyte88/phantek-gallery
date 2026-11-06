@@ -155,7 +155,8 @@ const Map<String, String> fiTranslations = {
   'theme': 'Teema',
   'themeAmoledDesc': 'Täysin musta OLED-näytöille',
   'themeAmoledPureDesc': 'Syvänmusta OLED minimalistisilla sinkkipinnoilla',
-  'themeCleanLightDesc': 'Raikas liuskekivityyli puhtailla kirkkailla pinnoilla',
+  'themeCleanLightDesc':
+      'Raikas liuskekivityyli puhtailla kirkkailla pinnoilla',
   'themeDarkDesc': 'Tyylikäs tumma tila',
   'themeLightDesc': 'Puhdas ja kirkas päiväteema',
   'themeModeAmoled': 'Midnight',
@@ -184,7 +185,8 @@ const Map<String, String> fiTranslations = {
   'cropAdaptive': 'Mukautuva suhde',
   'cropSquare': 'Neliö (1:1)',
   'videoDoubleTapAction': 'Videon kaksoisnapautuksen toiminto',
-  'videoDoubleTapActionDesc': 'Valitse mitä tapahtuu videota kaksoisnapautettaessa',
+  'videoDoubleTapActionDesc':
+      'Valitse mitä tapahtuu videota kaksoisnapautettaessa',
   'doubleTapActionSmart': 'Älykäs (Kelaa reunoilta, Zoomaa keskeltä)',
   'doubleTapActionSeekOnly': 'Vain kelaus (Kelaa taakse / eteen)',
   'doubleTapActionZoomOnly': 'Vain zoomaus (Zoomaa / Palauta)',
