@@ -63,32 +63,35 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build APK (ARM 64-bit)
-        run: flutter build apk --release --split-per-abi --target-platform android-arm64
+      - name: Build 64-bit Release APK (Single ARM64 Binary)
+        run: flutter build apk --release --target-platform android-arm64 --android-skip-build-dependency-validation
 
-      - name: Extract Version and Organize APK Artifacts
+      - name: Organize Single APK Artifact
         id: extract_version
         run: |
           VERSION=$(grep '^version: ' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
           echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           cd build/app/outputs/flutter-apk/
+          APK_NAME="Phantek-Gallery-v${VERSION}-arm64-v8a.apk"
           if [ -f "app-arm64-v8a-release.apk" ]; then
-            cp app-arm64-v8a-release.apk "Phantek-Gallery-arm64-v8a-v${VERSION}.apk"
-            mv app-arm64-v8a-release.apk Phantek-Gallery-arm64-v8a.apk
+            mv app-arm64-v8a-release.apk "$APK_NAME"
           elif [ -f "app-release.apk" ]; then
-            cp app-release.apk "Phantek-Gallery-arm64-v8a-v${VERSION}.apk"
-            mv app-release.apk Phantek-Gallery-arm64-v8a.apk
+            mv app-release.apk "$APK_NAME"
           fi
+          sha256sum "$APK_NAME" > "${APK_NAME}.sha256"
+          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
           rm -f app-*.apk *x86*
-          echo "Hasil build APK:"
-          ls -la *.apk
+          echo "Artifact yang dihasilkan (single APK):"
+          ls -la "$APK_NAME" "${APK_NAME}.sha256"
 
-      - name: Upload APK Artifacts
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: phantek-gallery-arm64-v8a
-          path: build/app/outputs/flutter-apk/*.apk
+          name: ${{ steps.extract_version.outputs.apk_name }}
+          path: |
+            build/app/outputs/flutter-apk/${{ steps.extract_version.outputs.apk_name }}
+            build/app/outputs/flutter-apk/${{ steps.extract_version.outputs.apk_name }}.sha256
           retention-days: 30
           if-no-files-found: error
 
@@ -99,8 +102,8 @@ jobs:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.extract_version.outputs.version) }}
           name: ${{ format('Phantek Gallery v{0}', steps.extract_version.outputs.version) }}
           files: |
-            build/app/outputs/flutter-apk/Phantek-Gallery-arm64-v8a-v*.apk
-            build/app/outputs/flutter-apk/Phantek-Gallery-arm64-v8a.apk
+            build/app/outputs/flutter-apk/${{ steps.extract_version.outputs.apk_name }}
+            build/app/outputs/flutter-apk/${{ steps.extract_version.outputs.apk_name }}.sha256
           generate_release_notes: true
           draft: false
           prerelease: false

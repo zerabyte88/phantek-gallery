@@ -5,11 +5,11 @@
 
   **Fast, privacy-focused offline photo and video gallery for Android with PSD layer support.**
 
-  [![Version](https://img.shields.io/badge/Version-v2.14.0-3b82f6?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
-  [![Platform](https://img.shields.io/badge/Platform-Android%208.0+-10b981?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
-  [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
-  [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20ExoPlayer-6366f1?style=flat-square)](https://developer.android.com/media/media3)
-  [![License](https://img.shields.io/badge/License-MIT-f59e0b?style=flat-square&logo=open-source-initiative&logoColor=white)](LICENSE)
+  [![Version](https://img.shields.io/badge/Version-v2.14.0-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20ExoPlayer-6366f1.svg?style=flat-square)](https://developer.android.com/media/media3)
+  [![License](https://img.shields.io/badge/License-MIT-f59e0b.svg?style=flat-square&logo=open-source-initiative&logoColor=white)](LICENSE)
 
   [Download APK](https://github.com/zerabyte88/phantek-gallery/releases/latest) • [Features](#features) • [Supported Formats](#supported-formats) • [Tech Stack](#tech-stack) • [Permissions](#permissions) • [Build](#build-from-source) • [License](#license)
 </div>
@@ -96,11 +96,11 @@ cd phantek-gallery
 # Install dependencies
 flutter pub get
 
-# Build release APK (split per ABI)
-flutter build apk --release --split-per-abi
+# Build 64-bit release APK
+flutter build apk --release --target-platform android-arm64
 ```
 
-Compiled binary (64-bit ARM) : `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
+Compiled binary (64-bit ARM) : `build/app/outputs/flutter-apk/app-release.apk`
 
 ---
 
