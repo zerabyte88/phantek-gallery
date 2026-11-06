@@ -81,6 +81,7 @@ class MediaScannerService {
       '.flv' => 'video/x-flv',
       '.ts' => 'video/mp2t',
       '.wmv' => 'video/x-ms-wmv',
+      '.psd' => 'image/vnd.adobe.photoshop',
       _ => isVideo ? 'video/${ext.replaceFirst('.', '')}' : null,
     };
   }

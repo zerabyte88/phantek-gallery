@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'media_scanner_service.dart';
+import 'psd_service.dart';
 
 /// Queued thumbnail fetch request for uncached items.
 class _ThumbnailRequest {
@@ -545,7 +546,17 @@ class ThumbnailService {
                 req.filePath!.toLowerCase().endsWith('.mp4')));
 
     try {
-      if (isVideo) {
+      if (req.filePath != null && PsdService.isPsd(req.filePath!)) {
+        try {
+          bytes = await PsdService.instance.decodeThumbnail(
+            req.filePath!,
+            maxDimension: _thumbnailSize,
+          );
+        } catch (e) {
+          debugPrint(
+              '[ThumbnailService] Error decoding PSD thumbnail for ${req.filePath}: $e');
+        }
+      } else if (isVideo) {
         String? targetPath = req.filePath;
         if (targetPath == null || targetPath.isEmpty) {
           final entity =

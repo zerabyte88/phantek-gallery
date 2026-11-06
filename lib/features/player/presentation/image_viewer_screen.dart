@@ -15,9 +15,11 @@ import '../../../core/services/permission_service.dart';
 import '../../../core/services/screen_keeper_service.dart';
 import '../../../core/services/share_service.dart';
 import '../../../core/services/thumbnail_service.dart';
+import '../../../core/services/psd_service.dart';
 import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/media_info_sheet.dart';
+import 'widgets/psd_layer_sheet.dart';
 import 'widgets/rename_dialog.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
 import '../../../core/widgets/feedback_pill.dart';
@@ -165,6 +167,74 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   bool _isSlideshowPlaying = false;
   bool _didSetMaxBrightness = false;
 
+  final Map<String, List<PsdLayerInfo>> _psdLayersCache = {};
+  final Map<String, Set<int>> _psdHiddenLayers = {};
+  final Map<String, Uint8List> _psdRenderedBytes = {};
+  final Map<String, bool> _psdRendering = {};
+
+  void _loadPsdDataIfNeeded(String path) {
+    if (!PsdService.isPsd(path)) return;
+
+    if (!_psdLayersCache.containsKey(path)) {
+      PsdService.instance.getLayers(path).then((layers) {
+        if (mounted && layers.isNotEmpty) {
+          setState(() {
+            _psdLayersCache[path] = layers;
+          });
+        }
+      });
+    }
+
+    if (!_psdRenderedBytes.containsKey(path) && _psdRendering[path] != true) {
+      _psdRendering[path] = true;
+      PsdService.instance
+          .renderWithLayers(
+        path,
+        hiddenLayerIndices: _psdHiddenLayers[path] ?? {},
+      )
+          .then((bytes) {
+        if (mounted) {
+          setState(() {
+            if (bytes != null) {
+              _psdRenderedBytes[path] = bytes;
+            }
+            _psdRendering[path] = false;
+          });
+        }
+      });
+    }
+  }
+
+  void _openPsdLayerSheet(MediaItem item) {
+    final path = item.path;
+    final layers = _psdLayersCache[path] ?? [];
+    final hidden = _psdHiddenLayers[path] ?? <int>{};
+
+    PsdLayerSheet.show(
+      context: context,
+      layers: layers,
+      hiddenIndices: hidden,
+      onVisibilityChanged: (newHidden) async {
+        setState(() {
+          _psdHiddenLayers[path] = Set<int>.from(newHidden);
+          _psdRendering[path] = true;
+        });
+        final bytes = await PsdService.instance.renderWithLayers(
+          path,
+          hiddenLayerIndices: newHidden,
+        );
+        if (mounted) {
+          setState(() {
+            if (bytes != null) {
+              _psdRenderedBytes[path] = bytes;
+            }
+            _psdRendering[path] = false;
+          });
+        }
+      },
+    );
+  }
+
   void _startSlideshow() {
     setState(() {
       _isSlideshowPlaying = true;
@@ -252,6 +322,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         _activeMediaNotifier = ref.read(activeViewerMediaIdProvider.notifier);
       }
       _precacheAdjacent(_current);
+      if (widget.items.isNotEmpty && _current < widget.items.length) {
+        _loadPsdDataIfNeeded(widget.items[_current].path);
+      }
       if (widget.startSlideshow && mounted) {
         _startSlideshow();
       }
@@ -268,7 +341,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       final target = index + offset;
       if (target >= 0 && target < widget.items.length) {
         final item = widget.items[target];
-        if (item.isVideo) continue;
+        if (item.isVideo || PsdService.isPsd(item.path)) continue;
         final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
         if (mem != null) {
           precacheImage(MemoryImage(mem), context);
@@ -465,6 +538,39 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         ),
       );
     }
+
+    if (PsdService.isPsd(it.path)) {
+      _loadPsdDataIfNeeded(it.path);
+      final rendered = _psdRenderedBytes[it.path];
+      Widget content;
+      if (rendered != null) {
+        content = Image(
+          image: MemoryImage(rendered),
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
+        );
+      } else {
+        content = _thumb(it.id, it.path);
+      }
+
+      final ar = (it.width != null &&
+              it.height != null &&
+              it.width! > 0 &&
+              it.height! > 0)
+          ? (it.width! / it.height!)
+          : ThumbnailService.instance.getThumbnailAspectRatio(it.id);
+
+      if (ar != null && ar > 0) {
+        content = AspectRatio(
+          aspectRatio: ar,
+          child: content,
+        );
+      }
+
+      return content;
+    }
+
     Widget content = Image(
       image: (isCurrent && _isDeepZoomed)
           ? displayImage(it.path, maxDimension: 4096)
@@ -896,6 +1002,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           _transformationController.value = Matrix4.identity();
                         });
                         _precacheAdjacent(i);
+                        if (widget.items.isNotEmpty &&
+                            i < widget.items.length) {
+                          _loadPsdDataIfNeeded(widget.items[i].path);
+                        }
                       },
                       physics: (_isCurrentlyZoomed ||
                               _isPinching ||
@@ -1065,6 +1175,19 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 ],
                               ),
                             ),
+                            if (!widget.isTrash && PsdService.isPsd(item.path))
+                              IconButton(
+                                icon: Icon(
+                                  (_psdHiddenLayers[item.path]?.isNotEmpty ??
+                                          false)
+                                      ? Icons.layers
+                                      : Icons.layers_outlined,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                                tooltip: 'Layers',
+                                onPressed: () => _openPsdLayerSheet(item),
+                              ),
                             if (!widget.isTrash)
                               IconButton(
                                 icon: const Icon(Icons.info_outline,
@@ -1106,7 +1229,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         child: widget.isTrash
                             ? Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceAround,
                                 children: [
                                   _ViewerActionButton(
                                     icon: const Icon(Icons.restore,
@@ -1130,7 +1254,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 ],
                               )
                             : Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceAround,
                                 children: [
                                   _ViewerActionButton(
                                     icon: const Icon(Icons.share_outlined,
@@ -1144,7 +1269,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                     builder: (context, ref, _) {
                                       final isFav = ref.watch(
                                         settingsNotifierProvider.select(
-                                          (s) => s.favoriteIds.contains(item.id),
+                                          (s) =>
+                                              s.favoriteIds.contains(item.id),
                                         ),
                                       );
                                       return _ViewerActionButton(
@@ -1194,7 +1320,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(14),
                                     ),
-                                    constraints: const BoxConstraints(minWidth: 130, maxWidth: 195),
+                                    constraints: const BoxConstraints(
+                                        minWidth: 130, maxWidth: 195),
                                     onSelected: (value) async {
                                       if (value == 'slideshow') {
                                         if (_isSlideshowPlaying) {
@@ -1219,12 +1346,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       PopupMenuItem(
                                         value: 'slideshow',
                                         height: 40,
-                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 14),
                                         child: Row(
                                           children: [
                                             Icon(
                                               _isSlideshowPlaying
-                                                  ? Icons.pause_circle_outline_rounded
+                                                  ? Icons
+                                                      .pause_circle_outline_rounded
                                                   : Icons.slideshow_rounded,
                                               size: 18,
                                               color: Colors.white,
@@ -1244,7 +1373,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       PopupMenuItem(
                                         value: 'rename',
                                         height: 40,
-                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 14),
                                         child: Row(
                                           children: [
                                             const Icon(Icons.edit_outlined,
@@ -1262,7 +1392,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       PopupMenuItem(
                                         value: 'wallpaper',
                                         height: 40,
-                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 14),
                                         child: Row(
                                           children: [
                                             const Icon(Icons.wallpaper_outlined,
