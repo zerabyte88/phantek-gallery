@@ -1,114 +1,70 @@
-# Phantek Gallery
-
-<p align="center">
-  <img src="assets/app_icon.png" alt="Phantek Gallery Icon" width="108" style="box-shadow: 0 6px 20px rgba(0,0,0,0.25);" />
-</p>
-
 <div align="center">
-  <img src="https://img.shields.io/static/v1?label=Status&message=pre-release&color=orange&style=flat-square&labelColor=0f172a" alt="Status" />
-  <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=flat-square&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
-  <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=flat-square&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.14.0&color=2563eb&style=flat-square&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=MIT&color=2563eb&style=flat-square&logo=github&logoColor=white&labelColor=0f172a" alt="License" /></a>
+  <img src="assets/app_icon.png" alt="Phantek Gallery" width="120" />
 
-  <p>
-    <a href="https://github.com/zerabyte88/phantek-gallery/releases/latest"><b>Download APK</b></a> •
-    <a href="#overview">Overview</a> •
-    <a href="#features">Features</a> •
-    <a href="#supported-formats">Formats</a> •
-    <a href="#tech-stack">Tech Stack</a> •
-    <a href="#building-from-source">Build</a>
-  </p>
+  # Phantek - Gallery
+
+  **Fast, privacy-focused offline photo and video gallery for Android with PSD layer support.**
+
+  [![Version](https://img.shields.io/badge/Version-v2.14.0-3b82f6?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Platform](https://img.shields.io/badge/Platform-Android%208.0+-10b981?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20ExoPlayer-6366f1?style=flat-square)](https://developer.android.com/media/media3)
+  [![License](https://img.shields.io/badge/License-MIT-f59e0b?style=flat-square&logo=open-source-initiative&logoColor=white)](LICENSE)
+
+  [Download APK](https://github.com/zerabyte88/phantek-gallery/releases/latest) • [Features](#features) • [Supported Formats](#supported-formats) • [Tech Stack](#tech-stack) • [Permissions](#permissions) • [Build](#build-from-source) • [License](#license)
 </div>
-
----
-
-## Overview
-
-**Phantek Gallery** is a fast, offline photo and video gallery for Android. Built with Flutter and powered by the video_player engine (AndroidX Media3 / ExoPlayer), it offers smooth media viewing, responsive gestures, and complete privacy with zero telemetry, tracking, or mandatory internet connectivity.
-
-> [!WARNING]
-> **Active Development & Pre-Release Notice**:  
-> Phantek Gallery is currently under active development and in pre-release stage. You may encounter bugs, instability, or unexpected behavior.
 
 ---
 
 ## Features
 
-### Media Organization & Browsing
-- **Timeline & Albums:** Browse your media chronologically or organized by on-device folders (Camera, Screenshots, Downloads, etc.).
-- **Timeline Grouping & Crop Styles:** Choose between Continuous, Daily, or Monthly date-header groupings, and toggle between Square and Adaptive thumbnail cropping.
-- **Startup Screen:** Configure your default landing tab (All Media, Photos, Videos, or Albums).
-- **Grid Customization:** Adjust grid layout between 2, 3, 4, or 5 columns independently for photos and albums.
-- **Filtering & File Management:** Filter out small/junk images (< 50 KB), toggle display of hidden and `.nomedia` files, pin items to Favorites, and exclude private or system folders.
-
-### Photo Viewer
-- **Fluid Gestures:** Pinch-to-zoom with elastic boundaries, double-tap to zoom, horizontal swipe between items, and swipe down to dismiss.
-- **Slideshow & Display:** Automated slideshow with configurable duration (1–10 seconds), optional Max Brightness on media open, and Keep Screen Awake.
-- **Quick Actions:** Share, favorite, view EXIF details, set as wallpaper, rename, or delete directly from the viewer.
-
-### Video Player (AndroidX Media3 ExoPlayer)
-- **Wide Format Support:** Hardware-accelerated playback for MP4, MKV, WebM, and MOV using native AndroidX Media3 / ExoPlayer.
-- **Playback Controls:** Selectable playback speed (0.25x to 2.0x), customizable double-tap seek intervals (5s, 10s, 15s, 30s), resume playback position, start muted option, and single loop toggle.
-- **Timeline Scrubbing:** Precise seekbar with real-time frame previews.
-- **Video Zoom:** Pinch-to-zoom up to 5x with pan support and quick reset.
-
-### Privacy & Storage
-- **Secure Screen:** Enforce Android `FLAG_SECURE` to block screenshots and screen recordings while blurring app switch preview.
-- **Recycle Bin & Auto-Cleanup:** Staged deletion in `.trash` with optional automated cleanup after 7, 14, or 30 days, or manual batch restore/delete.
-- **Cache Management:** One-tap thumbnail cache clearing with real-time cache size metrics.
-
-### Theming & Internationalization
-- **Theme Modes:** System default, Sunburst, Snowfall, Midnight, and Sakura themes with artistic custom headers.
-- **Languages:** Complete multilingual localization across 22 languages.
+- **Ultra-Fast Media Grid** : Native hardware thumbnail acceleration via `MediaStore.loadThumbnail` (1–2ms), in-memory cache indexing, and isolate-backed decoding for smooth 120Hz scrolling.
+- **PSD Layer Viewer** : Full Adobe Photoshop (`.psd`) support with seekable embedded JPEG extraction (<1ms) and interactive layer visibility toggle sheet.
+- **Hardware Video Playback** : Powered by AndroidX Media3 / ExoPlayer with double-tap seek, smart zoom, gesture controls for brightness and volume, and playback position resume.
+- **Recycle Bin & Safe Deletion** : Staged `.trash` bin with configurable auto-purge (7, 14, 30 days or never) and batch restore/permanent delete.
+- **Privacy & Security** : Enforce Android `FLAG_SECURE` to block screenshots, screen recordings, and blur recent apps switcher previews.
+- **EXIF & Media Inspector** : Detailed technical metadata for photos (ISO, aperture, focal length, resolution) and videos (bitrate, fps, codec, channels).
+- **Custom Visual Themes** : 6 hand-crafted visual themes (*Dark Mode*, *Light Mode*, *Snowfall*, *Clean Light*, *Midnight*, *Sakura*) with dynamic artistic headers.
+- **Multilingual Support** : Complete localization across 22 languages with instant runtime switching without app restart.
+- **100% Offline & Private** : Zero cloud sync, zero telemetry, zero analytics, and zero unsolicited network requests.
 
 ---
 
 ## Supported Formats
 
-| Type | Formats / Containers | Notes |
-| :--- | :--- | :--- |
-| **Photos** | `.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, `.gif`, `.bmp` | EXIF metadata extraction and downsampled rendering |
-| **Videos** | `.mp4`, `.mkv`, `.mov`, `.webm` | H.264, H.265/HEVC, and VP9 with hardware acceleration |
+<div align="center">
 
----
+| Type | Container / Extension | Codec / Details | Notes |
+| :---: | :---: | :---: | :---: |
+| **Photos** | `.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, `.bmp` | Standard image decoders | EXIF metadata extraction and downsampled caching |
+| **Animation** | `.gif` | Multi-frame decoder | Frame-by-frame animation playback |
+| **Design** | `.psd` | Adobe Photoshop Document | Seekable embedded JPEG preview + per-layer toggle |
+| **Videos** | `.mp4`, `.mkv`, `.mov`, `.webm` | H.264, H.265 (HEVC), VP9, AV1 | Hardware accelerated via AndroidX Media3 / ExoPlayer |
 
-## System Requirements
-
-| Specification | Requirement |
-| :--- | :--- |
-| **Operating System** | Android 8.0 (API 26) or higher |
-| **Architecture** | 64-bit ARM (`arm64-v8a`) |
-| **Internet Access** | Optional (used solely for loading external avatars in developer about card) |
+</div>
 
 ---
 
 ## Tech Stack
 
-- **Framework:** [Flutter](https://flutter.dev) (Dart 3.x)
-- **State Management:** [Flutter Riverpod](https://riverpod.dev)
-- **Video Engine:** [video_player](https://pub.dev/packages/video_player) (AndroidX Media3 / ExoPlayer, BSD-3-Clause)
-- **Media Scanning:** `photo_manager` & `permission_handler`
-- **Preferences:** `shared_preferences`
+<div align="center">
 
----
+| Layer | Package / Tool | Role |
+| :---: | :---: | :---: |
+| **Framework** | Flutter (Dart SDK `^3.5`) | UI rendering, animations, gestures, and localization |
+| **State Management** | `flutter_riverpod` (`^2.5.1`) | Reactive state management and dependency injection |
+| **Video Engine** | `video_player` (`^2.9.2`) | AndroidX Media3 / ExoPlayer hardware video playback |
+| **Media Scanning** | `photo_manager`, `permission_handler` | Scoped storage media queries and permission handling |
+| **Native Bridge** | Kotlin MethodChannels | Android `FLAG_SECURE`, MediaStore thumbnail loader, FileProvider |
+| **Storage & Caching** | `shared_preferences`, `path_provider` | Key-value settings persistence and thumbnail disk caching |
 
-## Building from Source
-
-Phantek Gallery compiles directly with Flutter and AndroidX Media3. The release build targets 64-bit ARM architectures.
-
-```bash
-flutter build apk --release --split-per-abi --target-platform android-arm64
-```
-
-The compiled release APK will be located at:
-```
-build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-```
+</div>
 
 ---
 
 ## Permissions
+
+<div align="center">
 
 | Permission | Purpose |
 | :--- | :--- |
@@ -116,16 +72,40 @@ build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 | `READ_MEDIA_VISUAL_USER_SELECTED` | User-selected partial media access on Android 14+ (API 34+) |
 | `READ_EXTERNAL_STORAGE` / `WRITE_EXTERNAL_STORAGE` | Storage access on Android 12 and below |
 | `MANAGE_EXTERNAL_STORAGE` | Direct file manipulation for `.trash` recycle bin management |
-| `ACCESS_MEDIA_LOCATION` | Read location metadata from EXIF tags |
-| `INTERNET` | Optional network access for developer about card |
+| `ACCESS_MEDIA_LOCATION` | Read geographic and EXIF location metadata from camera photos |
+| `INTERNET` | Optional network access for loading developer avatar in About card |
+
+</div>
+
+---
+
+## Build from Source
+
+### Prerequisites
+
+- Flutter SDK `^3.5`
+- Android SDK & Java 17+
+
+### Steps
+
+```bash
+# Clone repository
+git clone https://github.com/zerabyte88/phantek-gallery.git
+cd phantek-gallery
+
+# Install dependencies
+flutter pub get
+
+# Build release APK (split per ABI)
+flutter build apk --release --split-per-abi
+```
+
+Compiled binary (64-bit ARM) : `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for complete details.
+This project is open-source software licensed under the **[MIT License](LICENSE)**.
 
-### Third-Party Licenses & Acknowledgments
-
-- **video_player & AndroidX Media3:** Video playback is powered by Flutter's official [video_player](https://pub.dev/packages/video_player) plugin under the BSD-3-Clause License, utilizing Google's AndroidX Media3 / ExoPlayer (Apache 2.0).
-- **Flutter & Dependencies:** Third-party Dart and Flutter packages are licensed under their respective open-source licenses (BSD-3-Clause, MIT, Apache 2.0). Complete open-source licenses can be inspected directly inside the application under **Settings > About > License**.
+Third-party components (AndroidX Media3, Flutter, and bundled plugins) are subject to their respective open-source licenses (Apache 2.0, BSD, MIT) and can be inspected in-app under **Settings > About > License**.
