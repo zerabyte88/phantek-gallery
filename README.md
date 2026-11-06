@@ -8,8 +8,8 @@
   <img src="https://img.shields.io/static/v1?label=Status&message=pre-release&color=orange&style=flat-square&labelColor=0f172a" alt="Status" />
   <img src="https://img.shields.io/static/v1?label=Platform&message=Android&color=059669&style=flat-square&logo=android&logoColor=white&labelColor=0f172a" alt="Platform" />
   <img src="https://img.shields.io/static/v1?label=Architecture&message=arm64-v8a&color=7c3aed&style=flat-square&logo=arm&logoColor=white&labelColor=0f172a" alt="Architecture" />
-  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.12.1&color=2563eb&style=flat-square&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=GPLv3&color=475569&style=flat-square&logo=gnu&logoColor=white&labelColor=0f172a" alt="License" /></a>
+  <a href="https://github.com/zerabyte88/phantek-gallery/releases"><img src="https://img.shields.io/static/v1?label=Version&message=v2.13.0&color=2563eb&style=flat-square&logo=github&logoColor=white&labelColor=0f172a" alt="Version" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/static/v1?label=License&message=MIT&color=2563eb&style=flat-square&logo=github&logoColor=white&labelColor=0f172a" alt="License" /></a>
 
   <p>
     <a href="https://github.com/zerabyte88/phantek-gallery/releases/latest"><b>Download APK</b></a> •
@@ -25,7 +25,7 @@
 
 ## Overview
 
-**Phantek Gallery** is a fast, offline photo and video gallery for Android. Built with Flutter and powered by the native MPV engine via MediaKit, it offers smooth media viewing, responsive gestures, and complete privacy with zero telemetry, tracking, or mandatory internet connectivity.
+**Phantek Gallery** is a fast, offline photo and video gallery for Android. Built with Flutter and powered by the video_player engine (AndroidX Media3 / ExoPlayer), it offers smooth media viewing, responsive gestures, and complete privacy with zero telemetry, tracking, or mandatory internet connectivity.
 
 > [!WARNING]
 > **Active Development & Pre-Release Notice**:  
@@ -47,8 +47,8 @@
 - **Slideshow & Display:** Automated slideshow with configurable duration (1–10 seconds), optional Max Brightness on media open, and Keep Screen Awake.
 - **Quick Actions:** Share, favorite, view EXIF details, set as wallpaper, rename, or delete directly from the viewer.
 
-### Video Player (MPV Engine)
-- **Wide Format Support:** Hardware-accelerated playback for MKV, MP4, MOV, and WebM using native MPV and FFmpeg libraries.
+### Video Player (AndroidX Media3 ExoPlayer)
+- **Wide Format Support:** Hardware-accelerated playback for MP4, MKV, WebM, and MOV using native AndroidX Media3 / ExoPlayer.
 - **Playback Controls:** Selectable playback speed (0.25x to 2.0x), customizable double-tap seek intervals (5s, 10s, 15s, 30s), resume playback position, start muted option, and single loop toggle.
 - **Timeline Scrubbing:** Precise seekbar with real-time frame previews.
 - **Video Zoom:** Pinch-to-zoom up to 5x with pan support and quick reset.
@@ -90,7 +90,7 @@
 
 - **Framework:** [Flutter](https://flutter.dev) (Dart 3.x)
 - **State Management:** [Flutter Riverpod](https://riverpod.dev)
-- **Video Engine:** [MediaKit](https://github.com/media-kit/media-kit) (Native MPV + FFmpeg)
+- **Video Engine:** [video_player](https://pub.dev/packages/video_player) (AndroidX Media3 / ExoPlayer, BSD-3-Clause)
 - **Media Scanning:** `photo_manager` & `permission_handler`
 - **Preferences:** `shared_preferences`
 
@@ -98,7 +98,7 @@
 
 ## Building from Source
 
-Phantek Gallery compiles against native C/C++ libraries bundled via MediaKit and MPV. The release build targets 64-bit ARM architectures.
+Phantek Gallery compiles directly with Flutter and AndroidX Media3. The release build targets 64-bit ARM architectures.
 
 ```bash
 flutter build apk --release --split-per-abi --target-platform android-arm64
@@ -127,20 +127,9 @@ build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0 (GPLv3)**. See the [LICENSE](LICENSE) file for complete details.
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for complete details.
 
 ### Third-Party Licenses & Acknowledgments
 
-- **MediaKit & MPV:** Video playback is powered by [MediaKit](https://github.com/media-kit/media-kit) (MIT License) utilizing native builds of [mpv](https://mpv.io) and [FFmpeg](https://ffmpeg.org) under LGPL/GPL.
+- **video_player & AndroidX Media3:** Video playback is powered by Flutter's official [video_player](https://pub.dev/packages/video_player) plugin under the BSD-3-Clause License, utilizing Google's AndroidX Media3 / ExoPlayer (Apache 2.0).
 - **Flutter & Dependencies:** Third-party Dart and Flutter packages are licensed under their respective open-source licenses (BSD-3-Clause, MIT, Apache 2.0). Complete open-source licenses can be inspected directly inside the application under **Settings > About > License**.
-
----
-
-<div align="center">
-  <br/>
-  <a href="https://github.com/zerabyte88">
-    <img src="https://github.com/zerabyte88.png" width="48" height="48" style="border-radius: 50%;" alt="zerabyte88" />
-  </a>
-  <br/>
-  <sub>Developed with ❤️ by <a href="https://github.com/zerabyte88">zerabyte88</a></sub>
-</div>

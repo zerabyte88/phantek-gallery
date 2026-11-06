@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +14,7 @@ import 'package:phantek_gallery/core/models/media_item.dart';
 import 'package:phantek_gallery/core/models/settings_model.dart';
 import 'package:phantek_gallery/core/providers/media_provider.dart';
 import 'package:flutter/services.dart';
+import 'package:phantek_gallery/core/services/license_service.dart';
 import 'package:phantek_gallery/core/services/settings_service.dart';
 import 'package:phantek_gallery/core/services/screen_keeper_service.dart';
 import 'package:phantek_gallery/core/services/media_scanner_service.dart';
@@ -580,10 +582,17 @@ void main() {
       expect(find.text('Architecture'), findsNothing);
       expect(find.text('ARM64-v8a'), findsNothing);
       expect(find.text('Video Engine'), findsNothing);
-      expect(find.text('MediaKit'), findsNothing);
       expect(find.text('Build'), findsOneWidget);
-      expect(find.text('51'), findsOneWidget);
-      expect(find.text('GPLv3'), findsOneWidget);
+      expect(find.text('52'), findsOneWidget);
+      expect(find.text('MIT'), findsOneWidget);
+    });
+
+    test('LicenseService registers phantek_gallery and androidx.media3 licenses', () async {
+      LicenseService.registerLicenses();
+      final licenses = await LicenseRegistry.licenses.toList();
+      final allPackages = licenses.expand((e) => e.packages).toSet();
+      expect(allPackages.contains('phantek_gallery'), isTrue);
+      expect(allPackages.contains('androidx.media3 (ExoPlayer)'), isTrue);
     });
 
     test('MediaListNotifier optimistic removeItems and restoreItems', () async {
@@ -1078,13 +1087,13 @@ void main() {
         'Codec configuration verifies auto-copy with SW fallback and hardware acceleration for VP9, HEVC, and H264',
         () {
       const hwdec = 'auto-copy';
-      const bufferSize = 8388608; // 8 MB – within MPV Android hard-cap of 10 MB
+      const bufferSize = 8388608; // 8 MB – within Android memory limits
 
       // 'auto-copy' tries available HW decoders, then falls back to SW (libvpx, libde265, etc.)
       // automatically without failing on codecs without MediaCodec HW support (VP9, some HEVC).
       expect(hwdec, 'auto-copy');
 
-      // Buffer must not exceed MPV Android limit of 10 MB (10485760)
+      // Buffer must not exceed Android buffer limit of 10 MB (10485760)
       expect(bufferSize, lessThanOrEqualTo(10485760));
     });
 
@@ -2536,7 +2545,7 @@ void main() {
       expect(encodedHeight > encodedWidth, isFalse);
     });
 
-    test('Horizontal video with encoded portrait dimensions resolves to horizontal layout via thumbnail and MPV ratio cache', () {
+    test('Horizontal video with encoded portrait dimensions resolves to horizontal layout via thumbnail and video ratio cache', () {
       // Videos like 720x1280 or 1080x1170 with 90° rotation play horizontally.
       const encodedWidth = 720;
       const encodedHeight = 1280;

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // Copyright (C) 2026 zerabyte88
 
 import 'package:flutter/material.dart';
@@ -12,7 +12,7 @@ import 'core/localization/app_language.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/models/settings_model.dart';
 import 'core/providers/settings_provider.dart';
-import 'core/services/media_kit_setup.dart';
+import 'core/services/license_service.dart';
 import 'core/services/screen_keeper_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/services/thumbnail_service.dart';
@@ -31,8 +31,8 @@ Future<void> main() async {
   ]);
 
   // Boot order matters:
-  //  1. media_kit native engine (MPV/FFmpeg) — must be before runApp.
-  MediaKitSetup.init();
+  //  1. Register application and native component licenses.
+  LicenseService.registerLicenses();
 
   //  2. Persisted settings (synchronous after first init).
   await SettingsService.init();
@@ -40,7 +40,7 @@ Future<void> main() async {
   //  3. Pre-warm thumbnail persistent disk cache directory.
   await ThumbnailService.init();
 
-  //  4. Clean up any leftover OTA APK from a previous update.
+  //  3. Clean up any leftover OTA APK from a previous update.
   //     SAFETY: only deletes files matching "Phantek_Gallery_v*.apk" pattern.
   await UpdateService.instance.cleanupAllApks();
 

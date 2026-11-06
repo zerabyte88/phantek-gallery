@@ -4,8 +4,6 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -123,7 +121,7 @@ class ThumbnailService {
     return null;
   }
 
-  /// Sets or updates the visual aspect ratio cache (e.g. from MPV player probe).
+  /// Sets or updates the visual aspect ratio cache (e.g. from video player probe).
   void setThumbnailAspectRatio(String assetId, double ratio) {
     if (ratio > 0) {
       _thumbnailAspectRatioCache[assetId] = ratio;
@@ -198,12 +196,6 @@ class ThumbnailService {
             );
           } catch (_) {}
         }
-      }
-
-      if (bytes == null || bytes.isEmpty) {
-        try {
-          bytes = await _extractFrameViaMpv(filePath);
-        } catch (_) {}
       }
 
       if (bytes != null && bytes.isNotEmpty) {
@@ -284,8 +276,8 @@ class ThumbnailService {
   }
 
   /// Extracts a video frame at a specific timestamp for seekbar preview.
-  /// Uses native Android MediaMetadataRetriever running on background executor,
-  /// with automatic fallback to MPV engine for exotic formats, and an LRU bucket cache.
+  /// Uses native Android MediaMetadataRetriever running on background executor
+  /// with an LRU bucket cache.
   Future<Uint8List?> getVideoFrame({
     required String filePath,
     required Duration time,
@@ -316,16 +308,6 @@ class ThumbnailService {
           '[ThumbnailService] Native getVideoFrame failed for $filePath: $e');
     }
 
-    // 2. Fallback: MPV frame extraction if native returned null (e.g. MKV/AV1/HEVC 10-bit)
-    if (result == null || result.isEmpty) {
-      try {
-        result = await _extractFrameAtTimeViaMpv(filePath, time);
-      } catch (e) {
-        debugPrint(
-            '[ThumbnailService] MPV fallback getVideoFrame failed for $filePath: $e');
-      }
-    }
-
     if (result != null && result.isNotEmpty) {
       if (_videoFrameCache.length >= 80) {
         _videoFrameCache.remove(_videoFrameCache.keys.first);
@@ -334,72 +316,6 @@ class ThumbnailService {
       return result;
     }
     return null;
-  }
-
-  /// Extracts a video frame at a specific timestamp using headless MPV engine when native fails.
-  Future<Uint8List?> _extractFrameAtTimeViaMpv(
-      String filePath, Duration time) async {
-    final player = Player(
-      configuration: const PlayerConfiguration(
-        logLevel: MPVLogLevel.error,
-      ),
-    );
-    try {
-      final controller = VideoController(
-        player,
-        configuration: const VideoControllerConfiguration(
-          enableHardwareAcceleration: false,
-          hwdec: 'no', // Software decode (FFmpeg)
-        ),
-      );
-
-      await player.open(Media(filePath), play: false);
-      await controller.waitUntilFirstFrameRendered
-          .timeout(const Duration(milliseconds: 800), onTimeout: () => null);
-      if (time > Duration.zero) {
-        await player.seek(time);
-        await Future<void>.delayed(const Duration(milliseconds: 120));
-      }
-
-      final bytes = await player.screenshot(format: 'image/jpeg');
-      return (bytes != null && bytes.isNotEmpty) ? bytes : null;
-    } catch (_) {
-      return null;
-    } finally {
-      await player.dispose();
-    }
-  }
-
-  /// Extracts a single video frame via media_kit's MPV engine using software decoding.
-  /// Handles exotic codecs and containers (VP9, HEVC 10-bit, AV1, MKV, WebM, AVI, FLV, TS).
-  Future<Uint8List?> _extractFrameViaMpv(String filePath) async {
-    final player = Player(
-      configuration: const PlayerConfiguration(
-        logLevel: MPVLogLevel.error,
-      ),
-    );
-    try {
-      final controller = VideoController(
-        player,
-        configuration: const VideoControllerConfiguration(
-          enableHardwareAcceleration: false,
-          hwdec:
-              'no', // Software decode (FFmpeg): decode all exotic codecs without crashing
-        ),
-      );
-
-      await player.open(Media(filePath), play: false);
-      await controller.waitUntilFirstFrameRendered
-          .timeout(const Duration(milliseconds: 1500), onTimeout: () => null);
-
-      final bytes = await player.screenshot(format: 'image/jpeg');
-      return (bytes != null && bytes.isNotEmpty) ? bytes : null;
-    } catch (e) {
-      debugPrint('[ThumbnailService] MPV frame extraction failed: $e');
-      return null;
-    } finally {
-      await player.dispose();
-    }
   }
 
   Future<Directory> _getCacheDirectory() {
@@ -678,17 +594,6 @@ class ThumbnailService {
                   .timeout(const Duration(seconds: 3), onTimeout: () => null);
             } catch (_) {}
           }
-        }
-
-        // 3. Last resort: use media_kit (MPV/FFmpeg) headless software decode to extract a single frame.
-        //    Handles exotic formats/codecs (MKV, WebM, AVI, FLV, TS, VP9, AV1, HEVC 10-bit, 4K/2160p)
-        if ((bytes == null || bytes.isEmpty) &&
-            targetPath != null &&
-            targetPath.isNotEmpty) {
-          try {
-            bytes = await _extractFrameViaMpv(targetPath)
-                .timeout(const Duration(seconds: 6), onTimeout: () => null);
-          } catch (_) {}
         }
       } else {
         // Photo / image:

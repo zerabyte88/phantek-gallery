@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:media_kit/media_kit.dart';
+import 'package:video_player/video_player.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/models/media_item.dart';
 import '../../../../core/utils/media_utils.dart';
@@ -9,37 +9,24 @@ import '../../../../core/utils/media_utils.dart';
 void showMediaInfoSheet(
   BuildContext context,
   MediaItem item, {
-  Player? player,
+  VideoPlayerController? player,
   double? fps,
   String? codec,
 }) {
   double? effectiveFps = fps;
   String? effectiveCodec = codec;
 
-  if (player != null) {
-    try {
-      final currentTrack = player.state.track.video;
-      effectiveFps ??= (currentTrack.fps != null && currentTrack.fps! > 0)
-          ? currentTrack.fps
-          : null;
-      effectiveCodec ??=
-          (currentTrack.codec != null && currentTrack.codec!.isNotEmpty)
-              ? currentTrack.codec
-              : null;
+  String resolution = item.resolution;
+  Duration? duration = item.duration;
 
-      if (effectiveFps == null || effectiveCodec == null) {
-        for (final t in player.state.tracks.video) {
-          if (effectiveFps == null && t.fps != null && t.fps! > 0) {
-            effectiveFps = t.fps;
-          }
-          if (effectiveCodec == null &&
-              t.codec != null &&
-              t.codec!.isNotEmpty) {
-            effectiveCodec = t.codec;
-          }
-        }
-      }
-    } catch (_) {}
+  if (player != null && player.value.isInitialized) {
+    final size = player.value.size;
+    if (size.width > 0 && size.height > 0) {
+      resolution = '${size.width.toInt()} × ${size.height.toInt()}';
+    }
+    if (player.value.duration > Duration.zero) {
+      duration = player.value.duration;
+    }
   }
 
   showModalBottomSheet<void>(
@@ -74,11 +61,11 @@ void showMediaInfoSheet(
                 label: context.tr.size,
                 value: MediaUtils.formatSize(item.size),
               ),
-              if (item.resolution.isNotEmpty)
+              if (resolution.isNotEmpty)
                 _InfoRow(
                   icon: Icons.aspect_ratio_outlined,
                   label: context.tr.resolution,
-                  value: item.resolution,
+                  value: resolution,
                 ),
               if (item.isVideo && effectiveFps != null && effectiveFps > 0)
                 _InfoRow(
@@ -94,11 +81,11 @@ void showMediaInfoSheet(
                   label: context.tr.codec,
                   value: MediaUtils.formatCodec(effectiveCodec),
                 ),
-              if (item.isVideo && item.duration != null)
+              if (item.isVideo && duration != null)
                 _InfoRow(
                   icon: Icons.timer_outlined,
                   label: context.tr.duration,
-                  value: MediaUtils.formatDuration(item.duration!),
+                  value: MediaUtils.formatDuration(duration),
                 ),
               _InfoRow(
                 icon: Icons.folder_outlined,

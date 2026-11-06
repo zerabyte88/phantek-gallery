@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // Copyright (C) 2026 zerabyte88
 
 import 'package:flutter/material.dart';
@@ -30,8 +30,8 @@ class DeveloperAboutCard extends ConsumerWidget {
       builder: (context, snapshot) {
         final theme = Theme.of(context);
         final cs = theme.colorScheme;
-        final version = snapshot.data?.version ?? '2.12.1';
-        final buildNumber = snapshot.data?.buildNumber ?? '51';
+        final version = snapshot.data?.version ?? '2.13.0';
+        final buildNumber = snapshot.data?.buildNumber ?? '52';
 
         final isDark = theme.brightness == Brightness.dark;
 
@@ -88,14 +88,25 @@ class DeveloperAboutCard extends ConsumerWidget {
               _buildDetailRow(
                 theme,
                 context.tr.license,
-                'GPLv3',
+                'MIT',
                 onTap: () {
                   showLicensePage(
                     context: context,
                     applicationName: 'Phantek Gallery',
                     applicationVersion: 'v$version ($buildNumber)',
+                    applicationIcon: Padding(
+                      padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.asset(
+                          'assets/app_icon.png',
+                          width: 48,
+                          height: 48,
+                        ),
+                      ),
+                    ),
                     applicationLegalese:
-                        'Copyright © 2026 zerabyte88\nLicensed under GNU General Public License v3.0 (GPLv3)',
+                        'Copyright © 2026 zerabyte88\nLicensed under the MIT License',
                   );
                 },
               ),

@@ -7,8 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
+import 'package:video_player/video_player.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/enums/video_double_tap_action.dart';
@@ -120,8 +119,9 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
 
 class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     with WidgetsBindingObserver, TickerProviderStateMixin {
-  late final Player _player;
-  late final VideoController _controller;
+  VideoPlayerController? _controller;
+  final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
+  bool get _isPlaying => _controller?.value.isPlaying ?? false;
   late final List<MediaItem> _videos;
   late final PageController _pageController;
   late final TransformationController _transformationController;
@@ -156,8 +156,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   AnimationController? _zoomAnimController;
   bool _hasStartedPlaying = false;
   bool _cropToFit = false;
-  String? _lastSize;
-  String? _activeVideoParamsPath;
   String? _activeLoadedVideoPath;
   Duration _lastPlaybackPosition = Duration.zero;
   DateTime? _lastPositionSaveTime;
@@ -170,8 +168,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   void _startSlideshow() {
     if (!mounted) return;
-    if (_player.state.playing) {
-      _player.pause();
+    if (_isPlaying) {
+      _controller?.pause();
     }
     setState(() {
       _isSlideshowPlaying = true;
@@ -189,8 +187,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     // During slideshow, videos are treated as slides and not auto-played.
     // If the player is currently playing, ensure it is paused.
-    if (_player.state.playing) {
-      _player.pause();
+    if (_isPlaying) {
+      _controller?.pause();
     }
 
     final interval = ref.read(settingsNotifierProvider).slideshowInterval;
@@ -351,8 +349,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           _videos[_current].isVideo) {
         _saveCurrentPosition(_activeLoadedVideoPath ?? _videos[_current].path);
       }
-      if (_player.state.playing) {
-        _player.pause();
+      if (_isPlaying) {
+        _controller?.pause();
       }
     }
   }
@@ -365,19 +363,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
     if (!_videos[_current].isVideo) return;
     final settings = ref.read(settingsNotifierProvider);
-    final shouldPlay =
-        !_isSlideshowPlaying && !widget.startSlideshow && settings.autoPlayVideo;
+    final shouldPlay = !_isSlideshowPlaying &&
+        !widget.startSlideshow &&
+        settings.autoPlayVideo;
     if (shouldPlay) {
-      if (!_player.state.playing) {
-        _player.play();
+      if (!_isPlaying) {
+        _controller?.play();
       }
-      _controller.waitUntilFirstFrameRendered.then((_) {
-        if (mounted &&
-            _routeTransitionComplete &&
-            !_videoSurfaceVisible.value) {
-          _videoSurfaceVisible.value = true;
-        }
-      });
+      if (mounted && _routeTransitionComplete && !_videoSurfaceVisible.value) {
+        _videoSurfaceVisible.value = true;
+      }
     }
   }
 
@@ -546,196 +541,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   Future<void> _initPlayer() async {
-    final settings = ref.read(settingsNotifierProvider);
-    _player = Player(
-      configuration: const PlayerConfiguration(
-        bufferSize: 32 * 1024 * 1024, // 32 MB buffer
-        logLevel: MPVLogLevel.warn,
-      ),
-    );
-    _controller = VideoController(
-      _player,
-      configuration: VideoControllerConfiguration(
-        enableHardwareAcceleration: settings.hardwareAcceleration,
-        hwdec: settings.hardwareAcceleration ? 'auto-copy' : 'no',
-      ),
-    );
-
-    // MPV properties:
-    // 1. Restrict hardware decoding to stable decoders on Snapdragon 685; exclude VP9, VP8, AV1
-    //    Snapdragon 685 MediaCodec hangs when negotiating VP9 profiles without falling back to SW.
-    // 2. Allow Opus/Vorbis audio demuxing and decoding within WebM containers.
-    if (_player.platform is NativePlayer) {
-      final native = _player.platform as NativePlayer;
-      await native.setProperty('hwdec-codecs', 'h264,hevc,mpeg4,vc1');
-      await native.setProperty(
-          'demuxer-lavf-buffersize', '8388608'); // 8 MB, within Android limit
-      await native.setProperty(
-          'demuxer-max-bytes', '33554432'); // 32 MB read-ahead
-      await native.setProperty(
-          'demuxer-max-back-bytes', '33554432'); // 32 MB backward seek buffer
-      await native.setProperty('demuxer-readahead-secs', '10');
-      await native.setProperty('demuxer-lavf-probesize', '2097152');
-      await native.setProperty('hr-seek-framedrop', 'yes');
-    }
-
-    _player.stream.error.listen((err) {
-      debugPrint('[VideoPlayer] Playback error: $err');
-      // Filter non-fatal MPV warnings that occur during normal HW→SW codec fallback,
-      // keyframe seeking, stream buffer flushes, or audio device re-negotiation across all SoCs.
-      final errLower = err.toString().toLowerCase();
-      final isNonFatal = errLower.contains('could not open codec') ||
-          errLower.contains('failed to open codec') ||
-          errLower.contains('decoder init failed') ||
-          errLower.contains('hwdec') ||
-          errLower.contains('mediacodec') ||
-          errLower.contains('using software decoding') ||
-          errLower.contains('error decoding') ||
-          errLower.contains('cannot decode') ||
-          errLower.contains('invalid data') ||
-          errLower.contains('corrupt') ||
-          errLower.contains('missing picture') ||
-          errLower.contains('packet') ||
-          errLower.contains('audiotrack') ||
-          errLower.contains('underrun') ||
-          errLower.contains('audio device') ||
-          errLower.contains('ao/audiotrack') ||
-          errLower.contains('codec:');
-      if (mounted && !isNonFatal) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Playback warning: $err'),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    });
-
-    _player.stream.playing.listen((playing) {
-      if (playing && mounted && _videos[_current].isVideo) {
-        if (!_videoSurfaceVisible.value) {
-          _controller.waitUntilFirstFrameRendered.then((_) {
-            if (mounted && !_videoSurfaceVisible.value) {
-              _videoSurfaceVisible.value = true;
-            }
-          });
-        }
-        if (!_hasStartedPlaying) {
-          setState(() {
-            _hasStartedPlaying = true;
-          });
-        }
-      } else if (!playing &&
-          _videos.isNotEmpty &&
-          _current < _videos.length &&
-          _videos[_current].isVideo &&
-          _activeLoadedVideoPath == _videos[_current].path) {
-        _saveCurrentPosition(_videos[_current].path);
-      }
-    });
-
-    _player.stream.position.listen((pos) {
-      if (pos > Duration.zero) {
-        _lastPlaybackPosition = pos;
-        if (mounted &&
-            _videos.isNotEmpty &&
-            _current < _videos.length &&
-            _videos[_current].isVideo &&
-            _routeTransitionComplete) {
-          if (!_videoSurfaceVisible.value) {
-            _videoSurfaceVisible.value = true;
-          }
-          final now = DateTime.now();
-          if (_lastPositionSaveTime == null ||
-              now.difference(_lastPositionSaveTime!) >=
-                  const Duration(seconds: 2)) {
-            _lastPositionSaveTime = now;
-            _saveCurrentPosition(
-                _activeLoadedVideoPath ?? _videos[_current].path);
-          }
-        }
-      }
-    });
-
-    _player.stream.completed.listen((completed) {
-      if (completed &&
-          _videos.isNotEmpty &&
-          _current < _videos.length &&
-          _videos[_current].isVideo) {
-        _lastPlaybackPosition = Duration.zero;
-        _lastPositionSaveTime = null;
-        SettingsService.instance
-            .clearVideoPlaybackPosition(_videos[_current].path);
-      }
-      if (completed && mounted && _isSlideshowPlaying) {
-        _slideshowTimer?.cancel();
-        _slideshowTimer = Timer(const Duration(milliseconds: 300), () {
-          if (mounted && _isSlideshowPlaying) {
-            _advanceSlideshow();
-          }
-        });
-      }
-    });
-
-    _player.stream.videoParams.listen((vp) async {
-      final w = vp.w ?? 0, h = vp.h ?? 0;
-      if (w <= 0 || h <= 0 || _lastSize == '${w}x$h') return;
-      _lastSize = '${w}x$h';
-      if (_player.platform is NativePlayer) {
-        final native = _player.platform as NativePlayer;
-        try {
-          final hw = await native.getProperty('hwdec-current');
-          debugPrint('[VideoPlayer] Active hwdec: $hw');
-        } catch (_) {}
-      }
-      if (mounted && _videos.isNotEmpty && _current < _videos.length) {
-        final currentItem = _videos[_current];
-        final rotate = vp.rotate ?? 0;
-        final isRotated90or270 = rotate == 90 || rotate == 270;
-        final effectiveW = isRotated90or270 ? h : w;
-        final effectiveH = isRotated90or270 ? w : h;
-        if (effectiveW > 0 && effectiveH > 0) {
-          ThumbnailService.instance
-              .setThumbnailAspectRatio(currentItem.id, effectiveW / effectiveH);
-        }
-        _activeVideoParamsPath = currentItem.path;
-        setState(() {});
-      }
-    });
-
     final currentItem = _videos[_current];
     _videoSurfaceVisible.value = false;
     if (currentItem.isVideo) {
       final currentPath = currentItem.path;
-      final isWebM = currentPath.toLowerCase().endsWith('.webm');
-      if (_player.platform is NativePlayer) {
-        final native = _player.platform as NativePlayer;
-        if (isWebM) {
-          await native.setProperty('hwdec', 'no');
-        } else {
-          await native.setProperty(
-              'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
-        }
-      }
-
-      await _player.setVolume(settings.startMuted ? 0.0 : 100.0);
-
-      final shouldPlay =
-          !widget.startSlideshow && settings.autoPlayVideo;
+      final settings = ref.read(settingsNotifierProvider);
+      final shouldPlay = !widget.startSlideshow && settings.autoPlayVideo;
       await _openAndRestoreVideo(
         currentPath,
         autoPlay: _routeTransitionComplete && shouldPlay,
         generation: _videoLoadGeneration,
       );
-      if (_routeTransitionComplete && shouldPlay) {
-        _controller.waitUntilFirstFrameRendered.then((_) {
-          if (mounted &&
-              _routeTransitionComplete &&
-              !_videoSurfaceVisible.value) {
-            _videoSurfaceVisible.value = true;
-          }
-        });
-      }
       if (widget.startSlideshow && mounted && !_isSlideshowPlaying) {
         _startSlideshow();
       }
@@ -751,8 +567,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     required bool autoPlay,
     required int generation,
   }) async {
-    final savedPos =
-        SettingsService.instance.getVideoPlaybackPosition(path);
+    final oldController = _controller;
+    _controller = null;
+    if (oldController != null) {
+      oldController.removeListener(_onControllerUpdate);
+      await oldController.dispose();
+    }
+    if (!mounted || generation != _videoLoadGeneration) return;
+
+    final savedPos = SettingsService.instance.getVideoPlaybackPosition(path);
     final knownDur =
         _current < _videos.length ? _videos[_current].duration : null;
     final effectiveStart = (savedPos != null &&
@@ -765,20 +588,143 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _lastPlaybackPosition = effectiveStart ?? Duration.zero;
     _lastPositionSaveTime = null;
 
-    await _player.open(
-      Media(path, start: effectiveStart),
-      play: autoPlay,
-    );
-    if (!mounted || generation != _videoLoadGeneration) return;
+    final settings = ref.read(settingsNotifierProvider);
+    final newController = VideoPlayerController.file(File(path));
+
+    try {
+      await newController.initialize();
+    } catch (e) {
+      debugPrint('[VideoPlayer] Initialization error for $path: $e');
+      newController.dispose();
+      return;
+    }
+
+    if (!mounted || generation != _videoLoadGeneration) {
+      newController.dispose();
+      return;
+    }
+
+    _controller = newController;
     _activeLoadedVideoPath = path;
+
+    await newController.setLooping(_isLooping && !_isSlideshowPlaying);
+    await newController.setVolume(settings.startMuted ? 0.0 : 1.0);
+    if (_playbackSpeed != 1.0) {
+      await newController.setPlaybackSpeed(_playbackSpeed);
+    }
+
+    if (effectiveStart != null && effectiveStart > Duration.zero) {
+      await newController.seekTo(effectiveStart);
+    }
+
+    newController.addListener(_onControllerUpdate);
+
+    final size = newController.value.size;
+    if (size.width > 0 &&
+        size.height > 0 &&
+        _videos.isNotEmpty &&
+        _current < _videos.length) {
+      final currentItem = _videos[_current];
+      ThumbnailService.instance
+          .setThumbnailAspectRatio(currentItem.id, size.width / size.height);
+    }
+
+    if (autoPlay) {
+      await newController.play();
+    }
+
+    if (mounted) {
+      setState(() {});
+      if (_routeTransitionComplete) {
+        _videoSurfaceVisible.value = true;
+      }
+    }
+  }
+
+  void _onControllerUpdate() {
+    if (!mounted || _controller == null) return;
+    final val = _controller!.value;
+
+    if (val.hasError) {
+      debugPrint('[VideoPlayer] Playback error: ${val.errorDescription}');
+      return;
+    }
+
+    final isPlaying = val.isPlaying;
+    if (_isPlayingNotifier.value != isPlaying) {
+      _isPlayingNotifier.value = isPlaying;
+    }
+
+    if (isPlaying &&
+        mounted &&
+        _videos.isNotEmpty &&
+        _current < _videos.length &&
+        _videos[_current].isVideo) {
+      if (!_videoSurfaceVisible.value) {
+        _videoSurfaceVisible.value = true;
+      }
+      if (!_hasStartedPlaying) {
+        setState(() {
+          _hasStartedPlaying = true;
+        });
+      }
+    } else if (!isPlaying &&
+        _videos.isNotEmpty &&
+        _current < _videos.length &&
+        _videos[_current].isVideo &&
+        _activeLoadedVideoPath == _videos[_current].path) {
+      _saveCurrentPosition(_videos[_current].path);
+    }
+
+    final pos = val.position;
+    if (pos > Duration.zero) {
+      _lastPlaybackPosition = pos;
+      if (mounted &&
+          _videos.isNotEmpty &&
+          _current < _videos.length &&
+          _videos[_current].isVideo &&
+          _routeTransitionComplete) {
+        if (!_videoSurfaceVisible.value) {
+          _videoSurfaceVisible.value = true;
+        }
+        final now = DateTime.now();
+        if (_lastPositionSaveTime == null ||
+            now.difference(_lastPositionSaveTime!) >=
+                const Duration(seconds: 2)) {
+          _lastPositionSaveTime = now;
+          _saveCurrentPosition(
+              _activeLoadedVideoPath ?? _videos[_current].path);
+        }
+      }
+    }
+
+    final isCompleted = val.isCompleted ||
+        (val.duration > Duration.zero && pos >= val.duration && !isPlaying);
+    if (isCompleted &&
+        _videos.isNotEmpty &&
+        _current < _videos.length &&
+        _videos[_current].isVideo) {
+      _lastPlaybackPosition = Duration.zero;
+      _lastPositionSaveTime = null;
+      SettingsService.instance
+          .clearVideoPlaybackPosition(_videos[_current].path);
+    }
+    if (isCompleted && mounted && _isSlideshowPlaying) {
+      _slideshowTimer?.cancel();
+      _slideshowTimer = Timer(const Duration(milliseconds: 300), () {
+        if (mounted && _isSlideshowPlaying) {
+          _advanceSlideshow();
+        }
+      });
+    }
   }
 
   void _saveCurrentPosition(String path) {
     if (_videos.isEmpty) return;
-    final statePos = _player.state.position;
+    final statePos = _controller?.value.position ?? Duration.zero;
     final pos = statePos > Duration.zero ? statePos : _lastPlaybackPosition;
     if (pos <= const Duration(seconds: 2)) return;
-    final activeDur = _player.state.duration;
+    final activeDur = _controller?.value.duration ?? Duration.zero;
     final dur = activeDur > Duration.zero
         ? activeDur
         : (_current < _videos.length
@@ -796,7 +742,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _lastPlaybackPosition = Duration.zero;
     _lastPositionSaveTime = null;
     _videoLoadDebounce?.cancel();
-    _activeVideoParamsPath = null;
     final thisGen = ++_videoLoadGeneration;
 
     if (_isVideoZoomed || !_transformationController.value.isIdentity()) {
@@ -806,7 +751,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       _transformationController.value = Matrix4.identity();
       _isVideoZoomed = false;
     }
-    _lastSize = null;
     final nextItem = _videos[index];
     setState(() {
       _current = index;
@@ -814,12 +758,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     });
 
     _videoSurfaceVisible.value = false;
-    if (_player.state.playing) {
-      _player.pause();
+    if (_isPlaying) {
+      _controller?.pause();
     }
 
     if (nextItem.isVideo) {
-      // Debounce loading native player so fast swipes are 100% fluid and never stall the hardware codec pipeline
+      // Debounce loading native player so fast swipes are 100% fluid
       _videoLoadDebounce = Timer(const Duration(milliseconds: 250), () async {
         if (!mounted || _current != index || thisGen != _videoLoadGeneration) {
           return;
@@ -827,22 +771,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         try {
           final settings = ref.read(settingsNotifierProvider);
           final path = _videos[index].path;
-          final isWebM = path.toLowerCase().endsWith('.webm');
-          if (_player.platform is NativePlayer) {
-            final native = _player.platform as NativePlayer;
-            if (isWebM) {
-              await native.setProperty('hwdec', 'no');
-            } else {
-              await native.setProperty(
-                  'hwdec', settings.hardwareAcceleration ? 'auto-copy' : 'no');
-            }
-          }
-          if (!mounted ||
-              _current != index ||
-              thisGen != _videoLoadGeneration) {
-            return;
-          }
-          await _player.stop();
           final shouldPlay = !_isSlideshowPlaying && settings.autoPlayVideo;
           await _openAndRestoreVideo(
             path,
@@ -854,20 +782,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
               thisGen != _videoLoadGeneration) {
             return;
           }
-          await _player.setVolume(settings.startMuted ? 0.0 : 100.0);
-          if (_isLooping && !_isSlideshowPlaying) {
-            _player.setPlaylistMode(PlaylistMode.loop);
-          } else {
-            _player.setPlaylistMode(PlaylistMode.none);
-          }
-          if (_playbackSpeed != 1.0) _player.setRate(_playbackSpeed);
-          _controller.waitUntilFirstFrameRendered.then((_) {
-            if (mounted &&
-                _current == index &&
-                thisGen == _videoLoadGeneration) {
-              _videoSurfaceVisible.value = true;
-            }
-          });
           if (_isSlideshowPlaying && mounted) {
             _scheduleNextSlideshowStep();
           }
@@ -875,7 +789,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       });
     } else {
       try {
-        _player.stop();
+        _controller?.pause();
       } catch (_) {}
       _activeLoadedVideoPath = null;
       if (_isSlideshowPlaying && mounted) {
@@ -909,13 +823,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       if (_videos.isNotEmpty && _current < _videos.length) {
         _saveCurrentPosition(_activeLoadedVideoPath ?? _videos[_current].path);
       }
-      if (_player.state.playing) {
-        _player.pause();
+      if (_isPlaying) {
+        _controller?.pause();
       }
     } else if (state == AppLifecycleState.resumed) {
       final settings = ref.read(settingsNotifierProvider);
-      if (!settings.startMuted && _player.state.volume == 0.0) {
-        _player.setVolume(100.0);
+      if (!settings.startMuted && (_controller?.value.volume ?? 1.0) == 0.0) {
+        _controller?.setVolume(1.0);
       }
     }
   }
@@ -959,10 +873,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _dragNotifier.dispose();
     _feedbackToastNotifier.dispose();
     _transformationController.dispose();
+    _isPlayingNotifier.dispose();
     try {
-      _player.stop();
+      _controller?.removeListener(_onControllerUpdate);
+      _controller?.dispose();
     } catch (_) {}
-    _player.dispose(); // releases native MPV context
+    _controller = null;
     _pageController.dispose();
     _exitFullscreen();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -970,17 +886,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   bool _isVideoPortrait(MediaItem item, int index) {
-    if (index == _current && _activeVideoParamsPath == item.path) {
-      final vParams = _player.state.videoParams;
-      if (vParams.w != null &&
-          vParams.h != null &&
-          vParams.w! > 0 &&
-          vParams.h! > 0) {
-        final rotate = vParams.rotate ?? 0;
-        final isRotated90or270 = rotate == 90 || rotate == 270;
-        final effectiveW = isRotated90or270 ? vParams.h! : vParams.w!;
-        final effectiveH = isRotated90or270 ? vParams.w! : vParams.h!;
-        return effectiveH > effectiveW;
+    if (index == _current &&
+        _controller != null &&
+        _controller!.value.isInitialized) {
+      final size = _controller!.value.size;
+      if (size.width > 0 && size.height > 0) {
+        return size.height > size.width;
       }
     }
     // Visual thumbnail aspect ratio accounts for native EXIF/MP4 rotation matrix
@@ -1004,17 +915,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   double? _getVideoAspectRatio(MediaItem item, int index) {
-    if (index == _current && _activeVideoParamsPath == item.path) {
-      final vParams = _player.state.videoParams;
-      if (vParams.w != null &&
-          vParams.h != null &&
-          vParams.w! > 0 &&
-          vParams.h! > 0) {
-        final rotate = vParams.rotate ?? 0;
-        final isRotated90or270 = rotate == 90 || rotate == 270;
-        final effectiveW = isRotated90or270 ? vParams.h! : vParams.w!;
-        final effectiveH = isRotated90or270 ? vParams.w! : vParams.h!;
-        return effectiveW / effectiveH;
+    if (index == _current &&
+        _controller != null &&
+        _controller!.value.isInitialized) {
+      final size = _controller!.value.size;
+      if (size.width > 0 && size.height > 0) {
+        return size.width / size.height;
       }
     }
     final thumbRatio =
@@ -1157,7 +1063,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
           isSwiping: _isSwipingPage,
         ),
-        if (index == _current)
+        if (index == _current && _controller != null)
           ValueListenableBuilder<bool>(
             valueListenable: _videoSurfaceVisible,
             builder: (context, visible, _) => AnimatedOpacity(
@@ -1166,13 +1072,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
               opacity: visible ? 1.0 : 0.0,
               child: IgnorePointer(
                 ignoring: !visible,
-                child: Video(
-                  key: ValueKey('active_video_surface_${item.id}'),
-                  controller: _controller,
-                  controls: NoVideoControls,
-                  fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
-                  filterQuality: FilterQuality.medium,
-                  fill: Colors.transparent,
+                child: SizedBox.expand(
+                  child: FittedBox(
+                    fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
+                    child: _controller!.value.isInitialized
+                        ? SizedBox(
+                            width: _controller!.value.size.width,
+                            height: _controller!.value.size.height,
+                            child: VideoPlayer(_controller!),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
                 ),
               ),
             ),
@@ -1211,11 +1121,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       final seekSec = settings.doubleTapSeekInterval;
 
       void doSeek(bool forward) {
-        final currentPos = _player.state.position;
+        final currentPos = _controller?.value.position ?? Duration.zero;
         final target = forward
             ? currentPos + Duration(seconds: seekSec)
             : currentPos - Duration(seconds: seekSec);
-        _player.seek(target < Duration.zero ? Duration.zero : target);
+        _controller?.seekTo(target < Duration.zero ? Duration.zero : target);
         _showFeedbackToast(
           message: forward ? '+${seekSec}s' : '-${seekSec}s',
           icon: forward ? Icons.forward_10_rounded : Icons.replay_10_rounded,
@@ -1308,7 +1218,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                             setState(() {
                               _playbackSpeed = speed;
                             });
-                            _player.setRate(speed);
+                            _controller?.setPlaybackSpeed(speed);
                             _showFeedbackToast(
                               message: _speedToastMessage(speed),
                               icon: Icons.speed_rounded,
@@ -1361,7 +1271,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     setState(() {
       _isLooping = next;
     });
-    _player.setPlaylistMode(next ? PlaylistMode.loop : PlaylistMode.none);
+    _controller?.setLooping(next);
     _showFeedbackToast(
       message: next ? context.tr.loopEnabled : context.tr.loopDisabled,
       icon: next ? Icons.repeat_one_rounded : Icons.repeat_rounded,
@@ -1380,7 +1290,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   Future<void> _restoreItem() async {
     final item = _videos[_current];
-    _player.pause();
+    _controller?.pause();
     await ref.read(trashProvider.notifier).restore(item.id);
     ref.read(mediaListProvider.notifier).restoreItems([item.id]);
     ref.read(mediaListProvider.notifier).refresh();
@@ -1420,7 +1330,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       );
       if (ok != true || !mounted) return;
 
-      _player.pause();
+      _controller?.pause();
       await ref.read(trashProvider.notifier).permanentDelete(item.id);
 
       if (!mounted) return;
@@ -1473,7 +1383,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       return;
     }
 
-    _player.pause();
+    _controller?.pause();
 
     ref.read(mediaListProvider.notifier).removeItems({item.id});
 
@@ -1537,7 +1447,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           if (_videos.isNotEmpty &&
               _current < _videos.length &&
               _videos[_current].isVideo) {
-            _saveCurrentPosition(_activeLoadedVideoPath ?? _videos[_current].path);
+            _saveCurrentPosition(
+                _activeLoadedVideoPath ?? _videos[_current].path);
           }
         } else if (_isFullscreen) {
           _exitFullscreen();
@@ -1571,629 +1482,619 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
               ),
             ),
             Listener(
-                onPointerDown: (e) {
-                  _activePointers.add(e.pointer);
-                  _settle.stop(); // grab a returning video mid-flight
-                  _zoomAnimController?.stop();
-                  _isSwipingHorizontal = false;
-                  if (_activePointers.length == 1) {
+              onPointerDown: (e) {
+                _activePointers.add(e.pointer);
+                _settle.stop(); // grab a returning video mid-flight
+                _zoomAnimController?.stop();
+                _isSwipingHorizontal = false;
+                if (_activePointers.length == 1) {
+                  _setDrag(Offset.zero);
+                  _isMultiTouch = false;
+                  _isPinching = false;
+                  if (_transformationController.value.getMaxScaleOnAxis() <=
+                      1.05) {
+                    _isVideoZoomed = false;
+                  }
+                }
+                final screenHeight = MediaQuery.sizeOf(context).height;
+                final isCurrentItemVideo = _videos[_current].isVideo;
+                final bottomThreshold = isCurrentItemVideo
+                    ? (MediaQuery.orientationOf(context) ==
+                            Orientation.landscape
+                        ? 140.0
+                        : 280.0)
+                    : 90.0;
+                final inBottomControlsArea = _showControls &&
+                    (e.position.dy > screenHeight - bottomThreshold);
+                if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
+                  // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
+                  _isMultiTouch = true;
+                  _isPinching = true;
+                  _startDragY = null;
+                  _startDragX = null;
+                  if (_dragNotifier.value != Offset.zero) {
                     _setDrag(Offset.zero);
-                    _isMultiTouch = false;
-                    _isPinching = false;
-                    if (_transformationController.value.getMaxScaleOnAxis() <=
-                        1.05) {
-                      _isVideoZoomed = false;
+                  }
+                  return;
+                }
+                if (inBottomControlsArea || _isScrubbing) {
+                  _startDragY = null;
+                  _startDragX = null;
+                  return;
+                }
+                _startDragY = e.position.dy;
+                _startDragX = e.position.dx;
+                _vt = VelocityTracker.withKind(e.kind);
+                _vt.addPosition(e.timeStamp, e.position);
+              },
+              onPointerMove: (e) {
+                // Detach the video surface on the first horizontal movement, before
+                // the PageView's own drag slop triggers ScrollStartNotification.
+                if (!_isCurrentlyVideoZoomed &&
+                    !_isMultiTouch &&
+                    !_isPinching &&
+                    !_isScrubbing &&
+                    _activePointers.length == 1 &&
+                    _startDragX != null &&
+                    _startDragY != null) {
+                  final adx = (e.position.dx - _startDragX!).abs();
+                  final ady = (e.position.dy - _startDragY!).abs();
+                  if (!_isSwipingHorizontal &&
+                      _dragNotifier.value == Offset.zero) {
+                    if (adx > 6 && adx >= ady) {
+                      if (_videoSurfaceVisible.value) {
+                        _videoSurfaceVisible.value = false;
+                      }
+                      _isSwipingHorizontal = true;
+                      _isSwipingPage.value = true;
+                      return;
                     }
                   }
-                  final screenHeight = MediaQuery.sizeOf(context).height;
-                  final isCurrentItemVideo = _videos[_current].isVideo;
-                  final bottomThreshold = isCurrentItemVideo
-                      ? (MediaQuery.orientationOf(context) ==
-                              Orientation.landscape
-                          ? 140.0
-                          : 280.0)
-                      : 90.0;
-                  final inBottomControlsArea = _showControls &&
-                      (e.position.dy > screenHeight - bottomThreshold);
-                  if (_activePointers.length >= 2 || _isCurrentlyVideoZoomed) {
-                    // Instantly lock PageView swiping and abort pull-to-dismiss on multi-touch, pinch, or zoom
-                    _isMultiTouch = true;
-                    _isPinching = true;
-                    _startDragY = null;
-                    _startDragX = null;
-                    if (_dragNotifier.value != Offset.zero) {
-                      _setDrag(Offset.zero);
+                }
+
+                if (_isSwipingHorizontal || _isScrubbing) return;
+
+                // Keep pull-to-dismiss and page swiping completely locked whenever
+                // the video is zoomed above 1.0x, pinching, or multi-touching.
+                if (_isFullscreen ||
+                    _isCurrentlyVideoZoomed ||
+                    _isPinching ||
+                    _isMultiTouch ||
+                    _activePointers.length >= 2 ||
+                    _startDragY == null ||
+                    _startDragX == null) {
+                  if (_dragNotifier.value != Offset.zero) {
+                    _setDrag(Offset.zero);
+                  }
+                  return;
+                }
+
+                _vt.addPosition(e.timeStamp, e.position);
+                final dy = e.position.dy - _startDragY!;
+                final dx = e.position.dx - _startDragX!;
+                final adx = dx.abs();
+                // Intentional vertical swipe deadzone: natural downward drag
+                if (_dragNotifier.value != Offset.zero ||
+                    (dy > 24 && dy > adx * 1.8)) {
+                  final dampedDx = dx * 0.45;
+                  final dragY = (dy - 24).clamp(0.0, 650.0);
+                  _setDrag(Offset(dampedDx, dragY));
+                  if (_isPlaying && dy > 16) {
+                    _controller?.pause();
+                  }
+                }
+              },
+              onPointerUp: (e) {
+                _vt.addPosition(e.timeStamp, e.position);
+                _activePointers.remove(e.pointer);
+                if (_activePointers.isEmpty) {
+                  final wasMultiTouch = _isMultiTouch;
+                  _isMultiTouch = false;
+                  _isPinching = false;
+                  _isSwipingHorizontal = false;
+                  _startDragY = null;
+                  _startDragX = null;
+                  if (!_isSwiping) {
+                    _isSwipingPage.value = false;
+                  }
+                  // Restore video surface if not swiping and player is playing
+                  if (!_isSwiping && _isPlaying) {
+                    _videoSurfaceVisible.value = true;
+                  }
+
+                  final d = _dragNotifier.value;
+                  final vy = _vt.getVelocity().pixelsPerSecond.dy;
+
+                  if (!wasMultiTouch &&
+                      !_isCurrentlyVideoZoomed &&
+                      d.dy > 0 &&
+                      (d.dy > 85 || (vy > 550 && d.dy > 20))) {
+                    _videoSurfaceVisible.value = false;
+                    if (_videos.isNotEmpty &&
+                        _current < _videos.length &&
+                        _videos[_current].isVideo) {
+                      _saveCurrentPosition(
+                          _activeLoadedVideoPath ?? _videos[_current].path);
                     }
-                    return;
+                    _controller?.pause();
+                    _activeMediaNotifier?.state = _videos[_current].id;
+                    Navigator.of(context).pop();
+                  } else if (d != Offset.zero) {
+                    _springBack(vy);
+                  } else {
+                    _setDrag(Offset.zero);
                   }
-                  if (inBottomControlsArea || _isScrubbing) {
-                    _startDragY = null;
-                    _startDragX = null;
-                    return;
+                }
+              },
+              onPointerCancel: (e) {
+                _activePointers.remove(e.pointer);
+                if (_activePointers.isEmpty) {
+                  _isMultiTouch = false;
+                  _isPinching = false;
+                  _isSwipingHorizontal = false;
+                  _startDragY = null;
+                  _startDragX = null;
+                  if (!_isSwiping) {
+                    _isSwipingPage.value = false;
                   }
-                  _startDragY = e.position.dy;
-                  _startDragX = e.position.dx;
-                  _vt = VelocityTracker.withKind(e.kind);
-                  _vt.addPosition(e.timeStamp, e.position);
-                },
-                onPointerMove: (e) {
-                  // Detach the MPV texture on the first horizontal movement, before
-                  // the PageView's own drag slop triggers ScrollStartNotification.
-                  if (!_isCurrentlyVideoZoomed &&
-                      !_isMultiTouch &&
-                      !_isPinching &&
-                      !_isScrubbing &&
-                      _activePointers.length == 1 &&
-                      _startDragX != null &&
-                      _startDragY != null) {
-                    final adx = (e.position.dx - _startDragX!).abs();
-                    final ady = (e.position.dy - _startDragY!).abs();
-                    if (!_isSwipingHorizontal &&
-                        _dragNotifier.value == Offset.zero) {
-                      if (adx > 6 && adx >= ady) {
-                        if (_videoSurfaceVisible.value) {
-                          _videoSurfaceVisible.value = false;
-                        }
-                        _isSwipingHorizontal = true;
-                        _isSwipingPage.value = true;
-                        return;
+                  if (_dragNotifier.value != Offset.zero) {
+                    _springBack(0);
+                  } else {
+                    _setDrag(Offset.zero);
+                  }
+                }
+              },
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  if (_dragNotifier.value.dy < 10) {
+                    if (_isSlideshowPlaying) {
+                      _stopSlideshow();
+                      return;
+                    }
+                    final next = !_showControls;
+                    setState(() => _showControls = next);
+                    if (!_isFullscreen) {
+                      if (next) {
+                        SystemChrome.setEnabledSystemUIMode(
+                            SystemUiMode.edgeToEdge);
+                        SystemChrome.setSystemUIOverlayStyle(
+                          const SystemUiOverlayStyle(
+                            statusBarColor: Colors.transparent,
+                            statusBarIconBrightness: Brightness.light,
+                            systemNavigationBarColor: Colors.transparent,
+                            systemNavigationBarIconBrightness: Brightness.light,
+                          ),
+                        );
+                      } else {
+                        SystemChrome.setEnabledSystemUIMode(
+                            SystemUiMode.immersiveSticky);
                       }
                     }
                   }
-
-                  if (_isSwipingHorizontal || _isScrubbing) return;
-
-                  // Keep pull-to-dismiss and page swiping completely locked whenever
-                  // the video is zoomed above 1.0x, pinching, or multi-touching.
-                  if (_isFullscreen ||
-                      _isCurrentlyVideoZoomed ||
-                      _isPinching ||
-                      _isMultiTouch ||
-                      _activePointers.length >= 2 ||
-                      _startDragY == null ||
-                      _startDragX == null) {
-                    if (_dragNotifier.value != Offset.zero) {
-                      _setDrag(Offset.zero);
-                    }
-                    return;
-                  }
-
-                  _vt.addPosition(e.timeStamp, e.position);
-                  final dy = e.position.dy - _startDragY!;
-                  final dx = e.position.dx - _startDragX!;
-                  final adx = dx.abs();
-                  // Intentional vertical swipe deadzone: natural downward drag
-                  if (_dragNotifier.value != Offset.zero ||
-                      (dy > 24 && dy > adx * 1.8)) {
-                    final dampedDx = dx * 0.45;
-                    final dragY = (dy - 24).clamp(0.0, 650.0);
-                    _setDrag(Offset(dampedDx, dragY));
-                    if (_player.state.playing && dy > 16) {
-                      _player.pause();
-                    }
-                  }
                 },
-                onPointerUp: (e) {
-                  _vt.addPosition(e.timeStamp, e.position);
-                  _activePointers.remove(e.pointer);
-                  if (_activePointers.isEmpty) {
-                    final wasMultiTouch = _isMultiTouch;
-                    _isMultiTouch = false;
-                    _isPinching = false;
-                    _isSwipingHorizontal = false;
-                    _startDragY = null;
-                    _startDragX = null;
-                    if (!_isSwiping) {
-                      _isSwipingPage.value = false;
-                    }
-                    // Restore video surface if not swiping and player is playing
-                    if (!_isSwiping && _player.state.playing) {
-                      _videoSurfaceVisible.value = true;
-                    }
-
-                    final d = _dragNotifier.value;
-                    final vy = _vt.getVelocity().pixelsPerSecond.dy;
-
-                    if (!wasMultiTouch &&
-                        !_isCurrentlyVideoZoomed &&
-                        d.dy > 0 &&
-                        (d.dy > 85 || (vy > 550 && d.dy > 20))) {
-                      _videoSurfaceVisible.value = false;
-                      if (_videos.isNotEmpty &&
-                          _current < _videos.length &&
-                          _videos[_current].isVideo) {
-                        _saveCurrentPosition(
-                            _activeLoadedVideoPath ?? _videos[_current].path);
-                      }
-                      _player.pause();
-                      _activeMediaNotifier?.state = _videos[_current].id;
-                      Navigator.of(context).pop();
-                    } else if (d != Offset.zero) {
-                      _springBack(vy);
-                    } else {
-                      _setDrag(Offset.zero);
-                    }
-                  }
+                onDoubleTapDown: (details) {
+                  _doubleTapDetails = details;
                 },
-                onPointerCancel: (e) {
-                  _activePointers.remove(e.pointer);
-                  if (_activePointers.isEmpty) {
-                    _isMultiTouch = false;
-                    _isPinching = false;
-                    _isSwipingHorizontal = false;
-                    _startDragY = null;
-                    _startDragX = null;
-                    if (!_isSwiping) {
-                      _isSwipingPage.value = false;
-                    }
-                    if (_dragNotifier.value != Offset.zero) {
-                      _springBack(0);
-                    } else {
-                      _setDrag(Offset.zero);
-                    }
-                  }
-                },
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (_dragNotifier.value.dy < 10) {
-                      if (_isSlideshowPlaying) {
-                        _stopSlideshow();
-                        return;
-                      }
-                      final next = !_showControls;
-                      setState(() => _showControls = next);
-                      if (!_isFullscreen) {
-                        if (next) {
-                          SystemChrome.setEnabledSystemUIMode(
-                              SystemUiMode.edgeToEdge);
-                          SystemChrome.setSystemUIOverlayStyle(
-                            const SystemUiOverlayStyle(
-                              statusBarColor: Colors.transparent,
-                              statusBarIconBrightness: Brightness.light,
-                              systemNavigationBarColor: Colors.transparent,
-                              systemNavigationBarIconBrightness:
-                                  Brightness.light,
-                            ),
-                          );
-                        } else {
-                          SystemChrome.setEnabledSystemUIMode(
-                              SystemUiMode.immersiveSticky);
-                        }
-                      }
-                    }
-                  },
-                  onDoubleTapDown: (details) {
-                    _doubleTapDetails = details;
-                  },
-                  onDoubleTap: _handleDoubleTap,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ValueListenableBuilder<Offset>(
-                        valueListenable: _dragNotifier,
-                        builder: (context, d, child) {
-                          final s =
-                              (1.0 - (d.dy / 1000.0) * 0.28).clamp(0.72, 1.0);
-                          final radius =
-                              (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
-                          return Transform(
-                            alignment: Alignment.center,
-                            transform: Matrix4.translationValues(d.dx, d.dy, 0)
-                              ..scaleByDouble(s, s, 1.0, 1.0),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(radius),
-                              clipBehavior:
-                                  radius > 0 ? Clip.antiAlias : Clip.none,
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: RepaintBoundary(
-                          child: NotificationListener<ScrollNotification>(
-                            onNotification: (notification) {
-                              if (notification is ScrollStartNotification) {
-                                if (notification.dragDetails != null) {
-                                  _isSwiping = true;
-                                  _isSwipingPage.value = true;
-                                  if (_player.state.playing) {
-                                    _player.pause();
-                                  }
+                onDoubleTap: _handleDoubleTap,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ValueListenableBuilder<Offset>(
+                      valueListenable: _dragNotifier,
+                      builder: (context, d, child) {
+                        final s =
+                            (1.0 - (d.dy / 1000.0) * 0.28).clamp(0.72, 1.0);
+                        final radius =
+                            (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
+                        return Transform(
+                          alignment: Alignment.center,
+                          transform: Matrix4.translationValues(d.dx, d.dy, 0)
+                            ..scaleByDouble(s, s, 1.0, 1.0),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(radius),
+                            clipBehavior:
+                                radius > 0 ? Clip.antiAlias : Clip.none,
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: RepaintBoundary(
+                        child: NotificationListener<ScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification is ScrollStartNotification) {
+                              if (notification.dragDetails != null) {
+                                _isSwiping = true;
+                                _isSwipingPage.value = true;
+                                if (_isPlaying) {
+                                  _controller?.pause();
                                 }
-                              } else if (notification
-                                  is ScrollEndNotification) {
-                                _isSwiping = false;
-                                _isSwipingPage.value = false;
-                                _precacheAdjacentVideos(_current);
-                                _activeMediaNotifier?.state =
-                                    _videos[_current].id;
                               }
-                              return false;
+                            } else if (notification is ScrollEndNotification) {
+                              _isSwiping = false;
+                              _isSwipingPage.value = false;
+                              _precacheAdjacentVideos(_current);
+                              _activeMediaNotifier?.state =
+                                  _videos[_current].id;
+                            }
+                            return false;
+                          },
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: _isDraggingDown,
+                            builder: (context, isDraggingDown, child) {
+                              return IgnorePointer(
+                                ignoring: isDraggingDown,
+                                child: child,
+                              );
                             },
-                            child: ValueListenableBuilder<bool>(
-                              valueListenable: _isDraggingDown,
-                              builder: (context, isDraggingDown, child) {
-                                return IgnorePointer(
-                                  ignoring: isDraggingDown,
-                                  child: child,
-                                );
-                              },
-                              child: PageView.builder(
-                                controller: _pageController,
-                                dragStartBehavior: DragStartBehavior.down,
-                                itemCount: _videos.length,
-                                onPageChanged: _onPageChanged,
-                                physics: (_isCurrentlyVideoZoomed ||
-                                        _isPinching ||
-                                        _isMultiTouch ||
-                                        _isScrubbing ||
-                                        _activePointers.length >= 2)
-                                    ? const NeverScrollableScrollPhysics()
-                                    : const BouncingScrollPhysics(
-                                        parent: PageScrollPhysics(),
-                                      ),
-                                itemBuilder: (context, index) {
-                                  final isCur = index == _current;
-                                  return RepaintBoundary(
-                                    child: Center(
-                                      child: ClipRect(
-                                        child: InteractiveViewer(
-                                          key: ValueKey(
-                                              'iv_${_videos[index].id}'),
-                                          transformationController: isCur
-                                              ? _transformationController
-                                              : null,
-                                          minScale: 1.0,
-                                          maxScale: 8.0,
-                                          panEnabled:
-                                              isCur && _isCurrentlyVideoZoomed,
-                                          scaleEnabled: isCur,
-                                          clipBehavior: Clip.hardEdge,
-                                          onInteractionStart: isCur
-                                              ? (details) {
-                                                  _zoomAnimController?.stop();
-                                                  if (details.pointerCount >=
-                                                      2) {
-                                                    _isPinching = true;
+                            child: PageView.builder(
+                              controller: _pageController,
+                              dragStartBehavior: DragStartBehavior.down,
+                              itemCount: _videos.length,
+                              onPageChanged: _onPageChanged,
+                              physics: (_isCurrentlyVideoZoomed ||
+                                      _isPinching ||
+                                      _isMultiTouch ||
+                                      _isScrubbing ||
+                                      _activePointers.length >= 2)
+                                  ? const NeverScrollableScrollPhysics()
+                                  : const BouncingScrollPhysics(
+                                      parent: PageScrollPhysics(),
+                                    ),
+                              itemBuilder: (context, index) {
+                                final isCur = index == _current;
+                                return RepaintBoundary(
+                                  child: Center(
+                                    child: ClipRect(
+                                      child: InteractiveViewer(
+                                        key:
+                                            ValueKey('iv_${_videos[index].id}'),
+                                        transformationController: isCur
+                                            ? _transformationController
+                                            : null,
+                                        minScale: 1.0,
+                                        maxScale: 8.0,
+                                        panEnabled:
+                                            isCur && _isCurrentlyVideoZoomed,
+                                        scaleEnabled: isCur,
+                                        clipBehavior: Clip.hardEdge,
+                                        onInteractionStart: isCur
+                                            ? (details) {
+                                                _zoomAnimController?.stop();
+                                                if (details.pointerCount >= 2) {
+                                                  _isPinching = true;
+                                                }
+                                              }
+                                            : null,
+                                        onInteractionUpdate: isCur
+                                            ? (details) {
+                                                final scale =
+                                                    _transformationController
+                                                        .value
+                                                        .getMaxScaleOnAxis();
+                                                final isZoomed = scale > 1.05;
+                                                if (isZoomed !=
+                                                    _isVideoZoomed) {
+                                                  _isVideoZoomed = isZoomed;
+                                                }
+                                              }
+                                            : null,
+                                        onInteractionEnd: isCur
+                                            ? (details) {
+                                                _isPinching = false;
+                                                final scale =
+                                                    _transformationController
+                                                        .value
+                                                        .getMaxScaleOnAxis();
+                                                if (scale <= 1.02) {
+                                                  _resetVideoZoom();
+                                                } else {
+                                                  if (!_isVideoZoomed &&
+                                                      mounted) {
+                                                    setState(() {
+                                                      _isVideoZoomed = true;
+                                                    });
                                                   }
                                                 }
-                                              : null,
-                                          onInteractionUpdate: isCur
-                                              ? (details) {
-                                                  final scale =
-                                                      _transformationController
-                                                          .value
-                                                          .getMaxScaleOnAxis();
-                                                  final isZoomed = scale > 1.05;
-                                                  if (isZoomed !=
-                                                      _isVideoZoomed) {
-                                                    _isVideoZoomed = isZoomed;
-                                                  }
-                                                }
-                                              : null,
-                                          onInteractionEnd: isCur
-                                              ? (details) {
-                                                  _isPinching = false;
-                                                  final scale =
-                                                      _transformationController
-                                                          .value
-                                                          .getMaxScaleOnAxis();
-                                                  if (scale <= 1.02) {
-                                                    _resetVideoZoom();
-                                                  } else {
-                                                    if (!_isVideoZoomed &&
-                                                        mounted) {
-                                                      setState(() {
-                                                        _isVideoZoomed = true;
-                                                      });
-                                                    }
-                                                  }
-                                                }
-                                              : null,
-                                          child: Center(
-                                            child: HeroMode(
-                                              enabled: isCur,
-                                              child: Hero(
-                                                tag: _videos[index].id,
-                                                transitionOnUserGestures: true,
-                                                flightShuttleBuilder: (
-                                                  flightContext,
-                                                  animation,
-                                                  flightDirection,
-                                                  fromHeroContext,
-                                                  toHeroContext,
-                                                ) =>
-                                                    _buildHeroShuttle(
-                                                  animation: animation,
-                                                  flightDirection:
-                                                      flightDirection,
-                                                  item: _videos[index],
-                                                  fallbackChild:
-                                                      flightDirection ==
-                                                              HeroFlightDirection
-                                                                  .push
-                                                          ? toHeroContext.widget
-                                                          : fromHeroContext
-                                                              .widget,
-                                                ),
-                                                child: _buildVideoPage(index),
+                                              }
+                                            : null,
+                                        child: Center(
+                                          child: HeroMode(
+                                            enabled: isCur,
+                                            child: Hero(
+                                              tag: _videos[index].id,
+                                              transitionOnUserGestures: true,
+                                              flightShuttleBuilder: (
+                                                flightContext,
+                                                animation,
+                                                flightDirection,
+                                                fromHeroContext,
+                                                toHeroContext,
+                                              ) =>
+                                                  _buildHeroShuttle(
+                                                animation: animation,
+                                                flightDirection:
+                                                    flightDirection,
+                                                item: _videos[index],
+                                                fallbackChild:
+                                                    flightDirection ==
+                                                            HeroFlightDirection
+                                                                .push
+                                                        ? toHeroContext.widget
+                                                        : fromHeroContext
+                                                            .widget,
                                               ),
+                                              child: _buildVideoPage(index),
                                             ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  );
-                                },
-                              ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                         ),
                       ),
-                      if (_isVideoZoomed)
-                        Positioned(
-                          top: _showControls
-                              ? 80
-                              : (MediaQuery.of(context).padding.top + 16),
-                          right: 16,
-                          child: SafeArea(
-                            top: !_showControls,
-                            child: BouncyTap(
-                              onTap: _resetVideoZoom,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.75),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.35),
-                                    width: 1,
+                    ),
+                    if (_isVideoZoomed)
+                      Positioned(
+                        top: _showControls
+                            ? 80
+                            : (MediaQuery.of(context).padding.top + 16),
+                        right: 16,
+                        child: SafeArea(
+                          top: !_showControls,
+                          child: BouncyTap(
+                            onTap: _resetVideoZoom,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.75),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.35),
+                                  width: 1,
+                                ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black45,
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
                                   ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Colors.black45,
-                                      blurRadius: 8,
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.zoom_out_map_rounded,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    ValueListenableBuilder<Matrix4>(
-                                      valueListenable:
-                                          _transformationController,
-                                      builder: (context, matrix, _) {
-                                        final scale =
-                                            matrix.getMaxScaleOnAxis();
-                                        return Text(
-                                          '${scale.toStringAsFixed(1)}x • Reset',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: 0.3,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
+                                ],
                               ),
-                            ),
-                          ),
-                        ),
-                      ValueListenableBuilder<Offset>(
-                        valueListenable: _dragNotifier,
-                        builder: (context, drag, child) {
-                          final dragFade =
-                              (1.0 - (drag.dy / 35.0)).clamp(0.0, 1.0);
-                          final baseOpacity =
-                              (_showControls && !_isPinching) ? dragFade : 0.0;
-                          final anim = ModalRoute.of(context)?.animation;
-                          if (anim == null) {
-                            return Opacity(
-                              opacity: baseOpacity,
-                              child: IgnorePointer(
-                                ignoring: !_showControls ||
-                                    drag.dy > 4 ||
-                                    _isPinching,
-                                child: child,
-                              ),
-                            );
-                          }
-                          return AnimatedBuilder(
-                            animation: anim,
-                            builder: (context, _) {
-                              final entrance = const Interval(0.65, 1.0,
-                                      curve: Curves.easeOut)
-                                  .transform(anim.value);
-                              final opacity =
-                                  (baseOpacity * entrance).clamp(0.0, 1.0);
-                              return Opacity(
-                                opacity: opacity,
-                                child: IgnorePointer(
-                                  ignoring: !_showControls ||
-                                      drag.dy > 4 ||
-                                      _isPinching ||
-                                      opacity < 0.5,
-                                  child: child,
-                                ),
-                              );
-                            },
-                          );
-                        },
-                        child: Stack(
-                          children: [
-                            // Center play button when paused (exact center of the screen)
-                            // In landscape: completely removed.
-                            // In portrait: only shown before the video has ever started playing.
-                            if (MediaQuery.orientationOf(context) !=
-                                    Orientation.landscape &&
-                                !_hasStartedPlaying &&
-                                _videos[_current].isVideo)
-                              Center(
-                                child: ValueListenableBuilder<bool>(
-                                  valueListenable: _isSwipingPage,
-                                  builder: (context, isSwiping, child) {
-                                    return AnimatedOpacity(
-                                      duration: Duration(
-                                          milliseconds: isSwiping ? 150 : 250),
-                                      curve: Curves.easeInOut,
-                                      opacity: isSwiping ? 0.0 : 1.0,
-                                      child: IgnorePointer(
-                                        ignoring: isSwiping,
-                                        child: child,
-                                      ),
-                                    );
-                                  },
-                                  child: StreamBuilder<bool>(
-                                    initialData: _player.state.playing,
-                                    stream: _player.stream.playing,
-                                    builder: (_, snap) {
-                                      final playing =
-                                          snap.data ?? _player.state.playing;
-                                      if (playing) {
-                                        return const SizedBox.shrink();
-                                      }
-                                      return BouncyTap(
-                                        onTap: () {
-                                          if (_videoLoadDebounce?.isActive ==
-                                              true) {
-                                            _videoLoadDebounce?.cancel();
-                                            final curPath =
-                                                _videos[_current].path;
-                                            final thisGen =
-                                                ++_videoLoadGeneration;
-                                            _openAndRestoreVideo(curPath,
-                                                autoPlay: true,
-                                                generation: thisGen);
-                                          } else {
-                                            _player.play();
-                                          }
-                                          if (!_hasStartedPlaying) {
-                                            setState(() =>
-                                                _hasStartedPlaying = true);
-                                          }
-                                        },
-                                        child: Container(
-                                          width: 72,
-                                          height: 72,
-                                          decoration: BoxDecoration(
-                                            color: Colors.black
-                                                .withValues(alpha: 0.55),
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.4),
-                                              width: 1.5,
-                                            ),
-                                          ),
-                                          child: const Center(
-                                            child: Padding(
-                                              padding: EdgeInsets.only(left: 3),
-                                              child: Icon(
-                                                Icons.play_arrow_rounded,
-                                                size: 48,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.zoom_out_map_rounded,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  ValueListenableBuilder<Matrix4>(
+                                    valueListenable: _transformationController,
+                                    builder: (context, matrix, _) {
+                                      final scale = matrix.getMaxScaleOnAxis();
+                                      return Text(
+                                        '${scale.toStringAsFixed(1)}x • Reset',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.3,
                                         ),
                                       );
                                     },
                                   ),
-                                ),
-                              ),
-                            // Top bar
-                            Positioned(
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              child: _TopBar(
-                                item: item,
-                                currentIndex: _current,
-                                totalVideos: _videos.length,
-                                isTrash: widget.isTrash,
-                                onRestore: _restoreItem,
-                                onBack: () {
-                                  if (_isFullscreen) {
-                                    _exitFullscreen();
-                                  } else {
-                                    _videoSurfaceVisible.value = false;
-                                    if (_videos.isNotEmpty &&
-                                        _current < _videos.length &&
-                                        _videos[_current].isVideo) {
-                                      _saveCurrentPosition(
-                                          _activeLoadedVideoPath ??
-                                              _videos[_current].path);
-                                    }
-                                    _player.pause();
-                                    _activeMediaNotifier?.state =
-                                        _videos[_current].id;
-                                    Navigator.of(context).pop();
-                                  }
-                                },
-                                onInfo: () => showMediaInfoSheet(
-                                    context, item,
-                                    player: _player),
-                                onDelete: _deleteItem,
+                                ],
                               ),
                             ),
-                            // Bottom controls
-                            Positioned(
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              child: _BottomBar(
-                                player: _player,
-                                item: item,
-                                isVertical: _isCurrentVideoPortrait(),
-                                isTrash: widget.isTrash,
-                                onRestore: _restoreItem,
-                                isFullscreen: _isFullscreen,
-                                isLooping: _isLooping,
-                                playbackSpeed: _playbackSpeed,
-                                isSlideshowPlaying: _isSlideshowPlaying,
-                                onStartSlideshow: _startSlideshow,
-                                onStopSlideshow: _stopSlideshow,
-                                cropToFit: _cropToFit,
-                                onToggleCropToFit: _toggleCropToFit,
-                                onToggleFullscreen: _toggleFullscreen,
-                                onToggleLoop: _toggleLoop,
-                                onSelectSpeed: _showPlaybackSpeedSheet,
-                                onDelete: _deleteItem,
-                                onRename: _renameCurrentItem,
-                                onToggleOrientation: _toggleOrientation,
-                                onScrubbingChanged: (scrubbing) {
-                                  if (_isScrubbing != scrubbing) {
-                                    setState(() => _isScrubbing = scrubbing);
-                                    if (!scrubbing &&
-                                        !_videoSurfaceVisible.value) {
-                                      _videoSurfaceVisible.value = true;
-                                    }
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                      _FeedbackPillOverlay(
-                        dataNotifier: _feedbackToastNotifier,
-                        dragNotifier: _dragNotifier,
+                    ValueListenableBuilder<Offset>(
+                      valueListenable: _dragNotifier,
+                      builder: (context, drag, child) {
+                        final dragFade =
+                            (1.0 - (drag.dy / 35.0)).clamp(0.0, 1.0);
+                        final baseOpacity =
+                            (_showControls && !_isPinching) ? dragFade : 0.0;
+                        final anim = ModalRoute.of(context)?.animation;
+                        if (anim == null) {
+                          return Opacity(
+                            opacity: baseOpacity,
+                            child: IgnorePointer(
+                              ignoring:
+                                  !_showControls || drag.dy > 4 || _isPinching,
+                              child: child,
+                            ),
+                          );
+                        }
+                        return AnimatedBuilder(
+                          animation: anim,
+                          builder: (context, _) {
+                            final entrance =
+                                const Interval(0.65, 1.0, curve: Curves.easeOut)
+                                    .transform(anim.value);
+                            final opacity =
+                                (baseOpacity * entrance).clamp(0.0, 1.0);
+                            return Opacity(
+                              opacity: opacity,
+                              child: IgnorePointer(
+                                ignoring: !_showControls ||
+                                    drag.dy > 4 ||
+                                    _isPinching ||
+                                    opacity < 0.5,
+                                child: child,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                      child: Stack(
+                        children: [
+                          // Center play button when paused (exact center of the screen)
+                          // In landscape: completely removed.
+                          // In portrait: only shown before the video has ever started playing.
+                          if (MediaQuery.orientationOf(context) !=
+                                  Orientation.landscape &&
+                              !_hasStartedPlaying &&
+                              _videos[_current].isVideo)
+                            Center(
+                              child: ValueListenableBuilder<bool>(
+                                valueListenable: _isSwipingPage,
+                                builder: (context, isSwiping, child) {
+                                  return AnimatedOpacity(
+                                    duration: Duration(
+                                        milliseconds: isSwiping ? 150 : 250),
+                                    curve: Curves.easeInOut,
+                                    opacity: isSwiping ? 0.0 : 1.0,
+                                    child: IgnorePointer(
+                                      ignoring: isSwiping,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: ValueListenableBuilder<bool>(
+                                  valueListenable: _isPlayingNotifier,
+                                  builder: (_, playing, __) {
+                                    if (playing) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return BouncyTap(
+                                      onTap: () {
+                                        if (_videoLoadDebounce?.isActive ==
+                                            true) {
+                                          _videoLoadDebounce?.cancel();
+                                          final curPath =
+                                              _videos[_current].path;
+                                          final thisGen =
+                                              ++_videoLoadGeneration;
+                                          _openAndRestoreVideo(curPath,
+                                              autoPlay: true,
+                                              generation: thisGen);
+                                        } else {
+                                          _controller?.play();
+                                        }
+                                        if (!_hasStartedPlaying) {
+                                          setState(
+                                              () => _hasStartedPlaying = true);
+                                        }
+                                      },
+                                      child: Container(
+                                        width: 72,
+                                        height: 72,
+                                        decoration: BoxDecoration(
+                                          color: Colors.black
+                                              .withValues(alpha: 0.55),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white
+                                                .withValues(alpha: 0.4),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: const Center(
+                                          child: Padding(
+                                            padding: EdgeInsets.only(left: 3),
+                                            child: Icon(
+                                              Icons.play_arrow_rounded,
+                                              size: 48,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          // Top bar
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            child: _TopBar(
+                              item: item,
+                              currentIndex: _current,
+                              totalVideos: _videos.length,
+                              isTrash: widget.isTrash,
+                              onRestore: _restoreItem,
+                              onBack: () {
+                                if (_isFullscreen) {
+                                  _exitFullscreen();
+                                } else {
+                                  _videoSurfaceVisible.value = false;
+                                  if (_videos.isNotEmpty &&
+                                      _current < _videos.length &&
+                                      _videos[_current].isVideo) {
+                                    _saveCurrentPosition(
+                                        _activeLoadedVideoPath ??
+                                            _videos[_current].path);
+                                  }
+                                  _controller?.pause();
+                                  _activeMediaNotifier?.state =
+                                      _videos[_current].id;
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                              onInfo: () => showMediaInfoSheet(context, item,
+                                  player: _controller),
+                              onDelete: _deleteItem,
+                            ),
+                          ),
+                          // Bottom controls
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: _BottomBar(
+                              controller: _controller,
+                              item: item,
+                              isVertical: _isCurrentVideoPortrait(),
+                              isTrash: widget.isTrash,
+                              onRestore: _restoreItem,
+                              isFullscreen: _isFullscreen,
+                              isLooping: _isLooping,
+                              playbackSpeed: _playbackSpeed,
+                              isSlideshowPlaying: _isSlideshowPlaying,
+                              onStartSlideshow: _startSlideshow,
+                              onStopSlideshow: _stopSlideshow,
+                              cropToFit: _cropToFit,
+                              onToggleCropToFit: _toggleCropToFit,
+                              onToggleFullscreen: _toggleFullscreen,
+                              onToggleLoop: _toggleLoop,
+                              onSelectSpeed: _showPlaybackSpeedSheet,
+                              onDelete: _deleteItem,
+                              onRename: _renameCurrentItem,
+                              onToggleOrientation: _toggleOrientation,
+                              onScrubbingChanged: (scrubbing) {
+                                if (_isScrubbing != scrubbing) {
+                                  setState(() => _isScrubbing = scrubbing);
+                                  if (!scrubbing &&
+                                      !_videoSurfaceVisible.value) {
+                                    _videoSurfaceVisible.value = true;
+                                  }
+                                }
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    _FeedbackPillOverlay(
+                      dataNotifier: _feedbackToastNotifier,
+                      dragNotifier: _dragNotifier,
+                    ),
+                  ],
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -2615,8 +2516,8 @@ class _TopBar extends StatelessWidget {
               ),
               if (!isTrash)
                 IconButton(
-                  icon:
-                      const Icon(Icons.info_outline, color: Colors.white, size: 22),
+                  icon: const Icon(Icons.info_outline,
+                      color: Colors.white, size: 22),
                   tooltip: context.tr.details,
                   onPressed: onInfo,
                 ),
@@ -2760,7 +2661,7 @@ class _TooltipCaretPainter extends CustomPainter {
 
 class _BottomBar extends StatefulWidget {
   const _BottomBar({
-    required this.player,
+    required this.controller,
     required this.item,
     required this.isVertical,
     required this.isFullscreen,
@@ -2782,7 +2683,7 @@ class _BottomBar extends StatefulWidget {
     this.onStopSlideshow,
   });
 
-  final Player player;
+  final VideoPlayerController? controller;
   final MediaItem item;
   final bool isVertical;
   final bool isFullscreen;
@@ -2812,8 +2713,6 @@ class _BottomBarState extends State<_BottomBar> {
   double? _dragFraction;
   bool _showPillBadge = false;
   Timer? _pillFadeTimer;
-  StreamSubscription<bool>? _playingSub;
-  StreamSubscription<bool>? _completedSub;
 
   final Map<int, Uint8List> _frameCache = {};
   Uint8List? _lastFrameBytes;
@@ -2842,7 +2741,7 @@ class _BottomBarState extends State<_BottomBar> {
   void initState() {
     super.initState();
     _lastFrameBytes = _resolveInitialThumbnail();
-    if (widget.player.state.playing) {
+    if (widget.controller?.value.isPlaying ?? false) {
       _showPillBadge = true;
       _pillFadeTimer = Timer(const Duration(seconds: 2), () {
         if (mounted && !_isDragging) {
@@ -2868,52 +2767,59 @@ class _BottomBarState extends State<_BottomBar> {
       _isFetchingFrame = false;
       _pendingTargetPos = null;
     }
-    if (oldWidget.player != widget.player) {
+    if (oldWidget.controller != widget.controller) {
       _unsubscribePlayer();
       _subscribePlayer();
     }
   }
 
   void _subscribePlayer() {
-    _playingSub = widget.player.stream.playing.listen((playing) {
-      if (!mounted) return;
-      if (playing) {
-        _pillFadeTimer?.cancel();
-        setState(() {
-          _showPillBadge = true;
-        });
-        _pillFadeTimer = Timer(const Duration(seconds: 2), () {
-          if (mounted && !_isDragging) {
-            setState(() {
-              _showPillBadge = false;
-            });
-          }
-        });
-      } else {
-        if (!_isDragging && !widget.player.state.completed) {
-          _pillFadeTimer?.cancel();
-          setState(() {
-            _showPillBadge = false;
-          });
-        }
-      }
-    });
-
-    _completedSub = widget.player.stream.completed.listen((completed) {
-      if (!mounted) return;
-      if (completed) {
-        _pillFadeTimer?.cancel();
-        setState(() {
-          _showPillBadge = true;
-        });
-      }
-    });
+    widget.controller?.addListener(_onControllerChange);
   }
 
   void _unsubscribePlayer() {
     _pillFadeTimer?.cancel();
-    _playingSub?.cancel();
-    _completedSub?.cancel();
+    widget.controller?.removeListener(_onControllerChange);
+  }
+
+  void _onControllerChange() {
+    if (!mounted || widget.controller == null) return;
+    final val = widget.controller!.value;
+    final playing = val.isPlaying;
+    final isCompleted = val.isCompleted ||
+        (val.duration > Duration.zero &&
+            val.position >= val.duration &&
+            !playing);
+
+    if (playing) {
+      _pillFadeTimer?.cancel();
+      if (!_showPillBadge) {
+        setState(() {
+          _showPillBadge = true;
+        });
+      }
+      _pillFadeTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted && !_isDragging) {
+          setState(() {
+            _showPillBadge = false;
+          });
+        }
+      });
+    } else {
+      if (!_isDragging && !isCompleted && _showPillBadge) {
+        _pillFadeTimer?.cancel();
+        setState(() {
+          _showPillBadge = false;
+        });
+      }
+    }
+
+    if (isCompleted && !_showPillBadge) {
+      _pillFadeTimer?.cancel();
+      setState(() {
+        _showPillBadge = true;
+      });
+    }
   }
 
   @override
@@ -3017,9 +2923,9 @@ class _BottomBarState extends State<_BottomBar> {
     widget.onScrubbingChanged?.call(true);
     _pillFadeTimer?.cancel();
     _previewFadeTimer?.cancel();
-    _wasPlayingBeforeDrag = widget.player.state.playing;
+    _wasPlayingBeforeDrag = widget.controller?.value.isPlaying ?? false;
     if (_wasPlayingBeforeDrag) {
-      widget.player.pause();
+      widget.controller?.pause();
     }
     final target = Duration(
       milliseconds: (v * dur.inMilliseconds).round(),
@@ -3055,9 +2961,9 @@ class _BottomBarState extends State<_BottomBar> {
     final target = Duration(
       milliseconds: (v * dur.inMilliseconds).round(),
     );
-    widget.player.seek(target);
+    widget.controller?.seekTo(target);
     if (_wasPlayingBeforeDrag) {
-      widget.player.play();
+      widget.controller?.play();
     }
     widget.onScrubbingChanged?.call(false);
     _debounceTimer?.cancel();
@@ -3181,178 +3087,182 @@ class _BottomBarState extends State<_BottomBar> {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
             child: widget.isTrash
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _ViewerActionButton(
-                    icon: const Icon(Icons.restore,
-                        color: Colors.white, size: 22),
-                    label: context.tr.restore,
-                    onTap: widget.onRestore ?? () {},
-                  ),
-                  _ViewerActionButton(
-                    icon: const Icon(Icons.info_outline,
-                        color: Colors.white, size: 22),
-                    label: context.tr.details,
-                    onTap: () => showMediaInfoSheet(context, widget.item),
-                  ),
-                  _ViewerActionButton(
-                    icon: const Icon(Icons.delete_forever,
-                        color: Colors.white, size: 22),
-                    label: context.tr.delete,
-                    onTap: widget.onDelete,
-                  ),
-                ],
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _ViewerActionButton(
-                    icon: const Icon(Icons.share_outlined,
-                        color: Colors.white, size: 22),
-                    label: context.tr.share,
-                    onTap: () => ShareService.shareSingle(widget.item.path,
-                        isVideo: false),
-                  ),
-                  Consumer(
-                    builder: (context, ref, _) {
-                      final isFav = ref.watch(
-                        settingsNotifierProvider.select(
-                          (s) => s.favoriteIds.contains(widget.item.id),
-                        ),
-                      );
-                      return _ViewerActionButton(
-                        icon: Icon(
-                          isFav ? Icons.favorite : Icons.favorite_border,
-                          color: isFav ? Colors.redAccent : Colors.white,
-                          size: 22,
-                        ),
-                        label: context.tr.favorite,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          final currentFavs = Set<String>.from(
-                            ref.read(settingsNotifierProvider).favoriteIds,
-                          );
-                          if (currentFavs.contains(widget.item.id)) {
-                            currentFavs.remove(widget.item.id);
-                          } else {
-                            currentFavs.add(widget.item.id);
-                          }
-                          ref.read(settingsNotifierProvider.notifier).update(
-                                (s) => s.copyWith(
-                                    favoriteIds: currentFavs.toList()),
-                              );
-                        },
-                      );
-                    },
-                  ),
-                  _ViewerActionButton(
-                    icon: const Icon(Icons.delete_outline,
-                        color: Colors.white, size: 22),
-                    label: context.tr.delete,
-                    onTap: widget.onDelete,
-                  ),
-                  PopupMenuButton<String>(
-                    tooltip: context.tr.moreOptions,
-                    color: const Color(0xFF222222),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    constraints: const BoxConstraints(minWidth: 130, maxWidth: 195),
-                    onSelected: (value) {
-                      if (value == 'slideshow') {
-                        if (widget.isSlideshowPlaying) {
-                          widget.onStopSlideshow?.call();
-                        } else {
-                          widget.onStartSlideshow?.call();
-                        }
-                      } else if (value == 'rename') {
-                        widget.onRename?.call();
-                      } else if (value == 'wallpaper') {
-                        ShareService.setAsWallpaper(widget.item.path);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: 'slideshow',
-                        height: 40,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Row(
-                          children: [
-                            Icon(
-                              widget.isSlideshowPlaying
-                                  ? Icons.pause_circle_outline_rounded
-                                  : Icons.slideshow_rounded,
-                              size: 18,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                              widget.isSlideshowPlaying
-                                  ? context.tr.pause
-                                  : context.tr.slideshow,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 13.5),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _ViewerActionButton(
+                        icon: const Icon(Icons.restore,
+                            color: Colors.white, size: 22),
+                        label: context.tr.restore,
+                        onTap: widget.onRestore ?? () {},
                       ),
-                      if (widget.onRename != null)
-                        PopupMenuItem(
-                          value: 'rename',
-                          height: 40,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.edit_outlined,
-                                  size: 18, color: Colors.white),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                context.tr.rename,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 13.5),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
+                      _ViewerActionButton(
+                        icon: const Icon(Icons.info_outline,
+                            color: Colors.white, size: 22),
+                        label: context.tr.details,
+                        onTap: () => showMediaInfoSheet(context, widget.item),
+                      ),
+                      _ViewerActionButton(
+                        icon: const Icon(Icons.delete_forever,
+                            color: Colors.white, size: 22),
+                        label: context.tr.delete,
+                        onTap: widget.onDelete,
+                      ),
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _ViewerActionButton(
+                        icon: const Icon(Icons.share_outlined,
+                            color: Colors.white, size: 22),
+                        label: context.tr.share,
+                        onTap: () => ShareService.shareSingle(widget.item.path,
+                            isVideo: false),
+                      ),
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final isFav = ref.watch(
+                            settingsNotifierProvider.select(
+                              (s) => s.favoriteIds.contains(widget.item.id),
+                            ),
+                          );
+                          return _ViewerActionButton(
+                            icon: Icon(
+                              isFav ? Icons.favorite : Icons.favorite_border,
+                              color: isFav ? Colors.redAccent : Colors.white,
+                              size: 22,
+                            ),
+                            label: context.tr.favorite,
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              final currentFavs = Set<String>.from(
+                                ref.read(settingsNotifierProvider).favoriteIds,
+                              );
+                              if (currentFavs.contains(widget.item.id)) {
+                                currentFavs.remove(widget.item.id);
+                              } else {
+                                currentFavs.add(widget.item.id);
+                              }
+                              ref
+                                  .read(settingsNotifierProvider.notifier)
+                                  .update(
+                                    (s) => s.copyWith(
+                                        favoriteIds: currentFavs.toList()),
+                                  );
+                            },
+                          );
+                        },
+                      ),
+                      _ViewerActionButton(
+                        icon: const Icon(Icons.delete_outline,
+                            color: Colors.white, size: 22),
+                        label: context.tr.delete,
+                        onTap: widget.onDelete,
+                      ),
+                      PopupMenuButton<String>(
+                        tooltip: context.tr.moreOptions,
+                        color: const Color(0xFF222222),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                      PopupMenuItem(
-                        value: 'wallpaper',
-                        height: 40,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.wallpaper_outlined,
-                                size: 18, color: Colors.white),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                              context.tr.setAsWallpaper,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 13.5),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                        constraints:
+                            const BoxConstraints(minWidth: 130, maxWidth: 195),
+                        onSelected: (value) {
+                          if (value == 'slideshow') {
+                            if (widget.isSlideshowPlaying) {
+                              widget.onStopSlideshow?.call();
+                            } else {
+                              widget.onStartSlideshow?.call();
+                            }
+                          } else if (value == 'rename') {
+                            widget.onRename?.call();
+                          } else if (value == 'wallpaper') {
+                            ShareService.setAsWallpaper(widget.item.path);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'slideshow',
+                            height: 40,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  widget.isSlideshowPlaying
+                                      ? Icons.pause_circle_outline_rounded
+                                      : Icons.slideshow_rounded,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    widget.isSlideshowPlaying
+                                        ? context.tr.pause
+                                        : context.tr.slideshow,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 13.5),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (widget.onRename != null)
+                            PopupMenuItem(
+                              value: 'rename',
+                              height: 40,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 14),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.edit_outlined,
+                                      size: 18, color: Colors.white),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      context.tr.rename,
+                                      style: const TextStyle(
+                                          color: Colors.white, fontSize: 13.5),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
+                          PopupMenuItem(
+                            value: 'wallpaper',
+                            height: 40,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.wallpaper_outlined,
+                                    size: 18, color: Colors.white),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    context.tr.setAsWallpaper,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 13.5),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        child: _ViewerActionButton(
+                          icon: const Icon(Icons.more_vert,
+                              color: Colors.white, size: 22),
+                          label: context.tr.more,
                         ),
                       ),
                     ],
-                    child: _ViewerActionButton(
-                      icon: const Icon(Icons.more_vert,
-                          color: Colors.white, size: 22),
-                      label: context.tr.more,
-                    ),
                   ),
-                ],
-              ),
           ),
         ),
       );
@@ -3375,40 +3285,38 @@ class _BottomBarState extends State<_BottomBar> {
         top: false,
         child: Padding(
           padding: EdgeInsets.fromLTRB(8, 0, 8, isLandscape ? 2 : 8),
-          child: StreamBuilder<Duration>(
-            stream: widget.player.stream.position,
-            builder: (_, posSnap) {
-              return StreamBuilder<Duration>(
-                stream: widget.player.stream.duration,
-                builder: (_, durSnap) {
-                  final pos = posSnap.data ?? Duration.zero;
-                  final dur = durSnap.data ?? widget.item.duration ?? Duration.zero;
-                  final displayPos = (_isDragging &&
-                          _dragFraction != null &&
-                          dur.inMilliseconds > 0)
-                      ? Duration(
-                          milliseconds:
-                              (_dragFraction! * dur.inMilliseconds).round())
-                      : pos;
-                  final frac = dur.inMilliseconds > 0
-                      ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))
-                      : 0.0;
+          child: ListenableBuilder(
+            listenable: widget.controller ?? ChangeNotifier(),
+            builder: (_, __) {
+              final val = widget.controller?.value;
+              final pos = val?.position ?? Duration.zero;
+              final dur = (val != null && val.duration > Duration.zero)
+                  ? val.duration
+                  : (widget.item.duration ?? Duration.zero);
+              final displayPos = (_isDragging &&
+                      _dragFraction != null &&
+                      dur.inMilliseconds > 0)
+                  ? Duration(
+                      milliseconds:
+                          (_dragFraction! * dur.inMilliseconds).round())
+                  : pos;
+              final frac = dur.inMilliseconds > 0
+                  ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))
+                  : 0.0;
 
-                  if (isLandscape) {
-                    return _buildLandscapeLayout(
-                      context,
-                      displayPos: displayPos,
-                      dur: dur,
-                      frac: frac,
-                    );
-                  }
-                  return _buildPortraitLayout(
-                    context,
-                    displayPos: displayPos,
-                    dur: dur,
-                    frac: frac,
-                  );
-                },
+              if (isLandscape) {
+                return _buildLandscapeLayout(
+                  context,
+                  displayPos: displayPos,
+                  dur: dur,
+                  frac: frac,
+                );
+              }
+              return _buildPortraitLayout(
+                context,
+                displayPos: displayPos,
+                dur: dur,
+                frac: frac,
               );
             },
           ),
@@ -3454,13 +3362,18 @@ class _BottomBarState extends State<_BottomBar> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               // Play / Pause button
-              StreamBuilder<bool>(
-                initialData: widget.player.state.playing,
-                stream: widget.player.stream.playing,
-                builder: (_, snap) {
-                  final playing = snap.data ?? widget.player.state.playing;
+              ListenableBuilder(
+                listenable: widget.controller ?? ChangeNotifier(),
+                builder: (_, __) {
+                  final playing = widget.controller?.value.isPlaying ?? false;
                   return BouncyTap(
-                    onTap: widget.player.playOrPause,
+                    onTap: () {
+                      if (playing) {
+                        widget.controller?.pause();
+                      } else {
+                        widget.controller?.play();
+                      }
+                    },
                     child: Padding(
                       padding: const EdgeInsets.all(6),
                       child: Icon(
@@ -3559,7 +3472,8 @@ class _BottomBarState extends State<_BottomBar> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      constraints: const BoxConstraints(minWidth: 130, maxWidth: 195),
+                      constraints:
+                          const BoxConstraints(minWidth: 130, maxWidth: 195),
                       offset: const Offset(0, 36),
                       onSelected: (value) {
                         if (value == 'restore') {
@@ -3599,7 +3513,8 @@ class _BottomBarState extends State<_BottomBar> {
                             PopupMenuItem(
                               value: 'restore',
                               height: 40,
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 14),
                               child: Row(
                                 children: [
                                   const Icon(Icons.restore,
@@ -3607,9 +3522,9 @@ class _BottomBarState extends State<_BottomBar> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                    context.tr.restore,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 13.5),
+                                      context.tr.restore,
+                                      style: const TextStyle(
+                                          color: Colors.white, fontSize: 13.5),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -3620,7 +3535,8 @@ class _BottomBarState extends State<_BottomBar> {
                             PopupMenuItem(
                               value: 'delete',
                               height: 40,
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 14),
                               child: Row(
                                 children: [
                                   const Icon(Icons.delete_forever,
@@ -3628,10 +3544,10 @@ class _BottomBarState extends State<_BottomBar> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                    context.tr.delete,
-                                    style: const TextStyle(
-                                        color: Colors.redAccent,
-                                        fontSize: 13.5),
+                                      context.tr.delete,
+                                      style: const TextStyle(
+                                          color: Colors.redAccent,
+                                          fontSize: 13.5),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -3663,11 +3579,11 @@ class _BottomBarState extends State<_BottomBar> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                  widget.isSlideshowPlaying
-                                      ? context.tr.pause
-                                      : context.tr.slideshow,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 13.5),
+                                    widget.isSlideshowPlaying
+                                        ? context.tr.pause
+                                        : context.tr.slideshow,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 13.5),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -3692,12 +3608,13 @@ class _BottomBarState extends State<_BottomBar> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                  context.tr.favorite,
-                                  style: TextStyle(
-                                    color:
-                                        isFav ? Colors.redAccent : Colors.white,
-                                    fontSize: 13.5,
-                                  ),
+                                    context.tr.favorite,
+                                    style: TextStyle(
+                                      color: isFav
+                                          ? Colors.redAccent
+                                          : Colors.white,
+                                      fontSize: 13.5,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -3716,9 +3633,9 @@ class _BottomBarState extends State<_BottomBar> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                  context.tr.share,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 13.5),
+                                    context.tr.share,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 13.5),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -3730,7 +3647,8 @@ class _BottomBarState extends State<_BottomBar> {
                             PopupMenuItem(
                               value: 'rename',
                               height: 40,
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 14),
                               child: Row(
                                 children: [
                                   const Icon(Icons.edit_outlined,
@@ -3738,9 +3656,9 @@ class _BottomBarState extends State<_BottomBar> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                    context.tr.rename,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 13.5),
+                                      context.tr.rename,
+                                      style: const TextStyle(
+                                          color: Colors.white, fontSize: 13.5),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -3759,9 +3677,9 @@ class _BottomBarState extends State<_BottomBar> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                  context.tr.delete,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 13.5),
+                                    context.tr.delete,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 13.5),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -3890,7 +3808,7 @@ class _BottomBarState extends State<_BottomBar> {
                         color: Colors.white, size: 22),
                     label: context.tr.details,
                     onTap: () => showMediaInfoSheet(context, widget.item,
-                        player: widget.player),
+                        player: widget.controller),
                   ),
                   _ViewerActionButton(
                     icon: const Icon(Icons.delete_forever,
@@ -3945,11 +3863,11 @@ class _BottomBarState extends State<_BottomBar> {
                     },
                   ),
                   // 3. Play / Pause
-                  StreamBuilder<bool>(
-                    initialData: widget.player.state.playing,
-                    stream: widget.player.stream.playing,
-                    builder: (_, snap) {
-                      final playing = snap.data ?? widget.player.state.playing;
+                  ListenableBuilder(
+                    listenable: widget.controller ?? ChangeNotifier(),
+                    builder: (_, __) {
+                      final playing =
+                          widget.controller?.value.isPlaying ?? false;
                       return _ViewerActionButton(
                         icon: Icon(
                           playing
@@ -3959,7 +3877,13 @@ class _BottomBarState extends State<_BottomBar> {
                           size: 24,
                         ),
                         label: playing ? context.tr.pause : context.tr.play,
-                        onTap: widget.player.playOrPause,
+                        onTap: () {
+                          if (playing) {
+                            widget.controller?.pause();
+                          } else {
+                            widget.controller?.play();
+                          }
+                        },
                       );
                     },
                   ),
@@ -3977,7 +3901,8 @@ class _BottomBarState extends State<_BottomBar> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    constraints: const BoxConstraints(minWidth: 130, maxWidth: 200),
+                    constraints:
+                        const BoxConstraints(minWidth: 130, maxWidth: 200),
                     onSelected: (value) {
                       if (value == 'slideshow') {
                         if (widget.isSlideshowPlaying) {
@@ -4010,11 +3935,11 @@ class _BottomBarState extends State<_BottomBar> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                              widget.isSlideshowPlaying
-                                  ? context.tr.pause
-                                  : context.tr.slideshow,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 13.5),
+                                widget.isSlideshowPlaying
+                                    ? context.tr.pause
+                                    : context.tr.slideshow,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 13.5),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -4033,9 +3958,9 @@ class _BottomBarState extends State<_BottomBar> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                              '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 13.5),
+                                '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 13.5),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -4061,15 +3986,15 @@ class _BottomBarState extends State<_BottomBar> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                              widget.isLooping
-                                  ? context.tr.loopOn
-                                  : context.tr.loopOff,
-                              style: TextStyle(
-                                color: widget.isLooping
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Colors.white,
-                                fontSize: 13.5,
-                              ),
+                                widget.isLooping
+                                    ? context.tr.loopOn
+                                    : context.tr.loopOff,
+                                style: TextStyle(
+                                  color: widget.isLooping
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Colors.white,
+                                  fontSize: 13.5,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -4089,9 +4014,9 @@ class _BottomBarState extends State<_BottomBar> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                context.tr.rename,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 13.5),
+                                  context.tr.rename,
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 13.5),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),

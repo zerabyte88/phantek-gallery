@@ -43,7 +43,7 @@ android {
         versionCode     = flutter.versionCode
         versionName     = flutter.versionName
 
-        // Needed for photo_manager / media_kit native bridge
+        // Needed for photo_manager native bridge
         multiDexEnabled = true
     }
 

@@ -58,7 +58,7 @@ class SettingsModel extends Equatable {
   /// When true, deleting moves items to .trash instead of permanently deleting.
   final bool enableTrash;
 
-  /// Use Android hardware-accelerated video decoding in media_kit.
+  /// Use Android hardware-accelerated video decoding.
   final bool hardwareAcceleration;
 
   /// Auto-play first video when entering the player.
