@@ -200,9 +200,9 @@ class PsdService {
       }
 
       return await _isolateGate.run(() => compute(
-        _isolateDecodeThumbnail,
-        _DecodeThumbnailParams(filePath, maxDimension),
-      ));
+            _isolateDecodeThumbnail,
+            _DecodeThumbnailParams(filePath, maxDimension),
+          ));
     } catch (e) {
       debugPrint('[PsdService] decodeThumbnail error for $filePath: $e');
       return null;
@@ -275,7 +275,8 @@ Uint8List? _isolateDecodeThumbnail(_DecodeThumbnailParams params) {
 
     if (image == null) return null;
 
-    if (image.width > params.maxDimension || image.height > params.maxDimension) {
+    if (image.width > params.maxDimension ||
+        image.height > params.maxDimension) {
       image = img.copyResize(
         image,
         width: image.width >= image.height ? params.maxDimension : null,
@@ -380,4 +381,3 @@ Uint8List? _isolateRenderWithLayers(_RenderWithLayersParams params) {
     return null;
   }
 }
-

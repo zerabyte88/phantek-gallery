@@ -581,9 +581,9 @@ class ThumbnailService {
 
         if (targetPath != null && targetPath.isNotEmpty) {
           try {
-            bytes = await _extractNativeVideoThumbnail(targetPath,
-                    assetId: req.id)
-                .timeout(const Duration(seconds: 4), onTimeout: () => null);
+            bytes =
+                await _extractNativeVideoThumbnail(targetPath, assetId: req.id)
+                    .timeout(const Duration(seconds: 4), onTimeout: () => null);
           } catch (_) {}
         }
 
