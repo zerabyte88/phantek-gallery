@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
@@ -580,7 +581,7 @@ void main() {
       expect(find.text('ARM64-v8a'), findsNothing);
       expect(find.text('Video Engine'), findsNothing);
       expect(find.text('Build'), findsOneWidget);
-      expect(find.text('762445'), findsOneWidget);
+      expect(find.text('762446'), findsOneWidget);
       expect(find.text('MIT License'), findsOneWidget);
     });
 
@@ -634,6 +635,73 @@ void main() {
         final badSigFile = File('${tempDir.path}/badsig.psd');
         await badSigFile.writeAsBytes(List.filled(40, 0));
         expect(await service.extractMergedComposite(badSigFile.path), isNull);
+      } finally {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('PsdService.loadPsdDocument multi-tier loader recovery engine',
+        () async {
+      final service = PsdService.instance;
+
+      // 1. Non-existent file returns null
+      final nonExistentResult =
+          await service.loadPsdDocument('/non/existent/path/file.psd');
+      expect(nonExistentResult, isNull);
+
+      // 2. Corrupt header file returns null safely
+      final tempDir = await Directory.systemTemp.createTemp('psd_load_test_');
+      try {
+        final corruptFile = File('${tempDir.path}/corrupt_header.psd');
+        await corruptFile.writeAsBytes([0x38, 0x42, 0x50, 0x53, 0x00, 0x01]);
+        expect(await service.loadPsdDocument(corruptFile.path), isNull);
+
+        // 3. Synthesized Section 5 PSD returns valid composite image
+        final synthFile = File('${tempDir.path}/valid_section5.psd');
+        final builder = BytesBuilder(copy: false);
+
+        // Header: 26 bytes ('8BPS', v1, 6 reserved bytes, 3 channels, 2x2, 8-bit, RGB mode = 3)
+        final header = Uint8List(26);
+        final hv = ByteData.sublistView(header);
+        header.setRange(0, 4, [0x38, 0x42, 0x50, 0x53]); // '8BPS'
+        hv.setUint16(4, 1); // version 1
+        hv.setUint16(12, 3); // channels = 3
+        hv.setUint32(14, 2); // height = 2
+        hv.setUint32(18, 2); // width = 2
+        hv.setUint16(22, 8); // depth = 8
+        hv.setUint16(24, 3); // colorMode = 3 (RGB)
+        builder.add(header);
+
+        // Color Mode Data Section: length = 0 (4 bytes)
+        builder.add(Uint8List(4));
+
+        // Image Resources Section: length = 0 (4 bytes)
+        builder.add(Uint8List(4));
+
+        // Layer and Mask Section: length = 0 (4 bytes)
+        builder.add(Uint8List(4));
+
+        // Section 5 (Image Data Section):
+        // Compression: 2 bytes (0 = raw uncompressed)
+        final sec5Header = Uint8List(2);
+        builder.add(sec5Header);
+
+        // Planar pixel data: 3 channels * 4 pixels = 12 bytes
+        // Red channel (4 bytes)
+        builder.add(Uint8List.fromList([255, 128, 64, 32]));
+        // Green channel (4 bytes)
+        builder.add(Uint8List.fromList([10, 20, 30, 40]));
+        // Blue channel (4 bytes)
+        builder.add(Uint8List.fromList([50, 60, 70, 80]));
+
+        await synthFile.writeAsBytes(builder.takeBytes());
+
+        final composite = await service.loadPsdDocument(synthFile.path);
+        expect(composite, isNotNull);
+        expect(composite!.isNotEmpty, isTrue);
+        // Valid JPEG header starts with 0xFF, 0xD8
+        expect(composite[0], 0xFF);
+        expect(composite[1], 0xD8);
       } finally {
         await tempDir.delete(recursive: true);
       }

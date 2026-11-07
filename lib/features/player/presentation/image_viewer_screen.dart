@@ -177,9 +177,31 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   final Map<String, Uint8List> _psdRenderedBytes = {};
   final Map<String, bool> _psdRendering = {};
   final Map<String, bool> _psdRenderComplete = {};
+  final Map<String, bool> _psdLoadError = {};
+  final Map<String, String> _psdLoadStatus = {};
 
-  void _loadPsdDataIfNeeded(String path) {
+  void _loadPsdDataIfNeeded(String path, {bool force = false}) {
     if (!PsdService.isPsd(path)) return;
+
+    if (force) {
+      _psdLoadError.remove(path);
+      _psdRenderComplete.remove(path);
+      _psdRenderedBytes.remove(path);
+    }
+
+    if (_psdRendering[path] == true) return;
+    if (_psdRenderedBytes.containsKey(path) &&
+        _psdRenderComplete[path] == true) {
+      return;
+    }
+    if (!force && _psdLoadError[path] == true) return;
+
+    _psdRendering[path] = true;
+    _psdLoadError[path] = false;
+    _psdLoadStatus[path] = 'Reading Photoshop document...';
+    if (force && mounted) {
+      setState(() {});
+    }
 
     if (!_psdLayersCache.containsKey(path)) {
       PsdService.instance.getLayers(path).then((layers) {
@@ -191,42 +213,27 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       });
     }
 
-    if (_psdRendering[path] == true) return;
-    if (_psdRenderedBytes.containsKey(path) &&
-        _psdRenderComplete[path] == true) {
-      return;
-    }
-
-    _psdRendering[path] = true;
-
-    // Phase 1: Quick preview via embedded thumbnail — shows something immediately
-    if (!_psdRenderedBytes.containsKey(path)) {
-      PsdService.instance.decodeThumbnail(path, maxDimension: 1024).then((preview) {
-        if (!mounted) return;
-        if (preview != null && preview.isNotEmpty) {
-          setState(() {
-            _psdRenderedBytes[path] = preview;
-          });
+    PsdService.instance.loadPsdDocument(path, maxDimension: 2048).then((bytes) {
+      if (!mounted) return;
+      setState(() {
+        if (bytes != null && bytes.isNotEmpty) {
+          _psdRenderedBytes[path] = bytes;
+          _psdRenderComplete[path] = true;
+          _psdRendering[path] = false;
+          _psdLoadError[path] = false;
+        } else {
+          _psdRendering[path] = false;
+          _psdLoadError[path] = true;
+          _psdLoadStatus[path] = 'Failed to load document';
         }
       });
-    }
-
-    // Phase 2: Full render — overwrites preview on success
-    PsdService.instance
-        .renderWithLayers(
-      path,
-      hiddenLayerIndices: _psdHiddenLayers[path] ?? {},
-    )
-        .then((bytes) {
-      if (mounted) {
-        setState(() {
-          if (bytes != null && bytes.isNotEmpty) {
-            _psdRenderedBytes[path] = bytes;
-            _psdRenderComplete[path] = true;
-          }
-          _psdRendering[path] = false;
-        });
-      }
+    }).catchError((_) {
+      if (!mounted) return;
+      setState(() {
+        _psdRendering[path] = false;
+        _psdLoadError[path] = true;
+        _psdLoadStatus[path] = 'Failed to load document';
+      });
     });
   }
 
@@ -567,50 +574,207 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     if (PsdService.isPsd(it.path)) {
       _loadPsdDataIfNeeded(it.path);
       final rendered = _psdRenderedBytes[it.path];
-      final isRendering = _psdRendering[it.path] == true;
-      Widget content;
       if (rendered != null && rendered.isNotEmpty) {
-        content = Image(
+        Widget content = Image(
           image: MemoryImage(rendered),
           fit: BoxFit.contain,
           gaplessPlayback: true,
           filterQuality: FilterQuality.medium,
         );
-      } else {
-        content = Stack(
-          alignment: Alignment.center,
-          children: [
-            _thumb(it.id, it.path, _psdRenderedBytes[it.path]),
-            if (isRendering)
-              const Center(
-                child: SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+
+        final ar = (it.width != null &&
+                it.height != null &&
+                it.width! > 0 &&
+                it.height! > 0)
+            ? (it.width! / it.height!)
+            : ThumbnailService.instance.getThumbnailAspectRatio(it.id);
+
+        if (ar != null && ar > 0) {
+          content = AspectRatio(
+            aspectRatio: ar,
+            child: content,
+          );
+        }
+
+        return content;
+      } else if (_psdLoadError[it.path] == true) {
+        return Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.all(24),
+            constraints: const BoxConstraints(maxWidth: 380),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black45,
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF31A8FF),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'PSD',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                      letterSpacing: 1.2,
+                    ),
                   ),
                 ),
+                const SizedBox(height: 14),
+                Text(
+                  it.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Could not load Photoshop document',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 13,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: () => _loadPsdDataIfNeeded(it.path, force: true),
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Retry'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF31A8FF),
+                    foregroundColor: Colors.black,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        final sizeMb = (it.size / (1024 * 1024)).toStringAsFixed(1);
+        final status =
+            _psdLoadStatus[it.path] ?? 'Reading Photoshop document...';
+
+        return Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned.fill(
+                child: Opacity(
+                  opacity: 0.25,
+                  child: _thumb(it.id, it.path, null),
+                ),
               ),
-          ],
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.all(24),
+                constraints: const BoxConstraints(maxWidth: 380),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(16),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black45,
+                      blurRadius: 20,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF31A8FF),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'PSD',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      it.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '$sizeMb MB',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const SizedBox(
+                      width: 140,
+                      child: LinearProgressIndicator(
+                        backgroundColor: Colors.white12,
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Color(0xFF31A8FF)),
+                        minHeight: 3,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      status,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 12,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         );
       }
-
-      final ar = (it.width != null &&
-              it.height != null &&
-              it.width! > 0 &&
-              it.height! > 0)
-          ? (it.width! / it.height!)
-          : ThumbnailService.instance.getThumbnailAspectRatio(it.id);
-
-      if (ar != null && ar > 0) {
-        content = AspectRatio(
-          aspectRatio: ar,
-          child: content,
-        );
-      }
-
-      return content;
     }
 
     Widget content = Image(
@@ -1067,8 +1231,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                     isCur ? _transformationController : null,
                                 minScale: 1.0,
                                 maxScale: 8.0,
-                                panEnabled: isCur && _isCurrentlyZoomed,
-                                scaleEnabled: isCur,
+                                panEnabled: isCur &&
+                                    _isCurrentlyZoomed &&
+                                    (_psdLoadError[it.path] != true),
+                                scaleEnabled: isCur &&
+                                    (!PsdService.isPsd(it.path) ||
+                                        (_psdRenderedBytes[it.path] != null &&
+                                            _psdRenderedBytes[it.path]!
+                                                .isNotEmpty)),
                                 clipBehavior: Clip.hardEdge,
                                 onInteractionStart: isCur
                                     ? (details) {

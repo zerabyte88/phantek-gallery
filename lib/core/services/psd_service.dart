@@ -451,6 +451,63 @@ class PsdService {
       return null;
     }
   }
+
+  /// Photoshop-style PSD Document Loader with multi-tier recovery engine:
+  /// - Tier 1: Merged composite from Section 5 ([extractMergedComposite])
+  /// - Tier 2: Embedded JPEG thumbnail ([extractEmbeddedThumbnail])
+  /// - Tier 3: Render composite with all layers visible ([renderWithLayers])
+  /// - Tier 4: Fallback to null
+  Future<Uint8List?> loadPsdDocument(
+    String filePath, {
+    int maxDimension = 2048,
+  }) async {
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) return null;
+
+      // Tier 1: Merged composite from Section 5
+      try {
+        final composite = await extractMergedComposite(
+          filePath,
+          maxDimension: maxDimension,
+        );
+        if (composite != null && composite.isNotEmpty) {
+          return composite;
+        }
+      } catch (e) {
+        debugPrint('[PsdService] Tier 1 extractMergedComposite failed: $e');
+      }
+
+      // Tier 2: Embedded high-resolution thumbnail (for files saved without Maximize Compatibility)
+      try {
+        final thumbnail = await extractEmbeddedThumbnail(filePath);
+        if (thumbnail != null && thumbnail.isNotEmpty) {
+          return thumbnail;
+        }
+      } catch (e) {
+        debugPrint('[PsdService] Tier 2 extractEmbeddedThumbnail failed: $e');
+      }
+
+      // Tier 3: Render composite with all layers
+      try {
+        final rendered = await renderWithLayers(
+          filePath,
+          hiddenLayerIndices: const {},
+          maxDimension: maxDimension,
+        );
+        if (rendered != null && rendered.isNotEmpty) {
+          return rendered;
+        }
+      } catch (e) {
+        debugPrint('[PsdService] Tier 3 renderWithLayers failed: $e');
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('[PsdService] loadPsdDocument error for $filePath: $e');
+      return null;
+    }
+  }
 }
 
 class _DecodeSynthParams {
