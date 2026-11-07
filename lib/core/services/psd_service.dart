@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -17,6 +18,9 @@ class PsdLayerInfo {
   final bool isVisible;
   final int opacity; // 0 - 255
   final bool isFolder;
+  final bool isClipped;
+  final int depth;
+  final int? parentIndex;
 
   const PsdLayerInfo({
     required this.index,
@@ -24,6 +28,9 @@ class PsdLayerInfo {
     required this.isVisible,
     required this.opacity,
     required this.isFolder,
+    this.isClipped = false,
+    this.depth = 0,
+    this.parentIndex,
   });
 
   PsdLayerInfo copyWith({
@@ -32,6 +39,9 @@ class PsdLayerInfo {
     bool? isVisible,
     int? opacity,
     bool? isFolder,
+    bool? isClipped,
+    int? depth,
+    int? parentIndex,
   }) {
     return PsdLayerInfo(
       index: index ?? this.index,
@@ -39,12 +49,15 @@ class PsdLayerInfo {
       isVisible: isVisible ?? this.isVisible,
       opacity: opacity ?? this.opacity,
       isFolder: isFolder ?? this.isFolder,
+      isClipped: isClipped ?? this.isClipped,
+      depth: depth ?? this.depth,
+      parentIndex: parentIndex ?? this.parentIndex,
     );
   }
 
   @override
   String toString() =>
-      'PsdLayerInfo(index: $index, name: $name, isVisible: $isVisible, opacity: $opacity, isFolder: $isFolder)';
+      'PsdLayerInfo(index: $index, name: $name, isVisible: $isVisible, opacity: $opacity, isFolder: $isFolder, isClipped: $isClipped, depth: $depth, parentIndex: $parentIndex)';
 }
 
 class _AsyncGate {
@@ -73,6 +86,26 @@ class _AsyncGate {
 }
 
 /// Service for decoding, inspecting layers, and rendering Adobe Photoshop (.psd) files.
+class _RawLayerRecord {
+  final int index;
+  final String name;
+  final bool isVisible;
+  final int opacity;
+  final bool isFolder;
+  final bool isClosingDelimiter;
+  final bool isClipped;
+
+  const _RawLayerRecord({
+    required this.index,
+    required this.name,
+    required this.isVisible,
+    required this.opacity,
+    required this.isFolder,
+    required this.isClosingDelimiter,
+    required this.isClipped,
+  });
+}
+
 class PsdService {
   PsdService._();
   static final PsdService instance = PsdService._();
@@ -461,7 +494,7 @@ class PsdService {
       final layerCount = count.abs();
       if (layerCount == 0) return [];
 
-      final layers = <PsdLayerInfo>[];
+      final rawLayers = <_RawLayerRecord>[];
 
       for (var i = 0; i < layerCount; i++) {
         // Rect (16 bytes: top, left, bottom, right)
@@ -486,6 +519,8 @@ class PsdService {
         final blendBytes = await raf.read(12);
         if (blendBytes.length < 12) break;
         final opacity = blendBytes[8];
+        final clipping = blendBytes[9];
+        final isClipped = clipping == 1;
         final flags = blendBytes[10];
         final isVisible = (flags & 2) == 0;
 
@@ -611,22 +646,102 @@ class PsdService {
                     ? pascalName.trim()
                     : 'Layer ${i + 1}');
 
-        if (isClosingDelimiter ||
+        final isClosing = isClosingDelimiter ||
             effectiveName == '</Layer group>' ||
-            effectiveName == '</Layer set>') {
-          continue;
-        }
+            effectiveName == '</Layer set>';
 
-        layers.add(PsdLayerInfo(
+        rawLayers.add(_RawLayerRecord(
           index: i,
           name: effectiveName,
           isVisible: isVisible,
           opacity: opacity,
           isFolder: isFolder,
+          isClosingDelimiter: isClosing,
+          isClipped: isClipped,
         ));
       }
 
-      return layers;
+      // Determine if folder headers are at higher indices than delimiters (standard Photoshop)
+      int lastFolderIdx = -1;
+      int lastDelimiterIdx = -1;
+      for (final r in rawLayers) {
+        if (r.isFolder) lastFolderIdx = r.index;
+        if (r.isClosingDelimiter) lastDelimiterIdx = r.index;
+      }
+      final bool isStandardPsOrder = lastDelimiterIdx == -1 ||
+          lastFolderIdx == -1 ||
+          lastFolderIdx > lastDelimiterIdx;
+
+      final processed = <PsdLayerInfo>[];
+      final folderStack = <int>[];
+
+      if (isStandardPsOrder) {
+        // Standard Photoshop: iterate top-down (index rawLayers.length - 1 down to 0)
+        for (var i = rawLayers.length - 1; i >= 0; i--) {
+          final rec = rawLayers[i];
+          if (rec.isClosingDelimiter ||
+              rec.name == '</Layer group>' ||
+              rec.name == '</Layer set>') {
+            if (folderStack.isNotEmpty) {
+              folderStack.removeLast();
+            }
+            continue;
+          }
+
+          final parentIndex =
+              folderStack.isNotEmpty ? folderStack.last : null;
+          final depth = folderStack.length;
+
+          processed.add(PsdLayerInfo(
+            index: rec.index,
+            name: rec.name,
+            isVisible: rec.isVisible,
+            opacity: rec.opacity,
+            isFolder: rec.isFolder,
+            isClipped: rec.isClipped,
+            depth: depth,
+            parentIndex: parentIndex,
+          ));
+
+          if (rec.isFolder) {
+            folderStack.add(rec.index);
+          }
+        }
+        return processed.reversed.toList();
+      } else {
+        // Forward order: iterate bottom-up (0 up to rawLayers.length - 1)
+        for (var i = 0; i < rawLayers.length; i++) {
+          final rec = rawLayers[i];
+          if (rec.isClosingDelimiter ||
+              rec.name == '</Layer group>' ||
+              rec.name == '</Layer set>') {
+            if (folderStack.isNotEmpty) {
+              folderStack.removeLast();
+            }
+            continue;
+          }
+
+          final parentIndex =
+              folderStack.isNotEmpty ? folderStack.last : null;
+          final depth = folderStack.length;
+
+          processed.add(PsdLayerInfo(
+            index: rec.index,
+            name: rec.name,
+            isVisible: rec.isVisible,
+            opacity: rec.opacity,
+            isFolder: rec.isFolder,
+            isClipped: rec.isClipped,
+            depth: depth,
+            parentIndex: parentIndex,
+          ));
+
+          if (rec.isFolder) {
+            folderStack.add(rec.index);
+          }
+        }
+        return processed;
+      }
     } catch (e) {
       debugPrint('[PsdService] _streamLayerRecords error for $filePath: $e');
       return [];
@@ -670,6 +785,42 @@ class PsdService {
     }
   }
 
+  final Map<String, Map<int, Uint8List>> _layerThumbnailsCache = {};
+
+  /// Extracts downsampled PNG thumbnails for all raster layers in [filePath].
+  Future<Map<int, Uint8List>> getLayerThumbnails(
+    String filePath, {
+    int maxThumbDim = 56,
+  }) async {
+    if (_layerThumbnailsCache.containsKey(filePath)) {
+      return _layerThumbnailsCache[filePath]!;
+    }
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) return {};
+
+      final results = await _isolateGate.run(() => compute(
+            _isolateExtractLayerThumbnails,
+            _ExtractThumbParams(filePath, maxThumbDim),
+          ));
+      if (results != null) {
+        _layerThumbnailsCache[filePath] = results;
+        return results;
+      }
+      return {};
+    } catch (e) {
+      debugPrint('[PsdService] getLayerThumbnails error for $filePath: $e');
+      return {};
+    }
+  }
+
+  @visibleForTesting
+  Future<Map<int, Uint8List>> extractLayerThumbnails(
+    String filePath, {
+    int maxThumbDim = 56,
+  }) =>
+      getLayerThumbnails(filePath, maxThumbDim: maxThumbDim);
+
   /// Renders the PSD document with custom layer visibility in an isolate.
   ///
   /// When [hiddenLayerIndices] is empty, attempts streaming Section 5 merged
@@ -693,7 +844,24 @@ class PsdService {
         }
       }
 
-      // Only if hiddenLayerIndices.isNotEmpty (or composite failed):
+      // 1. Streaming renderer for layer toggling (or if merged composite is missing)
+      try {
+        final streamed = await _isolateGate.run(() => compute(
+              _isolateStreamRenderWithLayers,
+              _StreamRenderParams(
+                filePath: filePath,
+                hiddenLayerIndices: hiddenLayerIndices,
+                maxDimension: maxDimension,
+              ),
+            ));
+        if (streamed != null && streamed.isNotEmpty) {
+          return streamed;
+        }
+      } catch (e) {
+        debugPrint('[PsdService] _isolateStreamRenderWithLayers error: $e');
+      }
+
+      // 2. Legacy fallback
       final fileSize = await file.length();
       if (fileSize >= 150 * 1024 * 1024 && hiddenLayerIndices.isEmpty) {
         return await decodeThumbnail(filePath, maxDimension: maxDimension);
@@ -1006,5 +1174,873 @@ Uint8List? _isolateRenderWithLayers(_RenderWithLayersParams params) {
     return Uint8List.fromList(img.encodeJpg(rendered, quality: 90));
   } catch (e) {
     return null;
+  }
+}
+
+class _LayerChannelRecord {
+  final int id;
+  final int length;
+  int fileOffset = 0;
+  _LayerChannelRecord({
+    required this.id,
+    required this.length,
+  });
+}
+
+class _StreamLayerInfo {
+  final int index;
+  final int top;
+  final int left;
+  final int bottom;
+  final int right;
+  final int opacity;
+  final bool isVisible;
+  final bool isFolder;
+  final bool isClosingDelimiter;
+  final bool isClipped;
+  int? parentIndex;
+  final List<_LayerChannelRecord> channels;
+
+  int get width => right - left;
+  int get height => bottom - top;
+
+  _StreamLayerInfo({
+    required this.index,
+    required this.top,
+    required this.left,
+    required this.bottom,
+    required this.right,
+    required this.opacity,
+    required this.isVisible,
+    this.isFolder = false,
+    this.isClosingDelimiter = false,
+    this.isClipped = false,
+    required this.channels,
+  });
+}
+
+class _StreamRenderParams {
+  final String filePath;
+  final Set<int> hiddenLayerIndices;
+  final int maxDimension;
+  const _StreamRenderParams({
+    required this.filePath,
+    required this.hiddenLayerIndices,
+    required this.maxDimension,
+  });
+}
+
+Uint8List _decodePackBits(
+  Uint8List src,
+  int srcOffset,
+  int srcLength,
+  int expectedLength,
+) {
+  if (expectedLength <= 0) return Uint8List(0);
+  final dst = Uint8List(expectedLength);
+  var inIdx = srcOffset;
+  final inEnd = (srcOffset + srcLength).clamp(0, src.length);
+  var outIdx = 0;
+
+  while (inIdx < inEnd && outIdx < expectedLength) {
+    var n = src[inIdx++];
+    if (n > 127) n -= 256; // convert to signed byte -128..127
+
+    if (n >= 0) {
+      final count = n + 1;
+      for (var i = 0; i < count && inIdx < inEnd && outIdx < expectedLength; i++) {
+        dst[outIdx++] = src[inIdx++];
+      }
+    } else if (n > -128) {
+      final count = -n + 1;
+      if (inIdx < inEnd) {
+        final val = src[inIdx++];
+        for (var i = 0; i < count && outIdx < expectedLength; i++) {
+          dst[outIdx++] = val;
+        }
+      }
+    }
+    // n == -128 is NOP
+  }
+  return dst;
+}
+
+Uint8List? _decompressChannelData(
+  Uint8List rawChannelData,
+  int width,
+  int height, {
+  bool isPsb = false,
+}) {
+  if (width <= 0 || height <= 0 || rawChannelData.length < 2) return null;
+
+  try {
+    final compression = ByteData.sublistView(rawChannelData).getUint16(0);
+    final expectedBytes = width * height;
+
+    switch (compression) {
+      case 0: // Raw uncompressed
+        final out = Uint8List(expectedBytes);
+        final available = min(expectedBytes, rawChannelData.length - 2);
+        if (available > 0) {
+          out.setRange(0, available, rawChannelData, 2);
+        }
+        return out;
+
+      case 1: // PackBits RLE
+        final entrySize = isPsb ? 4 : 2;
+        final tableLength = height * entrySize;
+        if (rawChannelData.length < 2 + tableLength) return null;
+
+        final out = Uint8List(expectedBytes);
+        var dataOffset = 2 + tableLength;
+        final bd = ByteData.sublistView(rawChannelData);
+
+        for (var row = 0; row < height; row++) {
+          final scanlineLen = isPsb
+              ? bd.getUint32(2 + row * 4)
+              : bd.getUint16(2 + row * 2);
+          if (dataOffset + scanlineLen > rawChannelData.length) {
+            final remaining = rawChannelData.length - dataOffset;
+            if (remaining > 0) {
+              final scanline = _decodePackBits(
+                rawChannelData,
+                dataOffset,
+                remaining,
+                width,
+              );
+              final copyLen = min(scanline.length, width);
+              out.setRange(row * width, row * width + copyLen, scanline);
+            }
+            break;
+          }
+          final scanline = _decodePackBits(
+            rawChannelData,
+            dataOffset,
+            scanlineLen,
+            width,
+          );
+          final copyLen = min(scanline.length, width);
+          out.setRange(row * width, row * width + copyLen, scanline);
+          dataOffset += scanlineLen;
+        }
+        return out;
+
+      case 2: // ZIP without prediction
+        final compressed = rawChannelData.sublist(2);
+        final decompressed = Uint8List.fromList(zlib.decode(compressed));
+        if (decompressed.length >= expectedBytes) {
+          return decompressed.length == expectedBytes
+              ? decompressed
+              : Uint8List.sublistView(decompressed, 0, expectedBytes);
+        } else {
+          final out = Uint8List(expectedBytes);
+          out.setRange(0, decompressed.length, decompressed);
+          return out;
+        }
+
+      case 3: // ZIP with delta differencing
+        final compressed = rawChannelData.sublist(2);
+        final decompressed = Uint8List.fromList(zlib.decode(compressed));
+        for (var y = 0; y < height; y++) {
+          final rowStart = y * width;
+          for (var x = 1; x < width; x++) {
+            final idx = rowStart + x;
+            if (idx < decompressed.length) {
+              decompressed[idx] =
+                  (decompressed[idx] + decompressed[idx - 1]) & 0xFF;
+            }
+          }
+        }
+        if (decompressed.length >= expectedBytes) {
+          return decompressed.length == expectedBytes
+              ? decompressed
+              : Uint8List.sublistView(decompressed, 0, expectedBytes);
+        } else {
+          final out = Uint8List(expectedBytes);
+          out.setRange(0, decompressed.length, decompressed);
+          return out;
+        }
+
+      default:
+        return null;
+    }
+  } catch (e) {
+    debugPrint('[PsdService] decompressChannelData error: $e');
+    return null;
+  }
+}
+
+void _compositeLayer(
+  img.Image dst,
+  img.Image src,
+  int dstX,
+  int dstY,
+  int opacity,
+) {
+  if (opacity <= 0) return;
+  if (src.width <= 0 || src.height <= 0 || dst.width <= 0 || dst.height <= 0) {
+    return;
+  }
+  final effOpacity = opacity.clamp(0, 255);
+
+  final startX = dstX < 0 ? -dstX : 0;
+  final startY = dstY < 0 ? -dstY : 0;
+  final dstStartX = dstX < 0 ? 0 : dstX;
+  final dstStartY = dstY < 0 ? 0 : dstY;
+  final dstEndX = (dstX + src.width).clamp(0, dst.width);
+  final dstEndY = (dstY + src.height).clamp(0, dst.height);
+
+  if (dstStartX >= dstEndX || dstStartY >= dstEndY) return;
+
+  for (var dy = dstStartY; dy < dstEndY; dy++) {
+    final sy = startY + (dy - dstStartY);
+    for (var dx = dstStartX; dx < dstEndX; dx++) {
+      final sx = startX + (dx - dstStartX);
+      final sp = src.getPixel(sx, sy);
+      final sa = (sp.a.toInt() * effOpacity) ~/ 255;
+      if (sa == 0) continue;
+
+      if (sa >= 255) {
+        dst.setPixelRgba(dx, dy, sp.r.toInt(), sp.g.toInt(), sp.b.toInt(), 255);
+        continue;
+      }
+
+      final dp = dst.getPixel(dx, dy);
+      final da = dp.a.toInt();
+      final invSa = 255 - sa;
+      final outA = sa + (da * invSa ~/ 255);
+      if (outA <= 0) continue;
+
+      final sr = sp.r.toInt();
+      final sg = sp.g.toInt();
+      final sb = sp.b.toInt();
+      final dr = dp.r.toInt();
+      final dg = dp.g.toInt();
+      final db = dp.b.toInt();
+
+      final outR = ((sr * sa) + (dr * da * invSa ~/ 255)) ~/ outA;
+      final outG = ((sg * sa) + (dg * da * invSa ~/ 255)) ~/ outA;
+      final outB = ((sb * sa) + (db * da * invSa ~/ 255)) ~/ outA;
+
+      dst.setPixelRgba(
+        dx,
+        dy,
+        outR.clamp(0, 255),
+        outG.clamp(0, 255),
+        outB.clamp(0, 255),
+        outA.clamp(0, 255),
+      );
+    }
+  }
+}
+
+Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
+  RandomAccessFile? raf;
+  try {
+    final file = File(params.filePath);
+    if (!file.existsSync()) return null;
+    raf = file.openSync(mode: FileMode.read);
+    final fileLen = raf.lengthSync();
+    if (fileLen < 34) return null;
+
+    // 1. Read 26-byte header
+    final header = raf.readSync(26);
+    if (header.length < 26) return null;
+    if (header[0] != 0x38 ||
+        header[1] != 0x42 ||
+        header[2] != 0x50 ||
+        header[3] != 0x53) {
+      return null;
+    }
+    final headerView = ByteData.sublistView(header);
+    final version = headerView.getUint16(4);
+    if (version != 1 && version != 2) return null;
+    final isPsb = version == 2;
+    final docHeight = headerView.getUint32(14);
+    final docWidth = headerView.getUint32(18);
+    if (docWidth <= 0 || docHeight <= 0) return null;
+
+    // 2. Color Mode Data
+    final colorDataLenBytes = raf.readSync(4);
+    if (colorDataLenBytes.length < 4) return null;
+    final colorDataLen = ByteData.sublistView(colorDataLenBytes).getUint32(0);
+    final sec3Pos = 26 + 4 + colorDataLen;
+    if (sec3Pos + 4 > fileLen) return null;
+    raf.setPositionSync(sec3Pos);
+
+    // 3. Image Resources
+    final resLenBytes = raf.readSync(4);
+    if (resLenBytes.length < 4) return null;
+    final resLen = ByteData.sublistView(resLenBytes).getUint32(0);
+    final sec4Pos = sec3Pos + 4 + resLen;
+    final sec4LenHeaderSize = isPsb ? 8 : 4;
+    if (sec4Pos + sec4LenHeaderSize > fileLen) return null;
+    raf.setPositionSync(sec4Pos);
+
+    // 4. Section 4: Layer and Mask Information Section
+    final int section4Len;
+    if (isPsb) {
+      final sec4LenBytes = raf.readSync(8);
+      if (sec4LenBytes.length < 8) return null;
+      section4Len = ByteData.sublistView(sec4LenBytes).getUint64(0);
+    } else {
+      final sec4LenBytes = raf.readSync(4);
+      if (sec4LenBytes.length < 4) return null;
+      section4Len = ByteData.sublistView(sec4LenBytes).getUint32(0);
+    }
+    if (section4Len <= 0) return null;
+
+    final sec4End = raf.positionSync() + section4Len;
+    if (sec4End > fileLen) return null;
+
+    // Layer Info length
+    final int layerInfoLen;
+    if (isPsb) {
+      if (raf.positionSync() + 8 > sec4End) return null;
+      final layerLenBytes = raf.readSync(8);
+      if (layerLenBytes.length < 8) return null;
+      layerInfoLen = ByteData.sublistView(layerLenBytes).getUint64(0);
+    } else {
+      if (raf.positionSync() + 4 > sec4End) return null;
+      final layerLenBytes = raf.readSync(4);
+      if (layerLenBytes.length < 4) return null;
+      layerInfoLen = ByteData.sublistView(layerLenBytes).getUint32(0);
+    }
+    if (layerInfoLen <= 0) return null;
+
+    // Layer count (int16)
+    if (raf.positionSync() + 2 > sec4End) return null;
+    final countBytes = raf.readSync(2);
+    if (countBytes.length < 2) return null;
+    final count = ByteData.sublistView(countBytes).getInt16(0);
+    final layerCount = count.abs();
+    if (layerCount == 0) return null;
+
+    final layers = <_StreamLayerInfo>[];
+
+    for (var i = 0; i < layerCount; i++) {
+      if (raf.positionSync() + 16 > fileLen) break;
+      final rectBytes = raf.readSync(16);
+      if (rectBytes.length < 16) break;
+      final rectView = ByteData.sublistView(rectBytes);
+      final top = rectView.getInt32(0);
+      final left = rectView.getInt32(4);
+      final bottom = rectView.getInt32(8);
+      final right = rectView.getInt32(12);
+
+      if (raf.positionSync() + 2 > fileLen) break;
+      final chanCountBytes = raf.readSync(2);
+      if (chanCountBytes.length < 2) break;
+      final numChannels = ByteData.sublistView(chanCountBytes).getUint16(0);
+
+      final channelEntrySize = isPsb ? 10 : 6;
+      final totalChanInfoLen = numChannels * channelEntrySize;
+      if (raf.positionSync() + totalChanInfoLen > fileLen) break;
+      final chanInfoBytes = raf.readSync(totalChanInfoLen);
+      if (chanInfoBytes.length < totalChanInfoLen) break;
+      final chanInfoView = ByteData.sublistView(chanInfoBytes);
+
+      final channels = <_LayerChannelRecord>[];
+      for (var c = 0; c < numChannels; c++) {
+        final chId = chanInfoView.getInt16(c * channelEntrySize);
+        final chLen = isPsb
+            ? chanInfoView.getUint64(c * channelEntrySize + 2)
+            : chanInfoView.getUint32(c * channelEntrySize + 2);
+        channels.add(_LayerChannelRecord(id: chId, length: chLen));
+      }
+
+      if (raf.positionSync() + 12 > fileLen) break;
+      final blendBytes = raf.readSync(12);
+      if (blendBytes.length < 12) break;
+      final opacity = blendBytes[8];
+      final clipping = blendBytes[9];
+      final isClipped = clipping == 1;
+      final flags = blendBytes[10];
+      final isVisible = (flags & 2) == 0;
+
+      if (raf.positionSync() + 4 > fileLen) break;
+      final extraLenBytes = raf.readSync(4);
+      if (extraLenBytes.length < 4) break;
+      final extraLen = ByteData.sublistView(extraLenBytes).getUint32(0);
+      final extraEnd = raf.positionSync() + extraLen;
+      if (extraEnd > fileLen) break;
+
+      bool isFolder = false;
+      bool isClosingDelimiter = false;
+      if (extraLen > 0) {
+        if (raf.positionSync() + 4 <= extraEnd) {
+          final maskLen = ByteData.sublistView(raf.readSync(4)).getUint32(0);
+          final nextPos = raf.positionSync() + maskLen;
+          raf.setPositionSync(nextPos <= extraEnd ? nextPos : extraEnd);
+        }
+        if (raf.positionSync() + 4 <= extraEnd) {
+          final blendLen = ByteData.sublistView(raf.readSync(4)).getUint32(0);
+          final nextPos = raf.positionSync() + blendLen;
+          raf.setPositionSync(nextPos <= extraEnd ? nextPos : extraEnd);
+        }
+        if (raf.positionSync() + 1 <= extraEnd) {
+          final nameLen = raf.readSync(1)[0];
+          if (raf.positionSync() + nameLen <= extraEnd) {
+            raf.setPositionSync(raf.positionSync() + nameLen);
+            final padding = (4 - (nameLen % 4)) - 1;
+            final nextPos = raf.positionSync() + padding;
+            raf.setPositionSync(nextPos <= extraEnd ? nextPos : extraEnd);
+          }
+        }
+        while (raf.positionSync() + 12 <= extraEnd) {
+          final tagHead = raf.readSync(12);
+          if (tagHead.length < 12) break;
+          final headView = ByteData.sublistView(tagHead);
+          final sig = headView.getUint32(0);
+          if (sig != 0x3842494D && sig != 0x38423634) break;
+          final tagKey =
+              ascii.decode(tagHead.sublist(4, 8), allowInvalid: true);
+          final tagLen = headView.getUint32(8);
+          final tagDataStart = raf.positionSync();
+          final nextTagPos = tagDataStart + tagLen + (tagLen % 2);
+          if (nextTagPos > extraEnd) break;
+
+          if (tagKey == 'lsct' || tagKey == 'lsdk') {
+            if (tagLen >= 4) {
+              final typeBytes = raf.readSync(4);
+              if (typeBytes.length == 4) {
+                final type = ByteData.sublistView(typeBytes).getUint32(0);
+                if (type == 1 || type == 2) {
+                  isFolder = true;
+                } else if (type == 3) {
+                  isClosingDelimiter = true;
+                }
+              }
+            }
+          }
+          raf.setPositionSync(nextTagPos);
+        }
+        raf.setPositionSync(extraEnd);
+      }
+
+      layers.add(_StreamLayerInfo(
+        index: i,
+        top: top,
+        left: left,
+        bottom: bottom,
+        right: right,
+        opacity: opacity,
+        isVisible: isVisible,
+        isFolder: isFolder,
+        isClosingDelimiter: isClosingDelimiter,
+        isClipped: isClipped,
+        channels: channels,
+      ));
+    }
+
+    if (layers.isEmpty) return null;
+
+    final folderStack = <int>[];
+    final parentMap = <int, int>{};
+    for (var idx = layers.length - 1; idx >= 0; idx--) {
+      final l = layers[idx];
+      if (l.isClosingDelimiter) {
+        if (folderStack.isNotEmpty) folderStack.removeLast();
+        continue;
+      }
+      final pIndex = folderStack.isNotEmpty ? folderStack.last : null;
+      l.parentIndex = pIndex;
+      if (pIndex != null) {
+        parentMap[l.index] = pIndex;
+      }
+      if (l.isFolder) {
+        folderStack.add(l.index);
+      }
+    }
+
+    bool isAncestorHidden(int? pIndex) {
+      var curr = pIndex;
+      while (curr != null) {
+        if (params.hiddenLayerIndices.contains(curr)) return true;
+        curr = parentMap[curr];
+      }
+      return false;
+    }
+
+    // Calculate absolute file offsets for every channel data block
+    int currentOffset = raf.positionSync();
+    for (final layer in layers) {
+      for (final ch in layer.channels) {
+        ch.fileOffset = currentOffset;
+        currentOffset += ch.length;
+      }
+    }
+
+    // Initialize document canvas
+    final maxDim = params.maxDimension;
+    final double scale = maxDim > 0 && max(docWidth, docHeight) > maxDim
+        ? maxDim / max(docWidth, docHeight)
+        : 1.0;
+    final canvasW = max(1, (docWidth * scale).round());
+    final canvasH = max(1, (docHeight * scale).round());
+    final canvas = img.Image(width: canvasW, height: canvasH, numChannels: 4);
+    img.fill(canvas, color: img.ColorRgba8(255, 255, 255, 255));
+
+    // Render layers from bottom to top (0 .. layerCount - 1)
+    for (final layer in layers) {
+      if (params.hiddenLayerIndices.contains(layer.index)) continue;
+      if (layer.parentIndex != null &&
+          (params.hiddenLayerIndices.contains(layer.parentIndex) ||
+              isAncestorHidden(layer.parentIndex))) {
+        continue;
+      }
+      if (!layer.isVisible) continue;
+      if (layer.isFolder || layer.isClosingDelimiter) continue;
+      if (layer.width <= 0 || layer.height <= 0) continue;
+      if (layer.opacity <= 0) continue;
+
+      final decompressedChannels = <int, Uint8List>{};
+      for (final ch in layer.channels) {
+        if (ch.length <= 0) continue;
+        if (ch.fileOffset + ch.length > fileLen) continue;
+
+        raf.setPositionSync(ch.fileOffset);
+        final rawData = raf.readSync(ch.length);
+        if (rawData.length < ch.length) continue;
+
+        final decompressed = _decompressChannelData(
+          rawData,
+          layer.width,
+          layer.height,
+          isPsb: isPsb,
+        );
+        if (decompressed != null) {
+          decompressedChannels[ch.id] = decompressed;
+        }
+      }
+
+      final redData = decompressedChannels[0];
+      final greenData = decompressedChannels[1];
+      final blueData = decompressedChannels[2];
+      final alphaData = decompressedChannels[-1];
+
+      if (redData == null && greenData == null && blueData == null) {
+        continue;
+      }
+
+      final layerW = layer.width;
+      final layerH = layer.height;
+      final layerImg = img.Image(width: layerW, height: layerH, numChannels: 4);
+
+      for (var y = 0; y < layerH; y++) {
+        final rowOffset = y * layerW;
+        for (var x = 0; x < layerW; x++) {
+          final idx = rowOffset + x;
+          final r =
+              (redData != null && idx < redData.length) ? redData[idx] : 0;
+          final g = (greenData != null && idx < greenData.length)
+              ? greenData[idx]
+              : (redData != null && idx < redData.length ? redData[idx] : 0);
+          final b = (blueData != null && idx < blueData.length)
+              ? blueData[idx]
+              : (redData != null && idx < redData.length ? redData[idx] : 0);
+          final a = (alphaData != null && idx < alphaData.length)
+              ? alphaData[idx]
+              : 255;
+
+          layerImg.setPixelRgba(x, y, r, g, b, a);
+        }
+      }
+
+      img.Image finalLayerImg = layerImg;
+      if (scale < 1.0) {
+        final targetW = max(1, (layerW * scale).round());
+        final targetH = max(1, (layerH * scale).round());
+        finalLayerImg = img.copyResize(
+          layerImg,
+          width: targetW,
+          height: targetH,
+          interpolation: img.Interpolation.linear,
+        );
+      }
+
+      final dstX = (layer.left * scale).round();
+      final dstY = (layer.top * scale).round();
+      _compositeLayer(canvas, finalLayerImg, dstX, dstY, layer.opacity);
+    }
+
+    return Uint8List.fromList(img.encodeJpg(canvas, quality: 90));
+  } catch (e) {
+    debugPrint('[PsdService] _isolateStreamRenderWithLayers error: $e');
+    return null;
+  } finally {
+    try {
+      raf?.closeSync();
+    } catch (_) {}
+  }
+}
+
+@visibleForTesting
+Uint8List decodePackBits(
+  Uint8List src,
+  int srcOffset,
+  int srcLength,
+  int expectedLength,
+) =>
+    _decodePackBits(src, srcOffset, srcLength, expectedLength);
+
+@visibleForTesting
+Uint8List? decompressChannelData(
+  Uint8List rawChannelData,
+  int width,
+  int height, {
+  bool isPsb = false,
+}) =>
+    _decompressChannelData(rawChannelData, width, height, isPsb: isPsb);
+
+@visibleForTesting
+void compositeLayer(
+  img.Image dst,
+  img.Image src,
+  int dstX,
+  int dstY,
+  int opacity,
+) =>
+    _compositeLayer(dst, src, dstX, dstY, opacity);
+
+class _ExtractThumbParams {
+  final String filePath;
+  final int maxThumbDim;
+  const _ExtractThumbParams(this.filePath, this.maxThumbDim);
+}
+
+Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) {
+  RandomAccessFile? raf;
+  try {
+    final file = File(params.filePath);
+    if (!file.existsSync()) return null;
+    raf = file.openSync(mode: FileMode.read);
+    final fileLen = raf.lengthSync();
+    if (fileLen < 34) return null;
+
+    final header = raf.readSync(26);
+    if (header.length < 26) return null;
+    if (header[0] != 0x38 ||
+        header[1] != 0x42 ||
+        header[2] != 0x50 ||
+        header[3] != 0x53) {
+      return null;
+    }
+    final headerView = ByteData.sublistView(header);
+    final version = headerView.getUint16(4);
+    if (version != 1 && version != 2) return null;
+    final isPsb = version == 2;
+
+    final colorDataLenBytes = raf.readSync(4);
+    if (colorDataLenBytes.length < 4) return null;
+    final colorDataLen = ByteData.sublistView(colorDataLenBytes).getUint32(0);
+    final sec3Pos = 26 + 4 + colorDataLen;
+    if (sec3Pos + 4 > fileLen) return null;
+    raf.setPositionSync(sec3Pos);
+
+    final resLenBytes = raf.readSync(4);
+    if (resLenBytes.length < 4) return null;
+    final resLen = ByteData.sublistView(resLenBytes).getUint32(0);
+    final sec4Pos = sec3Pos + 4 + resLen;
+    final sec4LenHeaderSize = isPsb ? 8 : 4;
+    if (sec4Pos + sec4LenHeaderSize > fileLen) return null;
+    raf.setPositionSync(sec4Pos);
+
+    final int section4Len;
+    if (isPsb) {
+      final sec4LenBytes = raf.readSync(8);
+      if (sec4LenBytes.length < 8) return null;
+      section4Len = ByteData.sublistView(sec4LenBytes).getUint64(0);
+    } else {
+      final sec4LenBytes = raf.readSync(4);
+      if (sec4LenBytes.length < 4) return null;
+      section4Len = ByteData.sublistView(sec4LenBytes).getUint32(0);
+    }
+    if (section4Len <= 0) return null;
+
+    final sec4End = raf.positionSync() + section4Len;
+    if (sec4End > fileLen) return null;
+
+    final int layerInfoLen;
+    if (isPsb) {
+      if (raf.positionSync() + 8 > sec4End) return null;
+      final layerLenBytes = raf.readSync(8);
+      if (layerLenBytes.length < 8) return null;
+      layerInfoLen = ByteData.sublistView(layerLenBytes).getUint64(0);
+    } else {
+      if (raf.positionSync() + 4 > sec4End) return null;
+      final layerLenBytes = raf.readSync(4);
+      if (layerLenBytes.length < 4) return null;
+      layerInfoLen = ByteData.sublistView(layerLenBytes).getUint32(0);
+    }
+    if (layerInfoLen <= 0) return null;
+
+    if (raf.positionSync() + 2 > sec4End) return null;
+    final countBytes = raf.readSync(2);
+    if (countBytes.length < 2) return null;
+    final count = ByteData.sublistView(countBytes).getInt16(0);
+    final layerCount = count.abs();
+    if (layerCount == 0) return null;
+
+    final layers = <_StreamLayerInfo>[];
+
+    for (var i = 0; i < layerCount; i++) {
+      if (raf.positionSync() + 16 > fileLen) break;
+      final rectBytes = raf.readSync(16);
+      if (rectBytes.length < 16) break;
+      final rectView = ByteData.sublistView(rectBytes);
+      final top = rectView.getInt32(0);
+      final left = rectView.getInt32(4);
+      final bottom = rectView.getInt32(8);
+      final right = rectView.getInt32(12);
+
+      if (raf.positionSync() + 2 > fileLen) break;
+      final chanCountBytes = raf.readSync(2);
+      if (chanCountBytes.length < 2) break;
+      final numChannels = ByteData.sublistView(chanCountBytes).getUint16(0);
+
+      final channelEntrySize = isPsb ? 10 : 6;
+      final totalChanInfoLen = numChannels * channelEntrySize;
+      if (raf.positionSync() + totalChanInfoLen > fileLen) break;
+      final chanInfoBytes = raf.readSync(totalChanInfoLen);
+      if (chanInfoBytes.length < totalChanInfoLen) break;
+      final chanInfoView = ByteData.sublistView(chanInfoBytes);
+
+      final channels = <_LayerChannelRecord>[];
+      for (var c = 0; c < numChannels; c++) {
+        final chId = chanInfoView.getInt16(c * channelEntrySize);
+        final chLen = isPsb
+            ? chanInfoView.getUint64(c * channelEntrySize + 2)
+            : chanInfoView.getUint32(c * channelEntrySize + 2);
+        channels.add(_LayerChannelRecord(id: chId, length: chLen));
+      }
+
+      if (raf.positionSync() + 12 > fileLen) break;
+      final blendBytes = raf.readSync(12);
+      if (blendBytes.length < 12) break;
+      final opacity = blendBytes[8];
+      final flags = blendBytes[10];
+      final isVisible = (flags & 2) == 0;
+
+      if (raf.positionSync() + 4 > fileLen) break;
+      final extraLenBytes = raf.readSync(4);
+      if (extraLenBytes.length < 4) break;
+      final extraLen = ByteData.sublistView(extraLenBytes).getUint32(0);
+      final extraEnd = raf.positionSync() + extraLen;
+      if (extraEnd > fileLen) break;
+      raf.setPositionSync(extraEnd);
+
+      layers.add(_StreamLayerInfo(
+        index: i,
+        top: top,
+        left: left,
+        bottom: bottom,
+        right: right,
+        opacity: opacity,
+        isVisible: isVisible,
+        channels: channels,
+      ));
+    }
+
+    if (layers.isEmpty) return {};
+
+    int currentOffset = raf.positionSync();
+    for (final layer in layers) {
+      for (final ch in layer.channels) {
+        ch.fileOffset = currentOffset;
+        currentOffset += ch.length;
+      }
+    }
+
+    final results = <int, Uint8List>{};
+
+    for (final layer in layers) {
+      if (layer.width <= 0 || layer.height <= 0 || layer.channels.isEmpty) {
+        continue;
+      }
+
+      final decompressedChannels = <int, Uint8List>{};
+      for (final ch in layer.channels) {
+        if (ch.id != 0 && ch.id != 1 && ch.id != 2 && ch.id != -1) continue;
+        if (ch.length <= 0) continue;
+        if (ch.fileOffset + ch.length > fileLen) continue;
+
+        raf.setPositionSync(ch.fileOffset);
+        final rawData = raf.readSync(ch.length);
+        if (rawData.length < ch.length) continue;
+
+        final decompressed = _decompressChannelData(
+          rawData,
+          layer.width,
+          layer.height,
+          isPsb: isPsb,
+        );
+        if (decompressed != null) {
+          decompressedChannels[ch.id] = decompressed;
+        }
+      }
+
+      final redData = decompressedChannels[0];
+      final greenData = decompressedChannels[1];
+      final blueData = decompressedChannels[2];
+      final alphaData = decompressedChannels[-1];
+
+      if (redData == null && greenData == null && blueData == null) {
+        continue;
+      }
+
+      final maxDim = params.maxThumbDim;
+      int thumbW, thumbH;
+      if (layer.width >= layer.height) {
+        thumbW = min(maxDim, layer.width);
+        thumbH = max(1, (thumbW * layer.height / layer.width).round());
+      } else {
+        thumbH = min(maxDim, layer.height);
+        thumbW = max(1, (thumbH * layer.width / layer.height).round());
+      }
+
+      final stepX = layer.width / thumbW;
+      final stepY = layer.height / thumbH;
+      final thumbImg = img.Image(width: thumbW, height: thumbH, numChannels: 4);
+
+      final layerW = layer.width;
+      final opacity = layer.opacity;
+
+      for (var ty = 0; ty < thumbH; ty++) {
+        final sy = (ty * stepY).toInt().clamp(0, layer.height - 1);
+        final rowOffset = sy * layerW;
+        for (var tx = 0; tx < thumbW; tx++) {
+          final sx = (tx * stepX).toInt().clamp(0, layer.width - 1);
+          final idx = rowOffset + sx;
+
+          final r =
+              (redData != null && idx < redData.length) ? redData[idx] : 0;
+          final g = (greenData != null && idx < greenData.length)
+              ? greenData[idx]
+              : (redData != null && idx < redData.length ? redData[idx] : 0);
+          final b = (blueData != null && idx < blueData.length)
+              ? blueData[idx]
+              : (redData != null && idx < redData.length ? redData[idx] : 0);
+          final rawA = (alphaData != null && idx < alphaData.length)
+              ? alphaData[idx]
+              : 255;
+          final a = (rawA * opacity) ~/ 255;
+
+          thumbImg.setPixelRgba(tx, ty, r, g, b, a);
+        }
+      }
+
+      final pngBytes = Uint8List.fromList(img.encodePng(thumbImg));
+      results[layer.index] = pngBytes;
+    }
+
+    return results;
+  } catch (e) {
+    debugPrint('[PsdService] _isolateExtractLayerThumbnails error: $e');
+    return null;
+  } finally {
+    try {
+      raf?.closeSync();
+    } catch (_) {}
   }
 }

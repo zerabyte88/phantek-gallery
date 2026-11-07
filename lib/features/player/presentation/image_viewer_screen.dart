@@ -255,6 +255,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
     PsdLayerSheet.show(
       context: context,
+      filePath: path,
       layers: effectiveLayers,
       hiddenIndices: hidden,
       onVisibilityChanged: (newHidden) async {

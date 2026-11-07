@@ -253,6 +253,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     PsdLayerSheet.show(
       context: context,
+      filePath: path,
       layers: effectiveLayers,
       hiddenIndices: hidden,
       onVisibilityChanged: (newHidden) async {

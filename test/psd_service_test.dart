@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:phantek_gallery/core/services/license_service.dart';
 import 'package:phantek_gallery/core/services/psd_service.dart';
 
@@ -12,6 +13,7 @@ class _SyntheticLayer {
   final int opacity;
   final bool isFolder;
   final bool isClosingDelimiter;
+  final bool isClipped;
 
   const _SyntheticLayer({
     required this.pascalName,
@@ -20,6 +22,7 @@ class _SyntheticLayer {
     this.opacity = 255,
     this.isFolder = false,
     this.isClosingDelimiter = false,
+    this.isClipped = false,
   });
 }
 
@@ -76,7 +79,7 @@ Uint8List _createSyntheticPsd({
     recordsBuilder.add([0x38, 0x42, 0x49, 0x4D]); // '8BIM'
     recordsBuilder.add([0x6E, 0x6F, 0x72, 0x6D]); // 'norm'
     recordsBuilder.add([l.opacity]);
-    recordsBuilder.add([0]); // clipping
+    recordsBuilder.add([l.isClipped ? 1 : 0]); // clipping
     recordsBuilder.add([l.isVisible ? 0 : 2]); // flags (bit 1 is invisible)
     recordsBuilder.add([0]); // filler
 
@@ -314,5 +317,263 @@ void main() {
 
       await tempDir.delete(recursive: true);
     });
+
+    test('PsdService streaming accurately calculates depth, parentIndex, and clipping mask', () async {
+      final tempDir = await Directory.systemTemp.createTemp('psd_hier_test_');
+      final psdFile = File('${tempDir.path}/hierarchy.psd');
+
+      final syntheticLayers = [
+        const _SyntheticLayer(pascalName: 'Base', isVisible: true),
+        const _SyntheticLayer(pascalName: 'Group A', isFolder: true),
+        const _SyntheticLayer(pascalName: 'Child 1', isVisible: true),
+        const _SyntheticLayer(pascalName: 'Child 2 Clipped', isClipped: true),
+        const _SyntheticLayer(pascalName: '</Layer group>', isClosingDelimiter: true),
+      ];
+
+      await psdFile.writeAsBytes(_createSyntheticPsd(layers: syntheticLayers));
+
+      final layers = await PsdService.instance.streamLayerRecords(psdFile.path);
+      expect(layers.length, 4);
+
+      // Forward ordering (header at index 1, delimiter at index 4):
+      expect(layers[0].name, 'Base');
+      expect(layers[0].depth, 0);
+      expect(layers[0].parentIndex, isNull);
+      expect(layers[0].isClipped, isFalse);
+
+      expect(layers[1].name, 'Group A');
+      expect(layers[1].depth, 0);
+      expect(layers[1].parentIndex, isNull);
+      expect(layers[1].isFolder, isTrue);
+
+      expect(layers[2].name, 'Child 1');
+      expect(layers[2].depth, 1);
+      expect(layers[2].parentIndex, 1);
+      expect(layers[2].isClipped, isFalse);
+
+      expect(layers[3].name, 'Child 2 Clipped');
+      expect(layers[3].depth, 1);
+      expect(layers[3].parentIndex, 1);
+      expect(layers[3].isClipped, isTrue);
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('getLayerThumbnails extracts per-layer PNG thumbnails with correct dimensions', () async {
+      final tempDir = await Directory.systemTemp.createTemp('psd_thumb_test_');
+      final psdFile = File('${tempDir.path}/renderable.psd');
+
+      final psdBytes = _createRenderableSyntheticPsd(
+        width: 10,
+        height: 10,
+        layerColors: [
+          img.ColorRgba8(255, 0, 0, 255),
+          img.ColorRgba8(0, 255, 0, 255),
+        ],
+      );
+      await psdFile.writeAsBytes(psdBytes);
+
+      final thumbs = await PsdService.instance.getLayerThumbnails(psdFile.path, maxThumbDim: 48);
+      expect(thumbs.length, 2);
+      expect(thumbs.containsKey(0), isTrue);
+      expect(thumbs.containsKey(1), isTrue);
+
+      final png0 = img.decodePng(thumbs[0]!);
+      expect(png0, isNotNull);
+      expect(png0!.width, lessThanOrEqualTo(48));
+      expect(png0.height, lessThanOrEqualTo(48));
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('PackBits decompression decodes literal runs and repeat runs accurately', () {
+      final src = Uint8List.fromList([2, 1, 2, 3, 0xFE, 9, 0x80]);
+      final decoded = decodePackBits(src, 0, src.length, 6);
+      expect(decoded, equals(Uint8List.fromList([1, 2, 3, 9, 9, 9])));
+    });
+
+    test('Channel decompression handles raw, PackBits, ZIP, and ZIP delta differencing', () {
+      // 1. Raw
+      final rawData = Uint8List.fromList([0, 0, 10, 20, 30, 40]);
+      final decRaw = decompressChannelData(rawData, 2, 2);
+      expect(decRaw, equals(Uint8List.fromList([10, 20, 30, 40])));
+
+      // 2. PackBits
+      final rleData = Uint8List.fromList([
+        0, 1, // comp 1
+        0, 2, // scanline 0 len = 2
+        0, 2, // scanline 1 len = 2
+        0xFF, 5, // scanline 0 repeat 2x of 5
+        0xFF, 7, // scanline 1 repeat 2x of 7
+      ]);
+      final decRle = decompressChannelData(rleData, 2, 2);
+      expect(decRle, equals(Uint8List.fromList([5, 5, 7, 7])));
+
+      // 3. ZIP
+      final uncompressed = Uint8List.fromList([1, 2, 3, 4]);
+      final zipped = zlib.encode(uncompressed);
+      final zipData = Uint8List.fromList([0, 2, ...zipped]);
+      final decZip = decompressChannelData(zipData, 2, 2);
+      expect(decZip, equals(uncompressed));
+
+      // 4. ZIP Delta differencing: rows [10, 25], [100, 120] -> deltas [10, 15], [100, 20]
+      final deltaData = Uint8List.fromList([10, 15, 100, 20]);
+      final zipDelta = zlib.encode(deltaData);
+      final zipDeltaData = Uint8List.fromList([0, 3, ...zipDelta]);
+      final decDelta = decompressChannelData(zipDeltaData, 2, 2);
+      expect(decDelta, equals(Uint8List.fromList([10, 25, 100, 120])));
+    });
+
+    test('compositeLayer blends with opacity and handles clipping bounds', () {
+      final dst = img.Image(width: 4, height: 4, numChannels: 4);
+      img.fill(dst, color: img.ColorRgba8(255, 255, 255, 255));
+
+      final src = img.Image(width: 2, height: 2, numChannels: 4);
+      img.fill(src, color: img.ColorRgba8(0, 0, 0, 255));
+
+      compositeLayer(dst, src, 1, 1, 255);
+      final p11 = dst.getPixel(1, 1);
+      expect(p11.r.toInt(), 0);
+      expect(p11.g.toInt(), 0);
+      expect(p11.b.toInt(), 0);
+
+      final p00 = dst.getPixel(0, 0);
+      expect(p00.r.toInt(), 255);
+    });
+
+    test('renderWithLayers excludes hidden layers and reflects layer toggling in output image', () async {
+      final tempDir = await Directory.systemTemp.createTemp('psd_render_test_');
+      final psdFile = File('${tempDir.path}/two_layers.psd');
+
+      // Layer 0: Solid Red (255, 0, 0)
+      // Layer 1: Solid Blue (0, 0, 255)
+      final psdBytes = _createRenderableSyntheticPsd(
+        width: 10,
+        height: 10,
+        layerColors: [
+          img.ColorRgba8(255, 0, 0, 255),
+          img.ColorRgba8(0, 0, 255, 255),
+        ],
+      );
+      await psdFile.writeAsBytes(psdBytes);
+
+      // Render 1: Hidden layer 1 -> Only Layer 0 (Red) is visible!
+      final renderedHidden1 = await PsdService.instance.renderWithLayers(
+        psdFile.path,
+        hiddenLayerIndices: {1},
+      );
+      expect(renderedHidden1, isNotNull);
+      final imgHidden1 = img.decodeJpg(renderedHidden1!)!;
+      final pRed = imgHidden1.getPixel(5, 5);
+      expect(pRed.r.toInt(), greaterThan(200));
+      expect(pRed.b.toInt(), lessThan(50));
+
+      // Render 2: All layers visible -> Layer 1 (Blue) covers Layer 0 (Red)!
+      final renderedAll = await PsdService.instance.renderWithLayers(
+        psdFile.path,
+        hiddenLayerIndices: {999},
+      );
+      expect(renderedAll, isNotNull);
+      final imgAll = img.decodeJpg(renderedAll!)!;
+      final pBlue = imgAll.getPixel(5, 5);
+      expect(pBlue.b.toInt(), greaterThan(200));
+      expect(pBlue.r.toInt(), lessThan(50));
+
+      // Output bytes must be different
+      expect(renderedHidden1, isNot(equals(renderedAll)));
+
+      await tempDir.delete(recursive: true);
+    });
   });
+}
+
+Uint8List _createRenderableSyntheticPsd({
+  int width = 10,
+  int height = 10,
+  required List<img.ColorRgba8> layerColors,
+}) {
+  final bb = BytesBuilder();
+
+  // 1. Header (26 bytes)
+  bb.add([0x38, 0x42, 0x50, 0x53]); // '8BPS'
+  final headerMeta = ByteData(22);
+  headerMeta.setUint16(0, 1); // version 1
+  headerMeta.setUint16(8, 3); // channels = 3
+  headerMeta.setUint32(10, height);
+  headerMeta.setUint32(14, width);
+  headerMeta.setUint16(18, 8); // depth = 8
+  headerMeta.setUint16(20, 3); // colorMode = RGB
+  bb.add(headerMeta.buffer.asUint8List());
+
+  // 2. Color Mode Data
+  bb.add([0, 0, 0, 0]);
+
+  // 3. Image Resources
+  bb.add([0, 0, 0, 0]);
+
+  final channelLen = 2 + width * height; // 2 bytes comp + uncompressed raw pixels
+
+  // 4. Section 4: Layer records
+  final recordsBuilder = BytesBuilder();
+  final countData = ByteData(2);
+  countData.setInt16(0, layerColors.length);
+  recordsBuilder.add(countData.buffer.asUint8List());
+
+  for (var i = 0; i < layerColors.length; i++) {
+    final rect = ByteData(16);
+    rect.setInt32(0, 0);
+    rect.setInt32(4, 0);
+    rect.setInt32(8, height);
+    rect.setInt32(12, width);
+    recordsBuilder.add(rect.buffer.asUint8List());
+
+    final chanCount = ByteData(2);
+    chanCount.setUint16(0, 3);
+    recordsBuilder.add(chanCount.buffer.asUint8List());
+
+    // 3 channels (id 0 = R, 1 = G, 2 = B)
+    final chanInfo = ByteData(3 * 6);
+    for (var c = 0; c < 3; c++) {
+      chanInfo.setInt16(c * 6, c);
+      chanInfo.setUint32(c * 6 + 2, channelLen);
+    }
+    recordsBuilder.add(chanInfo.buffer.asUint8List());
+
+    // Blend norm, opacity 255, visible (flags = 0)
+    recordsBuilder.add([0x38, 0x42, 0x49, 0x4D]); // '8BIM'
+    recordsBuilder.add([0x6E, 0x6F, 0x72, 0x6D]); // 'norm'
+    recordsBuilder.add([255, 0, 0, 0]);
+
+    // Extra data length = 0
+    recordsBuilder.add([0, 0, 0, 0]);
+  }
+
+  // Channel image data
+  final channelDataBuilder = BytesBuilder();
+  for (final color in layerColors) {
+    // Channel 0: R
+    channelDataBuilder.add([0, 0]); // comp 0
+    channelDataBuilder.add(List.filled(width * height, color.r.toInt()));
+
+    // Channel 1: G
+    channelDataBuilder.add([0, 0]); // comp 0
+    channelDataBuilder.add(List.filled(width * height, color.g.toInt()));
+
+    // Channel 2: B
+    channelDataBuilder.add([0, 0]); // comp 0
+    channelDataBuilder.add(List.filled(width * height, color.b.toInt()));
+  }
+
+  final recordsBytes = recordsBuilder.toBytes();
+  final channelDataBytes = channelDataBuilder.toBytes();
+  final layerInfoLen = recordsBytes.length + channelDataBytes.length;
+
+  final sec4Meta = ByteData(8);
+  sec4Meta.setUint32(0, 4 + layerInfoLen);
+  sec4Meta.setUint32(4, layerInfoLen);
+  bb.add(sec4Meta.buffer.asUint8List());
+  bb.add(recordsBytes);
+  bb.add(channelDataBytes);
+
+  return bb.toBytes();
 }
