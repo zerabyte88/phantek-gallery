@@ -203,7 +203,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     if (!_psdLayersCache.containsKey(path)) {
       PsdService.instance.getLayers(path).then((layers) {
-        if (mounted && layers.isNotEmpty) {
+        if (mounted) {
           setState(() {
             _psdLayersCache[path] = layers;
           });
@@ -235,14 +235,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     });
   }
 
-  void _openPsdLayerSheet(MediaItem item) {
+  Future<void> _openPsdLayerSheet(MediaItem item) async {
     final path = item.path;
-    final layers = _psdLayersCache[path] ?? [];
+    List<PsdLayerInfo>? layers = _psdLayersCache[path];
+    if (layers == null || layers.isEmpty) {
+      layers = await PsdService.instance.getLayers(path);
+      if (mounted) {
+        setState(() {
+          _psdLayersCache[path] = layers!;
+        });
+      }
+    }
+    if (!mounted) return;
+
+    final effectiveLayers = _psdLayersCache[path] ?? layers;
     final hidden = _psdHiddenLayers[path] ?? <int>{};
 
     PsdLayerSheet.show(
       context: context,
-      layers: layers,
+      layers: effectiveLayers,
       hiddenIndices: hidden,
       onVisibilityChanged: (newHidden) async {
         setState(() {
