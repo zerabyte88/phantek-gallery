@@ -249,13 +249,21 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (!mounted) return;
 
     final effectiveLayers = _psdLayersCache[path] ?? layers;
-    final hidden = _psdHiddenLayers[path] ?? <int>{};
+    if (!_psdHiddenLayers.containsKey(path)) {
+      _psdHiddenLayers[path] = effectiveLayers
+          .where((l) => !l.isVisible)
+          .map((l) => l.index)
+          .toSet();
+    }
+    final hidden = _psdHiddenLayers[path]!;
+    final cachedThumbs = PsdService.instance.getCachedLayerThumbnails(path);
 
     PsdLayerSheet.show(
       context: context,
       filePath: path,
       layers: effectiveLayers,
       hiddenIndices: hidden,
+      initialThumbnails: cachedThumbs,
       onVisibilityChanged: (newHidden) async {
         setState(() {
           _psdHiddenLayers[path] = Set<int>.from(newHidden);
@@ -1126,6 +1134,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         final rendered = _psdRenderedBytes[item.path];
         if (rendered != null && rendered.isNotEmpty) {
           Widget content = Image(
+            key: ValueKey('psd_${item.path}_${_psdHiddenLayers[item.path]?.length}_${_psdHiddenLayers[item.path]?.join('_')}_${rendered.length}'),
             image: MemoryImage(rendered),
             fit: BoxFit.contain,
             gaplessPlayback: true,

@@ -787,6 +787,10 @@ class PsdService {
 
   final Map<String, Map<int, Uint8List>> _layerThumbnailsCache = {};
 
+  /// Returns cached layer thumbnails if already extracted, or null.
+  Map<int, Uint8List>? getCachedLayerThumbnails(String filePath) =>
+      _layerThumbnailsCache[filePath];
+
   /// Extracts downsampled PNG thumbnails for all raster layers in [filePath].
   Future<Map<int, Uint8List>> getLayerThumbnails(
     String filePath, {
@@ -902,6 +906,9 @@ class PsdService {
     try {
       final file = File(filePath);
       if (!await file.exists()) return null;
+
+      // Pre-cache layer thumbnails in background so they are ready for layer sheet
+      unawaited(getLayerThumbnails(filePath).catchError((_) => <int, Uint8List>{}));
 
       // Tier 1: Merged composite from Section 5
       try {
@@ -1265,17 +1272,29 @@ Uint8List _decodePackBits(
   return dst;
 }
 
+int _getSample(Uint8List? data, int idx, int depth) {
+  if (data == null) return 0;
+  if (depth == 16) {
+    final byteIdx = idx * 2;
+    return byteIdx < data.length ? data[byteIdx] : 0;
+  }
+  return idx < data.length ? data[idx] : 0;
+}
+
 Uint8List? _decompressChannelData(
   Uint8List rawChannelData,
   int width,
   int height, {
   bool isPsb = false,
+  int depth = 8,
 }) {
   if (width <= 0 || height <= 0 || rawChannelData.length < 2) return null;
 
   try {
     final compression = ByteData.sublistView(rawChannelData).getUint16(0);
-    final expectedBytes = width * height;
+    final bytesPerPixel = (depth == 16) ? 2 : 1;
+    final rowBytes = width * bytesPerPixel;
+    final expectedBytes = width * height * bytesPerPixel;
 
     switch (compression) {
       case 0: // Raw uncompressed
@@ -1306,10 +1325,10 @@ Uint8List? _decompressChannelData(
                 rawChannelData,
                 dataOffset,
                 remaining,
-                width,
+                rowBytes,
               );
-              final copyLen = min(scanline.length, width);
-              out.setRange(row * width, row * width + copyLen, scanline);
+              final copyLen = min(scanline.length, rowBytes);
+              out.setRange(row * rowBytes, row * rowBytes + copyLen, scanline);
             }
             break;
           }
@@ -1317,10 +1336,10 @@ Uint8List? _decompressChannelData(
             rawChannelData,
             dataOffset,
             scanlineLen,
-            width,
+            rowBytes,
           );
-          final copyLen = min(scanline.length, width);
-          out.setRange(row * width, row * width + copyLen, scanline);
+          final copyLen = min(scanline.length, rowBytes);
+          out.setRange(row * rowBytes, row * rowBytes + copyLen, scanline);
           dataOffset += scanlineLen;
         }
         return out;
@@ -1342,8 +1361,8 @@ Uint8List? _decompressChannelData(
         final compressed = rawChannelData.sublist(2);
         final decompressed = Uint8List.fromList(zlib.decode(compressed));
         for (var y = 0; y < height; y++) {
-          final rowStart = y * width;
-          for (var x = 1; x < width; x++) {
+          final rowStart = y * rowBytes;
+          for (var x = 1; x < rowBytes; x++) {
             final idx = rowStart + x;
             if (idx < decompressed.length) {
               decompressed[idx] =
@@ -1456,6 +1475,8 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
     final version = headerView.getUint16(4);
     if (version != 1 && version != 2) return null;
     final isPsb = version == 2;
+    final depth = headerView.getUint16(22);
+    final colorMode = headerView.getUint16(24);
     final docHeight = headerView.getUint32(14);
     final docWidth = headerView.getUint32(18);
     if (docWidth <= 0 || docHeight <= 0) return null;
@@ -1653,6 +1674,20 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
       }
     }
 
+    final clippingBaseMap = <int, int>{};
+    int? currentBaseIndex;
+    for (final layer in layers) {
+      if (layer.isFolder || layer.isClosingDelimiter) {
+        currentBaseIndex = null;
+        continue;
+      }
+      if (layer.isClipped && currentBaseIndex != null) {
+        clippingBaseMap[layer.index] = currentBaseIndex;
+      } else {
+        currentBaseIndex = layer.index;
+      }
+    }
+
     bool isAncestorHidden(int? pIndex) {
       var curr = pIndex;
       while (curr != null) {
@@ -1689,7 +1724,16 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
               isAncestorHidden(layer.parentIndex))) {
         continue;
       }
-      if (!layer.isVisible) continue;
+      if (layer.isClipped) {
+        final baseIndex = clippingBaseMap[layer.index];
+        if (baseIndex != null &&
+            (params.hiddenLayerIndices.contains(baseIndex) ||
+                (layers[baseIndex].parentIndex != null &&
+                    (params.hiddenLayerIndices.contains(layers[baseIndex].parentIndex) ||
+                        isAncestorHidden(layers[baseIndex].parentIndex))))) {
+          continue;
+        }
+      }
       if (layer.isFolder || layer.isClosingDelimiter) continue;
       if (layer.width <= 0 || layer.height <= 0) continue;
       if (layer.opacity <= 0) continue;
@@ -1708,60 +1752,81 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
           layer.width,
           layer.height,
           isPsb: isPsb,
+          depth: depth,
         );
         if (decompressed != null) {
           decompressedChannels[ch.id] = decompressed;
         }
       }
 
-      final redData = decompressedChannels[0];
-      final greenData = decompressedChannels[1];
-      final blueData = decompressedChannels[2];
-      final alphaData = decompressedChannels[-1];
+      final ch0 = decompressedChannels[0];
+      final ch1 = decompressedChannels[1];
+      final ch2 = decompressedChannels[2];
+      final ch3 = decompressedChannels[3];
+      final alphaData = decompressedChannels[-1] ?? decompressedChannels[-2];
 
-      if (redData == null && greenData == null && blueData == null) {
+      if (ch0 == null && ch1 == null && ch2 == null && ch3 == null && alphaData == null) {
         continue;
       }
 
       final layerW = layer.width;
       final layerH = layer.height;
-      final layerImg = img.Image(width: layerW, height: layerH, numChannels: 4);
+      final targetW = max(1, (layerW * scale).round());
+      final targetH = max(1, (layerH * scale).round());
+      final layerImg = img.Image(width: targetW, height: targetH, numChannels: 4);
 
-      for (var y = 0; y < layerH; y++) {
-        final rowOffset = y * layerW;
-        for (var x = 0; x < layerW; x++) {
-          final idx = rowOffset + x;
-          final r =
-              (redData != null && idx < redData.length) ? redData[idx] : 0;
-          final g = (greenData != null && idx < greenData.length)
-              ? greenData[idx]
-              : (redData != null && idx < redData.length ? redData[idx] : 0);
-          final b = (blueData != null && idx < blueData.length)
-              ? blueData[idx]
-              : (redData != null && idx < redData.length ? redData[idx] : 0);
-          final a = (alphaData != null && idx < alphaData.length)
-              ? alphaData[idx]
-              : 255;
+      final stepX = layerW / targetW;
+      final stepY = layerH / targetH;
 
-          layerImg.setPixelRgba(x, y, r, g, b, a);
+      for (var ty = 0; ty < targetH; ty++) {
+        final sy = (ty * stepY).toInt().clamp(0, layerH - 1);
+        final rowOffset = sy * layerW;
+        for (var tx = 0; tx < targetW; tx++) {
+          final sx = (tx * stepX).toInt().clamp(0, layerW - 1);
+          final idx = rowOffset + sx;
+
+          int r, g, b, a;
+          if (colorMode == 4) {
+            // CMYK
+            final c = _getSample(ch0, idx, depth);
+            final m = _getSample(ch1, idx, depth);
+            final y = _getSample(ch2, idx, depth);
+            final k = _getSample(ch3, idx, depth);
+            r = ((255 - c) * (255 - k)) ~/ 255;
+            g = ((255 - m) * (255 - k)) ~/ 255;
+            b = ((255 - y) * (255 - k)) ~/ 255;
+          } else if (colorMode == 1) {
+            // Grayscale
+            final gray = _getSample(ch0, idx, depth);
+            r = gray;
+            g = gray;
+            b = gray;
+          } else if (ch0 == null && ch1 == null && ch2 == null) {
+            // Mask-only / alpha-only layer
+            final mask = _getSample(alphaData, idx, depth);
+            r = mask;
+            g = mask;
+            b = mask;
+          } else {
+            // RGB
+            r = _getSample(ch0, idx, depth);
+            g = ch1 != null ? _getSample(ch1, idx, depth) : _getSample(ch0, idx, depth);
+            b = ch2 != null ? _getSample(ch2, idx, depth) : _getSample(ch0, idx, depth);
+          }
+
+          if (ch0 == null && ch1 == null && ch2 == null && ch3 == null && alphaData != null) {
+            a = 255;
+          } else {
+            a = (alphaData != null) ? _getSample(alphaData, idx, depth) : 255;
+          }
+
+          layerImg.setPixelRgba(tx, ty, r, g, b, a);
         }
-      }
-
-      img.Image finalLayerImg = layerImg;
-      if (scale < 1.0) {
-        final targetW = max(1, (layerW * scale).round());
-        final targetH = max(1, (layerH * scale).round());
-        finalLayerImg = img.copyResize(
-          layerImg,
-          width: targetW,
-          height: targetH,
-          interpolation: img.Interpolation.linear,
-        );
       }
 
       final dstX = (layer.left * scale).round();
       final dstY = (layer.top * scale).round();
-      _compositeLayer(canvas, finalLayerImg, dstX, dstY, layer.opacity);
+      _compositeLayer(canvas, layerImg, dstX, dstY, layer.opacity);
     }
 
     return Uint8List.fromList(img.encodeJpg(canvas, quality: 90));
@@ -1790,8 +1855,9 @@ Uint8List? decompressChannelData(
   int width,
   int height, {
   bool isPsb = false,
+  int depth = 8,
 }) =>
-    _decompressChannelData(rawChannelData, width, height, isPsb: isPsb);
+    _decompressChannelData(rawChannelData, width, height, isPsb: isPsb, depth: depth);
 
 @visibleForTesting
 void compositeLayer(
@@ -1830,6 +1896,8 @@ Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) 
     final version = headerView.getUint16(4);
     if (version != 1 && version != 2) return null;
     final isPsb = version == 2;
+    final depth = headerView.getUint16(22);
+    final colorMode = headerView.getUint16(24);
 
     final colorDataLenBytes = raf.readSync(4);
     if (colorDataLenBytes.length < 4) return null;
@@ -1961,7 +2029,7 @@ Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) 
 
       final decompressedChannels = <int, Uint8List>{};
       for (final ch in layer.channels) {
-        if (ch.id != 0 && ch.id != 1 && ch.id != 2 && ch.id != -1) continue;
+        if (ch.id < -2 || ch.id > 3) continue;
         if (ch.length <= 0) continue;
         if (ch.fileOffset + ch.length > fileLen) continue;
 
@@ -1974,18 +2042,20 @@ Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) 
           layer.width,
           layer.height,
           isPsb: isPsb,
+          depth: depth,
         );
         if (decompressed != null) {
           decompressedChannels[ch.id] = decompressed;
         }
       }
 
-      final redData = decompressedChannels[0];
-      final greenData = decompressedChannels[1];
-      final blueData = decompressedChannels[2];
-      final alphaData = decompressedChannels[-1];
+      final ch0 = decompressedChannels[0];
+      final ch1 = decompressedChannels[1];
+      final ch2 = decompressedChannels[2];
+      final ch3 = decompressedChannels[3];
+      final alphaData = decompressedChannels[-1] ?? decompressedChannels[-2];
 
-      if (redData == null && greenData == null && blueData == null) {
+      if (ch0 == null && ch1 == null && ch2 == null && ch3 == null && alphaData == null) {
         continue;
       }
 
@@ -2013,18 +2083,41 @@ Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) 
           final sx = (tx * stepX).toInt().clamp(0, layer.width - 1);
           final idx = rowOffset + sx;
 
-          final r =
-              (redData != null && idx < redData.length) ? redData[idx] : 0;
-          final g = (greenData != null && idx < greenData.length)
-              ? greenData[idx]
-              : (redData != null && idx < redData.length ? redData[idx] : 0);
-          final b = (blueData != null && idx < blueData.length)
-              ? blueData[idx]
-              : (redData != null && idx < redData.length ? redData[idx] : 0);
-          final rawA = (alphaData != null && idx < alphaData.length)
-              ? alphaData[idx]
-              : 255;
-          final a = (rawA * opacity) ~/ 255;
+          int r, g, b, a;
+          if (colorMode == 4) {
+            // CMYK
+            final c = _getSample(ch0, idx, depth);
+            final m = _getSample(ch1, idx, depth);
+            final y = _getSample(ch2, idx, depth);
+            final k = _getSample(ch3, idx, depth);
+            r = ((255 - c) * (255 - k)) ~/ 255;
+            g = ((255 - m) * (255 - k)) ~/ 255;
+            b = ((255 - y) * (255 - k)) ~/ 255;
+          } else if (colorMode == 1) {
+            // Grayscale
+            final gray = _getSample(ch0, idx, depth);
+            r = gray;
+            g = gray;
+            b = gray;
+          } else if (ch0 == null && ch1 == null && ch2 == null) {
+            // Mask-only / alpha-only layer
+            final mask = _getSample(alphaData, idx, depth);
+            r = mask;
+            g = mask;
+            b = mask;
+          } else {
+            // RGB
+            r = _getSample(ch0, idx, depth);
+            g = ch1 != null ? _getSample(ch1, idx, depth) : _getSample(ch0, idx, depth);
+            b = ch2 != null ? _getSample(ch2, idx, depth) : _getSample(ch0, idx, depth);
+          }
+
+          if (ch0 == null && ch1 == null && ch2 == null && ch3 == null && alphaData != null) {
+            a = (255 * opacity) ~/ 255;
+          } else {
+            final rawA = (alphaData != null) ? _getSample(alphaData, idx, depth) : 255;
+            a = (rawA * opacity) ~/ 255;
+          }
 
           thumbImg.setPixelRgba(tx, ty, r, g, b, a);
         }
