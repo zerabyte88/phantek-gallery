@@ -364,7 +364,11 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                                   _toggleSelect(item.id);
                                   return;
                                 }
-                                Navigator.of(context).openVideo(sortedItems, i);
+                                  if (sortedItems.every((e) => !e.isVideo)) {
+                                    Navigator.of(context).openImage(sortedItems, i);
+                                  } else {
+                                    Navigator.of(context).openVideo(sortedItems, i);
+                                  }
                               },
                               onLongPress: () {
                                 if (!_selecting) {

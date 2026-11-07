@@ -27,16 +27,21 @@ import 'widgets/rename_dialog.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
 import '../../../core/widgets/feedback_pill.dart';
 import 'image_viewer_screen.dart' show screenDisplayImage;
+import '../../../core/services/psd_service.dart';
+import 'widgets/psd_layer_sheet.dart';
 
-Widget _photoThumb(String id, [String? path]) {
+Widget _photoThumb(String id, [String? path, Uint8List? psdFallbackBytes]) {
   final hr = ThumbnailService.instance.getMemoryHighResThumbnail(id);
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
   final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
+  final isPsd = path != null && PsdService.isPsd(path);
   final ImageProvider? p = mem != null
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (path != null ? screenDisplayImage(path) : null));
+          : (isPsd && psdFallbackBytes != null && psdFallbackBytes.isNotEmpty
+              ? MemoryImage(psdFallbackBytes)
+              : (path != null && !isPsd ? screenDisplayImage(path) : null)));
   if (p == null) return const SizedBox.shrink();
   return Image(
     image: p,
@@ -52,18 +57,22 @@ Widget _buildHeroShuttle({
   required HeroFlightDirection flightDirection,
   required MediaItem item,
   Widget? fallbackChild,
+  Uint8List? psdFallbackBytes,
 }) {
   final hr = ThumbnailService.instance.getMemoryHighResThumbnail(item.id);
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(item.id);
   final disk =
       mem == null ? ThumbnailService.instance.getCachedFile(item.id) : null;
+  final isPsd = item.path.isNotEmpty && PsdService.isPsd(item.path);
   final ImageProvider? p = mem != null
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (item.path.isNotEmpty && !item.isVideo
-              ? screenDisplayImage(item.path)
-              : null));
+          : (isPsd && psdFallbackBytes != null && psdFallbackBytes.isNotEmpty
+              ? MemoryImage(psdFallbackBytes)
+              : (item.path.isNotEmpty && !item.isVideo && !isPsd
+                  ? screenDisplayImage(item.path)
+                  : null)));
 
   final Widget content = p != null
       ? Image(
@@ -160,6 +169,103 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   Animation<double>? _routeAnimation;
   StateController<String?>? _activeMediaNotifier;
   bool _didSetMaxBrightness = false;
+
+  final Map<String, List<PsdLayerInfo>> _psdLayersCache = {};
+  final Map<String, Set<int>> _psdHiddenLayers = {};
+  final Map<String, Uint8List> _psdRenderedBytes = {};
+  final Map<String, bool> _psdRendering = {};
+  final Map<String, bool> _psdRenderComplete = {};
+  final Map<String, bool> _psdLoadError = {};
+  final Map<String, String> _psdLoadStatus = {};
+
+  void _loadPsdDataIfNeeded(String path, {bool force = false}) {
+    if (!PsdService.isPsd(path)) return;
+
+    if (force) {
+      _psdLoadError.remove(path);
+      _psdRenderComplete.remove(path);
+      _psdRenderedBytes.remove(path);
+    }
+
+    if (_psdRendering[path] == true) return;
+    if (_psdRenderedBytes.containsKey(path) &&
+        _psdRenderComplete[path] == true) {
+      return;
+    }
+    if (!force && _psdLoadError[path] == true) return;
+
+    _psdRendering[path] = true;
+    _psdLoadError[path] = false;
+    _psdLoadStatus[path] = 'Reading Photoshop document...';
+    if (force && mounted) {
+      setState(() {});
+    }
+
+    if (!_psdLayersCache.containsKey(path)) {
+      PsdService.instance.getLayers(path).then((layers) {
+        if (mounted && layers.isNotEmpty) {
+          setState(() {
+            _psdLayersCache[path] = layers;
+          });
+        }
+      });
+    }
+
+    PsdService.instance.loadPsdDocument(path, maxDimension: 2048).then((bytes) {
+      if (!mounted) return;
+      setState(() {
+        if (bytes != null && bytes.isNotEmpty) {
+          _psdRenderedBytes[path] = bytes;
+          _psdRenderComplete[path] = true;
+          _psdRendering[path] = false;
+          _psdLoadError[path] = false;
+        } else {
+          _psdRendering[path] = false;
+          _psdLoadError[path] = true;
+          _psdLoadStatus[path] = 'Failed to load document';
+        }
+      });
+    }).catchError((_) {
+      if (!mounted) return;
+      setState(() {
+        _psdRendering[path] = false;
+        _psdLoadError[path] = true;
+        _psdLoadStatus[path] = 'Failed to load document';
+      });
+    });
+  }
+
+  void _openPsdLayerSheet(MediaItem item) {
+    final path = item.path;
+    final layers = _psdLayersCache[path] ?? [];
+    final hidden = _psdHiddenLayers[path] ?? <int>{};
+
+    PsdLayerSheet.show(
+      context: context,
+      layers: layers,
+      hiddenIndices: hidden,
+      onVisibilityChanged: (newHidden) async {
+        setState(() {
+          _psdHiddenLayers[path] = Set<int>.from(newHidden);
+          _psdRendering[path] = true;
+        });
+        final bytes = await PsdService.instance.renderWithLayers(
+          path,
+          hiddenLayerIndices: newHidden,
+          maxDimension: 2048,
+        );
+        if (mounted) {
+          setState(() {
+            if (bytes != null && bytes.isNotEmpty) {
+              _psdRenderedBytes[path] = bytes;
+              _psdRenderComplete[path] = true;
+            }
+            _psdRendering[path] = false;
+          });
+        }
+      },
+    );
+  }
   Timer? _slideshowTimer;
   bool _isSlideshowPlaying = false;
 
@@ -1003,6 +1109,212 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   Widget _buildVideoPage(int index) {
     final item = _videos[index];
     if (!item.isVideo) {
+      if (PsdService.isPsd(item.path)) {
+        _loadPsdDataIfNeeded(item.path);
+        final rendered = _psdRenderedBytes[item.path];
+        if (rendered != null && rendered.isNotEmpty) {
+          Widget content = Image(
+            image: MemoryImage(rendered),
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.medium,
+          );
+
+          final ar = (item.width != null &&
+                  item.height != null &&
+                  item.width! > 0 &&
+                  item.height! > 0)
+              ? (item.width! / item.height!)
+              : ThumbnailService.instance.getThumbnailAspectRatio(item.id);
+
+          if (ar != null && ar > 0) {
+            content = AspectRatio(
+              aspectRatio: ar,
+              child: content,
+            );
+          }
+
+          return content;
+        } else if (_psdLoadError[item.path] == true) {
+          return Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.all(24),
+              constraints: const BoxConstraints(maxWidth: 380),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black45,
+                    blurRadius: 20,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF31A8FF),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'PSD',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Could not load Photoshop document',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 13,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () => _loadPsdDataIfNeeded(item.path, force: true),
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Retry'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF31A8FF),
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        } else {
+          final sizeMb = (item.size / (1024 * 1024)).toStringAsFixed(1);
+          final status =
+              _psdLoadStatus[item.path] ?? 'Reading Photoshop document...';
+
+          return Center(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: 0.25,
+                    child: _photoThumb(item.id, item.path, null),
+                  ),
+                ),
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.all(24),
+                  constraints: const BoxConstraints(maxWidth: 380),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(16),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black45,
+                        blurRadius: 20,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF31A8FF),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'PSD',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        item.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '$sizeMb MB',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const SizedBox(
+                        width: 140,
+                        child: LinearProgressIndicator(
+                          backgroundColor: Colors.white12,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Color(0xFF31A8FF)),
+                          minHeight: 3,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        status,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+
       Widget content = Image(
         image: screenDisplayImage(item.path),
         fit: BoxFit.contain,
@@ -2016,6 +2328,10 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               totalVideos: _videos.length,
                               isTrash: widget.isTrash,
                               onRestore: _restoreItem,
+                              onLayers: () => _openPsdLayerSheet(item),
+                              psdHasHiddenLayers:
+                                  _psdHiddenLayers[item.path]?.isNotEmpty ??
+                                      false,
                               onBack: () {
                                 if (_isFullscreen) {
                                   _exitFullscreen();
@@ -2440,6 +2756,8 @@ class _TopBar extends StatelessWidget {
     required this.onDelete,
     this.isTrash = false,
     this.onRestore,
+    this.onLayers,
+    this.psdHasHiddenLayers = false,
   });
   final MediaItem item;
   final int currentIndex;
@@ -2449,6 +2767,8 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onDelete;
   final bool isTrash;
   final VoidCallback? onRestore;
+  final VoidCallback? onLayers;
+  final bool psdHasHiddenLayers;
 
   @override
   Widget build(BuildContext context) {
@@ -2505,6 +2825,18 @@ class _TopBar extends StatelessWidget {
                   ],
                 ),
               ),
+              if (!isTrash && !item.isVideo && PsdService.isPsd(item.path))
+                IconButton(
+                  icon: Icon(
+                    psdHasHiddenLayers
+                        ? Icons.layers
+                        : Icons.layers_outlined,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                  tooltip: 'Layers',
+                  onPressed: onLayers,
+                ),
               if (!isTrash)
                 IconButton(
                   icon: const Icon(Icons.info_outline,
