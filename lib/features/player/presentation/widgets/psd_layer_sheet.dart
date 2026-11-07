@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 zerabyte88
 
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../../core/services/psd_service.dart';
+
+typedef PsdVisibilityCallback = FutureOr<void> Function(Set<int>);
 
 /// Modal bottom sheet for viewing and toggling Photoshop PSD layers.
 class PsdLayerSheet extends StatefulWidget {
@@ -18,7 +21,7 @@ class PsdLayerSheet extends StatefulWidget {
 
   final List<PsdLayerInfo> layers;
   final Set<int> hiddenIndices;
-  final ValueChanged<Set<int>> onVisibilityChanged;
+  final PsdVisibilityCallback onVisibilityChanged;
   final String? filePath;
   final Map<int, Uint8List>? initialThumbnails;
 
@@ -26,7 +29,7 @@ class PsdLayerSheet extends StatefulWidget {
     required BuildContext context,
     required List<PsdLayerInfo> layers,
     required Set<int> hiddenIndices,
-    required ValueChanged<Set<int>> onVisibilityChanged,
+    required PsdVisibilityCallback onVisibilityChanged,
     String? filePath,
     Map<int, Uint8List>? initialThumbnails,
   }) {
@@ -53,6 +56,14 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
   late Set<int> _hidden;
   late Map<int, Uint8List> _thumbnails;
   final Set<int> _collapsedFolders = <int>{};
+  bool _isApplying = false;
+  Timer? _debounceTimer;
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -87,6 +98,21 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
     return descendants;
   }
 
+  void _scheduleUpdate() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 200), () async {
+      if (!mounted) return;
+      setState(() => _isApplying = true);
+      try {
+        await widget.onVisibilityChanged(_hidden);
+      } finally {
+        if (mounted) {
+          setState(() => _isApplying = false);
+        }
+      }
+    });
+  }
+
   void _toggleLayer(PsdLayerInfo layer) {
     setState(() {
       if (layer.isFolder) {
@@ -107,7 +133,7 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
         }
       }
     });
-    widget.onVisibilityChanged(_hidden);
+    _scheduleUpdate();
   }
 
   void _toggleFolderCollapsed(int folderIndex) {
@@ -124,14 +150,14 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
     setState(() {
       _hidden.clear();
     });
-    widget.onVisibilityChanged(_hidden);
+    _scheduleUpdate();
   }
 
   void _hideAll() {
     setState(() {
       _hidden = widget.layers.map((l) => l.index).toSet();
     });
-    widget.onVisibilityChanged(_hidden);
+    _scheduleUpdate();
   }
 
   @override
@@ -205,13 +231,41 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      'Photoshop layers (${widget.layers.length})',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: colorScheme.onSurface,
-                        fontSize: 15,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Photoshop layers (${widget.layers.length})',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurface,
+                              fontSize: 15,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (_isApplying) ...[
+                          const SizedBox(width: 8),
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF31A8FF)),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Applying...',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   if (widget.layers.length > 1) ...[

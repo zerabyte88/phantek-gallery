@@ -179,6 +179,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   final Map<String, bool> _psdRenderComplete = {};
   final Map<String, bool> _psdLoadError = {};
   final Map<String, String> _psdLoadStatus = {};
+  final Map<String, int> _psdRenderSeq = {};
 
   void _loadPsdDataIfNeeded(String path, {bool force = false}) {
     if (!PsdService.isPsd(path)) return;
@@ -267,6 +268,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       hiddenIndices: hidden,
       initialThumbnails: cachedThumbs,
       onVisibilityChanged: (newHidden) async {
+        final seq = (_psdRenderSeq[path] ?? 0) + 1;
+        _psdRenderSeq[path] = seq;
         setState(() {
           _psdHiddenLayers[path] = Set<int>.from(newHidden);
           _psdRendering[path] = true;
@@ -275,13 +278,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           path,
           hiddenLayerIndices: newHidden,
         );
-        if (mounted) {
+        if (mounted && _psdRenderSeq[path] == seq) {
           setState(() {
             if (bytes != null && bytes.isNotEmpty) {
               _psdRenderedBytes[path] = bytes;
               _psdRenderComplete[path] = true;
             }
-            // bytes null → keep existing _psdRenderedBytes[path] as fallback
             _psdRendering[path] = false;
           });
         }
@@ -595,12 +597,60 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       _loadPsdDataIfNeeded(it.path);
       final rendered = _psdRenderedBytes[it.path];
       if (rendered != null && rendered.isNotEmpty) {
-        Widget content = Image(
-          key: ValueKey('psd_${it.path}_${_psdHiddenLayers[it.path]?.length}_${_psdHiddenLayers[it.path]?.join('_')}_${rendered.length}'),
-          image: MemoryImage(rendered),
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
+        final isRenderingThis = _psdRendering[it.path] == true;
+        Widget content = Stack(
+          alignment: Alignment.center,
+          children: [
+            AnimatedOpacity(
+              duration: const Duration(milliseconds: 150),
+              opacity: isRenderingThis ? 0.65 : 1.0,
+              child: Image(
+                key: ValueKey('psd_${it.path}_${_psdHiddenLayers[it.path]?.length}_${_psdHiddenLayers[it.path]?.join('_')}_${rendered.length}'),
+                image: MemoryImage(rendered),
+                fit: BoxFit.contain,
+                gaplessPlayback: true,
+                filterQuality: FilterQuality.medium,
+              ),
+            ),
+            if (isRenderingThis)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.75),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black38,
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF31A8FF)),
+                      ),
+                    ),
+                    SizedBox(width: 10),
+                    Text(
+                      'Rendering PSD...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         );
 
         final ar = (it.width != null &&

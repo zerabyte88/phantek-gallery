@@ -70,6 +70,23 @@ void main() {
       expect(decoded[0], 0x12);
       expect(decoded[1], 0x34);
     });
+
+    test('Scanline-targeted layer thumbnail extraction is fast and accurate', () async {
+      final tempDir = await Directory.systemTemp.createTemp('psd_subsample_');
+      final psdFile = File('${tempDir.path}/test_subsample.psd');
+      await psdFile.writeAsBytes(_createPhotoshopLikePsd());
+
+      final thumbs = await PsdService.instance.getLayerThumbnails(psdFile.path, maxThumbDim: 24);
+      expect(thumbs.isNotEmpty, isTrue);
+      for (final thumbBytes in thumbs.values) {
+        final decoded = img.decodePng(thumbBytes);
+        expect(decoded, isNotNull);
+        expect(decoded!.width <= 24, isTrue);
+        expect(decoded.height <= 24, isTrue);
+      }
+
+      await tempDir.delete(recursive: true);
+    });
   });
 }
 

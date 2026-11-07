@@ -109,7 +109,8 @@ class _RawLayerRecord {
 class PsdService {
   PsdService._();
   static final PsdService instance = PsdService._();
-  final _AsyncGate _isolateGate = _AsyncGate(1);
+  final _AsyncGate _renderGate = _AsyncGate(1);
+  final _AsyncGate _thumbGate = _AsyncGate(1);
 
   /// Returns true if [pathOrExt] has a .psd extension (case-insensitive).
   static bool isPsd(String pathOrExt) {
@@ -398,10 +399,10 @@ class PsdService {
       // For files >= 50MB, do NOT run _isolateDecodeThumbnail to prevent OOM.
       final fileSize = await file.length();
       if (fileSize < 50 * 1024 * 1024) {
-        return await _isolateGate.run(() => compute(
+        return await _renderGate.run(() => compute(
               _isolateDecodeThumbnail,
               _DecodeThumbnailParams(filePath, maxDimension),
-            ));
+            ).timeout(const Duration(seconds: 12), onTimeout: () => null));
       }
 
       return null;
@@ -775,7 +776,10 @@ class PsdService {
       // 2. Fallback to isolate decoder only for files < 80MB if streaming didn't find layers
       final fileSize = await file.length();
       if (fileSize < 80 * 1024 * 1024) {
-        return await _isolateGate.run(() => compute(_isolateGetLayers, filePath));
+        return await _renderGate.run(() => compute(
+              _isolateGetLayers,
+              filePath,
+            ).timeout(const Duration(seconds: 12), onTimeout: () => <PsdLayerInfo>[]));
       }
 
       return [];
@@ -803,15 +807,15 @@ class PsdService {
       final file = File(filePath);
       if (!await file.exists()) return {};
 
-      final results = await _isolateGate.run(() => compute(
+      final results = await _thumbGate.run(() => compute(
             _isolateExtractLayerThumbnails,
             _ExtractThumbParams(filePath, maxThumbDim),
-          ));
-      if (results != null) {
+          ).timeout(const Duration(seconds: 12), onTimeout: () => null));
+      if (results != null && results.isNotEmpty) {
         _layerThumbnailsCache[filePath] = results;
         return results;
       }
-      return {};
+      return results ?? {};
     } catch (e) {
       debugPrint('[PsdService] getLayerThumbnails error for $filePath: $e');
       return {};
@@ -850,14 +854,14 @@ class PsdService {
 
       // 1. Streaming renderer for layer toggling (or if merged composite is missing)
       try {
-        final streamed = await _isolateGate.run(() => compute(
+        final streamed = await _renderGate.run(() => compute(
               _isolateStreamRenderWithLayers,
               _StreamRenderParams(
                 filePath: filePath,
                 hiddenLayerIndices: hiddenLayerIndices,
                 maxDimension: maxDimension,
               ),
-            ));
+            ).timeout(const Duration(seconds: 12), onTimeout: () => null));
         if (streamed != null && streamed.isNotEmpty) {
           return streamed;
         }
@@ -871,14 +875,14 @@ class PsdService {
         return await decodeThumbnail(filePath, maxDimension: maxDimension);
       }
 
-      final result = await _isolateGate.run(() => compute(
+      final result = await _renderGate.run(() => compute(
             _isolateRenderWithLayers,
             _RenderWithLayersParams(
               filePath: filePath,
               hiddenLayerIndices: hiddenLayerIndices,
               maxDimension: maxDimension,
             ),
-          ));
+          ).timeout(const Duration(seconds: 12), onTimeout: () => null));
 
       if (result == null && hiddenLayerIndices.isEmpty) {
         return await decodeThumbnail(filePath, maxDimension: maxDimension);
@@ -1453,6 +1457,135 @@ void _compositeLayer(
   }
 }
 
+class _ChannelScanlineReader {
+  final Uint8List raw;
+  final int width;
+  final int height;
+  final int bytesPerPixel;
+  final int depth;
+  final int compression;
+  final Uint32List? scanlineOffsets;
+  final Uint32List? scanlineLengths;
+  final Uint8List? fullDecompressed;
+
+  int get rowBytes => width * bytesPerPixel;
+
+  int _cachedRow = -1;
+  Uint8List? _cachedScanline;
+
+  _ChannelScanlineReader._({
+    required this.raw,
+    required this.width,
+    required this.height,
+    required this.bytesPerPixel,
+    required this.depth,
+    required this.compression,
+    this.scanlineOffsets,
+    this.scanlineLengths,
+    this.fullDecompressed,
+  });
+
+  static _ChannelScanlineReader? create(
+    Uint8List rawChannelData,
+    int width,
+    int height, {
+    bool isPsb = false,
+    int depth = 8,
+  }) {
+    if (width <= 0 || height <= 0 || rawChannelData.length < 2) return null;
+    final compression = ByteData.sublistView(rawChannelData).getUint16(0);
+    final bytesPerPixel = (depth == 16) ? 2 : 1;
+
+    if (compression == 0) {
+      return _ChannelScanlineReader._(
+        raw: rawChannelData,
+        width: width,
+        height: height,
+        bytesPerPixel: bytesPerPixel,
+        depth: depth,
+        compression: 0,
+      );
+    } else if (compression == 1) {
+      final entrySize = isPsb ? 4 : 2;
+      final tableLength = height * entrySize;
+      if (rawChannelData.length < 2 + tableLength) return null;
+
+      final scanlineOffsets = Uint32List(height);
+      final scanlineLengths = Uint32List(height);
+      var currOffset = 2 + tableLength;
+      final bd = ByteData.sublistView(rawChannelData);
+
+      for (var r = 0; r < height; r++) {
+        final slen = isPsb ? bd.getUint32(2 + r * 4) : bd.getUint16(2 + r * 2);
+        scanlineOffsets[r] = currOffset;
+        scanlineLengths[r] = slen;
+        currOffset += slen;
+      }
+
+      return _ChannelScanlineReader._(
+        raw: rawChannelData,
+        width: width,
+        height: height,
+        bytesPerPixel: bytesPerPixel,
+        depth: depth,
+        compression: 1,
+        scanlineOffsets: scanlineOffsets,
+        scanlineLengths: scanlineLengths,
+      );
+    } else if (compression == 2 || compression == 3) {
+      final decompressed = _decompressChannelData(
+        rawChannelData,
+        width,
+        height,
+        isPsb: isPsb,
+        depth: depth,
+      );
+      if (decompressed == null) return null;
+      return _ChannelScanlineReader._(
+        raw: rawChannelData,
+        width: width,
+        height: height,
+        bytesPerPixel: bytesPerPixel,
+        depth: depth,
+        compression: compression,
+        fullDecompressed: decompressed,
+      );
+    }
+    return null;
+  }
+
+  int getSample(int sx, int sy) {
+    if (fullDecompressed != null) {
+      return _getSample(fullDecompressed, sy * width + sx, depth);
+    }
+    if (compression == 0) {
+      final offset = 2 + sy * rowBytes + (depth == 16 ? sx * 2 : sx);
+      return (offset < raw.length) ? raw[offset] : 0;
+    } else if (compression == 1) {
+      if (scanlineOffsets == null || scanlineLengths == null) return 0;
+      if (sy < 0 || sy >= height) return 0;
+      if (_cachedRow != sy) {
+        final off = scanlineOffsets![sy];
+        final len = scanlineLengths![sy];
+        if (off + len <= raw.length) {
+          _cachedScanline = _decodePackBits(raw, off, len, rowBytes);
+        } else {
+          final rem = raw.length - off;
+          _cachedScanline = rem > 0
+              ? _decodePackBits(raw, off, rem, rowBytes)
+              : Uint8List(rowBytes);
+        }
+        _cachedRow = sy;
+      }
+      final sl = _cachedScanline;
+      if (sl == null) return 0;
+      final bIdx = (depth == 16) ? sx * 2 : sx;
+      return (bIdx < sl.length) ? sl[bIdx] : 0;
+    }
+    return 0;
+  }
+}
+
 Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
   RandomAccessFile? raf;
   try {
@@ -1738,95 +1871,97 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
       if (layer.width <= 0 || layer.height <= 0) continue;
       if (layer.opacity <= 0) continue;
 
-      final decompressedChannels = <int, Uint8List>{};
-      for (final ch in layer.channels) {
-        if (ch.length <= 0) continue;
-        if (ch.fileOffset + ch.length > fileLen) continue;
+      try {
+        final readers = <int, _ChannelScanlineReader>{};
+        for (final ch in layer.channels) {
+          if (ch.length <= 0) continue;
+          if (ch.fileOffset + ch.length > fileLen) continue;
 
-        raf.setPositionSync(ch.fileOffset);
-        final rawData = raf.readSync(ch.length);
-        if (rawData.length < ch.length) continue;
+          raf.setPositionSync(ch.fileOffset);
+          final rawData = raf.readSync(ch.length);
+          if (rawData.length < ch.length) continue;
 
-        final decompressed = _decompressChannelData(
-          rawData,
-          layer.width,
-          layer.height,
-          isPsb: isPsb,
-          depth: depth,
-        );
-        if (decompressed != null) {
-          decompressedChannels[ch.id] = decompressed;
-        }
-      }
-
-      final ch0 = decompressedChannels[0];
-      final ch1 = decompressedChannels[1];
-      final ch2 = decompressedChannels[2];
-      final ch3 = decompressedChannels[3];
-      final alphaData = decompressedChannels[-1] ?? decompressedChannels[-2];
-
-      if (ch0 == null && ch1 == null && ch2 == null && ch3 == null && alphaData == null) {
-        continue;
-      }
-
-      final layerW = layer.width;
-      final layerH = layer.height;
-      final targetW = max(1, (layerW * scale).round());
-      final targetH = max(1, (layerH * scale).round());
-      final layerImg = img.Image(width: targetW, height: targetH, numChannels: 4);
-
-      final stepX = layerW / targetW;
-      final stepY = layerH / targetH;
-
-      for (var ty = 0; ty < targetH; ty++) {
-        final sy = (ty * stepY).toInt().clamp(0, layerH - 1);
-        final rowOffset = sy * layerW;
-        for (var tx = 0; tx < targetW; tx++) {
-          final sx = (tx * stepX).toInt().clamp(0, layerW - 1);
-          final idx = rowOffset + sx;
-
-          int r, g, b, a;
-          if (colorMode == 4) {
-            // CMYK
-            final c = _getSample(ch0, idx, depth);
-            final m = _getSample(ch1, idx, depth);
-            final y = _getSample(ch2, idx, depth);
-            final k = _getSample(ch3, idx, depth);
-            r = ((255 - c) * (255 - k)) ~/ 255;
-            g = ((255 - m) * (255 - k)) ~/ 255;
-            b = ((255 - y) * (255 - k)) ~/ 255;
-          } else if (colorMode == 1) {
-            // Grayscale
-            final gray = _getSample(ch0, idx, depth);
-            r = gray;
-            g = gray;
-            b = gray;
-          } else if (ch0 == null && ch1 == null && ch2 == null) {
-            // Mask-only / alpha-only layer
-            final mask = _getSample(alphaData, idx, depth);
-            r = mask;
-            g = mask;
-            b = mask;
-          } else {
-            // RGB
-            r = _getSample(ch0, idx, depth);
-            g = ch1 != null ? _getSample(ch1, idx, depth) : _getSample(ch0, idx, depth);
-            b = ch2 != null ? _getSample(ch2, idx, depth) : _getSample(ch0, idx, depth);
+          final reader = _ChannelScanlineReader.create(
+            rawData,
+            layer.width,
+            layer.height,
+            isPsb: isPsb,
+            depth: depth,
+          );
+          if (reader != null) {
+            readers[ch.id] = reader;
           }
-
-          if (ch0 == null && ch1 == null && ch2 == null && ch3 == null && alphaData != null) {
-            a = 255;
-          } else {
-            a = (alphaData != null) ? _getSample(alphaData, idx, depth) : 255;
-          }
-
-          layerImg.setPixelRgba(tx, ty, r, g, b, a);
         }
-      }
 
-      final dstX = (layer.left * scale).round();
-      final dstY = (layer.top * scale).round();
-      _compositeLayer(canvas, layerImg, dstX, dstY, layer.opacity);
+        final r0 = readers[0];
+        final r1 = readers[1];
+        final r2 = readers[2];
+        final r3 = readers[3];
+        final rAlpha = readers[-1] ?? readers[-2];
+
+        if (r0 == null && r1 == null && r2 == null && r3 == null && rAlpha == null) {
+          continue;
+        }
+
+        final layerW = layer.width;
+        final layerH = layer.height;
+        final targetW = max(1, (layerW * scale).round());
+        final targetH = max(1, (layerH * scale).round());
+        final layerImg = img.Image(width: targetW, height: targetH, numChannels: 4);
+
+        final stepX = layerW / targetW;
+        final stepY = layerH / targetH;
+
+        for (var ty = 0; ty < targetH; ty++) {
+          final sy = (ty * stepY).toInt().clamp(0, layerH - 1);
+          for (var tx = 0; tx < targetW; tx++) {
+            final sx = (tx * stepX).toInt().clamp(0, layerW - 1);
+
+            int r, g, b, a;
+            if (colorMode == 4) {
+              // CMYK
+              final c = r0?.getSample(sx, sy) ?? 0;
+              final m = r1?.getSample(sx, sy) ?? 0;
+              final y = r2?.getSample(sx, sy) ?? 0;
+              final k = r3?.getSample(sx, sy) ?? 0;
+              r = ((255 - c) * (255 - k)) ~/ 255;
+              g = ((255 - m) * (255 - k)) ~/ 255;
+              b = ((255 - y) * (255 - k)) ~/ 255;
+            } else if (colorMode == 1) {
+              // Grayscale
+              final gray = r0?.getSample(sx, sy) ?? 0;
+              r = gray;
+              g = gray;
+              b = gray;
+            } else if (r0 == null && r1 == null && r2 == null) {
+              // Mask-only / alpha-only layer
+              final mask = rAlpha?.getSample(sx, sy) ?? 0;
+              r = mask;
+              g = mask;
+              b = mask;
+            } else {
+              // RGB
+              r = r0?.getSample(sx, sy) ?? 0;
+              g = r1 != null ? r1.getSample(sx, sy) : (r0?.getSample(sx, sy) ?? 0);
+              b = r2 != null ? r2.getSample(sx, sy) : (r0?.getSample(sx, sy) ?? 0);
+            }
+
+            if (r0 == null && r1 == null && r2 == null && r3 == null && rAlpha != null) {
+              a = 255;
+            } else {
+              a = (rAlpha != null) ? rAlpha.getSample(sx, sy) : 255;
+            }
+
+            layerImg.setPixelRgba(tx, ty, r, g, b, a);
+          }
+        }
+
+        final dstX = (layer.left * scale).round();
+        final dstY = (layer.top * scale).round();
+        _compositeLayer(canvas, layerImg, dstX, dstY, layer.opacity);
+      } catch (layerErr) {
+        debugPrint('[PsdService] stream render error on layer ${layer.index}: $layerErr');
+      }
     }
 
     return Uint8List.fromList(img.encodeJpg(canvas, quality: 90));
@@ -2027,7 +2162,7 @@ Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) 
         continue;
       }
 
-      final decompressedChannels = <int, Uint8List>{};
+      final readers = <int, _ChannelScanlineReader>{};
       for (final ch in layer.channels) {
         if (ch.id < -2 || ch.id > 3) continue;
         if (ch.length <= 0) continue;
@@ -2037,25 +2172,25 @@ Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) 
         final rawData = raf.readSync(ch.length);
         if (rawData.length < ch.length) continue;
 
-        final decompressed = _decompressChannelData(
+        final reader = _ChannelScanlineReader.create(
           rawData,
           layer.width,
           layer.height,
           isPsb: isPsb,
           depth: depth,
         );
-        if (decompressed != null) {
-          decompressedChannels[ch.id] = decompressed;
+        if (reader != null) {
+          readers[ch.id] = reader;
         }
       }
 
-      final ch0 = decompressedChannels[0];
-      final ch1 = decompressedChannels[1];
-      final ch2 = decompressedChannels[2];
-      final ch3 = decompressedChannels[3];
-      final alphaData = decompressedChannels[-1] ?? decompressedChannels[-2];
+      final r0 = readers[0];
+      final r1 = readers[1];
+      final r2 = readers[2];
+      final r3 = readers[3];
+      final rAlpha = readers[-1] ?? readers[-2];
 
-      if (ch0 == null && ch1 == null && ch2 == null && ch3 == null && alphaData == null) {
+      if (r0 == null && r1 == null && r2 == null && r3 == null && rAlpha == null) {
         continue;
       }
 
@@ -2073,49 +2208,46 @@ Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) 
       final stepY = layer.height / thumbH;
       final thumbImg = img.Image(width: thumbW, height: thumbH, numChannels: 4);
 
-      final layerW = layer.width;
       final opacity = layer.opacity;
 
       for (var ty = 0; ty < thumbH; ty++) {
         final sy = (ty * stepY).toInt().clamp(0, layer.height - 1);
-        final rowOffset = sy * layerW;
         for (var tx = 0; tx < thumbW; tx++) {
           final sx = (tx * stepX).toInt().clamp(0, layer.width - 1);
-          final idx = rowOffset + sx;
 
           int r, g, b, a;
           if (colorMode == 4) {
             // CMYK
-            final c = _getSample(ch0, idx, depth);
-            final m = _getSample(ch1, idx, depth);
-            final y = _getSample(ch2, idx, depth);
-            final k = _getSample(ch3, idx, depth);
+            final c = r0?.getSample(sx, sy) ?? 0;
+            final m = r1?.getSample(sx, sy) ?? 0;
+            final y = r2?.getSample(sx, sy) ?? 0;
+            final k = r3?.getSample(sx, sy) ?? 0;
             r = ((255 - c) * (255 - k)) ~/ 255;
             g = ((255 - m) * (255 - k)) ~/ 255;
             b = ((255 - y) * (255 - k)) ~/ 255;
           } else if (colorMode == 1) {
             // Grayscale
-            final gray = _getSample(ch0, idx, depth);
+            final gray = r0?.getSample(sx, sy) ?? 0;
             r = gray;
             g = gray;
             b = gray;
-          } else if (ch0 == null && ch1 == null && ch2 == null) {
+          } else if (r0 == null && r1 == null && r2 == null) {
             // Mask-only / alpha-only layer
-            final mask = _getSample(alphaData, idx, depth);
+            final mask = rAlpha?.getSample(sx, sy) ?? 0;
             r = mask;
             g = mask;
             b = mask;
           } else {
             // RGB
-            r = _getSample(ch0, idx, depth);
-            g = ch1 != null ? _getSample(ch1, idx, depth) : _getSample(ch0, idx, depth);
-            b = ch2 != null ? _getSample(ch2, idx, depth) : _getSample(ch0, idx, depth);
+            r = r0?.getSample(sx, sy) ?? 0;
+            g = r1 != null ? r1.getSample(sx, sy) : (r0?.getSample(sx, sy) ?? 0);
+            b = r2 != null ? r2.getSample(sx, sy) : (r0?.getSample(sx, sy) ?? 0);
           }
 
-          if (ch0 == null && ch1 == null && ch2 == null && ch3 == null && alphaData != null) {
+          if (r0 == null && r1 == null && r2 == null && r3 == null && rAlpha != null) {
             a = (255 * opacity) ~/ 255;
           } else {
-            final rawA = (alphaData != null) ? _getSample(alphaData, idx, depth) : 255;
+            final rawA = (rAlpha != null) ? rAlpha.getSample(sx, sy) : 255;
             a = (rawA * opacity) ~/ 255;
           }
 
