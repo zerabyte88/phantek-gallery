@@ -579,18 +579,24 @@ void main() {
       expect(find.text('ARM64-v8a'), findsNothing);
       expect(find.text('Video Engine'), findsNothing);
       expect(find.text('Build'), findsOneWidget);
-      expect(find.text('53'), findsOneWidget);
-      expect(find.text('MIT'), findsOneWidget);
+      expect(find.text('762443'), findsOneWidget);
+      expect(find.text('MIT License'), findsOneWidget);
     });
 
     test(
-        'LicenseService registers phantek_gallery and androidx.media3 licenses',
+        'LicenseService registers phantek_gallery and native dependencies',
         () async {
+      LicenseService.resetForTesting();
       LicenseService.registerLicenses();
       final licenses = await LicenseRegistry.licenses.toList();
       final allPackages = licenses.expand((e) => e.packages).toSet();
       expect(allPackages.contains('phantek_gallery'), isTrue);
+      expect(allPackages.contains('Phantek Gallery'), isTrue);
       expect(allPackages.contains('androidx.media3 (ExoPlayer)'), isTrue);
+      expect(allPackages.contains('androidx.media3'), isTrue);
+      expect(allPackages.contains('kotlinx.coroutines'), isTrue);
+      expect(allPackages.contains('glide'), isTrue);
+      expect(allPackages.contains('image'), isTrue);
     });
 
     test('MediaListNotifier optimistic removeItems and restoreItems', () async {
