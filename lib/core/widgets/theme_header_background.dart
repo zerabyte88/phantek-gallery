@@ -15,7 +15,7 @@ import '../providers/settings_provider.dart';
 /// - [AppThemeMode.amoledSnowfall]: AMOLED Nordic Winter Village with snow-capped hills, glowing cabins, pine trees, and falling crystalline snowflakes.
 /// - [AppThemeMode.light]: Prismatic morning breeze with flowing pastel silk waves, floating pearlescent glass orbs, and diamond prism sparkles.
 /// - [AppThemeMode.cleanLight]: Minimal clean bright static light background without animations (only Phantek title animated).
-/// - [AppThemeMode.system]: Dynamically follows the system brightness (AMOLED Pure in dark, Clean Light in light).
+/// - [AppThemeMode.system]: Dynamically follows the system brightness (Dark Mode in dark, Light Mode in light).
 class ThemeHeaderBackground extends ConsumerStatefulWidget {
   const ThemeHeaderBackground({super.key});
 

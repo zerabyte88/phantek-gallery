@@ -509,8 +509,8 @@ void main() {
     test('AppThemeMode labels and AppTheme amoled definitions', () {
       expect(AppThemeMode.amoledMidnight.label, 'Midnight');
       expect(AppThemeMode.amoledSnowfall.label, 'Snowfall');
-      expect(AppThemeMode.amoledPure.label, 'AMOLED Pure');
-      expect(AppThemeMode.cleanLight.label, 'Clean Light');
+      expect(AppThemeMode.amoledPure.label, 'Dark Mode');
+      expect(AppThemeMode.cleanLight.label, 'Light Mode');
       expect(AppThemeMode.amoledSakura.label, 'Sakura');
       expect(AppTheme.amoledMidnight.scaffoldBackgroundColor, Colors.black);
       expect(AppTheme.amoledSnowfall.scaffoldBackgroundColor, Colors.black);
@@ -547,8 +547,8 @@ void main() {
 
       // Verify themes are in dialog
       expect(find.text('Midnight'), findsOneWidget);
-      expect(find.text('AMOLED Pure'), findsOneWidget);
-      expect(find.text('Clean Light'), findsOneWidget);
+      expect(find.text('Dark Mode'), findsOneWidget);
+      expect(find.text('Light Mode'), findsOneWidget);
       expect(find.text('Sakura'), findsOneWidget);
 
       // Select Sakura theme
@@ -580,7 +580,7 @@ void main() {
       expect(find.text('ARM64-v8a'), findsNothing);
       expect(find.text('Video Engine'), findsNothing);
       expect(find.text('Build'), findsOneWidget);
-      expect(find.text('762444'), findsOneWidget);
+      expect(find.text('762445'), findsOneWidget);
       expect(find.text('MIT License'), findsOneWidget);
     });
 

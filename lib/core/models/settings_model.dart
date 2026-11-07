@@ -215,10 +215,10 @@ extension AppThemeModeLabel on AppThemeMode {
   String get label => switch (this) {
         AppThemeMode.system => 'System',
         AppThemeMode.light => 'Sunburst',
-        AppThemeMode.cleanLight => 'Clean Light',
+        AppThemeMode.cleanLight => 'Light Mode',
         AppThemeMode.amoledSnowfall => 'Snowfall',
         AppThemeMode.amoledMidnight => 'Midnight',
-        AppThemeMode.amoledPure => 'AMOLED Pure',
+        AppThemeMode.amoledPure => 'Dark Mode',
         AppThemeMode.amoledSakura => 'Sakura',
       };
 }
