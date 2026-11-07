@@ -169,7 +169,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   final Map<String, Set<int>> _psdHiddenLayers = {};
   final Map<String, Uint8List> _psdRenderedBytes = {};
   final Map<String, bool> _psdRendering = {};
-  final Set<String> _psdRenderFailed = {};
+  final Map<String, bool> _psdRenderComplete = {};
 
   void _loadPsdDataIfNeeded(String path) {
     if (!PsdService.isPsd(path)) return;
@@ -184,28 +184,43 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       });
     }
 
-    if (!_psdRenderedBytes.containsKey(path) &&
-        _psdRendering[path] != true &&
-        !_psdRenderFailed.contains(path)) {
-      _psdRendering[path] = true;
-      PsdService.instance
-          .renderWithLayers(
-        path,
-        hiddenLayerIndices: _psdHiddenLayers[path] ?? {},
-      )
-          .then((bytes) {
-        if (mounted) {
+    if (_psdRendering[path] == true) return;
+    if (_psdRenderedBytes.containsKey(path) &&
+        _psdRenderComplete[path] == true) {
+      return;
+    }
+
+    _psdRendering[path] = true;
+
+    // Phase 1: Quick preview via embedded thumbnail — shows something immediately
+    if (!_psdRenderedBytes.containsKey(path)) {
+      PsdService.instance.decodeThumbnail(path, maxDimension: 1024).then((preview) {
+        if (!mounted) return;
+        if (preview != null && preview.isNotEmpty) {
           setState(() {
-            if (bytes != null && bytes.isNotEmpty) {
-              _psdRenderedBytes[path] = bytes;
-            } else {
-              _psdRenderFailed.add(path);
-            }
-            _psdRendering[path] = false;
+            _psdRenderedBytes[path] = preview;
           });
         }
       });
     }
+
+    // Phase 2: Full render — overwrites preview on success
+    PsdService.instance
+        .renderWithLayers(
+      path,
+      hiddenLayerIndices: _psdHiddenLayers[path] ?? {},
+    )
+        .then((bytes) {
+      if (mounted) {
+        setState(() {
+          if (bytes != null && bytes.isNotEmpty) {
+            _psdRenderedBytes[path] = bytes;
+            _psdRenderComplete[path] = true;
+          }
+          _psdRendering[path] = false;
+        });
+      }
+    });
   }
 
   void _openPsdLayerSheet(MediaItem item) {
@@ -221,7 +236,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         setState(() {
           _psdHiddenLayers[path] = Set<int>.from(newHidden);
           _psdRendering[path] = true;
-          _psdRenderFailed.remove(path);
         });
         final bytes = await PsdService.instance.renderWithLayers(
           path,
@@ -231,9 +245,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           setState(() {
             if (bytes != null && bytes.isNotEmpty) {
               _psdRenderedBytes[path] = bytes;
-            } else {
-              _psdRenderFailed.add(path);
+              _psdRenderComplete[path] = true;
             }
+            // bytes null → keep existing _psdRenderedBytes[path] as fallback
             _psdRendering[path] = false;
           });
         }
