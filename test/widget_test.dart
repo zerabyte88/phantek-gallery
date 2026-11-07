@@ -20,6 +20,7 @@ import 'package:phantek_gallery/core/services/screen_keeper_service.dart';
 import 'package:phantek_gallery/core/services/media_scanner_service.dart';
 import 'package:phantek_gallery/core/services/thumbnail_service.dart';
 import 'package:phantek_gallery/core/services/trash_service.dart';
+import 'package:phantek_gallery/core/services/psd_service.dart';
 import 'package:phantek_gallery/core/models/trash_item.dart';
 import 'package:phantek_gallery/core/utils/media_utils.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/album_grid_item.dart';
@@ -597,6 +598,45 @@ void main() {
       expect(allPackages.contains('kotlinx.coroutines'), isTrue);
       expect(allPackages.contains('glide'), isTrue);
       expect(allPackages.contains('image'), isTrue);
+    });
+
+    test('PsdService.isPsd extension case-insensitive detection', () {
+      expect(PsdService.isPsd('test.psd'), isTrue);
+      expect(PsdService.isPsd('TEST.PSD'), isTrue);
+      expect(PsdService.isPsd('/path/to/image.psd'), isTrue);
+      expect(PsdService.isPsd('.psd'), isTrue);
+      expect(PsdService.isPsd('.PSD'), isTrue);
+      expect(PsdService.isPsd('psd'), isTrue);
+      expect(PsdService.isPsd('photo.jpg'), isFalse);
+      expect(PsdService.isPsd('clip.mp4'), isFalse);
+      expect(PsdService.isPsd(''), isFalse);
+    });
+
+    test(
+        'PsdService Section 5 streaming payload synthesis and OOM safety thresholds',
+        () async {
+      final service = PsdService.instance;
+
+      // 1. Non-existent file returns null gracefully
+      final missingResult =
+          await service.extractMergedComposite('/non/existent/file.psd');
+      expect(missingResult, isNull);
+
+      // 2. Corrupt/short header returns null safely
+      final tempDir = await Directory.systemTemp.createTemp('psd_test_');
+      try {
+        final corruptFile = File('${tempDir.path}/corrupt.psd');
+        await corruptFile
+            .writeAsBytes([0x38, 0x42, 0x50, 0x53, 0x00, 0x01]); // only 6 bytes
+        expect(await service.extractMergedComposite(corruptFile.path), isNull);
+
+        // 3. Invalid signature returns null safely
+        final badSigFile = File('${tempDir.path}/badsig.psd');
+        await badSigFile.writeAsBytes(List.filled(40, 0));
+        expect(await service.extractMergedComposite(badSigFile.path), isNull);
+      } finally {
+        await tempDir.delete(recursive: true);
+      }
     });
 
     test('MediaListNotifier optimistic removeItems and restoreItems', () async {

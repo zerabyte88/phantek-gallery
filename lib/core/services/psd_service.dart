@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
@@ -185,7 +186,157 @@ class PsdService {
     }
   }
 
-  /// Decodes a fast thumbnail of the PSD file in an isolate.
+  /// Streams Section 5 (Image Data Section) containing the pre-rendered, flattened composite
+  /// image directly from disk using [RandomAccessFile], completely bypassing Section 4's
+  /// multi-layer memory allocation.
+  ///
+  /// Safely avoids OutOfMemoryError on large PSD files (300-400MB) by only reading
+  /// Section 5 into memory (typically 5MB - 25MB instead of ~400MB+ in RAM).
+  Future<Uint8List?> extractMergedComposite(
+    String filePath, {
+    int maxDimension = 2048,
+  }) async {
+    RandomAccessFile? raf;
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) return null;
+      raf = await file.open(mode: FileMode.read);
+      final fileLen = await raf.length();
+      if (fileLen < 34) return null;
+
+      // 1. Read 26-byte header: verify signature 0x38425053 ('8BPS')
+      final header = await raf.read(26);
+      if (header.length < 26) return null;
+      if (header[0] != 0x38 ||
+          header[1] != 0x42 ||
+          header[2] != 0x50 ||
+          header[3] != 0x53) {
+        return null;
+      }
+
+      final headerView = ByteData.sublistView(header);
+      final version = headerView.getUint16(4);
+      if (version != 1 && version != 2) return null;
+
+      final channels = headerView.getUint16(12);
+      final height = headerView.getUint32(14);
+      final width = headerView.getUint32(18);
+      if (channels < 1 || height < 1 || width < 1) return null;
+
+      // 2. Read 4-byte Color Mode Data length (L1), seek past it
+      final colorDataLenBytes = await raf.read(4);
+      if (colorDataLenBytes.length < 4) return null;
+      final colorDataLen = ByteData.sublistView(colorDataLenBytes).getUint32(0);
+
+      Uint8List colorData = Uint8List(0);
+      if (colorDataLen > 0) {
+        if (colorDataLen <= 65536 &&
+            (await raf.position()) + colorDataLen <= fileLen) {
+          colorData = await raf.read(colorDataLen);
+        } else {
+          final targetPos = await raf.position() + colorDataLen;
+          if (targetPos > fileLen) return null;
+          await raf.setPosition(targetPos);
+        }
+      }
+
+      // 3. Read 4-byte Image Resources length (L2), seek past it
+      if ((await raf.position()) + 4 > fileLen) return null;
+      final resLenBytes = await raf.read(4);
+      if (resLenBytes.length < 4) return null;
+      final resLen = ByteData.sublistView(resLenBytes).getUint32(0);
+      final resEndPos = await raf.position() + resLen;
+      if (resEndPos > fileLen) return null;
+      await raf.setPosition(resEndPos);
+
+      // 4. Read Layer and Mask Information length (L3): seek past it!
+      // This skips the 380MB of layer pixel data in ~0ms without loading it into RAM!
+      final int layerSectionLen;
+      if (version == 2) {
+        if ((await raf.position()) + 8 > fileLen) return null;
+        final layerLenBytes = await raf.read(8);
+        if (layerLenBytes.length < 8) return null;
+        layerSectionLen = ByteData.sublistView(layerLenBytes).getUint64(0);
+      } else {
+        if ((await raf.position()) + 4 > fileLen) return null;
+        final layerLenBytes = await raf.read(4);
+        if (layerLenBytes.length < 4) return null;
+        layerSectionLen = ByteData.sublistView(layerLenBytes).getUint32(0);
+      }
+
+      final section5Pos = await raf.position() + layerSectionLen;
+      if (section5Pos > fileLen) return null;
+      await raf.setPosition(section5Pos);
+
+      // 5. Check if remaining bytes > 2 (Section 5: Image Data Section)
+      final remainingBytes = fileLen - await raf.position();
+      if (remainingBytes <= 2) return null;
+
+      // 6. Read ONLY Section 5 bytes
+      final section5Bytes = await raf.read(remainingBytes);
+      if (section5Bytes.length < 2) return null;
+
+      // 7. Construct synthesized lightweight PSD payload:
+      // - 26-byte original Header
+      // - Color Mode Data length & bytes (or 4 zero bytes)
+      // - 4 zero bytes (Image resources len = 0)
+      // - Layer & mask data block: 4 bytes len (8), 4 bytes layer len (0), 4 bytes mask len (0)
+      // - Section 5 bytes
+      final builder = BytesBuilder(copy: false);
+      builder.add(header);
+
+      if (colorData.isNotEmpty) {
+        final cdLenBytes = Uint8List(4);
+        ByteData.sublistView(cdLenBytes).setUint32(0, colorData.length);
+        builder.add(cdLenBytes);
+        builder.add(colorData);
+      } else {
+        builder.add(Uint8List(4));
+      }
+
+      builder.add(Uint8List(4)); // Resources len = 0
+
+      if (version == 2) {
+        final sec4 = Uint8List(24);
+        final bd = ByteData.sublistView(sec4);
+        bd.setUint64(0, 16); // section len = 16
+        bd.setUint64(8, 0); // layer info len = 0
+        bd.setUint64(16, 0); // mask info len = 0
+        builder.add(sec4);
+      } else {
+        final sec4 = Uint8List(12);
+        final bd = ByteData.sublistView(sec4);
+        bd.setUint32(0, 8); // section len = 8
+        bd.setUint32(4, 0); // layer info len = 0
+        bd.setUint32(8, 0); // mask info len = 0
+        builder.add(sec4);
+      }
+
+      builder.add(section5Bytes);
+      final synthBytes = builder.takeBytes();
+
+      // 8 & 9. Decode synthesized payload in worker isolate
+      return await compute(
+        _isolateDecodeSynthPsd,
+        _DecodeSynthParams(synthBytes, maxDimension),
+      );
+    } catch (e) {
+      debugPrint('[PsdService] extractMergedComposite error for $filePath: $e');
+      return null;
+    } finally {
+      try {
+        await raf?.close();
+      } catch (_) {}
+    }
+  }
+
+  /// Decodes a fast thumbnail of the PSD file.
+  ///
+  /// Uses a tiered strategy:
+  /// 1st: try [extractEmbeddedThumbnail].
+  /// 2nd: try [extractMergedComposite].
+  /// 3rd: for smaller files (< 50MB), fallback to [_isolateDecodeThumbnail].
+  ///      Files >= 50MB strictly avoid full isolate decode to prevent OutOfMemoryError.
   Future<Uint8List?> decodeThumbnail(
     String filePath, {
     int maxDimension = 512,
@@ -194,15 +345,32 @@ class PsdService {
       final file = File(filePath);
       if (!await file.exists()) return null;
 
+      // 1st: try embedded thumbnail
       final embedded = await extractEmbeddedThumbnail(filePath);
       if (embedded != null && embedded.isNotEmpty) {
         return embedded;
       }
 
-      return await _isolateGate.run(() => compute(
-            _isolateDecodeThumbnail,
-            _DecodeThumbnailParams(filePath, maxDimension),
-          ));
+      // 2nd: try streaming Section 5 merged composite
+      final composite = await extractMergedComposite(
+        filePath,
+        maxDimension: maxDimension,
+      );
+      if (composite != null && composite.isNotEmpty) {
+        return composite;
+      }
+
+      // 3rd: for smaller files (< 50MB), fallback to isolate layer decode.
+      // For files >= 50MB, do NOT run _isolateDecodeThumbnail to prevent OOM.
+      final fileSize = await file.length();
+      if (fileSize < 50 * 1024 * 1024) {
+        return await _isolateGate.run(() => compute(
+              _isolateDecodeThumbnail,
+              _DecodeThumbnailParams(filePath, maxDimension),
+            ));
+      }
+
+      return null;
     } catch (e) {
       debugPrint('[PsdService] decodeThumbnail error for $filePath: $e');
       return null;
@@ -210,12 +378,22 @@ class PsdService {
   }
 
   /// Extracts layer metadata from a PSD file in an isolate.
+  ///
+  /// Files >= 150MB skip full layer decoding and safely return an empty list
+  /// to protect Android heap limits from OutOfMemoryError.
   Future<List<PsdLayerInfo>> getLayers(String filePath) async {
     try {
       final file = File(filePath);
       if (!await file.exists()) return [];
 
-      return await compute(_isolateGetLayers, filePath);
+      final fileSize = await file.length();
+      if (fileSize >= 150 * 1024 * 1024) {
+        debugPrint(
+            '[PsdService] getLayers skipped for large PSD (${fileSize ~/ (1024 * 1024)}MB) to prevent OOM');
+        return [];
+      }
+
+      return await _isolateGate.run(() => compute(_isolateGetLayers, filePath));
     } catch (e) {
       debugPrint('[PsdService] getLayers error for $filePath: $e');
       return [];
@@ -223,6 +401,9 @@ class PsdService {
   }
 
   /// Renders the PSD document with custom layer visibility in an isolate.
+  ///
+  /// When [hiddenLayerIndices] is empty, attempts streaming Section 5 merged
+  /// composite first for zero layer overhead. Only decodes all layers if layers are toggled.
   Future<Uint8List?> renderWithLayers(
     String filePath, {
     required Set<int> hiddenLayerIndices,
@@ -232,14 +413,30 @@ class PsdService {
       final file = File(filePath);
       if (!await file.exists()) return null;
 
-      final result = await compute(
-        _isolateRenderWithLayers,
-        _RenderWithLayersParams(
-          filePath: filePath,
-          hiddenLayerIndices: hiddenLayerIndices,
+      if (hiddenLayerIndices.isEmpty) {
+        final composite = await extractMergedComposite(
+          filePath,
           maxDimension: maxDimension,
-        ),
-      );
+        );
+        if (composite != null && composite.isNotEmpty) {
+          return composite;
+        }
+      }
+
+      // Only if hiddenLayerIndices.isNotEmpty (or composite failed):
+      final fileSize = await file.length();
+      if (fileSize >= 150 * 1024 * 1024 && hiddenLayerIndices.isEmpty) {
+        return await decodeThumbnail(filePath, maxDimension: maxDimension);
+      }
+
+      final result = await _isolateGate.run(() => compute(
+            _isolateRenderWithLayers,
+            _RenderWithLayersParams(
+              filePath: filePath,
+              hiddenLayerIndices: hiddenLayerIndices,
+              maxDimension: maxDimension,
+            ),
+          ));
 
       if (result == null && hiddenLayerIndices.isEmpty) {
         return await decodeThumbnail(filePath, maxDimension: maxDimension);
@@ -253,6 +450,44 @@ class PsdService {
       }
       return null;
     }
+  }
+}
+
+class _DecodeSynthParams {
+  final Uint8List synthBytes;
+  final int maxDimension;
+  const _DecodeSynthParams(this.synthBytes, this.maxDimension);
+}
+
+Uint8List? _isolateDecodeSynthPsd(_DecodeSynthParams params) {
+  try {
+    final decoder = img.PsdDecoder(maxPixels: 0);
+    final psd = decoder.decodePsd(params.synthBytes);
+    img.Image? image = psd?.mergedImage;
+    if (image == null && psd != null) {
+      try {
+        image = psd.renderImage();
+      } catch (_) {
+        image = null;
+      }
+    }
+    image ??= decoder.decode(params.synthBytes);
+    if (image == null) return null;
+
+    if (params.maxDimension > 0 &&
+        (image.width > params.maxDimension ||
+            image.height > params.maxDimension)) {
+      image = img.copyResize(
+        image,
+        width: image.width >= image.height ? params.maxDimension : null,
+        height: image.height > image.width ? params.maxDimension : null,
+        maintainAspect: true,
+      );
+    }
+
+    return Uint8List.fromList(img.encodeJpg(image, quality: 90));
+  } catch (e) {
+    return null;
   }
 }
 

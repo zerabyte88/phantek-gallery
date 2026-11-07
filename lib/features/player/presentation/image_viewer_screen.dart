@@ -43,7 +43,7 @@ ImageProvider screenDisplayImage(String path, [int maxDim = 1440]) =>
     );
 
 /// Cached thumbnail, shown instantly while the full image decodes.
-Widget _thumb(String id, [String? path]) {
+Widget _thumb(String id, [String? path, Uint8List? psdFallbackBytes]) {
   final hr = ThumbnailService.instance.getMemoryHighResThumbnail(id);
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
   final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
@@ -59,7 +59,11 @@ Widget _thumb(String id, [String? path]) {
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (path != null && !isVid && !isPsd ? screenDisplayImage(path) : null));
+          : (isPsd && psdFallbackBytes != null && psdFallbackBytes.isNotEmpty
+              ? MemoryImage(psdFallbackBytes)
+              : (path != null && !isVid && !isPsd
+                  ? screenDisplayImage(path)
+                  : null)));
   if (p == null) return const SizedBox.shrink();
   return Image(
     image: p,
@@ -76,6 +80,7 @@ Widget _buildHeroShuttle({
   required String id,
   String? path,
   Widget? fallbackChild,
+  Uint8List? psdFallbackBytes,
 }) {
   final hr = ThumbnailService.instance.getMemoryHighResThumbnail(id);
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
@@ -85,7 +90,9 @@ Widget _buildHeroShuttle({
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (path != null && !isPsd ? screenDisplayImage(path) : null));
+          : (isPsd && psdFallbackBytes != null && psdFallbackBytes.isNotEmpty
+              ? MemoryImage(psdFallbackBytes)
+              : (path != null && !isPsd ? screenDisplayImage(path) : null)));
 
   final Widget content = p != null
       ? Image(
@@ -573,7 +580,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         content = Stack(
           alignment: Alignment.center,
           children: [
-            _thumb(it.id, it.path),
+            _thumb(it.id, it.path, _psdRenderedBytes[it.path]),
             if (isRendering)
               const Center(
                 child: SizedBox(
@@ -1124,6 +1131,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                         flightDirection: flightDirection,
                                         id: it.id,
                                         path: it.path,
+                                        psdFallbackBytes:
+                                            _psdRenderedBytes[it.path],
                                         fallbackChild: flightDirection ==
                                                 HeroFlightDirection.push
                                             ? toHeroContext.widget
