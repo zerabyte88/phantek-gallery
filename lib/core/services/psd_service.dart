@@ -842,17 +842,7 @@ class PsdService {
       final file = File(filePath);
       if (!await file.exists()) return null;
 
-      if (hiddenLayerIndices.isEmpty) {
-        final composite = await extractMergedComposite(
-          filePath,
-          maxDimension: maxDimension,
-        );
-        if (composite != null && composite.isNotEmpty) {
-          return composite;
-        }
-      }
-
-      // 1. Streaming renderer for layer toggling (or if merged composite is missing)
+      // 1. Primary execution path: streaming renderer for custom layer visibility
       try {
         final streamed = await _renderGate.run(() => compute(
               _isolateStreamRenderWithLayers,
@@ -869,12 +859,7 @@ class PsdService {
         debugPrint('[PsdService] _isolateStreamRenderWithLayers error: $e');
       }
 
-      // 2. Legacy fallback
-      final fileSize = await file.length();
-      if (fileSize >= 150 * 1024 * 1024 && hiddenLayerIndices.isEmpty) {
-        return await decodeThumbnail(filePath, maxDimension: maxDimension);
-      }
-
+      // 2. Secondary fallback: isolate full layer decode and composite
       final result = await _renderGate.run(() => compute(
             _isolateRenderWithLayers,
             _RenderWithLayersParams(
@@ -884,14 +869,33 @@ class PsdService {
             ),
           ).timeout(const Duration(seconds: 12), onTimeout: () => null));
 
-      if (result == null && hiddenLayerIndices.isEmpty) {
+      if (result != null && result.isNotEmpty) {
+        return result;
+      }
+
+      // 3. Last-resort fallback when both renderers return null and all layers are visible
+      if (hiddenLayerIndices.isEmpty) {
+        final composite = await extractMergedComposite(
+          filePath,
+          maxDimension: maxDimension,
+        );
+        if (composite != null && composite.isNotEmpty) {
+          return composite;
+        }
         return await decodeThumbnail(filePath, maxDimension: maxDimension);
       }
 
-      return result;
+      return null;
     } catch (e) {
       debugPrint('[PsdService] renderWithLayers error for $filePath: $e');
       if (hiddenLayerIndices.isEmpty) {
+        final composite = await extractMergedComposite(
+          filePath,
+          maxDimension: maxDimension,
+        );
+        if (composite != null && composite.isNotEmpty) {
+          return composite;
+        }
         return await decodeThumbnail(filePath, maxDimension: maxDimension);
       }
       return null;
@@ -1121,20 +1125,16 @@ Uint8List? _isolateRenderWithLayers(_RenderWithLayersParams params) {
 
     img.Image? rendered;
 
-    if (params.hiddenLayerIndices.isEmpty && psd.mergedImage != null) {
-      rendered = psd.mergedImage;
-    } else {
-      if (psd.layers.isNotEmpty) {
-        for (var i = 0; i < psd.layers.length; i++) {
-          final layer = psd.layers[i];
-          if (params.hiddenLayerIndices.contains(i)) {
-            layer.flags |= img.PsdFlag.hidden;
-          } else {
-            layer.flags &= ~img.PsdFlag.hidden;
-          }
+    if (psd.layers.isNotEmpty) {
+      for (var i = 0; i < psd.layers.length; i++) {
+        final layer = psd.layers[i];
+        if (params.hiddenLayerIndices.contains(i)) {
+          layer.flags |= img.PsdFlag.hidden;
+        } else {
+          layer.flags &= ~img.PsdFlag.hidden;
         }
-        psd.mergedImage = null;
       }
+      psd.mergedImage = null;
 
       try {
         rendered = psd.renderImage();
@@ -1152,7 +1152,6 @@ Uint8List? _isolateRenderWithLayers(_RenderWithLayersParams params) {
           for (var i = 0; i < psd.layers.length; i++) {
             if (params.hiddenLayerIndices.contains(i)) continue;
             final layer = psd.layers[i];
-            if (!layer.isVisible()) continue;
             final src = layer.layerImage;
             if (src == null || src.width <= 0 || src.height <= 0) continue;
             img.compositeImage(
@@ -1166,6 +1165,8 @@ Uint8List? _isolateRenderWithLayers(_RenderWithLayersParams params) {
           rendered = canvas;
         } catch (_) {}
       }
+    } else if (params.hiddenLayerIndices.isEmpty && psd.mergedImage != null) {
+      rendered = psd.mergedImage;
     }
 
     rendered ??= psd.mergedImage ?? decoder.decode(bytes);

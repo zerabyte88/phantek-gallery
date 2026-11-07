@@ -620,16 +620,19 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         if (target >= 0 && target < _videos.length) {
           final item = _videos[target];
           if (item.isVideo) {
-            ThumbnailService.instance
-                .getHighResVideoThumbnail(
-              item.id,
-              filePath: item.path,
-            )
-                .then((hrBytes) {
-              if (hrBytes != null && mounted) {
-                precacheImage(MemoryImage(hrBytes), context);
-              }
-            });
+            // Avoid native decoder contention when 4K / 60fps video is playing
+            if (_controller?.value.isPlaying != true) {
+              ThumbnailService.instance
+                  .getHighResVideoThumbnail(
+                item.id,
+                filePath: item.path,
+              )
+                  .then((hrBytes) {
+                if (hrBytes != null && mounted) {
+                  precacheImage(MemoryImage(hrBytes), context);
+                }
+              });
+            }
             final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
             if (mem != null && mounted) {
               precacheImage(MemoryImage(mem), context);
@@ -710,7 +713,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _lastPositionSaveTime = null;
 
     final settings = ref.read(settingsNotifierProvider);
-    final newController = VideoPlayerController.file(File(path));
+    final newController = VideoPlayerController.file(
+      File(path),
+      videoPlayerOptions: VideoPlayerOptions(
+        mixWithOthers: false,
+        allowBackgroundPlayback: false,
+        backBufferDurationMs: 2500,
+      ),
+    );
 
     try {
       await newController.initialize();
@@ -1433,11 +1443,25 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       fit: StackFit.expand,
       alignment: Alignment.center,
       children: [
-        _VideoThumbnailPage(
-          item: item,
-          fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
-          isSwiping: _isSwipingPage,
-        ),
+        if (index == _current)
+          ValueListenableBuilder<bool>(
+            valueListenable: _videoSurfaceVisible,
+            builder: (context, surfaceVisible, child) => Offstage(
+              offstage: surfaceVisible,
+              child: child,
+            ),
+            child: _VideoThumbnailPage(
+              item: item,
+              fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
+              isSwiping: _isSwipingPage,
+            ),
+          )
+        else
+          _VideoThumbnailPage(
+            item: item,
+            fit: shouldCrop ? BoxFit.cover : BoxFit.contain,
+            isSwiping: _isSwipingPage,
+          ),
         if (index == _current && _controller != null)
           ValueListenableBuilder<bool>(
             valueListenable: _videoSurfaceVisible,
@@ -1454,7 +1478,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         ? SizedBox(
                             width: _controller!.value.size.width,
                             height: _controller!.value.size.height,
-                            child: VideoPlayer(_controller!),
+                            child: RepaintBoundary(
+                              child: VideoPlayer(_controller!),
+                            ),
                           )
                         : const SizedBox.shrink(),
                   ),
@@ -2274,13 +2300,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                     ValueListenableBuilder<Offset>(
                       valueListenable: _dragNotifier,
                       builder: (context, drag, child) {
+                        final isHidden = !_showControls && drag.dy <= 4;
                         final dragFade =
                             (1.0 - (drag.dy / 35.0)).clamp(0.0, 1.0);
                         final baseOpacity =
                             (_showControls && !_isPinching) ? dragFade : 0.0;
                         final anim = ModalRoute.of(context)?.animation;
+                        Widget overlayContent;
                         if (anim == null) {
-                          return Opacity(
+                          overlayContent = Opacity(
                             opacity: baseOpacity,
                             child: IgnorePointer(
                               ignoring:
@@ -2288,26 +2316,31 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               child: child,
                             ),
                           );
+                        } else {
+                          overlayContent = AnimatedBuilder(
+                            animation: anim,
+                            builder: (context, _) {
+                              final entrance =
+                                  const Interval(0.65, 1.0, curve: Curves.easeOut)
+                                      .transform(anim.value);
+                              final opacity =
+                                  (baseOpacity * entrance).clamp(0.0, 1.0);
+                              return Opacity(
+                                opacity: opacity,
+                                child: IgnorePointer(
+                                  ignoring: !_showControls ||
+                                      drag.dy > 4 ||
+                                      _isPinching ||
+                                      opacity < 0.5,
+                                  child: child,
+                                ),
+                              );
+                            },
+                          );
                         }
-                        return AnimatedBuilder(
-                          animation: anim,
-                          builder: (context, _) {
-                            final entrance =
-                                const Interval(0.65, 1.0, curve: Curves.easeOut)
-                                    .transform(anim.value);
-                            final opacity =
-                                (baseOpacity * entrance).clamp(0.0, 1.0);
-                            return Opacity(
-                              opacity: opacity,
-                              child: IgnorePointer(
-                                ignoring: !_showControls ||
-                                    drag.dy > 4 ||
-                                    _isPinching ||
-                                    opacity < 0.5,
-                                child: child,
-                              ),
-                            );
-                          },
+                        return Offstage(
+                          offstage: isHidden,
+                          child: overlayContent,
                         );
                       },
                       child: Stack(
@@ -3680,75 +3713,65 @@ class _BottomBarState extends State<_BottomBar> {
         top: false,
         child: Padding(
           padding: EdgeInsets.fromLTRB(8, 0, 8, isLandscape ? 2 : 8),
-          child: ListenableBuilder(
-            listenable: widget.controller ?? ChangeNotifier(),
-            builder: (_, __) {
-              final val = widget.controller?.value;
-              final pos = val?.position ?? Duration.zero;
-              final dur = (val != null && val.duration > Duration.zero)
-                  ? val.duration
-                  : (widget.item.duration ?? Duration.zero);
-              final displayPos = (_isDragging &&
-                      _dragFraction != null &&
-                      dur.inMilliseconds > 0)
-                  ? Duration(
-                      milliseconds:
-                          (_dragFraction! * dur.inMilliseconds).round())
-                  : pos;
-              final frac = dur.inMilliseconds > 0
-                  ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))
-                  : 0.0;
-
-              if (isLandscape) {
-                return _buildLandscapeLayout(
-                  context,
-                  displayPos: displayPos,
-                  dur: dur,
-                  frac: frac,
-                );
-              }
-              return _buildPortraitLayout(
-                context,
-                displayPos: displayPos,
-                dur: dur,
-                frac: frac,
-              );
-            },
-          ),
+          child: isLandscape
+              ? _buildLandscapeLayout(context)
+              : _buildPortraitLayout(context),
         ),
       ),
     );
   }
 
-  Widget _buildLandscapeLayout(
-    BuildContext context, {
-    required Duration displayPos,
-    required Duration dur,
-    required double frac,
-  }) {
+  Widget _buildLandscapeLayout(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 1. Timestamp on the left (e.g. 00:04 / 00:14)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            '${MediaUtils.formatDuration(displayPos)} / ${MediaUtils.formatDuration(dur)}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        // 2. Compact seekbar slider with preview
-        _buildSeekbarWithPreview(
-          context,
-          frac: frac,
-          displayPos: displayPos,
-          dur: dur,
-          isLandscape: true,
+        ListenableBuilder(
+          listenable: widget.controller ?? ChangeNotifier(),
+          builder: (_, __) {
+            final val = widget.controller?.value;
+            final pos = val?.position ?? Duration.zero;
+            final dur = (val != null && val.duration > Duration.zero)
+                ? val.duration
+                : (widget.item.duration ?? Duration.zero);
+            final displayPos = (_isDragging &&
+                    _dragFraction != null &&
+                    dur.inMilliseconds > 0)
+                ? Duration(
+                    milliseconds:
+                        (_dragFraction! * dur.inMilliseconds).round())
+                : pos;
+            final frac = dur.inMilliseconds > 0
+                ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))
+                : 0.0;
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. Timestamp on the left (e.g. 00:04 / 00:14)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    '${MediaUtils.formatDuration(displayPos)} / ${MediaUtils.formatDuration(dur)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                // 2. Compact seekbar slider with preview
+                _buildSeekbarWithPreview(
+                  context,
+                  frac: frac,
+                  displayPos: displayPos,
+                  dur: dur,
+                  isLandscape: true,
+                ),
+              ],
+            );
+          },
         ),
         // 3. Actions row: Play/Pause on the left, action icons on the right
         Padding(
@@ -4103,91 +4126,113 @@ class _BottomBarState extends State<_BottomBar> {
     );
   }
 
-  Widget _buildPortraitLayout(
-    BuildContext context, {
-    required Duration displayPos,
-    required Duration dur,
-    required double frac,
-  }) {
+  Widget _buildPortraitLayout(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (widget.isVertical) ...[
-          SizedBox(
-            height: 28,
-            child: Center(
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOut,
-                opacity: (_showPillBadge && !_showPreview) ? 1.0 : 0.0,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.65),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Text(
-                    '${MediaUtils.formatDuration(displayPos)}/${MediaUtils.formatDuration(dur)}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 2),
-        ],
-        // Seek bar with preview
-        _buildSeekbarWithPreview(
-          context,
-          frac: frac,
-          displayPos: displayPos,
-          dur: dur,
-          isLandscape: false,
-        ),
-        if (!widget.isVertical) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        ListenableBuilder(
+          listenable: widget.controller ?? ChangeNotifier(),
+          builder: (_, __) {
+            final val = widget.controller?.value;
+            final pos = val?.position ?? Duration.zero;
+            final dur = (val != null && val.duration > Duration.zero)
+                ? val.duration
+                : (widget.item.duration ?? Duration.zero);
+            final displayPos = (_isDragging &&
+                    _dragFraction != null &&
+                    dur.inMilliseconds > 0)
+                ? Duration(
+                    milliseconds:
+                        (_dragFraction! * dur.inMilliseconds).round())
+                : pos;
+            final frac = dur.inMilliseconds > 0
+                ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))
+                : 0.0;
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(MediaUtils.formatDuration(displayPos),
-                    style: const TextStyle(color: Colors.white, fontSize: 12)),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(MediaUtils.formatDuration(dur),
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12)),
-                    const SizedBox(width: 8),
-                    BouncyTap(
-                      onTap: widget.onToggleOrientation,
-                      child: const Padding(
-                        padding: EdgeInsets.all(2),
-                        child: DeviceRotateIcon(
-                          size: 20,
-                          color: Colors.white,
+                if (widget.isVertical) ...[
+                  SizedBox(
+                    height: 28,
+                    child: Center(
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOut,
+                        opacity: (_showPillBadge && !_showPreview) ? 1.0 : 0.0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            '${MediaUtils.formatDuration(displayPos)}/${MediaUtils.formatDuration(dur)}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ],
+                  ),
+                  const SizedBox(height: 2),
+                ],
+                // Seek bar with preview
+                _buildSeekbarWithPreview(
+                  context,
+                  frac: frac,
+                  displayPos: displayPos,
+                  dur: dur,
+                  isLandscape: false,
                 ),
+                if (!widget.isVertical) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(MediaUtils.formatDuration(displayPos),
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 12)),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(MediaUtils.formatDuration(dur),
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 12)),
+                            const SizedBox(width: 8),
+                            BouncyTap(
+                              onTap: widget.onToggleOrientation,
+                              child: const Padding(
+                                padding: EdgeInsets.all(2),
+                                child: DeviceRotateIcon(
+                                  size: 20,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                ] else ...[
+                  const SizedBox(height: 8),
+                ],
               ],
-            ),
-          ),
-          const SizedBox(height: 32),
-        ] else ...[
-          const SizedBox(height: 8),
-        ],
+            );
+          },
+        ),
         widget.isTrash
             ? Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,

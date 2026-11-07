@@ -87,6 +87,61 @@ void main() {
 
       await tempDir.delete(recursive: true);
     });
+
+    test('Layer saved hidden in Photoshop renders when toggled ON (hiddenLayerIndices: {})', () async {
+      final tempDir = await Directory.systemTemp.createTemp('psd_hidden_');
+      final psdFile = File('${tempDir.path}/test_hidden.psd');
+
+      final bytes = _createPhotoshopPsdWithHiddenLayer();
+      await psdFile.writeAsBytes(bytes);
+
+      // 1. Verify layer metadata parses with isVisible == false
+      final layers = await PsdService.instance.getLayers(psdFile.path);
+      expect(layers.length, 2);
+      expect(layers[0].name, 'Background');
+      expect(layers[0].isVisible, isTrue);
+      expect(layers[1].name, 'Red Box');
+      expect(layers[1].isVisible, isFalse);
+
+      // 2. Verify Photoshop Section 5 merged composite is pure white (red box missing)
+      final composite = await PsdService.instance.extractMergedComposite(psdFile.path);
+      expect(composite, isNotNull);
+      final compositeImg = img.decodeImage(composite!);
+      expect(compositeImg, isNotNull);
+      final compPixel = compositeImg!.getPixel(10, 10);
+      expect(compPixel.r.toInt() > 200, isTrue);
+      expect(compPixel.g.toInt() > 200, isTrue);
+      expect(compPixel.b.toInt() > 200, isTrue);
+
+      // 3. Render with hiddenLayerIndices: {} (user toggled the hidden layer ON in our app)
+      // Must NOT return Section 5 composite, but stream-render all layers including Red Box!
+      final renderedOn = await PsdService.instance.renderWithLayers(
+        psdFile.path,
+        hiddenLayerIndices: {},
+      );
+      expect(renderedOn, isNotNull);
+      final onImg = img.decodeImage(renderedOn!);
+      expect(onImg, isNotNull);
+      final redBoxPixel = onImg!.getPixel(10, 10);
+      expect(redBoxPixel.r.toInt() > 200, isTrue);
+      expect(redBoxPixel.g.toInt() < 50, isTrue);
+      expect(redBoxPixel.b.toInt() < 50, isTrue);
+
+      // 4. Render with hiddenLayerIndices: {1} (explicitly hidden in our app)
+      final renderedOff = await PsdService.instance.renderWithLayers(
+        psdFile.path,
+        hiddenLayerIndices: {1},
+      );
+      expect(renderedOff, isNotNull);
+      final offImg = img.decodeImage(renderedOff!);
+      expect(offImg, isNotNull);
+      final whitePixel = offImg!.getPixel(10, 10);
+      expect(whitePixel.r.toInt() > 200, isTrue);
+      expect(whitePixel.g.toInt() > 200, isTrue);
+      expect(whitePixel.b.toInt() > 200, isTrue);
+
+      await tempDir.delete(recursive: true);
+    });
   });
 }
 
@@ -348,6 +403,140 @@ Uint8List _createPhotoshopLikePsd() {
   return bb.toBytes();
 }
 
+Uint8List _createPhotoshopPsdWithHiddenLayer() {
+  final bb = BytesBuilder();
+  const docW = 20;
+  const docH = 20;
+
+  // 1. Header
+  bb.add([0x38, 0x42, 0x50, 0x53]); // '8BPS'
+  final head = ByteData(22);
+  head.setUint16(0, 1); // version 1
+  head.setUint16(8, 3); // channels = 3
+  head.setUint32(10, docH);
+  head.setUint32(14, docW);
+  head.setUint16(18, 8); // 8-bit
+  head.setUint16(20, 3); // RGB
+  bb.add(head.buffer.asUint8List());
+
+  // 2. Color mode data
+  bb.add([0, 0, 0, 0]);
+
+  // 3. Image resources
+  bb.add([0, 0, 0, 0]);
+
+  // 4. Section 4:
+  // Layer 0: Background (white, 20x20, visible)
+  // Layer 1: Red Box (5, 5, 15, 15, red, HIDDEN in Photoshop: isVisible = false)
+  final layerSpecs = [
+    _LayerSpec(0, 0, 0, 20, 20, 'Background', img.ColorRgba8(255, 255, 255, 255), isVisible: true),
+    _LayerSpec(1, 5, 5, 15, 15, 'Red Box', img.ColorRgba8(255, 0, 0, 255), isVisible: false),
+  ];
+
+  final recordsBuilder = BytesBuilder();
+  final countData = ByteData(2);
+  countData.setInt16(0, layerSpecs.length);
+  recordsBuilder.add(countData.buffer.asUint8List());
+
+  final channelDataList = <Uint8List>[];
+
+  for (final spec in layerSpecs) {
+    final w = spec.right - spec.left;
+    final h = spec.bottom - spec.top;
+
+    final chanLens = <int>[];
+    final chanColors = [spec.color.r.toInt(), spec.color.g.toInt(), spec.color.b.toInt(), spec.color.a.toInt()];
+    for (final val in chanColors) {
+      final scanlines = <Uint8List>[];
+      for (var row = 0; row < h; row++) {
+        final rowBytes = List.filled(w, val);
+        scanlines.add(_encodePackBitsScanline(rowBytes));
+      }
+      final scanlineTable = ByteData(h * 2);
+      for (var row = 0; row < h; row++) {
+        scanlineTable.setUint16(row * 2, scanlines[row].length);
+      }
+      final chBuilder = BytesBuilder();
+      chBuilder.add([0, 1]); // compression = 1 (RLE)
+      chBuilder.add(scanlineTable.buffer.asUint8List());
+      for (final sl in scanlines) {
+        chBuilder.add(sl);
+      }
+      final chBytes = chBuilder.toBytes();
+      chanLens.add(chBytes.length);
+      channelDataList.add(chBytes);
+    }
+
+    final rect = ByteData(16);
+    rect.setInt32(0, spec.top);
+    rect.setInt32(4, spec.left);
+    rect.setInt32(8, spec.bottom);
+    rect.setInt32(12, spec.right);
+    recordsBuilder.add(rect.buffer.asUint8List());
+
+    final chanCount = ByteData(2);
+    chanCount.setUint16(0, 4);
+    recordsBuilder.add(chanCount.buffer.asUint8List());
+
+    final chanInfo = ByteData(4 * 6);
+    final chanIds = [0, 1, 2, -1];
+    for (var c = 0; c < 4; c++) {
+      chanInfo.setInt16(c * 6, chanIds[c]);
+      chanInfo.setUint32(c * 6 + 2, chanLens[c]);
+    }
+    recordsBuilder.add(chanInfo.buffer.asUint8List());
+
+    // '8BIM', 'norm', opacity 255, clipping 0, flags (bit 1 is hidden: 2 if not visible, 0 if visible)
+    final flags = spec.isVisible ? 0 : 2;
+    recordsBuilder.add([0x38, 0x42, 0x49, 0x4D]);
+    recordsBuilder.add([0x6E, 0x6F, 0x72, 0x6D]);
+    recordsBuilder.add([255, 0, flags, 0]);
+
+    // Extra data: mask len, blend len, name
+    final extraBuilder = BytesBuilder();
+    extraBuilder.add([0, 0, 0, 0]); // mask len = 0
+    extraBuilder.add([0, 0, 0, 0]); // blend len = 0
+
+    final nameBytes = spec.name.codeUnits;
+    final nameLen = nameBytes.length;
+    extraBuilder.addByte(nameLen);
+    extraBuilder.add(nameBytes);
+    final pad = (4 - (nameLen % 4)) - 1;
+    if (pad > 0) extraBuilder.add(List.filled(pad, 0));
+
+    final extraBytes = extraBuilder.toBytes();
+    final extraLenData = ByteData(4);
+    extraLenData.setUint32(0, extraBytes.length);
+    recordsBuilder.add(extraLenData.buffer.asUint8List());
+    recordsBuilder.add(extraBytes);
+  }
+
+  final channelDataBuilder = BytesBuilder();
+  for (final ch in channelDataList) {
+    channelDataBuilder.add(ch);
+  }
+
+  final recordsBytes = recordsBuilder.toBytes();
+  final channelDataBytes = channelDataBuilder.toBytes();
+  final layerInfoLen = recordsBytes.length + channelDataBytes.length;
+
+  final sec4Meta = ByteData(8);
+  sec4Meta.setUint32(0, 4 + layerInfoLen);
+  sec4Meta.setUint32(4, layerInfoLen);
+  bb.add(sec4Meta.buffer.asUint8List());
+  bb.add(recordsBytes);
+  bb.add(channelDataBytes);
+
+  // 5. Section 5: Merged composite saved by Photoshop WITHOUT the hidden Red Box (all white!)
+  bb.add([0, 0]); // compression = 0 (RAW)
+  final whitePlane = List.filled(docW * docH, 255);
+  bb.add(whitePlane); // R
+  bb.add(whitePlane); // G
+  bb.add(whitePlane); // B
+
+  return bb.toBytes();
+}
+
 class _LayerSpec {
   final int index;
   final int top;
@@ -358,7 +547,8 @@ class _LayerSpec {
   final img.ColorRgba8 color;
   final bool isFolder;
   final bool isClosing;
+  final bool isVisible;
 
   _LayerSpec(this.index, this.top, this.left, this.bottom, this.right, this.name, this.color,
-      {this.isFolder = false, this.isClosing = false});
+      {this.isFolder = false, this.isClosing = false, this.isVisible = true});
 }

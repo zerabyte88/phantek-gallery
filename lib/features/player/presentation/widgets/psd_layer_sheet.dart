@@ -113,6 +113,18 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
     });
   }
 
+  void _unhideAncestors(PsdLayerInfo layer) {
+    var pIdx = layer.parentIndex;
+    while (pIdx != null) {
+      _hidden.remove(pIdx);
+      final parent = widget.layers.firstWhere(
+        (l) => l.index == pIdx,
+        orElse: () => layer,
+      );
+      pIdx = (parent.index != pIdx) ? parent.parentIndex : null;
+    }
+  }
+
   void _toggleLayer(PsdLayerInfo layer) {
     setState(() {
       if (layer.isFolder) {
@@ -121,6 +133,7 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
         if (isCurrentlyHidden) {
           _hidden.remove(layer.index);
           _hidden.removeAll(descendants);
+          _unhideAncestors(layer);
         } else {
           _hidden.add(layer.index);
           _hidden.addAll(descendants);
@@ -128,6 +141,22 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
       } else {
         if (_hidden.contains(layer.index)) {
           _hidden.remove(layer.index);
+          _unhideAncestors(layer);
+          if (layer.isClipped) {
+            final layerIdx =
+                widget.layers.indexWhere((l) => l.index == layer.index);
+            if (layerIdx > 0) {
+              for (var i = layerIdx - 1; i >= 0; i--) {
+                final base = widget.layers[i];
+                if (base.isFolder) continue;
+                if (!base.isClipped) {
+                  _hidden.remove(base.index);
+                  _unhideAncestors(base);
+                  break;
+                }
+              }
+            }
+          }
         } else {
           _hidden.add(layer.index);
         }
