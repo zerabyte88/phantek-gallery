@@ -232,7 +232,7 @@ class PsdService {
       final file = File(filePath);
       if (!await file.exists()) return null;
 
-      return await compute(
+      final result = await compute(
         _isolateRenderWithLayers,
         _RenderWithLayersParams(
           filePath: filePath,
@@ -240,8 +240,17 @@ class PsdService {
           maxDimension: maxDimension,
         ),
       );
+
+      if (result == null && hiddenLayerIndices.isEmpty) {
+        return await decodeThumbnail(filePath, maxDimension: maxDimension);
+      }
+
+      return result;
     } catch (e) {
       debugPrint('[PsdService] renderWithLayers error for $filePath: $e');
+      if (hiddenLayerIndices.isEmpty) {
+        return await decodeThumbnail(filePath, maxDimension: maxDimension);
+      }
       return null;
     }
   }
@@ -258,7 +267,7 @@ Uint8List? _isolateDecodeThumbnail(_DecodeThumbnailParams params) {
     final bytes = File(params.filePath).readAsBytesSync();
     if (bytes.isEmpty) return null;
 
-    final decoder = img.PsdDecoder(maxPixels: 2048 * 2048);
+    final decoder = img.PsdDecoder(maxPixels: 0);
     if (!decoder.isValidFile(bytes)) return null;
 
     img.Image? image;
@@ -267,11 +276,14 @@ Uint8List? _isolateDecodeThumbnail(_DecodeThumbnailParams params) {
       if (psd.mergedImage != null) {
         image = psd.mergedImage;
       } else {
-        image = psd.renderImage();
+        try {
+          image = psd.renderImage();
+        } catch (_) {
+          image = null;
+        }
       }
-    } else {
-      image = decoder.decode(bytes);
     }
+    image ??= decoder.decode(bytes);
 
     if (image == null) return null;
 
@@ -296,7 +308,7 @@ List<PsdLayerInfo> _isolateGetLayers(String filePath) {
     final bytes = File(filePath).readAsBytesSync();
     if (bytes.isEmpty) return [];
 
-    final decoder = img.PsdDecoder(maxPixels: 2048 * 2048);
+    final decoder = img.PsdDecoder(maxPixels: 0);
     final psd = decoder.decodePsd(bytes);
     if (psd == null || psd.layers.isEmpty) return [];
 
@@ -347,23 +359,76 @@ Uint8List? _isolateRenderWithLayers(_RenderWithLayersParams params) {
     final bytes = File(params.filePath).readAsBytesSync();
     if (bytes.isEmpty) return null;
 
-    final decoder = img.PsdDecoder(maxPixels: 2048 * 2048);
+    final decoder = img.PsdDecoder(maxPixels: 0);
     final psd = decoder.decodePsd(bytes);
-    if (psd == null) return null;
-
-    if (psd.layers.isNotEmpty) {
-      for (var i = 0; i < psd.layers.length; i++) {
-        final layer = psd.layers[i];
-        if (params.hiddenLayerIndices.contains(i)) {
-          layer.flags |= img.PsdFlag.hidden;
-        } else {
-          layer.flags &= ~img.PsdFlag.hidden;
-        }
+    if (psd == null) {
+      final fallback = decoder.decode(bytes);
+      if (fallback == null) return null;
+      var rendered = fallback;
+      if (params.maxDimension > 0 &&
+          (rendered.width > params.maxDimension ||
+              rendered.height > params.maxDimension)) {
+        rendered = img.copyResize(
+          rendered,
+          width: rendered.width >= rendered.height ? params.maxDimension : null,
+          height: rendered.height > rendered.width ? params.maxDimension : null,
+          maintainAspect: true,
+        );
       }
-      psd.mergedImage = null;
+      return Uint8List.fromList(img.encodeJpg(rendered, quality: 90));
     }
 
-    img.Image? rendered = psd.renderImage();
+    img.Image? rendered;
+
+    if (params.hiddenLayerIndices.isEmpty && psd.mergedImage != null) {
+      rendered = psd.mergedImage;
+    } else {
+      if (psd.layers.isNotEmpty) {
+        for (var i = 0; i < psd.layers.length; i++) {
+          final layer = psd.layers[i];
+          if (params.hiddenLayerIndices.contains(i)) {
+            layer.flags |= img.PsdFlag.hidden;
+          } else {
+            layer.flags &= ~img.PsdFlag.hidden;
+          }
+        }
+        psd.mergedImage = null;
+      }
+
+      try {
+        rendered = psd.renderImage();
+      } catch (_) {
+        rendered = null;
+      }
+
+      if (rendered == null && psd.width > 0 && psd.height > 0) {
+        try {
+          final canvas = img.Image(
+            width: psd.width,
+            height: psd.height,
+            numChannels: 4,
+          );
+          for (var i = 0; i < psd.layers.length; i++) {
+            if (params.hiddenLayerIndices.contains(i)) continue;
+            final layer = psd.layers[i];
+            if (!layer.isVisible()) continue;
+            final src = layer.layerImage;
+            if (src == null || src.width <= 0 || src.height <= 0) continue;
+            img.compositeImage(
+              canvas,
+              src,
+              dstX: layer.left,
+              dstY: layer.top,
+              blend: img.BlendMode.alpha,
+            );
+          }
+          rendered = canvas;
+        } catch (_) {}
+      }
+    }
+
+    rendered ??= psd.mergedImage ?? decoder.decode(bytes);
+    if (rendered == null) return null;
 
     if (params.maxDimension > 0 &&
         (rendered.width > params.maxDimension ||

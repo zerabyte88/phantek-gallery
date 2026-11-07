@@ -56,3 +56,7 @@ keystore_base64.txt
 **/keystore_base64.txt
 .env*
 *.secrets
+
+# Agent configuration and instructions
+[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+[Aa][Gg][Ee][Nn][Tt].[Mm][Dd]

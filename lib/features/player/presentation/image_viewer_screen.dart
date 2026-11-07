@@ -54,11 +54,12 @@ Widget _thumb(String id, [String? path]) {
           path.toLowerCase().endsWith('.mov') ||
           path.toLowerCase().endsWith('.avi') ||
           path.toLowerCase().endsWith('.3gp'));
+  final isPsd = path != null && PsdService.isPsd(path);
   final ImageProvider? p = mem != null
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (path != null && !isVid ? screenDisplayImage(path) : null));
+          : (path != null && !isVid && !isPsd ? screenDisplayImage(path) : null));
   if (p == null) return const SizedBox.shrink();
   return Image(
     image: p,
@@ -79,11 +80,12 @@ Widget _buildHeroShuttle({
   final hr = ThumbnailService.instance.getMemoryHighResThumbnail(id);
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
   final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
+  final isPsd = path != null && PsdService.isPsd(path);
   final ImageProvider? p = mem != null
       ? MemoryImage(mem)
       : (disk != null
           ? FileImage(disk)
-          : (path != null ? screenDisplayImage(path) : null));
+          : (path != null && !isPsd ? screenDisplayImage(path) : null));
 
   final Widget content = p != null
       ? Image(
@@ -167,6 +169,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   final Map<String, Set<int>> _psdHiddenLayers = {};
   final Map<String, Uint8List> _psdRenderedBytes = {};
   final Map<String, bool> _psdRendering = {};
+  final Set<String> _psdRenderFailed = {};
 
   void _loadPsdDataIfNeeded(String path) {
     if (!PsdService.isPsd(path)) return;
@@ -181,7 +184,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       });
     }
 
-    if (!_psdRenderedBytes.containsKey(path) && _psdRendering[path] != true) {
+    if (!_psdRenderedBytes.containsKey(path) &&
+        _psdRendering[path] != true &&
+        !_psdRenderFailed.contains(path)) {
       _psdRendering[path] = true;
       PsdService.instance
           .renderWithLayers(
@@ -191,8 +196,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           .then((bytes) {
         if (mounted) {
           setState(() {
-            if (bytes != null) {
+            if (bytes != null && bytes.isNotEmpty) {
               _psdRenderedBytes[path] = bytes;
+            } else {
+              _psdRenderFailed.add(path);
             }
             _psdRendering[path] = false;
           });
@@ -214,6 +221,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         setState(() {
           _psdHiddenLayers[path] = Set<int>.from(newHidden);
           _psdRendering[path] = true;
+          _psdRenderFailed.remove(path);
         });
         final bytes = await PsdService.instance.renderWithLayers(
           path,
@@ -221,8 +229,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         );
         if (mounted) {
           setState(() {
-            if (bytes != null) {
+            if (bytes != null && bytes.isNotEmpty) {
               _psdRenderedBytes[path] = bytes;
+            } else {
+              _psdRenderFailed.add(path);
             }
             _psdRendering[path] = false;
           });
@@ -536,8 +546,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     if (PsdService.isPsd(it.path)) {
       _loadPsdDataIfNeeded(it.path);
       final rendered = _psdRenderedBytes[it.path];
+      final isRendering = _psdRendering[it.path] == true;
       Widget content;
-      if (rendered != null) {
+      if (rendered != null && rendered.isNotEmpty) {
         content = Image(
           image: MemoryImage(rendered),
           fit: BoxFit.contain,
@@ -545,7 +556,23 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           filterQuality: FilterQuality.medium,
         );
       } else {
-        content = _thumb(it.id, it.path);
+        content = Stack(
+          alignment: Alignment.center,
+          children: [
+            _thumb(it.id, it.path),
+            if (isRendering)
+              const Center(
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                  ),
+                ),
+              ),
+          ],
+        );
       }
 
       final ar = (it.width != null &&

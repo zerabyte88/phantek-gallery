@@ -40,7 +40,7 @@ class ThumbnailService {
   final Map<String, Completer<Uint8List?>> _highResInFlight = {};
   final Map<String, AssetEntity> _entityCache = {};
   final Queue<_ThumbnailRequest> _queue = Queue();
-  final Set<String> _diskCachedIds = {};
+  final Set<String> _diskCachedFileNames = {};
   int _activeWorkers = 0;
   Directory? _cacheDir;
   String? _cacheDirPath;
@@ -59,12 +59,9 @@ class ThumbnailService {
             in dir.list(recursive: false, followLinks: false)) {
           if (entity is File) {
             final name = p.basename(entity.path);
-            if (name.startsWith('thumb_') && name.endsWith('.bin')) {
-              final content = name.substring(6, name.length - 4);
-              final idx = content.indexOf('_');
-              if (idx != -1) {
-                _diskCachedIds.add(content.substring(idx + 1));
-              }
+            if ((name.startsWith('thumb_') || name.startsWith('hr_')) &&
+                name.endsWith('.bin')) {
+              _diskCachedFileNames.add(name);
             }
           }
         }
@@ -75,7 +72,12 @@ class ThumbnailService {
   }
 
   /// Returns true if the thumbnail for [assetId] is known to exist on disk.
-  bool hasDiskCache(String assetId) => _diskCachedIds.contains(assetId);
+  bool hasDiskCache(String assetId) =>
+      _diskCachedFileNames.contains(_cacheFileName(assetId));
+
+  /// Returns true if the high-res thumbnail for [assetId] is known to exist on disk.
+  bool hasDiskHighResCache(String assetId) =>
+      _diskCachedFileNames.contains(_highResCacheFileName(assetId));
 
   /// Synchronously returns the cached File on disk if it already exists, or null.
   File? getCachedFile(String assetId) {
@@ -93,6 +95,7 @@ class ThumbnailService {
 
   /// Synchronously returns the cached high-res video thumbnail File on disk if it exists.
   File? getCachedHighResFile(String assetId) {
+    if (!hasDiskHighResCache(assetId)) return null;
     final dirPath = _cacheDirPath ?? _cacheDir?.path;
     if (dirPath == null) return null;
     final file = File(p.join(dirPath, _highResCacheFileName(assetId)));
@@ -678,7 +681,7 @@ class ThumbnailService {
   }
 
   void _saveToDisk(String assetId, Uint8List bytes) async {
-    _diskCachedIds.add(assetId);
+    _diskCachedFileNames.add(_cacheFileName(assetId));
     try {
       final dir = await _getCacheDirectory();
       final targetPath = p.join(dir.path, _cacheFileName(assetId));
@@ -704,6 +707,7 @@ class ThumbnailService {
   }
 
   void _saveHighResToDisk(String assetId, Uint8List bytes) async {
+    _diskCachedFileNames.add(_highResCacheFileName(assetId));
     try {
       final dir = await _getCacheDirectory();
       final targetPath = p.join(dir.path, _highResCacheFileName(assetId));
@@ -741,7 +745,8 @@ class ThumbnailService {
 
   /// Remove a single entry from memory and disk (e.g., after deletion).
   Future<void> invalidate(String assetId) async {
-    _diskCachedIds.remove(assetId);
+    _diskCachedFileNames.remove(_cacheFileName(assetId));
+    _diskCachedFileNames.remove(_highResCacheFileName(assetId));
     _memoryCache.remove(assetId);
     _highResVideoCache.remove(assetId);
     _thumbnailAspectRatioCache.remove(assetId);
@@ -772,7 +777,7 @@ class ThumbnailService {
 
   /// Wipes both in-memory cache and persistent disk cache.
   Future<void> clearAll() async {
-    _diskCachedIds.clear();
+    _diskCachedFileNames.clear();
     _memoryCache.clear();
     _highResVideoCache.clear();
     _thumbnailAspectRatioCache.clear();
