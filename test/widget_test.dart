@@ -2995,6 +2995,22 @@ void main() {
       // Small photo should be filtered out, only 1 item shown
       expect(find.byType(MediaGridItem), findsOneWidget);
     });
+
+    test('PSD layer visibility persistence saves, retrieves, and clears', () async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      const testPsdPath = '/storage/emulated/0/Pictures/artwork.psd';
+      expect(PsdService.instance.getSavedLayerVisibility(testPsdPath), isNull);
+
+      await PsdService.instance.saveLayerVisibility(testPsdPath, {1, 3, 5});
+      final saved = PsdService.instance.getSavedLayerVisibility(testPsdPath);
+      expect(saved, isNotNull);
+      expect(saved, equals({1, 3, 5}));
+
+      await PsdService.instance.clearSavedLayerVisibility(testPsdPath);
+      expect(PsdService.instance.getSavedLayerVisibility(testPsdPath), isNull);
+    });
   });
 }
 

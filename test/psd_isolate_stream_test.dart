@@ -668,7 +668,7 @@ class _LayerSpec {
       {this.isFolder = false, this.isClosing = false, this.isVisible = true});
 }
 
-Uint8List _createMultiLayerTogglePsd({bool padOddChannels = true, bool forceOddLength = false}) {
+Uint8List _createMultiLayerTogglePsd({bool padOddChannels = false, bool forceOddLength = false}) {
   final bb = BytesBuilder();
   const docW = 20;
   const docH = 20;

@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
+import 'settings_service.dart';
 
 /// Representation of an individual Adobe Photoshop (.psd) layer.
 class PsdLayerInfo {
@@ -960,6 +961,30 @@ class PsdService {
       debugPrint('[PsdService] loadPsdDocument error for $filePath: $e');
       return null;
     }
+  }
+
+  // ── Saved Layer Visibility ──────────────────────────────────────────────────
+
+  Set<int>? getSavedLayerVisibility(String filePath) {
+    try {
+      return SettingsService.instance.getSavedPsdHiddenLayers(filePath);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveLayerVisibility(
+      String filePath, Set<int> hiddenIndices) async {
+    try {
+      await SettingsService.instance
+          .savePsdHiddenLayers(filePath, hiddenIndices);
+    } catch (_) {}
+  }
+
+  Future<void> clearSavedLayerVisibility(String filePath) async {
+    try {
+      await SettingsService.instance.clearSavedPsdHiddenLayers(filePath);
+    } catch (_) {}
   }
 }
 
@@ -1923,10 +1948,43 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
 
     // Calculate absolute file offsets for every channel data block
     int currentOffset = raf.positionSync();
-    for (final layer in layers) {
-      for (final ch in layer.channels) {
+    for (var lIdx = 0; lIdx < layers.length; lIdx++) {
+      final layer = layers[lIdx];
+      for (var cIdx = 0; cIdx < layer.channels.length; cIdx++) {
+        final ch = layer.channels[cIdx];
         ch.fileOffset = currentOffset;
-        currentOffset += ch.length + (ch.length % 2);
+        currentOffset += ch.length;
+        final isLast =
+            (lIdx == layers.length - 1) && (cIdx == layer.channels.length - 1);
+        if (!isLast && currentOffset + 2 <= fileLen) {
+          final nextLayer =
+              (cIdx < layer.channels.length - 1) ? layer : layers[lIdx + 1];
+          final nextCh = (cIdx < layer.channels.length - 1)
+              ? layer.channels[cIdx + 1]
+              : layers[lIdx + 1].channels.first;
+          final sampleBytes = (depth == 16) ? 2 : 1;
+          final expectedRawLen =
+              2 + nextLayer.width * nextLayer.height * sampleBytes;
+
+          raf.setPositionSync(currentOffset);
+          final probe = raf.readSync(2);
+          if (probe.length == 2) {
+            final comp = (probe[0] << 8) | probe[1];
+            if ((comp == 0 && nextCh.length != expectedRawLen) ||
+                probe[0] != 0 ||
+                probe[1] > 3) {
+              if (currentOffset + 3 <= fileLen) {
+                raf.setPositionSync(currentOffset + 1);
+                final probePad = raf.readSync(2);
+                if (probePad.length == 2 &&
+                    probePad[0] == 0 &&
+                    probePad[1] <= 3) {
+                  currentOffset += 1;
+                }
+              }
+            }
+          }
+        }
       }
     }
 
@@ -1939,6 +1997,9 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
     final canvasH = max(1, (docHeight * scale).round());
     final canvas = img.Image(width: canvasW, height: canvasH, numChannels: 4);
     img.fill(canvas, color: img.ColorRgba8(255, 255, 255, 255));
+
+    int renderedLayerCount = 0;
+    int visibleRasterLayers = 0;
 
     // Render layers from bottom to top (0 .. layerCount - 1)
     for (final layer in layers) {
@@ -1961,6 +2022,8 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
       if (layer.isFolder || layer.isClosingDelimiter) continue;
       if (layer.width <= 0 || layer.height <= 0) continue;
       if (layer.opacity <= 0) continue;
+
+      visibleRasterLayers++;
 
       try {
         final readers = <int, _ChannelScanlineReader>{};
@@ -2083,9 +2146,14 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
             }
           }
         }
+        renderedLayerCount++;
       } catch (layerErr) {
         debugPrint('[PsdService] stream render error on layer ${layer.index}: $layerErr');
       }
+    }
+
+    if (renderedLayerCount == 0 && visibleRasterLayers > 0) {
+      return null;
     }
 
     return Uint8List.fromList(img.encodeJpg(canvas, quality: 90));
@@ -2272,10 +2340,43 @@ Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) 
     if (layers.isEmpty) return {};
 
     int currentOffset = raf.positionSync();
-    for (final layer in layers) {
-      for (final ch in layer.channels) {
+    for (var lIdx = 0; lIdx < layers.length; lIdx++) {
+      final layer = layers[lIdx];
+      for (var cIdx = 0; cIdx < layer.channels.length; cIdx++) {
+        final ch = layer.channels[cIdx];
         ch.fileOffset = currentOffset;
-        currentOffset += ch.length + (ch.length % 2);
+        currentOffset += ch.length;
+        final isLast =
+            (lIdx == layers.length - 1) && (cIdx == layer.channels.length - 1);
+        if (!isLast && currentOffset + 2 <= fileLen) {
+          final nextLayer =
+              (cIdx < layer.channels.length - 1) ? layer : layers[lIdx + 1];
+          final nextCh = (cIdx < layer.channels.length - 1)
+              ? layer.channels[cIdx + 1]
+              : layers[lIdx + 1].channels.first;
+          final sampleBytes = (depth == 16) ? 2 : 1;
+          final expectedRawLen =
+              2 + nextLayer.width * nextLayer.height * sampleBytes;
+
+          raf.setPositionSync(currentOffset);
+          final probe = raf.readSync(2);
+          if (probe.length == 2) {
+            final comp = (probe[0] << 8) | probe[1];
+            if ((comp == 0 && nextCh.length != expectedRawLen) ||
+                probe[0] != 0 ||
+                probe[1] > 3) {
+              if (currentOffset + 3 <= fileLen) {
+                raf.setPositionSync(currentOffset + 1);
+                final probePad = raf.readSync(2);
+                if (probePad.length == 2 &&
+                    probePad[0] == 0 &&
+                    probePad[1] <= 3) {
+                  currentOffset += 1;
+                }
+              }
+            }
+          }
+        }
       }
     }
 

@@ -4,7 +4,9 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/services/psd_service.dart';
+import '../../../../core/widgets/feedback_pill.dart';
 
 typedef PsdVisibilityCallback = FutureOr<void> Function(Set<int>);
 
@@ -189,6 +191,18 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
     _scheduleUpdate();
   }
 
+  Future<void> _saveLayerState() async {
+    if (widget.filePath == null) return;
+    await PsdService.instance.saveLayerVisibility(widget.filePath!, _hidden);
+    if (mounted) {
+      showFeedbackPill(
+        context,
+        message: context.tr.layerStateSaved,
+        icon: Icons.check_circle_rounded,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -316,6 +330,19 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
                       ),
                       onPressed: _hideAll,
                       child: const Text('Hide all'),
+                    ),
+                  ],
+                  if (widget.filePath != null) ...[
+                    const SizedBox(width: 6),
+                    FilledButton.tonalIcon(
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 0),
+                      ),
+                      icon: const Icon(Icons.save_rounded, size: 16),
+                      label: Text(context.tr.save),
+                      onPressed: _saveLayerState,
                     ),
                   ],
                 ],

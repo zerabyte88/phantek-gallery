@@ -100,6 +100,13 @@ class AppLocalizations {
   String get sortByAlbum => _t('sortByAlbum');
   String get mangaMode => _t('mangaMode');
   String get readAsManga => _t('readAsManga');
+  String get flattenSubfolders => _t('flattenSubfolders');
+  String get showSubfolders => _t('showSubfolders');
+  String get allChapters => _t('allChapters');
+  String get chapters => _t('chapters');
+  String get subfolderView => _t('subfolderView');
+  String get flatView => _t('flatView');
+  String get layerStateSaved => _t('layerStateSaved');
   String get oldestToNewest => _t('oldestToNewest');
   String get newestToOldest => _t('newestToOldest');
   String get aToZ => _t('aToZ');

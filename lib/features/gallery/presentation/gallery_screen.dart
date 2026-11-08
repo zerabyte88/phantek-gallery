@@ -979,6 +979,15 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                       .openImage(items, 0, startSlideshow: true);
                 }
               }
+            } else if (value == 'manga') {
+              final items = _currentTabItems;
+              if (items.isNotEmpty) {
+                Navigator.of(context).openImage(
+                  items,
+                  0,
+                  initialMangaMode: true,
+                );
+              }
             } else if (value == 'select') {
               setState(() {
                 _selecting = true;
@@ -1002,6 +1011,27 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                   Expanded(
                     child: Text(
                       context.tr.slideshow,
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 13.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'manga',
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_stories_rounded,
+                      size: 18, color: Colors.white),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr.readAsManga,
                       style:
                           const TextStyle(color: Colors.white, fontSize: 13.5),
                       maxLines: 1,

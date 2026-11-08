@@ -69,6 +69,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final settings = ref.watch(settingsNotifierProvider);
 
     void patch(SettingsModel Function(SettingsModel) fn) {
@@ -89,7 +90,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       appBar: AppBar(
         title: Text(
           context.tr.settings,
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         centerTitle: false,
         scrolledUnderElevation: 0,
@@ -102,18 +103,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           hoverColor: Colors.transparent,
         ),
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(0, 8, 0, 32),
+          padding: const EdgeInsets.only(top: 4, bottom: 32),
           children: [
-            _SectionHeader(
-              title: context.tr.appearance,
-              icon: Icons.palette_outlined,
-              color: const Color(0xFF8B5CF6),
-            ),
+            _SectionHeader(title: context.tr.appearance),
             _SettingsCard(
               children: [
                 _ModernTile(
-                  icon: Icons.palette_rounded,
-                  iconColor: const Color(0xFF8B5CF6),
+                  icon: Icons.palette_outlined,
                   title: context.tr.theme,
                   subtitle: context.tr.themeModeLabel(settings.themeMode),
                   onTap: () async {
@@ -130,7 +126,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernTile(
                   icon: Icons.translate_rounded,
-                  iconColor: const Color(0xFF06B6D4),
                   title: context.tr.language,
                   subtitle: settings.language.nativeName,
                   onTap: () async {
@@ -145,16 +140,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-            _SectionHeader(
-              title: context.tr.gridAndLayout,
-              icon: Icons.grid_view_rounded,
-              color: const Color(0xFF3B82F6),
-            ),
+            _SectionHeader(title: context.tr.gridAndLayout),
             _SettingsCard(
               children: [
                 _ModernTile(
                   icon: Icons.grid_view_rounded,
-                  iconColor: const Color(0xFF3B82F6),
                   title: context.tr.gridColumns,
                   subtitle: context.tr.columnsCount(settings.gridColumns),
                   onTap: () async {
@@ -170,8 +160,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 const _CardDivider(),
                 _ModernTile(
-                  icon: Icons.photo_library_rounded,
-                  iconColor: const Color(0xFF6366F1),
+                  icon: Icons.photo_library_outlined,
                   title: context.tr.albumsGridColumns,
                   subtitle: context.tr.columnsCount(settings.albumGridColumns),
                   onTap: () async {
@@ -188,7 +177,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernTile(
                   icon: Icons.aspect_ratio_rounded,
-                  iconColor: const Color(0xFFEC4899),
                   title: context.tr.thumbnailCropStyle,
                   subtitle: context.tr
                       .thumbnailCropStyleLabel(settings.thumbnailCropStyle),
@@ -199,7 +187,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       title: context.tr.thumbnailCropStyle,
                       subtitle: context.tr.chooseVisualMode,
                       headerIcon: Icons.aspect_ratio_rounded,
-                      headerColor: const Color(0xFFEC4899),
                       currentValue: settings.thumbnailCropStyle,
                       options: [
                         _OptionItem(
@@ -221,8 +208,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 const _CardDivider(),
                 _ModernTile(
-                  icon: Icons.view_agenda_rounded,
-                  iconColor: const Color(0xFF8B5CF6),
+                  icon: Icons.view_agenda_outlined,
                   title: context.tr.timelineGrouping,
                   subtitle: context.tr
                       .timelineGroupingLabel(settings.timelineGrouping),
@@ -232,24 +218,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       context,
                       title: context.tr.timelineGrouping,
                       subtitle: context.tr.chooseVisualMode,
-                      headerIcon: Icons.view_agenda_rounded,
-                      headerColor: const Color(0xFF8B5CF6),
+                      headerIcon: Icons.view_agenda_outlined,
                       currentValue: settings.timelineGrouping,
                       options: [
                         _OptionItem(
                           value: TimelineGrouping.continuous,
                           title: context.tr.groupContinuous,
-                          icon: Icons.view_agenda_rounded,
+                          icon: Icons.view_agenda_outlined,
                         ),
                         _OptionItem(
                           value: TimelineGrouping.daily,
                           title: context.tr.groupDaily,
-                          icon: Icons.calendar_today_rounded,
+                          icon: Icons.calendar_today_outlined,
                         ),
                         _OptionItem(
                           value: TimelineGrouping.monthly,
                           title: context.tr.groupMonthly,
-                          icon: Icons.calendar_month_rounded,
+                          icon: Icons.calendar_month_outlined,
                         ),
                       ],
                     );
@@ -260,8 +245,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 const _CardDivider(),
                 _ModernSwitchTile(
-                  icon: Icons.badge_rounded,
-                  iconColor: const Color(0xFFF59E0B),
+                  icon: Icons.badge_outlined,
                   title: context.tr.showDurationBadges,
                   subtitle: context.tr.showDurationBadgesSubtitle,
                   value: settings.showBadges,
@@ -269,16 +253,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-            _SectionHeader(
-              title: context.tr.playback,
-              icon: Icons.play_circle_outline_rounded,
-              color: const Color(0xFF06B6D4),
-            ),
+            _SectionHeader(title: context.tr.playback),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
                   icon: Icons.play_circle_outline_rounded,
-                  iconColor: const Color(0xFF06B6D4),
                   title: context.tr.autoPlayVideo,
                   subtitle: context.tr.autoPlayVideoSubtitle,
                   value: settings.autoPlayVideo,
@@ -286,8 +265,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 const _CardDivider(),
                 _ModernSwitchTile(
-                  icon: Icons.volume_off_rounded,
-                  iconColor: const Color(0xFFEC4899),
+                  icon: Icons.volume_off_outlined,
                   title: context.tr.startMuted,
                   subtitle: context.tr.startMutedDesc,
                   value: settings.startMuted,
@@ -295,8 +273,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 const _CardDivider(),
                 _ModernTile(
-                  icon: Icons.touch_app_rounded,
-                  iconColor: const Color(0xFF6366F1),
+                  icon: Icons.touch_app_outlined,
                   title: context.tr.videoDoubleTapAction,
                   subtitle: context.tr
                       .videoDoubleTapActionLabel(settings.videoDoubleTapAction),
@@ -306,8 +283,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       context,
                       title: context.tr.videoDoubleTapAction,
                       subtitle: context.tr.playback,
-                      headerIcon: Icons.touch_app_rounded,
-                      headerColor: const Color(0xFF6366F1),
+                      headerIcon: Icons.touch_app_outlined,
                       currentValue: settings.videoDoubleTapAction,
                       options: [
                         _OptionItem(
@@ -335,7 +311,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernSliderTile(
                   icon: Icons.fast_forward_rounded,
-                  iconColor: const Color(0xFF38BDF8),
                   title: context.tr.doubleTapSeek,
                   valueLabel:
                       context.tr.secondsCount(settings.doubleTapSeekInterval),
@@ -351,7 +326,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernSwitchTile(
                   icon: Icons.replay_rounded,
-                  iconColor: const Color(0xFF10B981),
                   title: context.tr.resumeVideoPlayback,
                   subtitle: context.tr.resumeVideoPlaybackDesc,
                   value: settings.resumeVideoPlayback,
@@ -361,7 +335,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernSwitchTile(
                   icon: Icons.memory_rounded,
-                  iconColor: const Color(0xFF10B981),
                   title: context.tr.hardwareAcceleration,
                   subtitle: context.tr.hardwareAccelerationSubtitle,
                   value: settings.hardwareAcceleration,
@@ -370,16 +343,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-            _SectionHeader(
-              title: context.tr.displayAndSlideshow,
-              icon: Icons.slideshow_rounded,
-              color: const Color(0xFF8B5CF6),
-            ),
+            _SectionHeader(title: context.tr.displayAndSlideshow),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
                   icon: Icons.brightness_high_rounded,
-                  iconColor: const Color(0xFFF59E0B),
                   title: context.tr.maxBrightnessOnMedia,
                   subtitle: context.tr.maxBrightnessOnMediaDesc,
                   value: settings.maxBrightnessOnMedia,
@@ -389,7 +357,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernSwitchTile(
                   icon: Icons.light_mode_outlined,
-                  iconColor: const Color(0xFFFACC15),
                   title: context.tr.keepScreenOn,
                   subtitle: context.tr.keepScreenOnSubtitle,
                   value: settings.keepScreenOn,
@@ -398,7 +365,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernSliderTile(
                   icon: Icons.slideshow_rounded,
-                  iconColor: const Color(0xFF8B5CF6),
                   title: context.tr.slideshowInterval,
                   valueLabel:
                       context.tr.secondsCount(settings.slideshowInterval),
@@ -413,16 +379,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-            _SectionHeader(
-              title: context.tr.browsingAndNavigation,
-              icon: Icons.explore_outlined,
-              color: const Color(0xFF3B82F6),
-            ),
+            _SectionHeader(title: context.tr.browsingAndNavigation),
             _SettingsCard(
               children: [
                 _ModernTile(
                   icon: Icons.home_outlined,
-                  iconColor: const Color(0xFF3B82F6),
                   title: context.tr.startupScreen,
                   subtitle:
                       context.tr.startupScreenLabel(settings.startupScreen),
@@ -432,7 +393,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       title: context.tr.startupScreen,
                       subtitle: context.tr.browsingAndNavigation,
                       headerIcon: Icons.home_outlined,
-                      headerColor: const Color(0xFF3B82F6),
                       currentValue: settings.startupScreen,
                       options: [
                         _OptionItem(
@@ -443,17 +403,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         _OptionItem(
                           value: StartupScreen.photosOnly,
                           title: context.tr.photos,
-                          icon: Icons.photo_rounded,
+                          icon: Icons.photo_outlined,
                         ),
                         _OptionItem(
                           value: StartupScreen.videosOnly,
                           title: context.tr.videos,
-                          icon: Icons.videocam_rounded,
+                          icon: Icons.videocam_outlined,
                         ),
                         _OptionItem(
                           value: StartupScreen.albums,
                           title: context.tr.albums,
-                          icon: Icons.photo_library_rounded,
+                          icon: Icons.photo_library_outlined,
                         ),
                       ],
                     );
@@ -465,7 +425,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernSwitchTile(
                   icon: Icons.filter_alt_outlined,
-                  iconColor: const Color(0xFFF59E0B),
                   title: context.tr.filterSmallImages,
                   subtitle: context.tr.filterSmallImagesDesc,
                   value: settings.filterSmallImages,
@@ -475,7 +434,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernSwitchTile(
                   icon: Icons.visibility_outlined,
-                  iconColor: const Color(0xFF06B6D4),
                   title: context.tr.showHiddenFiles,
                   subtitle: context.tr.showHiddenFilesDesc,
                   value: settings.showHiddenFiles,
@@ -484,8 +442,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 const _CardDivider(),
                 _ModernTile(
-                  icon: Icons.folder_off_rounded,
-                  iconColor: const Color(0xFF64748B),
+                  icon: Icons.folder_off_outlined,
                   title: context.tr.excludedFolders,
                   subtitle: context.tr.excludedFoldersDescription,
                   onTap: () =>
@@ -493,16 +450,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-            _SectionHeader(
-              title: context.tr.storageAndCache,
-              icon: Icons.storage_rounded,
-              color: const Color(0xFF14B8A6),
-            ),
+            _SectionHeader(title: context.tr.storageAndCache),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
                   icon: Icons.delete_outline_rounded,
-                  iconColor: const Color(0xFF14B8A6),
                   title: context.tr.trashBin,
                   subtitle: context.tr.trashBinSubtitle,
                   value: settings.enableTrash,
@@ -511,7 +463,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernTile(
                   icon: Icons.auto_delete_outlined,
-                  iconColor: const Color(0xFF06B6D4),
                   title: context.tr.autoTrashCleanup,
                   subtitle: context.tr
                       .trashCleanupIntervalLabel(settings.autoTrashCleanup),
@@ -522,7 +473,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       title: context.tr.autoTrashCleanup,
                       subtitle: context.tr.storageAndCache,
                       headerIcon: Icons.auto_delete_outlined,
-                      headerColor: const Color(0xFF06B6D4),
                       currentValue: settings.autoTrashCleanup,
                       options: [
                         _OptionItem(
@@ -555,31 +505,57 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernTile(
                   icon: Icons.cleaning_services_rounded,
-                  iconColor: const Color(0xFFF97316),
+                  iconColor: cs.error,
                   title: context.tr.clearThumbnailCache,
                   subtitle: context.tr.diskSize(_cacheSizeStr),
                   onTap: () async {
                     final confirmed = await showDialog<bool>(
                       context: context,
-                      builder: (ctx) => AlertDialog(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        title: Text(context.tr.clearThumbnailCache),
-                        content: Text(
-                          '${context.tr.clearCacheConfirm}\n\n${context.tr.diskSize(_cacheSizeStr)}',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: Text(context.tr.cancel),
+                      builder: (ctx) {
+                        final dTheme = Theme.of(ctx);
+                        final dCs = dTheme.colorScheme;
+                        final dIsDark = dTheme.brightness == Brightness.dark;
+                        return AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide(
+                              color: dCs.outlineVariant.withValues(
+                                  alpha: dIsDark ? 0.12 : 0.18),
+                              width: 1,
+                            ),
                           ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: Text(context.tr.clearThumbnailCache),
+                          title: Text(
+                            context.tr.clearThumbnailCache,
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              color: dCs.onSurface,
+                            ),
                           ),
-                        ],
-                      ),
+                          content: Text(
+                            '${context.tr.clearCacheConfirm}\n\n${context.tr.diskSize(_cacheSizeStr)}',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              color: dCs.onSurfaceVariant,
+                              height: 1.4,
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: Text(context.tr.cancel),
+                            ),
+                            FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: dCs.error,
+                                foregroundColor: dCs.onError,
+                              ),
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: Text(context.tr.clearThumbnailCache),
+                            ),
+                          ],
+                        );
+                      },
                     );
                     if (confirmed == true) {
                       await ThumbnailService.instance.clearAll();
@@ -599,16 +575,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
-            _SectionHeader(
-              title: context.tr.privacyAndSecurity,
-              icon: Icons.shield_outlined,
-              color: const Color(0xFF10B981),
-            ),
+            _SectionHeader(title: context.tr.privacyAndSecurity),
             _SettingsCard(
               children: [
                 _ModernSwitchTile(
                   icon: Icons.security_rounded,
-                  iconColor: const Color(0xFF10B981),
                   title: context.tr.secureScreen,
                   subtitle: context.tr.secureScreenDesc,
                   value: settings.secureScreen,
@@ -618,10 +589,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 _ModernTile(
                   icon: _hasManageStorage
                       ? Icons.verified_user_rounded
-                      : Icons.folder_shared_rounded,
+                      : Icons.folder_shared_outlined,
                   iconColor: _hasManageStorage
                       ? const Color(0xFF10B981)
-                      : const Color(0xFF3B82F6),
+                      : null,
                   title: context.tr.allFilesAccess,
                   subtitle: _hasManageStorage
                       ? context.tr.allFilesGranted
@@ -639,7 +610,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             context.tr.allFilesGranted,
                             style: const TextStyle(
                               fontSize: 11,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w600,
                               color: Color(0xFF10B981),
                             ),
                           ),
@@ -689,33 +660,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
     required this.title,
-    required this.icon,
-    required this.color,
   });
 
   final String title;
-  final IconData icon;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 18, 16, 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 15, color: cs.primary),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
-              color: cs.primary,
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.6,
+          color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+        ),
       ),
     );
   }
@@ -732,19 +693,17 @@ class _SettingsCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
       decoration: BoxDecoration(
-        color: isDark
-            ? cs.surfaceContainerHighest.withValues(alpha: 0.35)
-            : cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
+        color: isDark ? cs.surfaceContainerLow : cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: cs.outline.withValues(alpha: isDark ? 0.08 : 0.12),
-          width: 0.8,
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+          width: 1,
         ),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: children,
@@ -757,7 +716,7 @@ class _SettingsCard extends StatelessWidget {
 class _ModernTile extends StatelessWidget {
   const _ModernTile({
     required this.icon,
-    required this.iconColor,
+    this.iconColor,
     required this.title,
     this.subtitle,
     this.trailing,
@@ -765,7 +724,7 @@ class _ModernTile extends StatelessWidget {
   });
 
   final IconData icon;
-  final Color iconColor;
+  final Color? iconColor;
   final String title;
   final String? subtitle;
   final Widget? trailing;
@@ -773,63 +732,74 @@ class _ModernTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return BouncyTap(
       scaleDown: onTap != null ? 0.985 : 1.0,
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 52),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest
+                      .withValues(alpha: isDark ? 0.45 : 0.55),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(
+                  icon,
+                  color: cs.onSurfaceVariant,
+                  size: 18,
+                ),
               ),
-              child: Icon(icon, color: iconColor, size: 19),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Text(
-                      subtitle!,
+                      title,
                       style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
-                        height: 1.25,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: cs.onSurface,
                       ),
                     ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: cs.onSurfaceVariant,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            if (trailing != null) ...[
-              const SizedBox(width: 8),
-              trailing!,
-            ] else if (onTap != null) ...[
-              const SizedBox(width: 8),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 20,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.45),
-              ),
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing!,
+              ] else if (onTap != null) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.38),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -839,7 +809,6 @@ class _ModernTile extends StatelessWidget {
 class _ModernSwitchTile extends StatelessWidget {
   const _ModernSwitchTile({
     required this.icon,
-    required this.iconColor,
     required this.title,
     required this.subtitle,
     required this.value,
@@ -847,7 +816,6 @@ class _ModernSwitchTile extends StatelessWidget {
   });
 
   final IconData icon;
-  final Color iconColor;
   final String title;
   final String subtitle;
   final bool value;
@@ -855,55 +823,66 @@ class _ModernSwitchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return BouncyTap(
       scaleDown: 0.99,
       onTap: () => onChanged(!value),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 52),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest
+                      .withValues(alpha: isDark ? 0.45 : 0.55),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(
+                  icon,
+                  color: cs.onSurfaceVariant,
+                  size: 18,
+                ),
               ),
-              child: Icon(icon, color: iconColor, size: 19),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: cs.onSurface,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: cs.onSurfaceVariant,
-                      height: 1.25,
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: cs.onSurfaceVariant,
+                        height: 1.25,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Switch(
-              value: value,
-              onChanged: onChanged,
-            ),
-          ],
+              const SizedBox(width: 8),
+              Switch(
+                value: value,
+                onChanged: onChanged,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -913,7 +892,6 @@ class _ModernSwitchTile extends StatelessWidget {
 class _ModernSliderTile extends StatelessWidget {
   const _ModernSliderTile({
     required this.icon,
-    required this.iconColor,
     required this.title,
     required this.valueLabel,
     required this.value,
@@ -924,7 +902,6 @@ class _ModernSliderTile extends StatelessWidget {
   });
 
   final IconData icon;
-  final Color iconColor;
   final String title;
   final String valueLabel;
   final double value;
@@ -935,59 +912,74 @@ class _ModernSliderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  color: cs.surfaceContainerHighest
+                      .withValues(alpha: isDark ? 0.45 : 0.55),
+                  borderRadius: BorderRadius.circular(9),
                 ),
-                child: Icon(icon, color: iconColor, size: 19),
+                child: Icon(
+                  icon,
+                  color: cs.onSurfaceVariant,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w600,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
+                  color: cs.surfaceContainerHighest
+                      .withValues(alpha: isDark ? 0.6 : 0.7),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   valueLabel,
                   style: TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: iconColor,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                    color: cs.onSurface,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              activeTrackColor: iconColor,
-              inactiveTrackColor: iconColor.withValues(alpha: 0.2),
-              thumbColor: iconColor,
-              overlayColor: iconColor.withValues(alpha: 0.15),
-              trackHeight: 3.5,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+              activeTrackColor: cs.primary,
+              inactiveTrackColor: cs.outlineVariant
+                  .withValues(alpha: isDark ? 0.25 : 0.35),
+              thumbColor: cs.primary,
+              overlayColor: cs.primary.withValues(alpha: 0.12),
+              trackHeight: 3.0,
+              thumbShape:
+                  const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape:
+                  const RoundSliderOverlayShape(overlayRadius: 14),
             ),
             child: Slider(
               value: value.clamp(min, max),
@@ -1008,13 +1000,16 @@ class _CardDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Divider(
       height: 1,
-      thickness: 0.8,
-      indent: 66,
-      endIndent: 16,
-      color: cs.outline.withValues(alpha: 0.07),
+      thickness: 1,
+      indent: 56,
+      endIndent: 0,
+      color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
     );
   }
 }
@@ -1025,8 +1020,6 @@ Future<void> _showExcludedFoldersDialog(
   SettingsModel settings,
 ) async {
   final current = List<String>.from(settings.excludedFolders);
-  final cs = Theme.of(context).colorScheme;
-
   final mediaItems = ref.read(mediaListProvider).valueOrNull ?? [];
   final detectedFolders = mediaItems
       .map((e) => p.dirname(e.path))
@@ -1038,246 +1031,270 @@ Future<void> _showExcludedFoldersDialog(
 
   await showDialog<void>(
     context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setSt) {
-        final availableAlbums =
-            detectedFolders.where((f) => !current.contains(f)).toList();
+    builder: (ctx) {
+      final dTheme = Theme.of(ctx);
+      final cs = dTheme.colorScheme;
+      final isDark = dTheme.brightness == Brightness.dark;
 
-        return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF64748B).withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.folder_off_rounded,
-                  color: Color(0xFF64748B),
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  context.tr.excludedFolders,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr.excludedFoldersDescription,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: cs.onSurfaceVariant,
-                      height: 1.35,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: BouncyTap(
-                      scaleDown: 0.96,
-                      child: FilledButton.icon(
-                        icon: const Icon(Icons.folder_open_rounded, size: 20),
-                        label: Text(
-                          context.tr.pickFromManager,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: FilledButton.styleFrom(
-                          alignment: Alignment.center,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 12, horizontal: 16),
-                        ),
-                        onPressed: () async {
-                          final path =
-                              await FolderPickerService.instance.pickFolder();
-                          if (path != null &&
-                              path.isNotEmpty &&
-                              !current.contains(path)) {
-                            setSt(() => current.add(path));
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                  if (availableAlbums.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      context.tr.pickFromAlbums,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: cs.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 120),
-                      child: SingleChildScrollView(
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: availableAlbums.map((folder) {
-                            final folderName = p.basename(folder);
-                            return ActionChip(
-                              avatar: const Icon(Icons.add, size: 16),
-                              label: Text(
-                                folderName.isEmpty ? folder : folderName,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              tooltip: folder,
-                              onPressed: () {
-                                setSt(() => current.add(folder));
-                              },
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (current.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          '${context.tr.excludedFolders} (${current.length})',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                        BouncyTap(
-                          scaleDown: 0.94,
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            setSt(() => current.clear());
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 4),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.delete_sweep_outlined,
-                                  size: 16,
-                                  color: Color(0xFFEF4444),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  context.tr.clearAll,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFFEF4444),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    const Divider(height: 1),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 160),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: current.length,
-                        itemBuilder: (ctx, i) {
-                          final item = current[i];
-                          return ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(
-                              Icons.folder_off_rounded,
-                              size: 18,
-                              color: Color(0xFFEF4444),
-                            ),
-                            title: Text(item,
-                                style: const TextStyle(fontSize: 12)),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.close, size: 18),
-                              onPressed: () =>
-                                  setSt(() => current.remove(item)),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ],
+      return StatefulBuilder(
+        builder: (ctx, setSt) {
+          final availableAlbums =
+              detectedFolders.where((f) => !current.contains(f)).toList();
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: cs.outlineVariant
+                    .withValues(alpha: isDark ? 0.12 : 0.18),
+                width: 1,
               ),
             ),
-          ),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+            contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+            title: Row(
               children: [
-                Expanded(
-                  child: BouncyTap(
-                    scaleDown: 0.95,
-                    child: TextButton(
-                      style: TextButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 11),
-                      ),
-                      onPressed: () => Navigator.pop(ctx),
-                      child:
-                          Text(context.tr.cancel, textAlign: TextAlign.center),
-                    ),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest
+                        .withValues(alpha: isDark ? 0.45 : 0.55),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    Icons.folder_off_outlined,
+                    color: cs.onSurface,
+                    size: 18,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: BouncyTap(
-                    scaleDown: 0.95,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 11),
-                      ),
-                      onPressed: () {
-                        ref.read(settingsNotifierProvider.notifier).update(
-                            (s) => s.copyWith(excludedFolders: current));
-                        Navigator.pop(ctx);
-                      },
-                      child: Text(context.tr.save, textAlign: TextAlign.center),
+                  child: Text(
+                    context.tr.excludedFolders,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
                     ),
                   ),
                 ),
               ],
             ),
-          ],
-        );
-      },
-    ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr.excludedFoldersDescription,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: cs.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: BouncyTap(
+                        scaleDown: 0.98,
+                        child: FilledButton.icon(
+                          icon: const Icon(Icons.folder_open_rounded, size: 18),
+                          label: Text(
+                            context.tr.pickFromManager,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            alignment: Alignment.center,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 12, horizontal: 16),
+                          ),
+                          onPressed: () async {
+                            final path =
+                                await FolderPickerService.instance.pickFolder();
+                            if (path != null &&
+                                path.isNotEmpty &&
+                                !current.contains(path)) {
+                              setSt(() => current.add(path));
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    if (availableAlbums.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Text(
+                        context.tr.pickFromAlbums,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 120),
+                        child: SingleChildScrollView(
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: availableAlbums.map((folder) {
+                              final folderName = p.basename(folder);
+                              return ActionChip(
+                                avatar: const Icon(Icons.add, size: 15),
+                                label: Text(
+                                  folderName.isEmpty ? folder : folderName,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                tooltip: folder,
+                                onPressed: () {
+                                  setSt(() => current.add(folder));
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (current.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            '${context.tr.excludedFolders} (${current.length})',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          BouncyTap(
+                            scaleDown: 0.96,
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              setSt(() => current.clear());
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 4),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.delete_sweep_outlined,
+                                    size: 16,
+                                    color: cs.error,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    context.tr.clearAll,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: cs.error,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: cs.outlineVariant
+                            .withValues(alpha: isDark ? 0.12 : 0.18),
+                      ),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 160),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: current.length,
+                          itemBuilder: (ctx, i) {
+                            final item = current[i];
+                            return ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(
+                                Icons.folder_off_outlined,
+                                size: 18,
+                                color: cs.error,
+                              ),
+                              title: Text(
+                                item,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.close, size: 16),
+                                onPressed: () =>
+                                    setSt(() => current.remove(item)),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actionsPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            actions: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 10, horizontal: 16),
+                    ),
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text(context.tr.cancel),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 10, horizontal: 16),
+                    ),
+                    onPressed: () {
+                      ref.read(settingsNotifierProvider.notifier).update(
+                          (s) => s.copyWith(excludedFolders: current));
+                      Navigator.pop(ctx);
+                    },
+                    child: Text(context.tr.save),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      );
+    },
   );
 }
 
@@ -1285,11 +1302,20 @@ Future<AppLanguage?> _showModernLanguageDialog(
   BuildContext context,
   AppLanguage currentLanguage,
 ) {
-  final cs = Theme.of(context).colorScheme;
+  final dTheme = Theme.of(context);
+  final cs = dTheme.colorScheme;
+  final isDark = dTheme.brightness == Brightness.dark;
+
   return showDialog<AppLanguage>(
     context: context,
     builder: (ctx) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+          width: 1,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
         child: Column(
@@ -1299,29 +1325,33 @@ Future<AppLanguage?> _showModernLanguageDialog(
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF06B6D4).withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
+                    color: cs.surfaceContainerHighest
+                        .withValues(alpha: isDark ? 0.45 : 0.55),
+                    borderRadius: BorderRadius.circular(9),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.translate_rounded,
-                    color: Color(0xFF06B6D4),
-                    size: 22,
+                    color: cs.onSurface,
+                    size: 18,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         context.tr.chooseLanguage,
-                        style: const TextStyle(
-                          fontSize: 18,
+                        style: TextStyle(
+                          fontSize: 17,
                           fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
                         ),
                       ),
+                      const SizedBox(height: 1),
                       Text(
                         context.tr.supportedLanguagesCount,
                         style: TextStyle(
@@ -1346,7 +1376,7 @@ Future<AppLanguage?> _showModernLanguageDialog(
                           selected: currentLanguage == lang,
                           onTap: () async {
                             await Future.delayed(
-                                const Duration(milliseconds: 140));
+                                const Duration(milliseconds: 100));
                             if (ctx.mounted) Navigator.pop(ctx, lang);
                           },
                         ),
@@ -1375,58 +1405,53 @@ class _ModernLanguageOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 6),
       child: BouncyTap(
-        scaleDown: 0.96,
+        scaleDown: 0.98,
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: selected
-                ? cs.primary.withValues(alpha: 0.12)
-                : cs.surfaceContainerHighest.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(16),
+                ? cs.primary.withValues(alpha: isDark ? 0.12 : 0.08)
+                : (isDark ? cs.surfaceContainerLow : cs.surfaceContainerLowest),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? cs.primary : cs.outline.withValues(alpha: 0.15),
-              width: selected ? 2 : 1,
+              color: selected
+                  ? cs.primary
+                  : cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+              width: selected ? 1.5 : 1,
             ),
           ),
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: selected
-                      ? cs.primary.withValues(alpha: 0.18)
-                      : cs.surfaceContainerHighest.withValues(alpha: 0.7),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: selected
-                        ? cs.primary
-                        : Colors.white.withValues(alpha: 0.2),
-                    width: 1.5,
-                  ),
+                  color: cs.surfaceContainerHighest
+                      .withValues(alpha: isDark ? 0.45 : 0.55),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 alignment: Alignment.center,
                 child: language.flagEmoji != null
                     ? Text(
                         language.flagEmoji!,
-                        style: const TextStyle(
-                          fontSize: 22,
-                        ),
+                        style: const TextStyle(fontSize: 20),
                       )
                     : Icon(
                         Icons.language_rounded,
-                        size: 22,
+                        size: 20,
                         color: selected ? cs.primary : cs.onSurfaceVariant,
                       ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1434,13 +1459,13 @@ class _ModernLanguageOptionCard extends StatelessWidget {
                     Text(
                       language.nativeName,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 14.5,
                         fontWeight:
-                            selected ? FontWeight.bold : FontWeight.w600,
+                            selected ? FontWeight.w600 : FontWeight.w500,
                         color: selected ? cs.primary : cs.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     Text(
                       language.englishName,
                       style: TextStyle(
@@ -1453,21 +1478,21 @@ class _ModernLanguageOptionCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 22,
-                height: 22,
+                duration: const Duration(milliseconds: 150),
+                width: 20,
+                height: 20,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: selected ? cs.primary : Colors.transparent,
                   border: Border.all(
                     color: selected
                         ? cs.primary
-                        : cs.outline.withValues(alpha: 0.4),
-                    width: 2,
+                        : cs.outlineVariant.withValues(alpha: 0.6),
+                    width: selected ? 2 : 1.5,
                   ),
                 ),
                 child: selected
-                    ? Icon(Icons.check, size: 14, color: cs.onPrimary)
+                    ? Icon(Icons.check, size: 13, color: cs.onPrimary)
                     : null,
               ),
             ],
@@ -1483,11 +1508,20 @@ Future<AppThemeMode?> _showModernThemeDialog(
   AppThemeMode currentTheme,
   List<AppThemeMode> availableThemeModes,
 ) {
-  final cs = Theme.of(context).colorScheme;
+  final dTheme = Theme.of(context);
+  final cs = dTheme.colorScheme;
+  final isDark = dTheme.brightness == Brightness.dark;
+
   return showDialog<AppThemeMode>(
     context: context,
     builder: (ctx) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+          width: 1,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
         child: SingleChildScrollView(
@@ -1498,26 +1532,33 @@ Future<AppThemeMode?> _showModernThemeDialog(
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
+                      color: cs.surfaceContainerHighest
+                          .withValues(alpha: isDark ? 0.45 : 0.55),
+                      borderRadius: BorderRadius.circular(9),
                     ),
-                    child: Icon(Icons.palette_rounded,
-                        color: cs.primary, size: 22),
+                    child: Icon(
+                      Icons.palette_outlined,
+                      color: cs.onSurface,
+                      size: 18,
+                    ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           context.tr.selectTheme,
-                          style: const TextStyle(
-                            fontSize: 18,
+                          style: TextStyle(
+                            fontSize: 17,
                             fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
                           ),
                         ),
+                        const SizedBox(height: 1),
                         Text(
                           context.tr.chooseVisualMode,
                           style: TextStyle(
@@ -1530,13 +1571,13 @@ Future<AppThemeMode?> _showModernThemeDialog(
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               ...availableThemeModes.map(
                 (m) => _ThemeOptionCard(
                   mode: m,
                   selected: currentTheme == m,
                   onTap: () async {
-                    await Future.delayed(const Duration(milliseconds: 140));
+                    await Future.delayed(const Duration(milliseconds: 100));
                     if (ctx.mounted) Navigator.pop(ctx, m);
                   },
                 ),
@@ -1562,7 +1603,9 @@ class _ThemeOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     final (icon, iconColor, bgPreview, description) = switch (mode) {
       AppThemeMode.system => (
@@ -1626,41 +1669,41 @@ class _ThemeOptionCard extends StatelessWidget {
     };
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 6),
       child: BouncyTap(
-        scaleDown: 0.96,
+        scaleDown: 0.98,
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: selected
-                ? cs.primary.withValues(alpha: 0.12)
-                : cs.surfaceContainerHighest.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(16),
+                ? cs.primary.withValues(alpha: isDark ? 0.12 : 0.08)
+                : (isDark ? cs.surfaceContainerLow : cs.surfaceContainerLowest),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? cs.primary : cs.outline.withValues(alpha: 0.15),
-              width: selected ? 2 : 1,
+              color: selected
+                  ? cs.primary
+                  : cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+              width: selected ? 1.5 : 1,
             ),
           ),
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
                   gradient: bgPreview,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: selected
-                        ? cs.primary
-                        : Colors.white.withValues(alpha: 0.2),
-                    width: 1.5,
+                    color: cs.outlineVariant.withValues(alpha: 0.3),
+                    width: 1,
                   ),
                 ),
-                child: Icon(icon, color: iconColor, size: 22),
+                child: Icon(icon, color: iconColor, size: 18),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1668,13 +1711,13 @@ class _ThemeOptionCard extends StatelessWidget {
                     Text(
                       context.tr.themeModeLabel(mode),
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 14.5,
                         fontWeight:
-                            selected ? FontWeight.bold : FontWeight.w600,
+                            selected ? FontWeight.w600 : FontWeight.w500,
                         color: selected ? cs.primary : cs.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     Text(
                       description,
                       style: TextStyle(
@@ -1687,21 +1730,21 @@ class _ThemeOptionCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 22,
-                height: 22,
+                duration: const Duration(milliseconds: 150),
+                width: 20,
+                height: 20,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: selected ? cs.primary : Colors.transparent,
                   border: Border.all(
                     color: selected
                         ? cs.primary
-                        : cs.outline.withValues(alpha: 0.4),
-                    width: 2,
+                        : cs.outlineVariant.withValues(alpha: 0.6),
+                    width: selected ? 2 : 1.5,
                   ),
                 ),
                 child: selected
-                    ? Icon(Icons.check, size: 14, color: cs.onPrimary)
+                    ? Icon(Icons.check, size: 13, color: cs.onPrimary)
                     : null,
               ),
             ],
@@ -1717,7 +1760,9 @@ Future<int?> _showModernGridColumnsDialog(
   int currentCols, {
   required bool isAlbum,
 }) {
-  final cs = Theme.of(context).colorScheme;
+  final dTheme = Theme.of(context);
+  final cs = dTheme.colorScheme;
+  final isDark = dTheme.brightness == Brightness.dark;
   final title = isAlbum
       ? context.tr.selectAlbumsGridColumns
       : context.tr.selectGridColumns;
@@ -1728,7 +1773,13 @@ Future<int?> _showModernGridColumnsDialog(
   return showDialog<int>(
     context: context,
     builder: (ctx) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+          width: 1,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
         child: SingleChildScrollView(
@@ -1739,31 +1790,35 @@ Future<int?> _showModernGridColumnsDialog(
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
+                      color: cs.surfaceContainerHighest
+                          .withValues(alpha: isDark ? 0.45 : 0.55),
+                      borderRadius: BorderRadius.circular(9),
                     ),
                     child: Icon(
                       isAlbum
-                          ? Icons.photo_library_rounded
+                          ? Icons.photo_library_outlined
                           : Icons.grid_view_rounded,
-                      color: cs.primary,
-                      size: 22,
+                      color: cs.onSurface,
+                      size: 18,
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           title,
-                          style: const TextStyle(
-                            fontSize: 18,
+                          style: TextStyle(
+                            fontSize: 17,
                             fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
                           ),
                         ),
+                        const SizedBox(height: 1),
                         Text(
                           subtitle,
                           style: TextStyle(
@@ -1776,14 +1831,14 @@ Future<int?> _showModernGridColumnsDialog(
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               ...[2, 3, 4, 5].map(
                 (c) => _ColumnOptionCard(
                   columns: c,
                   selected: currentCols == c,
                   isAlbum: isAlbum,
                   onTap: () async {
-                    await Future.delayed(const Duration(milliseconds: 140));
+                    await Future.delayed(const Duration(milliseconds: 100));
                     if (ctx.mounted) Navigator.pop(ctx, c);
                   },
                 ),
@@ -1811,7 +1866,9 @@ class _ColumnOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     final subtitle = switch (columns) {
       2 => context.tr.largeComfortableView,
@@ -1822,37 +1879,35 @@ class _ColumnOptionCard extends StatelessWidget {
     };
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 6),
       child: BouncyTap(
-        scaleDown: 0.96,
+        scaleDown: 0.98,
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: selected
-                ? cs.primary.withValues(alpha: 0.12)
-                : cs.surfaceContainerHighest.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(16),
+                ? cs.primary.withValues(alpha: isDark ? 0.12 : 0.08)
+                : (isDark ? cs.surfaceContainerLow : cs.surfaceContainerLowest),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? cs.primary : cs.outline.withValues(alpha: 0.15),
-              width: selected ? 2 : 1,
+              color: selected
+                  ? cs.primary
+                  : cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+              width: selected ? 1.5 : 1,
             ),
           ),
           child: Row(
             children: [
               Container(
-                width: 48,
-                height: 38,
+                width: 44,
+                height: 34,
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: selected
-                        ? cs.primary.withValues(alpha: 0.5)
-                        : cs.outline.withValues(alpha: 0.2),
-                  ),
+                  color: cs.surfaceContainerHighest
+                      .withValues(alpha: isDark ? 0.45 : 0.55),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(
                   children: List.generate(
@@ -1866,15 +1921,15 @@ class _ColumnOptionCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: selected
                               ? cs.primary
-                              : cs.onSurface.withValues(alpha: 0.25),
-                          borderRadius: BorderRadius.circular(3),
+                              : cs.onSurface.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1882,13 +1937,13 @@ class _ColumnOptionCard extends StatelessWidget {
                     Text(
                       context.tr.columnsCount(columns),
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 14.5,
                         fontWeight:
-                            selected ? FontWeight.bold : FontWeight.w600,
+                            selected ? FontWeight.w600 : FontWeight.w500,
                         color: selected ? cs.primary : cs.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     Text(
                       subtitle,
                       style: TextStyle(
@@ -1901,21 +1956,21 @@ class _ColumnOptionCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 22,
-                height: 22,
+                duration: const Duration(milliseconds: 150),
+                width: 20,
+                height: 20,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: selected ? cs.primary : Colors.transparent,
                   border: Border.all(
                     color: selected
                         ? cs.primary
-                        : cs.outline.withValues(alpha: 0.4),
-                    width: 2,
+                        : cs.outlineVariant.withValues(alpha: 0.6),
+                    width: selected ? 2 : 1.5,
                   ),
                 ),
                 child: selected
-                    ? Icon(Icons.check, size: 14, color: cs.onPrimary)
+                    ? Icon(Icons.check, size: 13, color: cs.onPrimary)
                     : null,
               ),
             ],
@@ -1949,14 +2004,21 @@ Future<T?> _showModernOptionDialog<T>(
   required T currentValue,
   required List<_OptionItem<T>> options,
 }) {
-  final cs = Theme.of(context).colorScheme;
+  final dTheme = Theme.of(context);
+  final cs = dTheme.colorScheme;
+  final isDark = dTheme.brightness == Brightness.dark;
+
   return showDialog<T>(
     context: context,
     builder: (ctx) => AlertDialog(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+          width: 1,
+        ),
       ),
-      titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
       contentPadding: const EdgeInsets.symmetric(vertical: 8),
       title: Row(
         children: [
@@ -1965,13 +2027,14 @@ Future<T?> _showModernOptionDialog<T>(
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: (headerColor ?? cs.primary).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
+                color: cs.surfaceContainerHighest
+                    .withValues(alpha: isDark ? 0.45 : 0.55),
+                borderRadius: BorderRadius.circular(9),
               ),
               child: Icon(
                 headerIcon,
-                size: 20,
-                color: headerColor ?? cs.primary,
+                size: 18,
+                color: cs.onSurface,
               ),
             ),
             const SizedBox(width: 12),
@@ -1983,13 +2046,14 @@ Future<T?> _showModernOptionDialog<T>(
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 18,
+                  style: TextStyle(
+                    fontSize: 17,
                     fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
                   ),
                 ),
                 if (subtitle != null) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1),
                   Text(
                     subtitle,
                     style: TextStyle(
@@ -2014,26 +2078,27 @@ Future<T?> _showModernOptionDialog<T>(
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
-                  vertical: 12,
+                  vertical: 10,
                 ),
                 child: Row(
                   children: [
                     Container(
-                      width: 40,
-                      height: 40,
+                      width: 34,
+                      height: 34,
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? cs.primaryContainer
-                            : cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(12),
+                            ? cs.primary.withValues(alpha: isDark ? 0.18 : 0.12)
+                            : cs.surfaceContainerHighest
+                                .withValues(alpha: isDark ? 0.45 : 0.55),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(
                         item.icon,
-                        size: 20,
+                        size: 18,
                         color: isSelected ? cs.primary : cs.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2041,15 +2106,15 @@ Future<T?> _showModernOptionDialog<T>(
                           Text(
                             item.title,
                             style: TextStyle(
-                              fontSize: 15,
+                              fontSize: 14.5,
                               fontWeight: isSelected
-                                  ? FontWeight.bold
+                                  ? FontWeight.w600
                                   : FontWeight.w500,
                               color: isSelected ? cs.primary : cs.onSurface,
                             ),
                           ),
                           if (item.subtitle != null) ...[
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 1),
                             Text(
                               item.subtitle!,
                               style: TextStyle(
@@ -2062,11 +2127,14 @@ Future<T?> _showModernOptionDialog<T>(
                       ),
                     ),
                     if (isSelected)
-                      Icon(Icons.check_circle_rounded, color: cs.primary)
+                      Icon(Icons.check_circle_rounded,
+                          color: cs.primary, size: 20)
                     else
                       Icon(
                         Icons.circle_outlined,
-                        color: cs.outline.withValues(alpha: 0.4),
+                        color:
+                            cs.outlineVariant.withValues(alpha: 0.6),
+                        size: 20,
                       ),
                   ],
                 ),
@@ -2075,6 +2143,7 @@ Future<T?> _showModernOptionDialog<T>(
           }).toList(),
         ),
       ),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),

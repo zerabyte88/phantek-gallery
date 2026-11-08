@@ -111,5 +111,59 @@ void main() {
         SortOption.albumZA,
       );
     });
+
+    test('MediaItem resolves nested parent album for manga with subfolders', () {
+      final mangaItem = MediaItem(
+        id: 'op_c1_p1',
+        path: '/storage/emulated/0/Download/One Piece/Chapter 1/01.jpg',
+        name: '01.jpg',
+        date: DateTime(2026, 1, 1),
+        size: 1024,
+        isVideo: false,
+      );
+
+      expect(mangaItem.parentAlbumName, 'One Piece');
+      expect(mangaItem.immediateFolderName, 'Chapter 1');
+      expect(mangaItem.albumName, 'One Piece');
+
+      final standardItem = MediaItem(
+        id: 'dcim_cam_1',
+        path: '/storage/emulated/0/DCIM/Camera/IMG_20260101.jpg',
+        name: 'IMG_20260101.jpg',
+        date: DateTime(2026, 1, 1),
+        size: 2048,
+        isVideo: false,
+      );
+
+      expect(standardItem.parentAlbumName, isNull);
+      expect(standardItem.immediateFolderName, 'Camera');
+      expect(standardItem.albumName, 'Camera');
+    });
+
+    test('groupMediaIntoAlbums groups nested chapters under the parent album', () {
+      final mangaPages = [
+        MediaItem(
+          id: 'p1',
+          path: '/storage/emulated/0/Download/Chainsaw Man/Chapter 1/01.jpg',
+          name: '01.jpg',
+          date: DateTime(2026, 1, 1),
+          size: 100,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'p2',
+          path: '/storage/emulated/0/Download/Chainsaw Man/Chapter 2/01.jpg',
+          name: '01.jpg',
+          date: DateTime(2026, 1, 2),
+          size: 100,
+          isVideo: false,
+        ),
+      ];
+
+      final albums = groupMediaIntoAlbums(mangaPages);
+      expect(albums.length, 1);
+      expect(albums.first.name, 'Chainsaw Man');
+      expect(albums.first.items.length, 2);
+    });
   });
 }

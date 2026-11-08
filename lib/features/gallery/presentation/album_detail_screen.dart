@@ -7,6 +7,7 @@ import '../../../core/enums/filter_option.dart';
 import '../../../core/enums/sort_option.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/utils/natural_sort.dart';
+import '../../../core/models/album.dart';
 import '../../../core/models/media_item.dart';
 import '../../../core/models/settings_model.dart';
 import '../../../core/providers/media_provider.dart';
@@ -15,6 +16,7 @@ import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/bouncy_tap.dart';
+import 'widgets/album_grid_item.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
 import 'widgets/delete_confirmation_sheet.dart';
@@ -38,6 +40,8 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
   bool _selecting = false;
   FilterOption _filter = FilterOption.all;
   SortOption? _sort;
+  bool _flattenSubfolders = true;
+  String? _selectedSubfolder;
   late final ScrollController _scrollController = ScrollController();
 
   @override
@@ -204,14 +208,41 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     }
     final albumItems = widget.albumName == 'Favorites'
         ? allItems.where((e) => settings.favoriteIds.contains(e.id)).toList()
-        : allItems.where((e) => e.albumName == widget.albumName).toList();
+        : allItems
+            .where((e) =>
+                e.albumName == widget.albumName ||
+                e.immediateFolderName == widget.albumName)
+            .toList();
+
+    final subfolderNames = albumItems
+        .map((e) => e.immediateFolderName)
+        .where((s) => s.isNotEmpty && s != widget.albumName)
+        .toSet()
+        .toList()
+      ..sort(naturalCompare);
+    final hasSubfolders = subfolderNames.length > 1;
+
+    final scopedItems = (_selectedSubfolder != null)
+        ? albumItems
+            .where((e) => e.immediateFolderName == _selectedSubfolder)
+            .toList()
+        : albumItems;
 
     // 1. Filter by All / Photos / Videos
     final filteredItems = switch (_filter) {
-      FilterOption.photosOnly => albumItems.where((e) => !e.isVideo).toList(),
-      FilterOption.videosOnly => albumItems.where((e) => e.isVideo).toList(),
-      _ => albumItems,
+      FilterOption.photosOnly => scopedItems.where((e) => !e.isVideo).toList(),
+      FilterOption.videosOnly => scopedItems.where((e) => e.isVideo).toList(),
+      _ => scopedItems,
     };
+
+    int compareMangaCanonical(MediaItem a, MediaItem b) {
+      if (hasSubfolders && _selectedSubfolder == null) {
+        final folderCmp =
+            naturalCompare(a.immediateFolderName, b.immediateFolderName);
+        if (folderCmp != 0) return folderCmp;
+      }
+      return naturalCompare(a.name, b.name);
+    }
 
     // 2. Sort by selected sort or settings.defaultSort
     final activeSort = _sort ?? settings.defaultSort;
@@ -224,24 +255,16 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
         ..sort((a, b) => b.date.compareTo(a.date)),
       SortOption.shootingTimeAsc => [...filteredItems]
         ..sort((a, b) => a.date.compareTo(b.date)),
-      SortOption.nameAZ => [...filteredItems]
-        ..sort((a, b) => naturalCompare(a.name, b.name)),
+      SortOption.nameAZ => [...filteredItems]..sort(compareMangaCanonical),
       SortOption.nameZA => [...filteredItems]
-        ..sort((a, b) => naturalCompare(b.name, a.name)),
+        ..sort((a, b) => compareMangaCanonical(b, a)),
       SortOption.sizeDesc => [...filteredItems]
         ..sort((a, b) => b.size.compareTo(a.size)),
       SortOption.sizeAsc => [...filteredItems]
         ..sort((a, b) => a.size.compareTo(b.size)),
-      SortOption.albumAZ => [...filteredItems]
-        ..sort((a, b) {
-          final c = naturalCompare(a.albumName, b.albumName);
-          return c != 0 ? c : naturalCompare(a.name, b.name);
-        }),
+      SortOption.albumAZ => [...filteredItems]..sort(compareMangaCanonical),
       SortOption.albumZA => [...filteredItems]
-        ..sort((a, b) {
-          final c = naturalCompare(b.albumName, a.albumName);
-          return c != 0 ? c : naturalCompare(a.name, b.name);
-        }),
+        ..sort((a, b) => compareMangaCanonical(b, a)),
     };
 
     ref.listen<String?>(activeViewerMediaIdProvider, (_, nextId) {
@@ -259,7 +282,13 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              if (_selectedSubfolder != null && !_flattenSubfolders) {
+                setState(() => _selectedSubfolder = null);
+              } else {
+                Navigator.of(context).pop();
+              }
+            },
           ),
           title: _selecting
               ? Text('${_selected.length} ${context.tr.selected}')
@@ -269,7 +298,9 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                     Text(
                       widget.albumName == 'Favorites'
                           ? context.tr.favorites
-                          : widget.albumName,
+                          : (_selectedSubfolder != null && !_flattenSubfolders
+                              ? '${widget.albumName} / $_selectedSubfolder'
+                              : widget.albumName),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -286,20 +317,137 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                   ],
                 ),
           actions: [
-            if (!_selecting && sortedItems.isNotEmpty)
+            if (!_selecting && hasSubfolders)
               BouncyTap(
                 scaleDown: 0.88,
                 child: IconButton(
-                  icon: const Icon(Icons.auto_stories_rounded),
-                  tooltip: context.tr.readAsManga,
+                  icon: Icon(
+                    _flattenSubfolders
+                        ? Icons.folder_copy_outlined
+                        : Icons.grid_view_rounded,
+                  ),
+                  tooltip: _flattenSubfolders
+                      ? context.tr.showSubfolders
+                      : context.tr.flattenSubfolders,
                   onPressed: () {
-                    Navigator.of(context).openImage(
-                      sortedItems,
-                      0,
-                      initialMangaMode: true,
-                    );
+                    setState(() {
+                      _flattenSubfolders = !_flattenSubfolders;
+                      _selectedSubfolder = null;
+                    });
                   },
                 ),
+              ),
+            if (!_selecting)
+              PopupMenuButton<String>(
+                tooltip: context.tr.moreOptions,
+                color: const Color(0xFF222222),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                constraints: const BoxConstraints(minWidth: 130, maxWidth: 195),
+                offset: const Offset(0, 48),
+                onSelected: (value) {
+                  if (value == 'manga') {
+                    if (sortedItems.isNotEmpty) {
+                      final mangaItems = [...filteredItems]
+                        ..sort(compareMangaCanonical);
+                      Navigator.of(context).openImage(
+                        mangaItems,
+                        0,
+                        initialMangaMode: true,
+                      );
+                    }
+                  } else if (value == 'slideshow') {
+                    if (sortedItems.isNotEmpty) {
+                      final hasVideos = sortedItems.any((e) => e.isVideo);
+                      if (hasVideos) {
+                        Navigator.of(context).openVideo(
+                          sortedItems,
+                          0,
+                          startSlideshow: true,
+                        );
+                      } else {
+                        Navigator.of(context).openImage(
+                          sortedItems,
+                          0,
+                          startSlideshow: true,
+                        );
+                      }
+                    }
+                  } else if (value == 'select') {
+                    setState(() {
+                      _selecting = true;
+                    });
+                  }
+                },
+                itemBuilder: (context) => [
+                  if (sortedItems.isNotEmpty) ...[
+                    PopupMenuItem(
+                      value: 'manga',
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.auto_stories_rounded,
+                              size: 18, color: Colors.white),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              context.tr.readAsManga,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 13.5),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'slideshow',
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.slideshow_rounded,
+                              size: 18, color: Colors.white),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              context.tr.slideshow,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 13.5),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  PopupMenuItem(
+                    value: 'select',
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.checklist_rounded,
+                            size: 18, color: Colors.white),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            context.tr.select,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 13.5),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                icon: const Icon(Icons.more_vert),
               ),
             if (_selecting) ...[
               BouncyTap(
@@ -341,6 +489,94 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
               currentSort: activeSort,
               onSortChanged: (s) => setState(() => _sort = s),
             ),
+            if (hasSubfolders && _flattenSubfolders) ...[
+              Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: FilterChip(
+                        selected: _selectedSubfolder == null,
+                        label: Text(
+                            '${context.tr.allChapters} (${albumItems.length})'),
+                        onSelected: (_) {
+                          setState(() => _selectedSubfolder = null);
+                        },
+                      ),
+                    ),
+                    for (final sub in subfolderNames)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: FilterChip(
+                          selected: _selectedSubfolder == sub,
+                          label: Text(
+                              '$sub (${albumItems.where((e) => e.immediateFolderName == sub).length})'),
+                          onSelected: (selected) {
+                            setState(() {
+                              _selectedSubfolder = selected ? sub : null;
+                            });
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+            if (hasSubfolders && !_flattenSubfolders && _selectedSubfolder != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                color: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.4),
+                child: Row(
+                  children: [
+                    InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => setState(() => _selectedSubfolder = null),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.arrow_back, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              context.tr.chapters,
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('•', style: TextStyle(color: Colors.grey)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _selectedSubfolder!,
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      context.tr.itemsCount(sortedItems.length),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const Divider(height: 1),
             Expanded(
               child: albumItems.isEmpty
@@ -359,53 +595,91 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                         ],
                       ),
                     )
-                  : sortedItems.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No ${_filter.label.toLowerCase()} in this album',
-                            style: const TextStyle(
-                                fontSize: 14, color: Colors.grey),
-                          ),
-                        )
-                      : GridView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.all(2),
+                  : (hasSubfolders &&
+                          !_flattenSubfolders &&
+                          _selectedSubfolder == null)
+                      ? GridView.builder(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: settings.gridColumns,
-                            crossAxisSpacing: 2,
-                            mainAxisSpacing: 2,
+                            crossAxisCount: settings.albumGridColumns,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 0.74,
                           ),
-                          itemCount: sortedItems.length,
+                          itemCount: subfolderNames.length,
                           itemBuilder: (_, i) {
-                            final item = sortedItems[i];
-                            return MediaGridItem(
-                              key: ValueKey(item.id),
-                              item: item,
-                              isSelected: _selected.contains(item.id),
-                              isSelecting: _selecting,
-                              showBadges: settings.showBadges,
+                            final sub = subfolderNames[i];
+                            final subItems = albumItems
+                                .where((e) => e.immediateFolderName == sub)
+                                .toList()
+                              ..sort((a, b) =>
+                                  naturalCompare(a.name, b.name));
+                            final cover = subItems.first;
+                            final subAlbum = Album(
+                              name: sub,
+                              items: subItems,
+                              coverItem: cover,
+                            );
+                            return AlbumGridItem(
+                              key: ValueKey(sub),
+                              album: subAlbum,
                               onTap: () {
-                                if (_selecting) {
-                                  _toggleSelect(item.id);
-                                  return;
-                                }
-                                  if (sortedItems.every((e) => !e.isVideo)) {
-                                    Navigator.of(context).openImage(sortedItems, i);
-                                  } else {
-                                    Navigator.of(context).openVideo(sortedItems, i);
-                                  }
-                              },
-                              onLongPress: () {
-                                if (!_selecting) {
-                                  _startSelect(item.id);
-                                } else {
-                                  _toggleSelect(item.id);
-                                }
+                                setState(() => _selectedSubfolder = sub);
                               },
                             );
                           },
-                        ),
+                        )
+                      : sortedItems.isEmpty
+                          ? Center(
+                              child: Text(
+                                'No ${_filter.label.toLowerCase()} in this album',
+                                style: const TextStyle(
+                                    fontSize: 14, color: Colors.grey),
+                              ),
+                            )
+                          : GridView.builder(
+                              controller: _scrollController,
+                              padding: const EdgeInsets.all(2),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: settings.gridColumns,
+                                crossAxisSpacing: 2,
+                                mainAxisSpacing: 2,
+                              ),
+                              itemCount: sortedItems.length,
+                              itemBuilder: (_, i) {
+                                final item = sortedItems[i];
+                                return MediaGridItem(
+                                  key: ValueKey(item.id),
+                                  item: item,
+                                  isSelected: _selected.contains(item.id),
+                                  isSelecting: _selecting,
+                                  showBadges: settings.showBadges,
+                                  onTap: () {
+                                    if (_selecting) {
+                                      _toggleSelect(item.id);
+                                      return;
+                                    }
+                                    if (sortedItems.every((e) => !e.isVideo)) {
+                                      Navigator.of(context)
+                                          .openImage(sortedItems, i);
+                                    } else {
+                                      Navigator.of(context)
+                                          .openVideo(sortedItems, i);
+                                    }
+                                  },
+                                  onLongPress: () {
+                                    if (!_selecting) {
+                                      _startSelect(item.id);
+                                    } else {
+                                      _toggleSelect(item.id);
+                                    }
+                                  },
+                                );
+                              },
+                            ),
             ),
           ],
         ),

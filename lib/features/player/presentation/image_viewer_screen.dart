@@ -218,6 +218,40 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       });
     }
 
+    final savedHidden = PsdService.instance.getSavedLayerVisibility(path);
+    if (savedHidden != null) {
+      _psdHiddenLayers[path] = Set<int>.from(savedHidden);
+      PsdService.instance
+          .renderWithLayers(
+        path,
+        hiddenLayerIndices: savedHidden,
+        maxDimension: 2048,
+      )
+          .then((bytes) {
+        if (!mounted) return;
+        setState(() {
+          if (bytes != null && bytes.isNotEmpty) {
+            _psdRenderedBytes[path] = bytes;
+            _psdRenderComplete[path] = true;
+            _psdRendering[path] = false;
+            _psdLoadError[path] = false;
+          } else {
+            _psdRendering[path] = false;
+            _psdLoadError[path] = true;
+            _psdLoadStatus[path] = 'Failed to load document';
+          }
+        });
+      }).catchError((_) {
+        if (!mounted) return;
+        setState(() {
+          _psdRendering[path] = false;
+          _psdLoadError[path] = true;
+          _psdLoadStatus[path] = 'Failed to load document';
+        });
+      });
+      return;
+    }
+
     PsdService.instance.loadPsdDocument(path, maxDimension: 2048).then((bytes) {
       if (!mounted) return;
       setState(() {
@@ -257,10 +291,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
     final effectiveLayers = _psdLayersCache[path] ?? layers;
     if (!_psdHiddenLayers.containsKey(path)) {
-      _psdHiddenLayers[path] = effectiveLayers
-          .where((l) => !l.isVisible)
-          .map((l) => l.index)
-          .toSet();
+      final savedHidden = PsdService.instance.getSavedLayerVisibility(path);
+      _psdHiddenLayers[path] = savedHidden ??
+          effectiveLayers
+              .where((l) => !l.isVisible)
+              .map((l) => l.index)
+              .toSet();
     }
     final hidden = _psdHiddenLayers[path]!;
     final cachedThumbs = PsdService.instance.getCachedLayerThumbnails(path);

@@ -56,15 +56,49 @@ class MediaItem extends Equatable {
   /// Optional explicit album / folder name.
   final String? album;
 
-  /// Name of the album / folder containing this media item.
-  String get albumName {
-    if (album != null && album!.trim().isNotEmpty) return album!.trim();
+  /// Standard root container folder names on Android and desktop that do not represent albums.
+  static const systemRootFolders = {
+    'storage', 'emulated', '0', 'sdcard', 'internal', 'external', 'extsdcard', 'mnt',
+    'dcim', 'pictures', 'picture', 'download', 'downloads', 'movies', 'movie', 'music',
+    'documents', 'document', 'android', 'data', 'obb', 'media', 'users', 'appdata',
+    'windows', 'program files', 'program files (x86)', 'system volume information', 'tmp', 'temp',
+  };
+
+  /// Name of the immediate folder containing this media item (e.g. 'Chapter 1').
+  String get immediateFolderName {
     final normalized = path.replaceAll('\\', '/');
     final parts = normalized.split('/').where((p) => p.isNotEmpty).toList();
     if (parts.length >= 2) {
       final folder = parts[parts.length - 2];
       if (folder.isNotEmpty) return folder;
     }
+    return '';
+  }
+
+  /// Name of the parent album folder when media is inside a chapter/subfolder (e.g. 'One Piece').
+  String? get parentAlbumName {
+    final normalized = path.replaceAll('\\', '/');
+    final parts = normalized.split('/').where((p) => p.isNotEmpty).toList();
+    if (parts.length >= 3) {
+      final candidate = parts[parts.length - 3];
+      final lower = candidate.toLowerCase();
+      final isDrive = RegExp(r'^[a-zA-Z]:$').hasMatch(candidate);
+      if (!isDrive && !systemRootFolders.contains(lower)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  /// Name of the album / folder containing this media item.
+  /// Prioritizes explicit album name, then parent folder for nested subfolders (e.g. Manga name),
+  /// then immediate folder name, falling back to 'Other'.
+  String get albumName {
+    if (album != null && album!.trim().isNotEmpty) return album!.trim();
+    final parent = parentAlbumName;
+    if (parent != null && parent.trim().isNotEmpty) return parent.trim();
+    final immediate = immediateFolderName;
+    if (immediate.trim().isNotEmpty) return immediate.trim();
     return 'Other';
   }
 

@@ -192,6 +192,36 @@ class SettingsService {
     _prefs.remove('playback_pos_${path.hashCode}');
   }
 
+  // ── PSD Layer Visibility Persistence ────────────────────────────────────────
+
+  String _psdLayerKey(String normalizedPath) =>
+      'psd_hidden_layers_${normalizedPath.hashCode}';
+
+  Set<int>? getSavedPsdHiddenLayers(String path) {
+    final normalized = path.replaceAll(r'\', '/');
+    final key = _psdLayerKey(normalized);
+    final raw = _prefs.getString(key);
+    if (raw == null) return null;
+    try {
+      final list = jsonDecode(raw) as List;
+      return list.map((e) => (e as num).toInt()).toSet();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> savePsdHiddenLayers(String path, Set<int> hiddenIndices) async {
+    final normalized = path.replaceAll(r'\', '/');
+    final key = _psdLayerKey(normalized);
+    await _prefs.setString(key, jsonEncode(hiddenIndices.toList()));
+  }
+
+  Future<void> clearSavedPsdHiddenLayers(String path) async {
+    final normalized = path.replaceAll(r'\', '/');
+    final key = _psdLayerKey(normalized);
+    await _prefs.remove(key);
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   T _readEnum<T extends Enum>(String key, List<T> values, T fallback) {
