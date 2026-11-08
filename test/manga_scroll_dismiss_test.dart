@@ -1,0 +1,177 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 zerabyte88
+
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:phantek_gallery/core/localization/app_localizations.dart';
+import 'package:phantek_gallery/core/models/media_item.dart';
+import 'package:phantek_gallery/core/services/settings_service.dart';
+import 'package:phantek_gallery/features/player/presentation/image_viewer_screen.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  final testItems = List.generate(
+    5,
+    (i) => MediaItem(
+      id: 'page_$i',
+      path: '/mock/manga/page_$i.jpg',
+      name: 'page_$i.jpg',
+      album: 'My Manga',
+      date: DateTime(2026, 1, i + 1),
+      isVideo: false,
+      size: 1024 * 1024,
+    ),
+  );
+
+  Widget buildViewer({bool mangaMode = false}) {
+    return ProviderScope(
+      child: MaterialApp(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('en'), Locale('id')],
+        home: ImageViewerScreen(
+          items: testItems,
+          initialIndex: 0,
+          initialMangaMode: mangaMode,
+        ),
+      ),
+    );
+  }
+
+  group('Manga Mode Scroll Gesture Tests', () {
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+    });
+
+    testWidgets(
+        'Downward scroll/drag in Manga Mode does NOT trigger dismiss pop',
+        (tester) async {
+      await tester.pumpWidget(buildViewer(mangaMode: true));
+      await tester.pumpAndSettle();
+
+      // Verify Manga mode is active with ListView
+      expect(find.byType(ListView), findsOneWidget);
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+
+      // Perform downward drag gesture (which simulates scrolling up towards page 1)
+      final center = tester.getCenter(find.byType(ListView));
+      final gesture = await tester.startGesture(center);
+      await gesture.moveBy(const Offset(0, 300));
+      await tester.pump();
+
+      // Screen must still be present during drag
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+
+      // Release pointer with high velocity
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // Screen MUST NOT be popped
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+      expect(find.byType(ListView), findsOneWidget);
+    });
+
+    testWidgets(
+        'Downward drag in standard photo mode triggers dismiss pop',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ProviderScope(
+                      child: ImageViewerScreen(
+                        items: testItems,
+                        initialIndex: 0,
+                        initialMangaMode: false,
+                      ),
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ));
+
+      // Open viewer
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+
+      // Drag down in standard mode
+      final center = tester.getCenter(find.byType(PageView));
+      final gesture = await tester.startGesture(center);
+      await gesture.moveBy(const Offset(0, 300));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // In standard mode, downward drag popped the screen back to base
+      expect(find.byType(ImageViewerScreen), findsNothing);
+      expect(find.text('Open'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Manga Mode displays separate manga title and animates page pill from top-center to top-left on focus',
+        (tester) async {
+      await tester.pumpWidget(buildViewer(mangaMode: true));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      // 1. Action buttons in footer MUST NOT be present in Manga Mode
+      expect(find.byIcon(Icons.share_outlined), findsNothing);
+      expect(find.byIcon(Icons.favorite_border), findsNothing);
+      expect(find.byIcon(Icons.delete_outline), findsNothing);
+      expect(find.byIcon(Icons.more_vert), findsNothing);
+
+      // 2. Manga title is displayed in header separately from page number
+      expect(find.text('My Manga'), findsOneWidget);
+      expect(find.text('page_0.jpg'), findsOneWidget);
+
+      // 3. Page counter pill has its own distinct text (not combined)
+      expect(find.text('1 / 5'), findsOneWidget);
+
+      // 4. Initially, pill is aligned at top center
+      final alignFinder = find.ancestor(
+        of: find.text('1 / 5'),
+        matching: find.byType(AnimatedAlign),
+      );
+      expect(alignFinder, findsOneWidget);
+      AnimatedAlign alignWidget = tester.widget<AnimatedAlign>(alignFinder);
+      expect(alignWidget.alignment, Alignment.topCenter);
+
+      // 5. Tap once on the screen to focus (hide header and footer)
+      await tester.tap(find.byType(ListView));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      // Page pill now animates to top-left (kiri atas)
+      alignWidget = tester.widget<AnimatedAlign>(alignFinder);
+      expect(alignWidget.alignment, Alignment.topLeft);
+      expect(find.text('1 / 5'), findsOneWidget);
+
+      // 6. Tap again to bring bars back
+      await tester.tap(find.byType(ListView));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      // Page pill animates back to top-center
+      alignWidget = tester.widget<AnimatedAlign>(alignFinder);
+      expect(alignWidget.alignment, Alignment.topCenter);
+      expect(find.text('1 / 5'), findsOneWidget);
+    });
+  });
+}

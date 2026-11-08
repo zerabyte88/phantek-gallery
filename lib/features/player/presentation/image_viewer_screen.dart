@@ -23,6 +23,9 @@ import 'widgets/psd_layer_sheet.dart';
 import 'widgets/rename_dialog.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
 import '../../../core/widgets/feedback_pill.dart';
+import '../../../core/services/translation/translation_models.dart';
+import '../../../core/services/translation/translation_isolate_coordinator.dart';
+import 'widgets/manga_translation_overlay.dart';
 
 // 4096px cap fits imageCache while staying sharp up to 3x zoom.
 ImageProvider displayImage(String path, {int maxDimension = 4096}) =>
@@ -173,6 +176,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   final ValueNotifier<bool> _isSwipingPage = ValueNotifier<bool>(false);
   late bool _isMangaMode;
   late final ScrollController _mangaScrollController;
+  TranslationRenderMode? _translationMode;
+  late final TranslationIsolateCoordinator _translationCoordinator;
   Timer? _slideshowTimer;
   bool _isSlideshowPlaying = false;
   bool _didSetMaxBrightness = false;
@@ -387,6 +392,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _isMangaMode = widget.initialMangaMode && hasValidManga;
     _mangaScrollController = ScrollController();
     _mangaScrollController.addListener(_onMangaScroll);
+    _translationCoordinator = TranslationIsolateCoordinator();
 
     if (_isMangaMode && widget.initialIndex > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -467,6 +473,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   @override
   void dispose() {
+    _translationCoordinator.dispose();
     _mangaScrollController.removeListener(_onMangaScroll);
     _mangaScrollController.dispose();
     _stopSlideshow();
@@ -525,6 +532,99 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       });
       _activeMediaNotifier?.state = activeItem.id;
     }
+
+    if (_isMangaMode && _translationMode != null) {
+      final it = mangaList[activeMangaIndex];
+      final w = (it.width != null && it.width! > 0)
+          ? it.width!.toDouble()
+          : screenWidth;
+      final h = (it.height != null && it.height! > 0)
+          ? it.height!.toDouble()
+          : screenWidth;
+      _translationCoordinator.scheduleTranslation(
+        imagePath: it.path,
+        imageSize: Size(w, h),
+        mode: _translationMode!,
+      );
+    }
+  }
+
+  void _setTranslationMode(TranslationRenderMode? mode) {
+    setState(() {
+      _translationMode = mode;
+    });
+    if (mode != null && _mangaItems.isNotEmpty) {
+      _onMangaScroll();
+    } else {
+      _translationCoordinator.cancelPending();
+    }
+  }
+
+  void _showTranslationSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.chat_bubble_outline_rounded,
+                      color: Colors.white),
+                  title: const Text(
+                    'Terjemahkan Balon Dialog (Speech Bubbles)',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  selected: _translationMode ==
+                      TranslationRenderMode.speechBubblesOnly,
+                  selectedColor: Theme.of(context).colorScheme.primary,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _setTranslationMode(
+                        TranslationRenderMode.speechBubblesOnly);
+                  },
+                ),
+                ListTile(
+                  leading:
+                      const Icon(Icons.image_outlined, color: Colors.white),
+                  title: const Text(
+                    'Terjemahkan Seluruh Halaman (Termasuk SFX)',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  selected: _translationMode ==
+                      TranslationRenderMode.fullImageWithSfx,
+                  selectedColor: Theme.of(context).colorScheme.primary,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _setTranslationMode(
+                        TranslationRenderMode.fullImageWithSfx);
+                  },
+                ),
+                if (_translationMode != null)
+                  ListTile(
+                    leading: const Icon(Icons.close_rounded,
+                        color: Colors.redAccent),
+                    title: const Text(
+                      'Matikan Terjemahan',
+                      style: TextStyle(color: Colors.redAccent),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _setTranslationMode(null);
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _scrollToCurrentInManga() {
@@ -588,39 +688,63 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         itemBuilder: (context, index) {
           final it = mangaList[index];
           return RepaintBoundary(
-            child: Image(
-              image: screenDisplayImage(it.path),
-              fit: BoxFit.fitWidth,
-              width: double.infinity,
-              gaplessPlayback: true,
-              filterQuality: FilterQuality.medium,
-              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                if (wasSynchronouslyLoaded) return child;
-                final loaded = frame != null;
-                return Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    AnimatedOpacity(
-                      opacity: loaded ? 0.0 : 1.0,
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOut,
-                      child: _thumb(it.id, it.path),
+            child: Stack(
+              children: [
+                Image(
+                  image: screenDisplayImage(it.path),
+                  fit: BoxFit.fitWidth,
+                  width: double.infinity,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                  frameBuilder:
+                      (context, child, frame, wasSynchronouslyLoaded) {
+                    if (wasSynchronouslyLoaded) return child;
+                    final loaded = frame != null;
+                    return Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        AnimatedOpacity(
+                          opacity: loaded ? 0.0 : 1.0,
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOut,
+                          child: _thumb(it.id, it.path),
+                        ),
+                        AnimatedOpacity(
+                          opacity: loaded ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOut,
+                          child: child,
+                        ),
+                      ],
+                    );
+                  },
+                  errorBuilder: (_, __, ___) => Container(
+                    height: 300,
+                    color: Colors.black26,
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.broken_image,
+                        size: 60, color: Colors.white38),
+                  ),
+                ),
+                if (_translationMode != null)
+                  Positioned.fill(
+                    child: ValueListenableBuilder<TranslationResult?>(
+                      valueListenable:
+                          _translationCoordinator.getResultNotifier(it.path),
+                      builder: (context, result, _) {
+                        if (result == null ||
+                            !result.isSuccess ||
+                            result.blocks.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        return MangaTranslationOverlay(
+                          result: result,
+                          mode: _translationMode!,
+                        );
+                      },
                     ),
-                    AnimatedOpacity(
-                      opacity: loaded ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOut,
-                      child: child,
-                    ),
-                  ],
-                );
-              },
-              errorBuilder: (_, __, ___) => Container(
-                height: 300,
-                color: Colors.black26,
-                alignment: Alignment.center,
-                child: const Icon(Icons.broken_image, size: 60, color: Colors.white38),
-              ),
+                  ),
+              ],
             ),
           );
         },
@@ -1311,6 +1435,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           _settle.stop();
           _zoomAnimController?.stop();
           _isSwipingHorizontal = false;
+          if (_isMangaMode) {
+            if (_drag.value != Offset.zero) _setDrag(Offset.zero);
+            return;
+          }
           if (_activePointers.length == 1) {
             _setDrag(Offset.zero);
             _isMultiTouch = false;
@@ -1341,6 +1469,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           _vt.addPosition(e.timeStamp, e.position);
         },
         onPointerMove: (e) {
+          if (_isMangaMode) return;
           if (_startDragY == null ||
               _startDragX == null ||
               _isCurrentlyZoomed ||
@@ -1384,6 +1513,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             _isSwipingHorizontal = false;
             _startDragY = null;
             _startDragX = null;
+            if (_isMangaMode) {
+              if (_drag.value != Offset.zero) _setDrag(Offset.zero);
+              return;
+            }
             final d = _drag.value;
             final vy = _vt.getVelocity().pixelsPerSecond.dy;
 
@@ -1693,7 +1826,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    MediaUtils.formatViewerDate(item.date),
+                                    _isMangaMode && item.albumName.isNotEmpty
+                                        ? item.albumName
+                                        : MediaUtils.formatViewerDate(
+                                            item.date),
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 16,
@@ -1704,7 +1840,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    MediaUtils.formatViewerTime(item.date),
+                                    _isMangaMode
+                                        ? item.name
+                                        : MediaUtils.formatViewerTime(
+                                            item.date),
                                     style: const TextStyle(
                                       color: Colors.white70,
                                       fontSize: 12,
@@ -1728,7 +1867,23 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 tooltip: 'Layers',
                                 onPressed: () => _openPsdLayerSheet(item),
                               ),
-                            if (!item.isVideo && !PsdService.isPsd(item.path))
+                            if (!item.isVideo && !PsdService.isPsd(item.path)) ...[
+                              if (_isMangaMode)
+                                IconButton(
+                                  key: const ValueKey(
+                                      'manga_translation_button'),
+                                  icon: Icon(
+                                    Icons.translate_rounded,
+                                    color: _translationMode != null
+                                        ? Theme.of(context)
+                                            .colorScheme
+                                            .primary
+                                        : Colors.white,
+                                    size: 22,
+                                  ),
+                                  tooltip: 'Manga Translation',
+                                  onPressed: _showTranslationSheet,
+                                ),
                               IconButton(
                                 icon: Icon(
                                   Icons.auto_stories_rounded,
@@ -1740,6 +1895,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 tooltip: context.tr.mangaMode,
                                 onPressed: _toggleMangaMode,
                               ),
+                            ],
                             if (!widget.isTrash)
                               IconButton(
                                 icon: const Icon(Icons.info_outline,
@@ -1757,46 +1913,68 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
               ),
               if (_isMangaMode)
                 Positioned(
-                  bottom: showBars ? 90 : 28,
+                  top: 0,
                   left: 0,
                   right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.75),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          width: 0.5,
+                  child: IgnorePointer(
+                    child: SafeArea(
+                      bottom: false,
+                      child: AnimatedPadding(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOutCubic,
+                        padding: EdgeInsets.only(
+                          top: showBars ? 58 : 8,
+                          left: showBars ? 0 : 16,
+                          right: showBars ? 0 : 16,
                         ),
-                      ),
-                      child: Builder(
-                        builder: (context) {
-                          final mangaList = _mangaItems;
-                          final mangaIdx = mangaList.indexOf(item);
-                          final pageStr = mangaIdx >= 0
-                              ? '${mangaIdx + 1} / ${mangaList.length}'
-                              : '${_current + 1} / ${widget.items.length}';
-                          return Text(
-                            '${item.albumName.isNotEmpty ? '${item.albumName} • ' : ''}$pageStr',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.3,
+                        child: AnimatedAlign(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeInOutCubic,
+                          alignment: showBars
+                              ? Alignment.topCenter
+                              : Alignment.topLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black
+                                  .withValues(alpha: showBars ? 0.75 : 0.6),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.18),
+                                width: 0.6,
+                              ),
                             ),
-                          );
-                        },
+                            child: Builder(
+                              builder: (context) {
+                                final mangaList = _mangaItems;
+                                final mangaIdx = mangaList.indexOf(item);
+                                final pageStr = mangaIdx >= 0
+                                    ? '${mangaIdx + 1} / ${mangaList.length}'
+                                    : '${_current + 1} / ${widget.items.length}';
+                                return Text(
+                                  pageStr,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.5,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: _buildStaggeredBar(
+              if (!_isMangaMode)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: _buildStaggeredBar(
                   context: context,
                   showBars: showBars,
                   child: Container(

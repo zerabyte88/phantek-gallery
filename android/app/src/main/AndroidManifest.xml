@@ -67,6 +67,11 @@
                 android:resource="@xml/file_provider_paths" />
         </provider>
 
+        <!-- ML Kit OCR offline models for Japanese, Chinese, Korean, and Latin scripts -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr,ocr-japanese,ocr-chinese,ocr-korean" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
