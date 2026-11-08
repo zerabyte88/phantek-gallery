@@ -21,6 +21,7 @@ import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
 import 'widgets/delete_confirmation_sheet.dart';
 import '../../../core/widgets/feedback_pill.dart';
+import '../../../core/services/psd_service.dart';
 
 /// Screen displaying photos and videos belonging to a specific album.
 class AlbumDetailScreen extends ConsumerStatefulWidget {
@@ -348,13 +349,21 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                 offset: const Offset(0, 48),
                 onSelected: (value) {
                   if (value == 'manga') {
-                    if (sortedItems.isNotEmpty) {
-                      final mangaItems = [...filteredItems]
-                        ..sort(compareMangaCanonical);
+                    final mangaItems = filteredItems
+                        .where((e) => !e.isVideo && !PsdService.isPsd(e.path))
+                        .toList()
+                      ..sort(compareMangaCanonical);
+                    if (mangaItems.isNotEmpty) {
                       Navigator.of(context).openImage(
                         mangaItems,
                         0,
                         initialMangaMode: true,
+                      );
+                    } else {
+                      showFeedbackPill(
+                        context,
+                        message: context.tr.noPhotosFound,
+                        icon: Icons.auto_stories_rounded,
                       );
                     }
                   } else if (value == 'slideshow') {

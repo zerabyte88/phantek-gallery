@@ -27,6 +27,7 @@ const Map<String, String> zhTwTranslations = {
   'chooseThumbnailDensity': '選擇媒體縮圖密度',
   'chooseVisualMode': '選擇視覺模式與對比度',
   'clearThumbnailCache': '清除縮圖快取',
+  'clearCache': '清除快取',
   'clearAll': '全部清除',
   'codec': '編碼',
   'columnsCount': '{count} 欄',

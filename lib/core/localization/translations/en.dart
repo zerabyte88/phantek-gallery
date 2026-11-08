@@ -30,6 +30,7 @@ const Map<String, String> enTranslations = {
   'chooseThumbnailDensity': 'Choose media thumbnail density',
   'chooseVisualMode': 'Choose visual mode and contrast',
   'clearThumbnailCache': 'Clear Thumbnail Cache',
+  'clearCache': 'Clear Cache',
   'clearAll': 'Clear All',
   'codec': 'Codec',
   'columnsCount': '{count} columns',

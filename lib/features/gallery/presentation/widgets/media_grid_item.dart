@@ -216,6 +216,30 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
                 ),
               ),
             ),
+          if (!widget.item.isVideo &&
+              PsdService.isPsd(widget.item.path) &&
+              widget.showBadges)
+            Positioned(
+              bottom: 4,
+              right: 4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'PSD',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ),
+            ),
           if (widget.isSelecting)
             Positioned.fill(
               child: AnimatedContainer(

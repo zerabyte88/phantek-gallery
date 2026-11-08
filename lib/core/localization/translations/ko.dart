@@ -27,6 +27,7 @@ const Map<String, String> koTranslations = {
   'chooseThumbnailDensity': '미디어 썸네일 밀도 선택',
   'chooseVisualMode': '화면 모드 및 대비 선택',
   'clearThumbnailCache': '썸네일 캐시 지우기',
+  'clearCache': '캐시 지우기',
   'clearAll': '모두 지우기',
   'codec': '코덱',
   'columnsCount': '{count}개 열',

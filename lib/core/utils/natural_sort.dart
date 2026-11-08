@@ -1,3 +1,5 @@
+import '../models/media_item.dart';
+
 /// Natural alphanumeric string comparator for sorting albums, chapters, and filenames.
 ///
 /// Splits strings into contiguous text vs number chunks (supporting decimal sub-chapters e.g. "1.1", "2.1"
@@ -32,4 +34,16 @@ int naturalCompare(String a, String b) {
   }
 
   return matchesA.length.compareTo(matchesB.length);
+}
+
+/// Canonical manga page comparator: sorts by immediate folder name first (if different and non-empty),
+/// then by file name using natural alphanumeric comparison.
+int compareMangaCanonical(MediaItem a, MediaItem b) {
+  if (a.immediateFolderName.isNotEmpty &&
+      b.immediateFolderName.isNotEmpty &&
+      a.immediateFolderName != b.immediateFolderName) {
+    final folderCmp = naturalCompare(a.immediateFolderName, b.immediateFolderName);
+    if (folderCmp != 0) return folderCmp;
+  }
+  return naturalCompare(a.name, b.name);
 }

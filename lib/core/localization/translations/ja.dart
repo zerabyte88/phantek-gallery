@@ -27,6 +27,7 @@ const Map<String, String> jaTranslations = {
   'chooseThumbnailDensity': 'メディアサムネイルの密度を選択',
   'chooseVisualMode': '表示モードとコントラストを選択',
   'clearThumbnailCache': 'サムネイルキャッシュを削除',
+  'clearCache': 'キャッシュを削除',
   'clearAll': 'すべてクリア',
   'codec': 'コーデック',
   'columnsCount': '{count} 列',

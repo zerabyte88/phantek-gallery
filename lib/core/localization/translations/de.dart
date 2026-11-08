@@ -29,6 +29,7 @@ const Map<String, String> deTranslations = {
   'chooseThumbnailDensity': 'Miniaturbild-Dichte wählen',
   'chooseVisualMode': 'Farbmodus und Kontrast wählen',
   'clearThumbnailCache': 'Thumbnail-Cache leeren',
+  'clearCache': 'Cache leeren',
   'clearAll': 'Alle löschen',
   'codec': 'Codec',
   'columnsCount': '{count} Spalten',

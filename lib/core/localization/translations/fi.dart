@@ -29,6 +29,7 @@ const Map<String, String> fiTranslations = {
   'chooseThumbnailDensity': 'Valitse pikkukuvien tiheys',
   'chooseVisualMode': 'Valitse visuaalinen tila ja kontrasti',
   'clearThumbnailCache': 'Tyhjennä pikkukuvien välimuisti',
+  'clearCache': 'Tyhjennä välimuisti',
   'clearAll': 'Tyhjennä kaikki',
   'codec': 'Koodekki',
   'columnsCount': '{count} saraketta',

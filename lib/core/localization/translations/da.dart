@@ -29,6 +29,7 @@ const Map<String, String> daTranslations = {
   'chooseThumbnailDensity': 'Vælg miniaturetæthed',
   'chooseVisualMode': 'Vælg visningstilstand og kontrast',
   'clearThumbnailCache': 'Ryd miniature-cache',
+  'clearCache': 'Ryd cache',
   'clearAll': 'Ryd alle',
   'codec': 'Codec',
   'columnsCount': '{count} kolonner',

@@ -17,6 +17,7 @@ import '../../../core/services/permission_service.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/developer_about_card.dart';
+import 'widgets/modern_theme_grid.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -69,7 +70,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final settings = ref.watch(settingsNotifierProvider);
 
     void patch(SettingsModel Function(SettingsModel) fn) {
@@ -108,20 +111,81 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             _SectionHeader(title: context.tr.appearance),
             _SettingsCard(
               children: [
-                _ModernTile(
-                  icon: Icons.palette_outlined,
-                  title: context.tr.theme,
-                  subtitle: context.tr.themeModeLabel(settings.themeMode),
-                  onTap: () async {
-                    final chosen = await _showModernThemeDialog(
-                      context,
-                      settings.themeMode,
-                      availableThemeModes,
-                    );
-                    if (chosen != null) {
-                      patch((s) => s.copyWith(themeMode: chosen));
-                    }
-                  },
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      BouncyTap(
+                        scaleDown: 0.985,
+                        onTap: () async {
+                          final chosen = await _showModernThemeDialog(
+                            context,
+                            settings.themeMode,
+                            availableThemeModes,
+                          );
+                          if (chosen != null) {
+                            patch((s) => s.copyWith(themeMode: chosen));
+                          }
+                        },
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: cs.primary
+                                    .withValues(alpha: isDark ? 0.14 : 0.10),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Icon(
+                                Icons.palette_outlined,
+                                color: cs.primary,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    context.tr.theme,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w500,
+                                      color: cs.onSurface,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    context.tr.themeModeLabel(settings.themeMode),
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: cs.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 20,
+                              color: cs.onSurfaceVariant.withValues(alpha: 0.38),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ModernThemeGrid(
+                        currentTheme: settings.themeMode,
+                        onThemeSelected: (chosen) {
+                          patch((s) => s.copyWith(themeMode: chosen));
+                        },
+                      ),
+                    ],
+                  ),
                 ),
                 const _CardDivider(),
                 _ModernTile(
@@ -505,7 +569,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernTile(
                   icon: Icons.cleaning_services_rounded,
-                  iconColor: cs.error,
                   title: context.tr.clearThumbnailCache,
                   subtitle: context.tr.diskSize(_cacheSizeStr),
                   onTap: () async {
@@ -540,18 +603,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               height: 1.4,
                             ),
                           ),
+                          actionsAlignment: MainAxisAlignment.spaceBetween,
+                          actionsPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
                           actions: [
                             TextButton(
+                              style: TextButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 10, horizontal: 16),
+                              ),
                               onPressed: () => Navigator.pop(ctx, false),
                               child: Text(context.tr.cancel),
                             ),
                             FilledButton(
                               style: FilledButton.styleFrom(
-                                backgroundColor: dCs.error,
-                                foregroundColor: dCs.onError,
+                                backgroundColor: dCs.primary,
+                                foregroundColor: dCs.onPrimary,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 10, horizontal: 16),
                               ),
                               onPressed: () => Navigator.pop(ctx, true),
-                              child: Text(context.tr.clearThumbnailCache),
+                              child: Text(context.tr.clearCache),
                             ),
                           ],
                         );
@@ -606,13 +684,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                 const Color(0xFF10B981).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: Text(
-                            context.tr.allFilesGranted,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF10B981),
-                            ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.check_circle_rounded,
+                                size: 13,
+                                color: Color(0xFF10B981),
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Granted',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF10B981),
+                                ),
+                              ),
+                            ],
                           ),
                         )
                       : null,
@@ -840,13 +929,13 @@ class _ModernSwitchTile extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest
-                      .withValues(alpha: isDark ? 0.45 : 0.55),
+                  color: cs.primary
+                      .withValues(alpha: isDark ? 0.14 : 0.10),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
                   icon,
-                  color: cs.onSurfaceVariant,
+                  color: cs.primary,
                   size: 18,
                 ),
               ),
@@ -927,13 +1016,13 @@ class _ModernSliderTile extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest
-                      .withValues(alpha: isDark ? 0.45 : 0.55),
+                  color: cs.primary
+                      .withValues(alpha: isDark ? 0.14 : 0.10),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
                   icon,
-                  color: cs.onSurfaceVariant,
+                  color: cs.primary,
                   size: 18,
                 ),
               ),
@@ -1058,13 +1147,13 @@ Future<void> _showExcludedFoldersDialog(
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest
-                        .withValues(alpha: isDark ? 0.45 : 0.55),
+                    color: cs.primary
+                        .withValues(alpha: isDark ? 0.14 : 0.10),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(
                     Icons.folder_off_outlined,
-                    color: cs.onSurface,
+                    color: cs.primary,
                     size: 18,
                   ),
                 ),
@@ -1198,7 +1287,7 @@ Future<void> _showExcludedFoldersDialog(
                                   Icon(
                                     Icons.delete_sweep_outlined,
                                     size: 16,
-                                    color: cs.error,
+                                    color: cs.primary,
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
@@ -1206,7 +1295,7 @@ Future<void> _showExcludedFoldersDialog(
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: cs.error,
+                                      color: cs.primary,
                                     ),
                                   ),
                                 ],
@@ -1235,7 +1324,7 @@ Future<void> _showExcludedFoldersDialog(
                               leading: Icon(
                                 Icons.folder_off_outlined,
                                 size: 18,
-                                color: cs.error,
+                                color: cs.primary,
                               ),
                               title: Text(
                                 item,
@@ -1328,13 +1417,13 @@ Future<AppLanguage?> _showModernLanguageDialog(
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest
-                        .withValues(alpha: isDark ? 0.45 : 0.55),
+                    color: cs.primary
+                        .withValues(alpha: isDark ? 0.14 : 0.10),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(
                     Icons.translate_rounded,
-                    color: cs.onSurface,
+                    color: cs.primary,
                     size: 18,
                   ),
                 ),
@@ -1535,13 +1624,13 @@ Future<AppThemeMode?> _showModernThemeDialog(
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest
-                          .withValues(alpha: isDark ? 0.45 : 0.55),
+                      color: cs.primary
+                          .withValues(alpha: isDark ? 0.14 : 0.10),
                       borderRadius: BorderRadius.circular(9),
                     ),
                     child: Icon(
                       Icons.palette_outlined,
-                      color: cs.onSurface,
+                      color: cs.primary,
                       size: 18,
                     ),
                   ),
@@ -1793,15 +1882,15 @@ Future<int?> _showModernGridColumnsDialog(
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest
-                          .withValues(alpha: isDark ? 0.45 : 0.55),
+                      color: cs.primary
+                          .withValues(alpha: isDark ? 0.14 : 0.10),
                       borderRadius: BorderRadius.circular(9),
                     ),
                     child: Icon(
                       isAlbum
                           ? Icons.photo_library_outlined
                           : Icons.grid_view_rounded,
-                      color: cs.onSurface,
+                      color: cs.primary,
                       size: 18,
                     ),
                   ),

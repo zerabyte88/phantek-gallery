@@ -27,6 +27,7 @@ const Map<String, String> arTranslations = {
   'chooseThumbnailDensity': 'اختر كثافة الصور المصغرة',
   'chooseVisualMode': 'اختر وضع العرض والتباين',
   'clearThumbnailCache': 'مسح ذاكرة التخزين المؤقت للصور المصغرة',
+  'clearCache': 'مسح الذاكرة المؤقتة',
   'clearAll': 'مسح الكل',
   'codec': 'برنامج الترميز',
   'columnsCount': '{count} أعمدة',

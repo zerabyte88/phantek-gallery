@@ -28,6 +28,7 @@ const Map<String, String> thTranslations = {
   'chooseThumbnailDensity': 'เลือกความหนาแน่นของภาพขนาดย่อ',
   'chooseVisualMode': 'เลือกโหมดการแสดงผลและความเปรียบต่าง',
   'clearThumbnailCache': 'ล้างแคชภาพขนาดย่อ',
+  'clearCache': 'ล้างแคช',
   'clearAll': 'ล้างทั้งหมด',
   'codec': 'ตัวแปลงสัญญาณ',
   'columnsCount': '{count} คอลัมน์',

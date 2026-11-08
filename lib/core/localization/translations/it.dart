@@ -29,6 +29,7 @@ const Map<String, String> itTranslations = {
   'chooseThumbnailDensity': 'Scegli densità miniature multimediali',
   'chooseVisualMode': 'Scegli modalità visiva e contrasto',
   'clearThumbnailCache': 'Cancella Cache Miniature',
+  'clearCache': 'Cancella cache',
   'clearAll': 'Cancella tutto',
   'codec': 'Codec',
   'columnsCount': '{count} colonne',

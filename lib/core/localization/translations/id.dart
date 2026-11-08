@@ -29,6 +29,7 @@ const Map<String, String> idTranslations = {
   'chooseThumbnailDensity': 'Pilih kerapatan thumbnail media',
   'chooseVisualMode': 'Pilih mode visual dan kontras',
   'clearThumbnailCache': 'Hapus Cache Thumbnail',
+  'clearCache': 'Clear Cache',
   'clearAll': 'Hapus Semua',
   'codec': 'Codec',
   'columnsCount': '{count} kolom',

@@ -64,6 +64,7 @@ class AppLocalizations {
   String get showDurationBadgesSubtitle => _t('showDurationBadgesSubtitle');
   String get cache => _t('cache');
   String get clearThumbnailCache => _t('clearThumbnailCache');
+  String get clearCache => _t('clearCache');
   String get clearAll => _t('clearAll');
   String get playback => _t('playback');
   String get hardwareAcceleration => _t('hardwareAcceleration');

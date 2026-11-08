@@ -29,6 +29,7 @@ const Map<String, String> svTranslations = {
   'chooseThumbnailDensity': 'Välj miniatyrtäthet',
   'chooseVisualMode': 'Välj visuellt läge och kontrast',
   'clearThumbnailCache': 'Rensa miniatyrcache',
+  'clearCache': 'Rensa cache',
   'clearAll': 'Rensa alla',
   'codec': 'Kodek',
   'columnsCount': '{count} kolumner',

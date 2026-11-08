@@ -28,6 +28,7 @@ const Map<String, String> viTranslations = {
   'chooseThumbnailDensity': 'Chọn mật độ ảnh thu nhỏ',
   'chooseVisualMode': 'Chọn chế độ hiển thị và độ tương phản',
   'clearThumbnailCache': 'Xóa bộ nhớ đệm ảnh thu nhỏ',
+  'clearCache': 'Xóa bộ nhớ đệm',
   'clearAll': 'Xóa tất cả',
   'codec': 'Bộ mã hóa',
   'columnsCount': '{count} cột',

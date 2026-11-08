@@ -27,6 +27,7 @@ import 'widgets/album_grid_item.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
 import 'widgets/delete_confirmation_sheet.dart';
+import 'widgets/manga_folder_picker_sheet.dart';
 import '../../../core/widgets/feedback_pill.dart';
 
 class GalleryScreen extends ConsumerStatefulWidget {
@@ -980,14 +981,10 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                 }
               }
             } else if (value == 'manga') {
-              final items = _currentTabItems;
-              if (items.isNotEmpty) {
-                Navigator.of(context).openImage(
-                  items,
-                  0,
-                  initialMangaMode: true,
-                );
-              }
+              MangaFolderPickerSheet.show(
+                context,
+                allItems: mediaAsync.value ?? [],
+              );
             } else if (value == 'select') {
               setState(() {
                 _selecting = true;

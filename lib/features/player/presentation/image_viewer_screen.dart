@@ -155,6 +155,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   // Drag translation notifier avoids rebuilding the viewer hierarchy.
   final ValueNotifier<Offset> _drag = ValueNotifier(Offset.zero);
   final ValueNotifier<bool> _isDraggingDown = ValueNotifier(false);
+  final ValueNotifier<bool> _isDismissing = ValueNotifier(false);
   bool _isSwipingHorizontal = false;
   late final AnimationController _settle;
   Offset _settleFrom = Offset.zero;
@@ -381,7 +382,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   void initState() {
     super.initState();
     _current = widget.initialIndex;
-    _isMangaMode = widget.initialMangaMode;
+    final hasValidManga =
+        widget.items.any((it) => !it.isVideo && !PsdService.isPsd(it.path));
+    _isMangaMode = widget.initialMangaMode && hasValidManga;
     _mangaScrollController = ScrollController();
     _mangaScrollController.addListener(_onMangaScroll);
 
@@ -484,6 +487,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _settle.dispose();
     _isDraggingDown.dispose();
+    _isDismissing.dispose();
     _isSwipingPage.dispose();
     _drag.dispose();
     _page.dispose();
@@ -491,40 +495,50 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   }
 
   void _onMangaScroll() {
-    if (!_mangaScrollController.hasClients || widget.items.isEmpty) return;
+    final mangaList = _mangaItems;
+    if (!_mangaScrollController.hasClients || mangaList.isEmpty) return;
     final offset = _mangaScrollController.offset;
     final screenWidth = MediaQuery.sizeOf(context).width;
 
     double cumulative = 0.0;
-    int activeIndex = 0;
-    for (int i = 0; i < widget.items.length; i++) {
-      final it = widget.items[i];
+    int activeMangaIndex = 0;
+    for (int i = 0; i < mangaList.length; i++) {
+      final it = mangaList[i];
       final ar = (it.width != null && it.height != null && it.width! > 0 && it.height! > 0)
           ? (it.width! / it.height!)
           : 1.0;
       final itemHeight = screenWidth / ar;
       cumulative += itemHeight;
       if (cumulative > offset + 120) {
-        activeIndex = i;
+        activeMangaIndex = i;
         break;
       }
-      activeIndex = i;
+      activeMangaIndex = i;
     }
 
-    if (activeIndex != _current && activeIndex >= 0 && activeIndex < widget.items.length) {
+    final activeItem = mangaList[activeMangaIndex];
+    final globalIndex = widget.items.indexOf(activeItem);
+
+    if (globalIndex != -1 && globalIndex != _current) {
       setState(() {
-        _current = activeIndex;
+        _current = globalIndex;
       });
-      _activeMediaNotifier?.state = widget.items[activeIndex].id;
+      _activeMediaNotifier?.state = activeItem.id;
     }
   }
 
   void _scrollToCurrentInManga() {
-    if (!_mangaScrollController.hasClients || _current == 0) return;
+    final mangaList = _mangaItems;
+    if (!_mangaScrollController.hasClients || mangaList.isEmpty) return;
+    final currentItem = _currentItem;
+    int mangaIdx = mangaList.indexOf(currentItem);
+    if (mangaIdx < 0) mangaIdx = 0;
+    if (mangaIdx == 0) return;
+
     final screenWidth = MediaQuery.sizeOf(context).width;
     double targetOffset = 0.0;
-    for (int i = 0; i < _current; i++) {
-      final it = widget.items[i];
+    for (int i = 0; i < mangaIdx; i++) {
+      final it = mangaList[i];
       final ar = (it.width != null && it.height != null && it.width! > 0 && it.height! > 0)
           ? (it.width! / it.height!)
           : 1.0;
@@ -535,6 +549,16 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   }
 
   void _toggleMangaMode() {
+    final mangaList = _mangaItems;
+    if (mangaList.isEmpty) {
+      showFeedbackPill(
+        context,
+        message: context.tr.noPhotosFound,
+        icon: Icons.auto_stories_rounded,
+      );
+      return;
+    }
+
     setState(() {
       _isMangaMode = !_isMangaMode;
     });
@@ -552,6 +576,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   }
 
   Widget _buildMangaView() {
+    final mangaList = _mangaItems;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _toggleBars,
@@ -559,9 +584,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         controller: _mangaScrollController,
         padding: EdgeInsets.zero,
         physics: const BouncingScrollPhysics(),
-        itemCount: widget.items.length,
+        itemCount: mangaList.length,
         itemBuilder: (context, index) {
-          final it = widget.items[index];
+          final it = mangaList[index];
           return RepaintBoundary(
             child: Image(
               image: screenDisplayImage(it.path),
@@ -603,6 +628,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     );
   }
 
+  List<MediaItem> get _mangaItems =>
+      widget.items.where((it) => !it.isVideo && !PsdService.isPsd(it.path)).toList();
+
   MediaItem get _currentItem => widget.items[_current];
 
   void _setDrag(Offset o) {
@@ -610,6 +638,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     final isDown = o.dy > 8.0;
     if (_isDraggingDown.value != isDown) {
       _isDraggingDown.value = isDown;
+      if (isDown && _page.hasClients && _page.page != null) {
+        final snapped = _page.page!.round().clamp(0, widget.items.length - 1);
+        if (_current != snapped) {
+          _current = snapped;
+        }
+        if ((_page.page! - _current).abs() > 0.001) {
+          _page.jumpToPage(_current);
+        }
+      }
     }
   }
 
@@ -1253,7 +1290,20 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   Widget build(BuildContext context) {
     final item = _currentItem;
     final showBars = _barsVisible && !_isCurrentlyZoomed && !_isPinching;
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          if (_page.hasClients && _page.page != null) {
+            final snapped =
+                _page.page!.round().clamp(0, widget.items.length - 1);
+            _current = snapped;
+          }
+          _isDismissing.value = true;
+          _activeMediaNotifier?.state = _currentItem.id;
+        }
+      },
+      child: Scaffold(
       backgroundColor: Colors.transparent,
       body: Listener(
         onPointerDown: (e) {
@@ -1345,7 +1395,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 final targetIndex =
                     _page.page!.round().clamp(0, widget.items.length - 1);
                 _current = targetIndex;
+                _page.jumpToPage(_current);
               }
+              _isDismissing.value = true;
               _activeMediaNotifier?.state = _currentItem.id;
               Navigator.of(context).pop();
               return;
@@ -1477,10 +1529,20 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       itemBuilder: (context, index) {
                         final it = widget.items[index];
                         final isCur = index == _current;
-                        return RepaintBoundary(
-                          child: Center(
-                            child: ClipRect(
-                              child: InteractiveViewer(
+                        return ListenableBuilder(
+                          listenable:
+                              Listenable.merge([_isDraggingDown, _isDismissing]),
+                          builder: (context, child) {
+                            if ((_isDraggingDown.value || _isDismissing.value) &&
+                                !isCur) {
+                              return const SizedBox.shrink();
+                            }
+                            return child!;
+                          },
+                          child: RepaintBoundary(
+                            child: Center(
+                              child: ClipRect(
+                                child: InteractiveViewer(
                                 key: ValueKey(
                                     'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
                                 transformationController:
@@ -1572,6 +1634,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               ),
                             ),
                           ),
+                          ),
                         );
                       },
                     ),
@@ -1609,6 +1672,16 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               icon: const Icon(Icons.arrow_back_ios_new,
                                   color: Colors.white, size: 20),
                               onPressed: () {
+                                if (_page.hasClients && _page.page != null) {
+                                  final snapped = _page.page!
+                                      .round()
+                                      .clamp(0, widget.items.length - 1);
+                                  if (_current != snapped) {
+                                    _current = snapped;
+                                  }
+                                  _page.jumpToPage(_current);
+                                }
+                                _isDismissing.value = true;
                                 _activeMediaNotifier?.state = _currentItem.id;
                                 Navigator.of(context).pop();
                               },
@@ -1655,17 +1728,18 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 tooltip: 'Layers',
                                 onPressed: () => _openPsdLayerSheet(item),
                               ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.auto_stories_rounded,
-                                color: _isMangaMode
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Colors.white,
-                                size: 22,
+                            if (!item.isVideo && !PsdService.isPsd(item.path))
+                              IconButton(
+                                icon: Icon(
+                                  Icons.auto_stories_rounded,
+                                  color: _isMangaMode
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Colors.white,
+                                  size: 22,
+                                ),
+                                tooltip: context.tr.mangaMode,
+                                onPressed: _toggleMangaMode,
                               ),
-                              tooltip: context.tr.mangaMode,
-                              onPressed: _toggleMangaMode,
-                            ),
                             if (!widget.isTrash)
                               IconButton(
                                 icon: const Icon(Icons.info_outline,
@@ -1697,14 +1771,23 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           width: 0.5,
                         ),
                       ),
-                      child: Text(
-                        '${item.albumName.isNotEmpty ? '${item.albumName} • ' : ''}${_current + 1} / ${widget.items.length}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.3,
-                        ),
+                      child: Builder(
+                        builder: (context) {
+                          final mangaList = _mangaItems;
+                          final mangaIdx = mangaList.indexOf(item);
+                          final pageStr = mangaIdx >= 0
+                              ? '${mangaIdx + 1} / ${mangaList.length}'
+                              : '${_current + 1} / ${widget.items.length}';
+                          return Text(
+                            '${item.albumName.isNotEmpty ? '${item.albumName} • ' : ''}$pageStr',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3,
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -1851,30 +1934,31 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       }
                                     },
                                     itemBuilder: (context) => [
-                                      PopupMenuItem(
-                                        value: 'manga',
-                                        height: 40,
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 14),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.auto_stories_rounded,
-                                              size: 18,
-                                              color: _isMangaMode
-                                                  ? Theme.of(context).colorScheme.primary
-                                                  : Colors.white,
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              context.tr.mangaMode,
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 13.5),
-                                            ),
-                                          ],
+                                      if (!item.isVideo && !PsdService.isPsd(item.path))
+                                        PopupMenuItem(
+                                          value: 'manga',
+                                          height: 40,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.auto_stories_rounded,
+                                                size: 18,
+                                                color: _isMangaMode
+                                                    ? Theme.of(context).colorScheme.primary
+                                                    : Colors.white,
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Text(
+                                                context.tr.mangaMode,
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 13.5),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
                                       PopupMenuItem(
                                         value: 'slideshow',
                                         height: 40,
@@ -1958,7 +2042,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 

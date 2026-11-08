@@ -27,6 +27,7 @@ const Map<String, String> hiTranslations = {
   'chooseThumbnailDensity': 'मीडिया थंबनेल घनत्व चुनें',
   'chooseVisualMode': 'दृश्य मोड और कंट्रास्ट चुनें',
   'clearThumbnailCache': 'थंबनेल कैश साफ़ करें',
+  'clearCache': 'कैश साफ़ करें',
   'clearAll': 'सभी साफ़ करें',
   'codec': 'कोडेक',
   'columnsCount': '{count} कॉलम',

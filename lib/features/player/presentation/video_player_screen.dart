@@ -142,6 +142,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   // Drag offset notifier avoids rebuilding the player hierarchy.
   final ValueNotifier<Offset> _dragNotifier = ValueNotifier(Offset.zero);
   final ValueNotifier<bool> _isDraggingDown = ValueNotifier(false);
+  final ValueNotifier<bool> _isDismissing = ValueNotifier(false);
   bool _isSwipingHorizontal = false;
   bool _isScrubbing = false;
   late final AnimationController _settle;
@@ -544,6 +545,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     final isDown = o.dy > 8.0;
     if (_isDraggingDown.value != isDown) {
       _isDraggingDown.value = isDown;
+      if (isDown && _pageController.hasClients && _pageController.page != null) {
+        final snapped =
+            _pageController.page!.round().clamp(0, _videos.length - 1);
+        if (_current != snapped) {
+          _current = snapped;
+        }
+        if ((_pageController.page! - _current).abs() > 0.001) {
+          _pageController.jumpToPage(_current);
+        }
+      }
     }
   }
 
@@ -1070,6 +1081,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _zoomAnimController?.dispose();
     _settle.dispose();
     _isDraggingDown.dispose();
+    _isDismissing.dispose();
     _videoSurfaceVisible.dispose();
     _isSwipingPage.dispose();
     _dragNotifier.dispose();
@@ -1915,6 +1927,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       canPop: !_isFullscreen,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) {
+          if (_pageController.hasClients && _pageController.page != null) {
+            final snapped =
+                _pageController.page!.round().clamp(0, _videos.length - 1);
+            _current = snapped;
+          }
+          _isDismissing.value = true;
+          _activeMediaNotifier?.state = _videos[_current].id;
           if (_videos.isNotEmpty &&
               _current < _videos.length &&
               _videos[_current].isVideo) {
@@ -2091,7 +2110,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       final targetIndex =
                           _pageController.page!.round().clamp(0, _videos.length - 1);
                       _current = targetIndex;
+                      _pageController.jumpToPage(_current);
                     }
+                    _isDismissing.value = true;
                     _videoSurfaceVisible.value = false;
                     if (_videos.isNotEmpty &&
                         _current < _videos.length &&
@@ -2226,10 +2247,20 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     ),
                               itemBuilder: (context, index) {
                                 final isCur = index == _current;
-                                return RepaintBoundary(
-                                  child: Center(
-                                    child: ClipRect(
-                                      child: InteractiveViewer(
+                                return ListenableBuilder(
+                                  listenable:
+                                      Listenable.merge([_isDraggingDown, _isDismissing]),
+                                  builder: (context, child) {
+                                    if ((_isDraggingDown.value || _isDismissing.value) &&
+                                        !isCur) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return child!;
+                                  },
+                                  child: RepaintBoundary(
+                                    child: Center(
+                                      child: ClipRect(
+                                        child: InteractiveViewer(
                                         key:
                                             ValueKey('iv_${_videos[index].id}'),
                                         transformationController: isCur
@@ -2314,8 +2345,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                       ),
                                     ),
                                   ),
-                                );
-                              },
+                                ),
+                              );
+                            },
                             ),
                           ),
                         ),
@@ -2526,6 +2558,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                 if (_isFullscreen) {
                                   _exitFullscreen();
                                 } else {
+                                  if (_pageController.hasClients &&
+                                      _pageController.page != null) {
+                                    final snapped = _pageController.page!
+                                        .round()
+                                        .clamp(0, _videos.length - 1);
+                                    if (_current != snapped) {
+                                      _current = snapped;
+                                    }
+                                    _pageController.jumpToPage(_current);
+                                  }
+                                  _isDismissing.value = true;
                                   _videoSurfaceVisible.value = false;
                                   if (_videos.isNotEmpty &&
                                       _current < _videos.length &&

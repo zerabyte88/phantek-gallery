@@ -29,6 +29,7 @@ const Map<String, String> msTranslations = {
   'chooseThumbnailDensity': 'Pilih ketumpatan gambar kenit media',
   'chooseVisualMode': 'Pilih mod visual dan kontras',
   'clearThumbnailCache': 'Kosongkan Cache Gambar Kenit',
+  'clearCache': 'Kosongkan Cache',
   'clearAll': 'Kosongkan Semua',
   'codec': 'Kodek',
   'columnsCount': '{count} lajur',

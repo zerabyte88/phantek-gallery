@@ -28,6 +28,7 @@ const Map<String, String> nlTranslations = {
   'chooseThumbnailDensity': 'Miniatuurdichtheid kiezen',
   'chooseVisualMode': 'Kies visuele modus en contrast',
   'clearThumbnailCache': 'Miniaturencache wissen',
+  'clearCache': 'Cache wissen',
   'clearAll': 'Alles wissen',
   'codec': 'Codec',
   'columnsCount': '{count} kolommen',

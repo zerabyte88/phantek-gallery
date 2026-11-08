@@ -30,6 +30,7 @@ const Map<String, String> ptTranslations = {
   'chooseThumbnailDensity': 'Escolha a densidade das miniaturas',
   'chooseVisualMode': 'Escolha o modo visual e o contraste',
   'clearThumbnailCache': 'Limpar cache de miniaturas',
+  'clearCache': 'Limpar cache',
   'clearAll': 'Limpar tudo',
   'codec': 'Codec',
   'columnsCount': '{count} colunas',

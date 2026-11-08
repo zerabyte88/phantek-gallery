@@ -29,6 +29,7 @@ const Map<String, String> noTranslations = {
   'chooseThumbnailDensity': 'Velg miniatyrbildetetthet',
   'chooseVisualMode': 'Velg visuell modus og kontrast',
   'clearThumbnailCache': 'Tøm miniatyrbilde-buffer',
+  'clearCache': 'Tøm buffer',
   'clearAll': 'Tøm alle',
   'codec': 'Kodek',
   'columnsCount': '{count} kolonner',

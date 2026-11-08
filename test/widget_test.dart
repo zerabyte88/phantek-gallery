@@ -542,27 +542,64 @@ void main() {
       );
 
       // Verify Theme tile has default "System"
-      expect(find.text('System'), findsOneWidget);
+      expect(find.text('System'), findsWidgets);
 
       // Tap Theme tile to open dialog
       await tester.tap(find.text('Theme'));
       await tester.pumpAndSettle();
 
       // Verify themes are in dialog
-      expect(find.text('Midnight'), findsOneWidget);
-      expect(find.text('Dark Mode'), findsOneWidget);
-      expect(find.text('Light Mode'), findsOneWidget);
-      expect(find.text('Sakura'), findsOneWidget);
+      final dialogFinder = find.byType(Dialog);
+      expect(dialogFinder, findsOneWidget);
+      expect(
+          find.descendant(of: dialogFinder, matching: find.text('Midnight')),
+          findsOneWidget);
+      expect(
+          find.descendant(of: dialogFinder, matching: find.text('Dark Mode')),
+          findsOneWidget);
+      expect(
+          find.descendant(of: dialogFinder, matching: find.text('Light Mode')),
+          findsOneWidget);
+      expect(
+          find.descendant(of: dialogFinder, matching: find.text('Sakura')),
+          findsOneWidget);
 
-      // Select Sakura theme
-      await tester.ensureVisible(find.text('Sakura'));
-      await tester.tap(find.text('Sakura'));
+      // Select Sakura theme from dialog
+      final sakuraInDialog =
+          find.descendant(of: dialogFinder, matching: find.text('Sakura'));
+      await tester.ensureVisible(sakuraInDialog);
+      await tester.tap(sakuraInDialog);
       await tester.pumpAndSettle();
 
       // Verify Sakura is now selected
       expect(SettingsService.instance.settings.themeMode,
           AppThemeMode.amoledSakura);
-      expect(find.text('Sakura'), findsOneWidget);
+      expect(find.text('Sakura'), findsWidgets);
+    });
+
+    testWidgets('ModernThemeGrid allows instant theme selection without dialog',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+          ],
+          child: const MaterialApp(
+            home: SettingsScreen(),
+          ),
+        ),
+      );
+
+      // Select Snowfall theme directly from theme card
+      await tester.ensureVisible(find.byIcon(Icons.ac_unit_rounded));
+      await tester.tap(find.byIcon(Icons.ac_unit_rounded));
+      await tester.pumpAndSettle();
+
+      expect(SettingsService.instance.settings.themeMode,
+          AppThemeMode.amoledSnowfall);
     });
 
     testWidgets(
@@ -2027,6 +2064,54 @@ void main() {
 
       // Dialog should display file manager selection button
       expect(find.text('Pilih lewat File Manager'), findsOneWidget);
+    });
+
+    testWidgets('Clear thumbnail cache dialog has Cancel on left, Clear Cache on right with theme color', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [
+              Locale('en'),
+              Locale('id'),
+            ],
+            home: const SettingsScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final clearTile = find.text('Clear Thumbnail Cache');
+      await tester.scrollUntilVisible(clearTile, 200);
+      await tester.pumpAndSettle();
+      expect(clearTile, findsOneWidget);
+
+      await tester.tap(clearTile);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      final cancelButton = find.widgetWithText(TextButton, 'Cancel');
+      final clearButton = find.widgetWithText(FilledButton, 'Clear Cache');
+
+      expect(cancelButton, findsOneWidget);
+      expect(clearButton, findsOneWidget);
+
+      final cancelOffset = tester.getTopLeft(cancelButton);
+      final clearOffset = tester.getTopLeft(clearButton);
+      expect(cancelOffset.dx < clearOffset.dx, isTrue);
+
+      await tester.tap(cancelButton);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
     });
 
     test('SettingsModel autoPlayVideo flag toggles correctly', () {
