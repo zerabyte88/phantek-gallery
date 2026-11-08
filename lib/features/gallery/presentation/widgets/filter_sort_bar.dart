@@ -119,18 +119,21 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                                   pageController!.page != null
                               ? pageController!.page!
                               : selectedIndex.toDouble();
-                          final selected = page.round() == index;
+                          final t =
+                              (1.0 - (page - index).abs()).clamp(0.0, 1.0);
+                          final color =
+                              Color.lerp(cs.onSurfaceVariant, cs.onPrimary, t);
+                          final weight = FontWeight.lerp(
+                              FontWeight.w500, FontWeight.w600, t);
                           return Text(
                             f.localizedLabel(context),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color:
-                                  selected ? cs.onPrimary : cs.onSurfaceVariant,
+                              color: color,
                               fontSize: 13,
-                              fontWeight:
-                                  selected ? FontWeight.w600 : FontWeight.w500,
+                              fontWeight: weight,
                             ),
                           );
                         },

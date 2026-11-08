@@ -5,8 +5,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 
-/// 100% offline on-device translation engine leveraging ONNX Runtime with NNAPI hardware acceleration
-/// and a rule-based fallback dictionary for zero-crash developer environments.
+/// Offline translation engine using ONNX Runtime with dictionary fallback.
 class OnnxTranslationEngine {
   OnnxTranslationEngine._();
   static final OnnxTranslationEngine instance = OnnxTranslationEngine._();
@@ -19,14 +18,14 @@ class OnnxTranslationEngine {
   bool get isInitialized => _isInitialized;
   bool get isNnapiActive => _isNnapiActive;
 
-  /// Initializes ONNX session with Android NNAPI acceleration if available,
-  /// falling back gracefully to 2-thread CPU inference for low-end hardware protection.
+  /// Initializes ONNX session with hardware acceleration or CPU fallback.
   Future<void> initialize({String? modelAssetPath}) async {
     if (_isInitialized) return;
 
     try {
       _onnxRuntime = OnnxRuntime();
-      final path = modelAssetPath ?? 'assets/models/translation/marian_ja_en_int8.onnx';
+      final path =
+          modelAssetPath ?? 'assets/models/translation/marian_ja_en_int8.onnx';
 
       if (await _doesAssetExist(path)) {
         try {
@@ -72,9 +71,7 @@ class OnnxTranslationEngine {
         if (onnxOutput != null && onnxOutput.isNotEmpty) {
           return onnxOutput;
         }
-      } catch (_) {
-        // Fall through to dictionary fallback
-      }
+      } catch (_) {}
     }
 
     return _fallbackDictionaryTranslate(cleaned, sourceLang);
@@ -85,7 +82,7 @@ class OnnxTranslationEngine {
     return null;
   }
 
-  /// Normalizes vertical Japanese line breaks, removes furigana artifacts, and trims noise.
+  /// Normalizes vertical line breaks and trims whitespace.
   String cleanMangaText(String text) {
     return text
         .replaceAll('\r\n', '\n')
@@ -98,8 +95,7 @@ class OnnxTranslationEngine {
         .trim();
   }
 
-  /// Comprehensive offline manga fallback dictionary covering common dialogs,
-  /// exclamations, questions, and SFX across Japanese, Chinese, and Korean.
+  /// Offline dictionary translation for dialog and SFX.
   String _fallbackDictionaryTranslate(String text, String lang) {
     final normalized = text.replaceAll(' ', '').trim();
 

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -176,7 +177,32 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   final ValueNotifier<bool> _isSwipingPage = ValueNotifier<bool>(false);
   late bool _isMangaMode;
   late final ScrollController _mangaScrollController;
+  final GlobalKey _mangaListKey = GlobalKey();
+  RenderSliverMultiBoxAdaptor? _cachedMangaSliver;
   TranslationRenderMode? _translationMode;
+
+  RenderSliverMultiBoxAdaptor? _getMangaSliver() {
+    if (_cachedMangaSliver != null && _cachedMangaSliver!.attached) {
+      return _cachedMangaSliver;
+    }
+    final ro = _mangaListKey.currentContext?.findRenderObject();
+    if (ro == null) return null;
+    RenderSliverMultiBoxAdaptor? found;
+    void search(RenderObject obj) {
+      if (obj is RenderSliverMultiBoxAdaptor) {
+        found = obj;
+        return;
+      }
+      obj.visitChildren((child) {
+        if (found == null) search(child);
+      });
+    }
+
+    search(ro);
+    _cachedMangaSliver = found;
+    return found;
+  }
+
   late final TranslationIsolateCoordinator _translationCoordinator;
   Timer? _slideshowTimer;
   bool _isSlideshowPlaying = false;
@@ -453,8 +479,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // Pre-cache immediate ±1 neighbor images.
-      for (final offset in const [-1, 1]) {
+      // Pre-cache immediate and upcoming neighbor images (±2 window).
+      for (final offset in const [-1, 1, -2, 2]) {
         final target = index + offset;
         if (target >= 0 && target < widget.items.length) {
           final item = widget.items[target];
@@ -504,23 +530,59 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   void _onMangaScroll() {
     final mangaList = _mangaItems;
     if (!_mangaScrollController.hasClients || mangaList.isEmpty) return;
-    final offset = _mangaScrollController.offset;
-    final screenWidth = MediaQuery.sizeOf(context).width;
+    final position = _mangaScrollController.position;
+    final offset = position.pixels;
+    final maxScroll = position.maxScrollExtent;
+    final viewportHeight = position.viewportDimension;
 
-    double cumulative = 0.0;
     int activeMangaIndex = 0;
-    for (int i = 0; i < mangaList.length; i++) {
-      final it = mangaList[i];
-      final ar = (it.width != null && it.height != null && it.width! > 0 && it.height! > 0)
-          ? (it.width! / it.height!)
-          : 1.0;
-      final itemHeight = screenWidth / ar;
-      cumulative += itemHeight;
-      if (cumulative > offset + 120) {
-        activeMangaIndex = i;
-        break;
+
+    if (maxScroll > 0 && offset >= maxScroll - 24.0) {
+      activeMangaIndex = mangaList.length - 1;
+    } else if (offset <= 24.0) {
+      activeMangaIndex = 0;
+    } else {
+      final sliver = _getMangaSliver();
+      int? foundIndex;
+      if (sliver != null && sliver.attached) {
+        final focalLine = offset + (viewportHeight * 0.35).clamp(60.0, 300.0);
+        int? fallbackIndex;
+
+        RenderBox? child = sliver.firstChild;
+        while (child != null) {
+          final parentData = child.parentData;
+          if (parentData is SliverMultiBoxAdaptorParentData &&
+              parentData.layoutOffset != null &&
+              parentData.index != null) {
+            final layoutOffset = parentData.layoutOffset!;
+            final childBottom = layoutOffset + child.size.height;
+            final idx = parentData.index!;
+
+            if (focalLine >= layoutOffset && focalLine < childBottom) {
+              foundIndex = idx;
+              break;
+            }
+
+            if (fallbackIndex == null &&
+                childBottom > offset &&
+                layoutOffset < offset + viewportHeight) {
+              fallbackIndex = idx;
+            }
+          }
+          child = sliver.childAfter(child);
+        }
+        foundIndex ??= fallbackIndex;
       }
-      activeMangaIndex = i;
+
+      if (foundIndex != null &&
+          foundIndex >= 0 &&
+          foundIndex < mangaList.length) {
+        activeMangaIndex = foundIndex;
+      } else if (maxScroll > 0) {
+        activeMangaIndex = ((mangaList.length - 1) * (offset / maxScroll))
+            .round()
+            .clamp(0, mangaList.length - 1);
+      }
     }
 
     final activeItem = mangaList[activeMangaIndex];
@@ -535,6 +597,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
     if (_isMangaMode && _translationMode != null) {
       final it = mangaList[activeMangaIndex];
+      final screenWidth = MediaQuery.sizeOf(context).width;
       final w = (it.width != null && it.width! > 0)
           ? it.width!.toDouble()
           : screenWidth;
@@ -567,7 +630,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -585,9 +648,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       TranslationRenderMode.speechBubblesOnly,
                   selectedColor: Theme.of(context).colorScheme.primary,
                   onTap: () {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     _setTranslationMode(
                         TranslationRenderMode.speechBubblesOnly);
+                    showFeedbackPill(
+                      context,
+                      message: 'Mengaktifkan terjemahan offline...',
+                      icon: Icons.translate_rounded,
+                    );
                   },
                 ),
                 ListTile(
@@ -601,9 +669,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       TranslationRenderMode.fullImageWithSfx,
                   selectedColor: Theme.of(context).colorScheme.primary,
                   onTap: () {
-                    Navigator.pop(context);
-                    _setTranslationMode(
-                        TranslationRenderMode.fullImageWithSfx);
+                    Navigator.pop(sheetContext);
+                    _setTranslationMode(TranslationRenderMode.fullImageWithSfx);
+                    showFeedbackPill(
+                      context,
+                      message: 'Mengaktifkan terjemahan offline...',
+                      icon: Icons.translate_rounded,
+                    );
                   },
                 ),
                 if (_translationMode != null)
@@ -615,7 +687,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       style: TextStyle(color: Colors.redAccent),
                     ),
                     onTap: () {
-                      Navigator.pop(context);
+                      Navigator.pop(sheetContext);
                       _setTranslationMode(null);
                     },
                   ),
@@ -635,16 +707,24 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     if (mangaIdx < 0) mangaIdx = 0;
     if (mangaIdx == 0) return;
 
+    final maxScroll = _mangaScrollController.position.maxScrollExtent;
+    if (mangaIdx == mangaList.length - 1 && maxScroll > 0) {
+      _mangaScrollController.jumpTo(maxScroll);
+      return;
+    }
+
     final screenWidth = MediaQuery.sizeOf(context).width;
     double targetOffset = 0.0;
     for (int i = 0; i < mangaIdx; i++) {
       final it = mangaList[i];
-      final ar = (it.width != null && it.height != null && it.width! > 0 && it.height! > 0)
+      final ar = (it.width != null &&
+              it.height != null &&
+              it.width! > 0 &&
+              it.height! > 0)
           ? (it.width! / it.height!)
-          : 1.0;
+          : 0.7; // Portrait manga fallback
       targetOffset += screenWidth / ar;
     }
-    final maxScroll = _mangaScrollController.position.maxScrollExtent;
     _mangaScrollController.jumpTo(targetOffset.clamp(0.0, maxScroll));
   }
 
@@ -681,51 +761,66 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       behavior: HitTestBehavior.opaque,
       onTap: _toggleBars,
       child: ListView.builder(
+        key: _mangaListKey,
         controller: _mangaScrollController,
         padding: EdgeInsets.zero,
         physics: const BouncingScrollPhysics(),
         itemCount: mangaList.length,
         itemBuilder: (context, index) {
           final it = mangaList[index];
+          Widget imageWidget = Image(
+            image: screenDisplayImage(it.path),
+            fit: BoxFit.fitWidth,
+            width: double.infinity,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.medium,
+            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+              if (wasSynchronouslyLoaded) return child;
+              final loaded = frame != null;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  AnimatedOpacity(
+                    opacity: loaded ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    child: _thumb(it.id, it.path),
+                  ),
+                  AnimatedOpacity(
+                    opacity: loaded ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    child: child,
+                  ),
+                ],
+              );
+            },
+            errorBuilder: (_, __, ___) => Container(
+              height: 300,
+              color: Colors.black26,
+              alignment: Alignment.center,
+              child: const Icon(Icons.broken_image,
+                  size: 60, color: Colors.white38),
+            ),
+          );
+
+          if (it.width != null &&
+              it.height != null &&
+              it.width! > 0 &&
+              it.height! > 0) {
+            final ar = it.width! / it.height!;
+            if (ar > 0.1 && ar < 5.0) {
+              imageWidget = AspectRatio(
+                aspectRatio: ar,
+                child: imageWidget,
+              );
+            }
+          }
+
           return RepaintBoundary(
             child: Stack(
               children: [
-                Image(
-                  image: screenDisplayImage(it.path),
-                  fit: BoxFit.fitWidth,
-                  width: double.infinity,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.medium,
-                  frameBuilder:
-                      (context, child, frame, wasSynchronouslyLoaded) {
-                    if (wasSynchronouslyLoaded) return child;
-                    final loaded = frame != null;
-                    return Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        AnimatedOpacity(
-                          opacity: loaded ? 0.0 : 1.0,
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeOut,
-                          child: _thumb(it.id, it.path),
-                        ),
-                        AnimatedOpacity(
-                          opacity: loaded ? 1.0 : 0.0,
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeOut,
-                          child: child,
-                        ),
-                      ],
-                    );
-                  },
-                  errorBuilder: (_, __, ___) => Container(
-                    height: 300,
-                    color: Colors.black26,
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.broken_image,
-                        size: 60, color: Colors.white38),
-                  ),
-                ),
+                imageWidget,
                 if (_translationMode != null)
                   Positioned.fill(
                     child: ValueListenableBuilder<TranslationResult?>(
@@ -752,8 +847,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     );
   }
 
-  List<MediaItem> get _mangaItems =>
-      widget.items.where((it) => !it.isVideo && !PsdService.isPsd(it.path)).toList();
+  List<MediaItem> get _mangaItems => widget.items
+      .where((it) => !it.isVideo && !PsdService.isPsd(it.path))
+      .toList();
 
   MediaItem get _currentItem => widget.items[_current];
 
@@ -937,7 +1033,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
               duration: const Duration(milliseconds: 150),
               opacity: isRenderingThis ? 0.65 : 1.0,
               child: Image(
-                key: ValueKey('psd_${it.path}_${_psdHiddenLayers[it.path]?.length}_${_psdHiddenLayers[it.path]?.join('_')}_${rendered.length}'),
+                key: ValueKey(
+                    'psd_${it.path}_${_psdHiddenLayers[it.path]?.length}_${_psdHiddenLayers[it.path]?.join('_')}_${rendered.length}'),
                 image: MemoryImage(rendered),
                 fit: BoxFit.contain,
                 gaplessPlayback: true,
@@ -946,11 +1043,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             ),
             if (isRenderingThis)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.75),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.15)),
                   boxShadow: const [
                     BoxShadow(
                       color: Colors.black38,
@@ -967,7 +1066,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF31A8FF)),
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Color(0xFF31A8FF)),
                       ),
                     ),
                     SizedBox(width: 10),
@@ -1188,28 +1288,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       gaplessPlayback: true,
       filterQuality: FilterQuality.medium,
       frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-        if (wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded || frame != null) {
           return child;
         }
-        final loaded = frame != null;
-        return Stack(
-          fit: StackFit.passthrough,
-          alignment: Alignment.center,
-          children: [
-            AnimatedOpacity(
-              opacity: loaded ? 0.0 : 1.0,
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              child: _thumb(it.id, it.path),
-            ),
-            AnimatedOpacity(
-              opacity: loaded ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              child: child,
-            ),
-          ],
-        );
+        return _thumb(it.id, it.path);
       },
       errorBuilder: (_, __, ___) => const Center(
         child: Icon(Icons.broken_image, size: 80, color: Colors.white38),
@@ -1374,39 +1456,52 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   Widget _buildStaggeredBar({
     required BuildContext context,
     required bool showBars,
+    bool isTopBar = true,
     required Widget child,
   }) {
     final anim = ModalRoute.of(context)?.animation;
-    return ValueListenableBuilder<Offset>(
-      valueListenable: _drag,
-      builder: (context, d, _) {
-        final dragFade = (1.0 - (d.dy / 35.0)).clamp(0.0, 1.0);
-        final baseOpacity = showBars ? dragFade : 0.0;
-        if (anim == null) {
-          return Opacity(
-            opacity: baseOpacity,
-            child: IgnorePointer(
-              ignoring: !showBars || d.dy > 4,
-              child: child,
-            ),
-          );
-        }
-        return AnimatedBuilder(
-          animation: anim,
-          builder: (context, _) {
-            final entrance = const Interval(0.65, 1.0, curve: Curves.easeOut)
-                .transform(anim.value);
-            final opacity = (baseOpacity * entrance).clamp(0.0, 1.0);
-            return Opacity(
-              opacity: opacity,
-              child: IgnorePointer(
-                ignoring: !showBars || d.dy > 4 || opacity < 0.5,
-                child: child,
-              ),
+    return AnimatedSlide(
+      offset: showBars
+          ? Offset.zero
+          : (isTopBar ? const Offset(0, -0.2) : const Offset(0, 0.2)),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      child: AnimatedOpacity(
+        opacity: showBars ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        child: ValueListenableBuilder<Offset>(
+          valueListenable: _drag,
+          builder: (context, d, _) {
+            final dragFade = (1.0 - (d.dy / 35.0)).clamp(0.0, 1.0);
+            if (anim == null) {
+              return Opacity(
+                opacity: dragFade,
+                child: IgnorePointer(
+                  ignoring: !showBars || d.dy > 4,
+                  child: child,
+                ),
+              );
+            }
+            return AnimatedBuilder(
+              animation: anim,
+              builder: (context, _) {
+                final entrance =
+                    const Interval(0.65, 1.0, curve: Curves.easeOut)
+                        .transform(anim.value);
+                final opacity = (dragFade * entrance).clamp(0.0, 1.0);
+                return Opacity(
+                  opacity: opacity,
+                  child: IgnorePointer(
+                    ignoring: !showBars || d.dy > 4 || opacity < 0.5,
+                    child: child,
+                  ),
+                );
+              },
             );
           },
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -1428,800 +1523,833 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         }
       },
       child: Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Listener(
-        onPointerDown: (e) {
-          _activePointers.add(e.pointer);
-          _settle.stop();
-          _zoomAnimController?.stop();
-          _isSwipingHorizontal = false;
-          if (_isMangaMode) {
-            if (_drag.value != Offset.zero) _setDrag(Offset.zero);
-            return;
-          }
-          if (_activePointers.length == 1) {
-            _setDrag(Offset.zero);
-            _isMultiTouch = false;
-            _isPinching = false;
-            if (_transformationController.value.getMaxScaleOnAxis() <= 1.05) {
-              _isPhotoZoomed = false;
-              _isDeepZoomed = false;
-            }
-          }
-          if (_activePointers.length >= 2 || _isCurrentlyZoomed) {
-            _isMultiTouch = true;
-            _isPinching = true;
-            _startDragY = null;
-            _startDragX = null;
-            if (_drag.value != Offset.zero) _setDrag(Offset.zero);
-            return;
-          }
-          if (_page.hasClients && _page.page != null) {
-            final snapped =
-                _page.page!.round().clamp(0, widget.items.length - 1);
-            if (_current != snapped) {
-              _current = snapped;
-            }
-          }
-          _startDragY = e.position.dy;
-          _startDragX = e.position.dx;
-          _vt = VelocityTracker.withKind(e.kind);
-          _vt.addPosition(e.timeStamp, e.position);
-        },
-        onPointerMove: (e) {
-          if (_isMangaMode) return;
-          if (_startDragY == null ||
-              _startDragX == null ||
-              _isCurrentlyZoomed ||
-              _isPinching ||
-              _isMultiTouch ||
-              _activePointers.length >= 2) {
-            if (_drag.value != Offset.zero) _setDrag(Offset.zero);
-            return;
-          }
-
-          final dx = e.position.dx - _startDragX!;
-          final dy = e.position.dy - _startDragY!;
-          final adx = dx.abs();
-          final ady = dy.abs();
-
-          if (!_isSwipingHorizontal && _drag.value == Offset.zero) {
-            if (adx > 6 && adx > ady) {
-              _isSwipingHorizontal = true;
-              return;
-            }
-          }
-
-          if (_isSwipingHorizontal) return;
-
-          _vt.addPosition(e.timeStamp, e.position);
-
-          if (_drag.value != Offset.zero || (dy > 18 && dy > adx * 1.5)) {
-            final dampedDx = dx * 0.45;
-            final dragY = (dy - 18).clamp(0.0, 650.0);
-            _setDrag(Offset(dampedDx, dragY));
-          }
-        },
-        onPointerUp: (e) {
-          _vt.addPosition(e.timeStamp, e.position);
-          _activePointers.remove(e.pointer);
-
-          if (_activePointers.isEmpty) {
-            final wasMultiTouch = _isMultiTouch;
-            _isMultiTouch = false;
-            _isPinching = false;
+        backgroundColor: Colors.transparent,
+        body: Listener(
+          onPointerDown: (e) {
+            _activePointers.add(e.pointer);
+            _settle.stop();
+            _zoomAnimController?.stop();
             _isSwipingHorizontal = false;
-            _startDragY = null;
-            _startDragX = null;
             if (_isMangaMode) {
               if (_drag.value != Offset.zero) _setDrag(Offset.zero);
               return;
             }
-            final d = _drag.value;
-            final vy = _vt.getVelocity().pixelsPerSecond.dy;
-
-            if (!wasMultiTouch &&
-                !_isCurrentlyZoomed &&
-                d.dy > 0 &&
-                (d.dy > 85 || (vy > 550 && d.dy > 20))) {
-              if (_page.hasClients && _page.page != null) {
-                final targetIndex =
-                    _page.page!.round().clamp(0, widget.items.length - 1);
-                _current = targetIndex;
-                _page.jumpToPage(_current);
+            if (_activePointers.length == 1) {
+              _setDrag(Offset.zero);
+              _isMultiTouch = false;
+              _isPinching = false;
+              if (_transformationController.value.getMaxScaleOnAxis() <= 1.05) {
+                _isPhotoZoomed = false;
+                _isDeepZoomed = false;
               }
-              _isDismissing.value = true;
-              _activeMediaNotifier?.state = _currentItem.id;
-              Navigator.of(context).pop();
-              return;
-            } else if (d != Offset.zero) {
-              _springBack(vy);
-              return;
-            } else {
-              _setDrag(Offset.zero);
             }
-          }
-        },
-        onPointerCancel: (e) {
-          _activePointers.remove(e.pointer);
-          if (_activePointers.isEmpty) {
-            _isMultiTouch = false;
-            _isPinching = false;
-            _isSwipingHorizontal = false;
-            _startDragY = null;
-            _startDragX = null;
-            if (_drag.value != Offset.zero) {
-              _springBack(0);
-            } else {
-              _setDrag(Offset.zero);
+            if (_activePointers.length >= 2 || _isCurrentlyZoomed) {
+              _isMultiTouch = true;
+              _isPinching = true;
+              _startDragY = null;
+              _startDragX = null;
+              if (_drag.value != Offset.zero) _setDrag(Offset.zero);
+              return;
             }
-          }
-        },
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            if (_drag.value.dy < 10) {
-              _toggleBars();
+            if (_page.hasClients && _page.page != null) {
+              final snapped =
+                  _page.page!.round().clamp(0, widget.items.length - 1);
+              if (_current != snapped) {
+                _current = snapped;
+              }
+            }
+            _startDragY = e.position.dy;
+            _startDragX = e.position.dx;
+            _vt = VelocityTracker.withKind(e.kind);
+            _vt.addPosition(e.timeStamp, e.position);
+          },
+          onPointerMove: (e) {
+            if (_isMangaMode) return;
+            if (_startDragY == null ||
+                _startDragX == null ||
+                _isCurrentlyZoomed ||
+                _isPinching ||
+                _isMultiTouch ||
+                _activePointers.length >= 2) {
+              if (_drag.value != Offset.zero) _setDrag(Offset.zero);
+              return;
+            }
+
+            final dx = e.position.dx - _startDragX!;
+            final dy = e.position.dy - _startDragY!;
+            final adx = dx.abs();
+            final ady = dy.abs();
+
+            if (!_isSwipingHorizontal && _drag.value == Offset.zero) {
+              if (adx > 6 && adx > ady) {
+                _isSwipingHorizontal = true;
+                return;
+              }
+            }
+
+            if (_isSwipingHorizontal) return;
+
+            _vt.addPosition(e.timeStamp, e.position);
+
+            if (_drag.value != Offset.zero || (dy > 18 && dy > adx * 1.5)) {
+              final dampedDx = dx * 0.45;
+              final dragY = (dy - 18).clamp(0.0, 650.0);
+              _setDrag(Offset(dampedDx, dragY));
             }
           },
-          onDoubleTapDown: (details) {
-            _doubleTapDetails = details;
+          onPointerUp: (e) {
+            _vt.addPosition(e.timeStamp, e.position);
+            _activePointers.remove(e.pointer);
+
+            if (_activePointers.isEmpty) {
+              final wasMultiTouch = _isMultiTouch;
+              _isMultiTouch = false;
+              _isPinching = false;
+              _isSwipingHorizontal = false;
+              _startDragY = null;
+              _startDragX = null;
+              if (_isMangaMode) {
+                if (_drag.value != Offset.zero) _setDrag(Offset.zero);
+                return;
+              }
+              final d = _drag.value;
+              final vy = _vt.getVelocity().pixelsPerSecond.dy;
+
+              if (!wasMultiTouch &&
+                  !_isCurrentlyZoomed &&
+                  d.dy > 0 &&
+                  (d.dy > 85 || (vy > 550 && d.dy > 20))) {
+                if (_page.hasClients && _page.page != null) {
+                  final targetIndex =
+                      _page.page!.round().clamp(0, widget.items.length - 1);
+                  _current = targetIndex;
+                  _page.jumpToPage(_current);
+                }
+                _isDismissing.value = true;
+                _activeMediaNotifier?.state = _currentItem.id;
+                Navigator.of(context).pop();
+                return;
+              } else if (d != Offset.zero) {
+                _springBack(vy);
+                return;
+              } else {
+                _setDrag(Offset.zero);
+              }
+            }
           },
-          onDoubleTap: _handleDoubleTap,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: AnimatedBuilder(
-                  animation: ModalRoute.of(context)?.animation ??
-                      kAlwaysCompleteAnimation,
-                  builder: (context, _) {
-                    final routeAnim =
-                        ModalRoute.of(context)?.animation?.value ?? 1.0;
-                    final curved = const Cubic(0.2, 0.0, 0.0, 1.0)
-                        .transform(routeAnim.clamp(0.0, 1.0));
-                    return ValueListenableBuilder<Offset>(
-                      valueListenable: _drag,
-                      builder: (_, d, __) {
-                        final dragFade = (1.0 - (d.dy / 320.0)).clamp(0.0, 1.0);
-                        return ColoredBox(
-                          color: Colors.black.withValues(
-                            alpha: (curved * dragFade).clamp(0.0, 1.0),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-              ValueListenableBuilder<Offset>(
-                valueListenable: _drag,
-                builder: (_, d, child) {
-                  final s = (1.0 - (d.dy / 1000.0) * 0.28).clamp(0.72, 1.0);
-                  final radius =
-                      (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
-                  return Transform(
-                    alignment: Alignment.center,
-                    transform: Matrix4.translationValues(d.dx, d.dy, 0)
-                      ..scaleByDouble(s, s, 1.0, 1.0),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(radius),
-                      clipBehavior: radius > 0 ? Clip.antiAlias : Clip.none,
-                      child: child,
-                    ),
-                  );
-                },
-                child: ValueListenableBuilder<bool>(
-                  valueListenable: _isDraggingDown,
-                  builder: (context, isDraggingDown, child) {
-                    return IgnorePointer(
-                      ignoring: isDraggingDown,
-                      child: child,
-                    );
-                  },
-                  child: _isMangaMode
-                      ? _buildMangaView()
-                      : NotificationListener<ScrollNotification>(
-                    onNotification: (notification) {
-                      if (notification is ScrollStartNotification) {
-                        if (notification.dragDetails != null) {
-                          _isSwipingPage.value = true;
-                        }
-                      } else if (notification is ScrollEndNotification) {
-                        _isSwipingPage.value = false;
-                        _precacheAdjacent(_current);
-                        _activeMediaNotifier?.state = widget.items[_current].id;
-                      }
-                      return false;
+          onPointerCancel: (e) {
+            _activePointers.remove(e.pointer);
+            if (_activePointers.isEmpty) {
+              _isMultiTouch = false;
+              _isPinching = false;
+              _isSwipingHorizontal = false;
+              _startDragY = null;
+              _startDragX = null;
+              if (_drag.value != Offset.zero) {
+                _springBack(0);
+              } else {
+                _setDrag(Offset.zero);
+              }
+            }
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (_drag.value.dy < 10) {
+                _toggleBars();
+              }
+            },
+            onDoubleTapDown: (details) {
+              _doubleTapDetails = details;
+            },
+            onDoubleTap: _handleDoubleTap,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: AnimatedBuilder(
+                    animation: ModalRoute.of(context)?.animation ??
+                        kAlwaysCompleteAnimation,
+                    builder: (context, _) {
+                      final routeAnim =
+                          ModalRoute.of(context)?.animation?.value ?? 1.0;
+                      final curved = const Cubic(0.2, 0.0, 0.0, 1.0)
+                          .transform(routeAnim.clamp(0.0, 1.0));
+                      return ValueListenableBuilder<Offset>(
+                        valueListenable: _drag,
+                        builder: (_, d, __) {
+                          final dragFade =
+                              (1.0 - (d.dy / 320.0)).clamp(0.0, 1.0);
+                          return ColoredBox(
+                            color: Colors.black.withValues(
+                              alpha: (curved * dragFade).clamp(0.0, 1.0),
+                            ),
+                          );
+                        },
+                      );
                     },
-                    child: PageView.builder(
-                      controller: _page,
-                      dragStartBehavior: DragStartBehavior.down,
-                      itemCount: widget.items.length,
-                      onPageChanged: (i) {
-                        setState(() {
-                          _current = i;
-                          _isPhotoZoomed = false;
-                          _isDeepZoomed = false;
-                          _isPinching = false;
-                          _transformationController.value = Matrix4.identity();
-                        });
-                        _precacheAdjacent(i);
-                        if (widget.items.isNotEmpty &&
-                            i < widget.items.length) {
-                          _loadPsdDataIfNeeded(widget.items[i].path);
-                        }
-                      },
-                      physics: (_isCurrentlyZoomed ||
-                              _isPinching ||
-                              _isMultiTouch ||
-                              _activePointers.length >= 2)
-                          ? const NeverScrollableScrollPhysics()
-                          : const ClampingScrollPhysics(
-                              parent: PageScrollPhysics(),
-                            ),
-                      itemBuilder: (context, index) {
-                        final it = widget.items[index];
-                        final isCur = index == _current;
-                        return ListenableBuilder(
-                          listenable:
-                              Listenable.merge([_isDraggingDown, _isDismissing]),
-                          builder: (context, child) {
-                            if ((_isDraggingDown.value || _isDismissing.value) &&
-                                !isCur) {
-                              return const SizedBox.shrink();
-                            }
-                            return child!;
-                          },
-                          child: RepaintBoundary(
-                            child: Center(
-                              child: ClipRect(
-                                child: InteractiveViewer(
-                                key: ValueKey(
-                                    'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
-                                transformationController:
-                                    isCur ? _transformationController : null,
-                                minScale: 1.0,
-                                maxScale: 8.0,
-                                panEnabled: isCur &&
-                                    _isCurrentlyZoomed &&
-                                    (_psdLoadError[it.path] != true),
-                                scaleEnabled: isCur &&
-                                    (!PsdService.isPsd(it.path) ||
-                                        (_psdRenderedBytes[it.path] != null &&
-                                            _psdRenderedBytes[it.path]!
-                                                .isNotEmpty)),
-                                clipBehavior: Clip.hardEdge,
-                                onInteractionStart: isCur
-                                    ? (details) {
-                                        _zoomAnimController?.stop();
-                                        if (details.pointerCount >= 2) {
-                                          _isPinching = true;
-                                        }
-                                      }
-                                    : null,
-                                onInteractionUpdate: isCur
-                                    ? (details) {
-                                        final scale = _transformationController
-                                            .value
-                                            .getMaxScaleOnAxis();
-                                        final isZoomed = scale > 1.05;
-                                        if (isZoomed != _isPhotoZoomed) {
-                                          setState(() {
-                                            _isPhotoZoomed = isZoomed;
-                                          });
-                                        }
-                                      }
-                                    : null,
-                                onInteractionEnd: isCur
-                                    ? (details) {
-                                        _isPinching = false;
-                                        final scale = _transformationController
-                                            .value
-                                            .getMaxScaleOnAxis();
-                                        if (scale <= 1.02) {
-                                          _resetPhotoZoom();
-                                        } else {
-                                          final shouldDeepZoom = scale > 1.2;
-                                          if ((!_isPhotoZoomed ||
-                                                  _isDeepZoomed !=
-                                                      shouldDeepZoom) &&
-                                              mounted) {
-                                            setState(() {
-                                              _isPhotoZoomed = true;
-                                              _isDeepZoomed = shouldDeepZoom;
-                                            });
-                                          }
-                                        }
-                                      }
-                                    : null,
-                                child: Center(
-                                  child: HeroMode(
-                                    enabled: isCur,
-                                    child: Hero(
-                                      tag: it.id,
-                                      transitionOnUserGestures: true,
-                                      flightShuttleBuilder: (
-                                        flightContext,
-                                        animation,
-                                        flightDirection,
-                                        fromHeroContext,
-                                        toHeroContext,
-                                      ) =>
-                                          _buildHeroShuttle(
-                                        animation: animation,
-                                        flightDirection: flightDirection,
-                                        id: it.id,
-                                        path: it.path,
-                                        psdFallbackBytes:
-                                            _psdRenderedBytes[it.path],
-                                        fallbackChild: flightDirection ==
-                                                HeroFlightDirection.push
-                                            ? toHeroContext.widget
-                                            : fromHeroContext.widget,
-                                      ),
-                                      child:
-                                          _buildPhotoPage(it, isCurrent: isCur),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          ),
-                        );
-                      },
-                    ),
                   ),
                 ),
-              ),
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: _buildStaggeredBar(
-                  context: context,
-                  showBars: showBars,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black87,
-                          Colors.black54,
-                          Colors.transparent,
-                        ],
-                        stops: [0.0, 0.7, 1.0],
+                ValueListenableBuilder<Offset>(
+                  valueListenable: _drag,
+                  builder: (_, d, child) {
+                    final s = (1.0 - (d.dy / 1000.0) * 0.28).clamp(0.72, 1.0);
+                    final radius =
+                        (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
+                    return Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.translationValues(d.dx, d.dy, 0)
+                        ..scaleByDouble(s, s, 1.0, 1.0),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(radius),
+                        clipBehavior: radius > 0 ? Clip.antiAlias : Clip.none,
+                        child: child,
                       ),
-                    ),
-                    child: SafeArea(
-                      bottom: false,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 4),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_back_ios_new,
-                                  color: Colors.white, size: 20),
-                              onPressed: () {
-                                if (_page.hasClients && _page.page != null) {
-                                  final snapped = _page.page!
-                                      .round()
-                                      .clamp(0, widget.items.length - 1);
-                                  if (_current != snapped) {
-                                    _current = snapped;
-                                  }
-                                  _page.jumpToPage(_current);
+                    );
+                  },
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: _isDraggingDown,
+                    builder: (context, isDraggingDown, child) {
+                      return IgnorePointer(
+                        ignoring: isDraggingDown,
+                        child: child,
+                      );
+                    },
+                    child: _isMangaMode
+                        ? _buildMangaView()
+                        : NotificationListener<ScrollNotification>(
+                            onNotification: (notification) {
+                              if (notification is ScrollStartNotification) {
+                                if (notification.dragDetails != null) {
+                                  _isSwipingPage.value = true;
                                 }
-                                _isDismissing.value = true;
-                                _activeMediaNotifier?.state = _currentItem.id;
-                                Navigator.of(context).pop();
+                              } else if (notification
+                                  is ScrollEndNotification) {
+                                _isSwipingPage.value = false;
+                                _precacheAdjacent(_current);
+                                _activeMediaNotifier?.state =
+                                    widget.items[_current].id;
+                              }
+                              return false;
+                            },
+                            child: PageView.builder(
+                              controller: _page,
+                              dragStartBehavior: DragStartBehavior.down,
+                              itemCount: widget.items.length,
+                              onPageChanged: (i) {
+                                setState(() {
+                                  _current = i;
+                                  _isPhotoZoomed = false;
+                                  _isDeepZoomed = false;
+                                  _isPinching = false;
+                                  _transformationController.value =
+                                      Matrix4.identity();
+                                });
+                                _precacheAdjacent(i);
+                                if (widget.items.isNotEmpty &&
+                                    i < widget.items.length) {
+                                  _loadPsdDataIfNeeded(widget.items[i].path);
+                                }
                               },
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    _isMangaMode && item.albumName.isNotEmpty
-                                        ? item.albumName
-                                        : MediaUtils.formatViewerDate(
-                                            item.date),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                              physics: (_isCurrentlyZoomed ||
+                                      _isPinching ||
+                                      _isMultiTouch ||
+                                      _activePointers.length >= 2)
+                                  ? const NeverScrollableScrollPhysics()
+                                  : const PageScrollPhysics(),
+                              itemBuilder: (context, index) {
+                                final it = widget.items[index];
+                                final isCur = index == _current;
+                                return ListenableBuilder(
+                                  listenable: Listenable.merge(
+                                      [_isDraggingDown, _isDismissing]),
+                                  builder: (context, child) {
+                                    if ((_isDraggingDown.value ||
+                                            _isDismissing.value) &&
+                                        !isCur) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return child!;
+                                  },
+                                  child: RepaintBoundary(
+                                    child: Center(
+                                      child: ClipRect(
+                                        child: isCur
+                                            ? InteractiveViewer(
+                                                key: ValueKey(
+                                                    'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
+                                                transformationController:
+                                                    _transformationController,
+                                                minScale: 1.0,
+                                                maxScale: 8.0,
+                                                panEnabled:
+                                                    _isCurrentlyZoomed &&
+                                                        (_psdLoadError[
+                                                                it.path] !=
+                                                            true),
+                                                scaleEnabled:
+                                                    (!PsdService.isPsd(
+                                                            it.path) ||
+                                                        (_psdRenderedBytes[
+                                                                    it.path] !=
+                                                                null &&
+                                                            _psdRenderedBytes[
+                                                                    it.path]!
+                                                                .isNotEmpty)),
+                                                clipBehavior: Clip.hardEdge,
+                                                onInteractionStart: (details) {
+                                                  _zoomAnimController?.stop();
+                                                  if (details.pointerCount >=
+                                                      2) {
+                                                    _isPinching = true;
+                                                  }
+                                                },
+                                                onInteractionUpdate: (details) {
+                                                  final scale =
+                                                      _transformationController
+                                                          .value
+                                                          .getMaxScaleOnAxis();
+                                                  final isZoomed = scale > 1.05;
+                                                  if (isZoomed !=
+                                                      _isPhotoZoomed) {
+                                                    setState(() {
+                                                      _isPhotoZoomed = isZoomed;
+                                                    });
+                                                  }
+                                                },
+                                                onInteractionEnd: (details) {
+                                                  _isPinching = false;
+                                                  final scale =
+                                                      _transformationController
+                                                          .value
+                                                          .getMaxScaleOnAxis();
+                                                  if (scale <= 1.02) {
+                                                    _resetPhotoZoom();
+                                                  } else {
+                                                    final shouldDeepZoom =
+                                                        scale > 1.2;
+                                                    if ((!_isPhotoZoomed ||
+                                                            _isDeepZoomed !=
+                                                                shouldDeepZoom) &&
+                                                        mounted) {
+                                                      setState(() {
+                                                        _isPhotoZoomed = true;
+                                                        _isDeepZoomed =
+                                                            shouldDeepZoom;
+                                                      });
+                                                    }
+                                                  }
+                                                },
+                                                child: Center(
+                                                  child: Hero(
+                                                    tag: it.id,
+                                                    flightShuttleBuilder: (
+                                                      flightContext,
+                                                      animation,
+                                                      flightDirection,
+                                                      fromHeroContext,
+                                                      toHeroContext,
+                                                    ) =>
+                                                        _buildHeroShuttle(
+                                                      animation: animation,
+                                                      flightDirection:
+                                                          flightDirection,
+                                                      id: it.id,
+                                                      path: it.path,
+                                                      psdFallbackBytes:
+                                                          _psdRenderedBytes[
+                                                              it.path],
+                                                      fallbackChild:
+                                                          flightDirection ==
+                                                                  HeroFlightDirection
+                                                                      .push
+                                                              ? toHeroContext
+                                                                  .widget
+                                                              : fromHeroContext
+                                                                  .widget,
+                                                    ),
+                                                    child: _buildPhotoPage(it,
+                                                        isCurrent: true),
+                                                  ),
+                                                ),
+                                              )
+                                            : Center(
+                                                child: _buildPhotoPage(it,
+                                                    isCurrent: false),
+                                              ),
+                                      ),
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _isMangaMode
-                                        ? item.name
-                                        : MediaUtils.formatViewerTime(
-                                            item.date),
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (!widget.isTrash && PsdService.isPsd(item.path))
-                              IconButton(
-                                icon: Icon(
-                                  (_psdHiddenLayers[item.path]?.isNotEmpty ??
-                                          false)
-                                      ? Icons.layers
-                                      : Icons.layers_outlined,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
-                                tooltip: 'Layers',
-                                onPressed: () => _openPsdLayerSheet(item),
-                              ),
-                            if (!item.isVideo && !PsdService.isPsd(item.path)) ...[
-                              if (_isMangaMode)
-                                IconButton(
-                                  key: const ValueKey(
-                                      'manga_translation_button'),
-                                  icon: Icon(
-                                    Icons.translate_rounded,
-                                    color: _translationMode != null
-                                        ? Theme.of(context)
-                                            .colorScheme
-                                            .primary
-                                        : Colors.white,
-                                    size: 22,
-                                  ),
-                                  tooltip: 'Manga Translation',
-                                  onPressed: _showTranslationSheet,
-                                ),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.auto_stories_rounded,
-                                  color: _isMangaMode
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Colors.white,
-                                  size: 22,
-                                ),
-                                tooltip: context.tr.mangaMode,
-                                onPressed: _toggleMangaMode,
-                              ),
-                            ],
-                            if (!widget.isTrash)
-                              IconButton(
-                                icon: const Icon(Icons.info_outline,
-                                    color: Colors.white, size: 22),
-                                tooltip: context.tr.details,
-                                onPressed: () =>
-                                    showMediaInfoSheet(context, item),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (_isMangaMode)
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: IgnorePointer(
-                    child: SafeArea(
-                      bottom: false,
-                      child: AnimatedPadding(
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeInOutCubic,
-                        padding: EdgeInsets.only(
-                          top: showBars ? 58 : 8,
-                          left: showBars ? 0 : 16,
-                          right: showBars ? 0 : 16,
-                        ),
-                        child: AnimatedAlign(
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeInOutCubic,
-                          alignment: showBars
-                              ? Alignment.topCenter
-                              : Alignment.topLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.black
-                                  .withValues(alpha: showBars ? 0.75 : 0.6),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.18),
-                                width: 0.6,
-                              ),
-                            ),
-                            child: Builder(
-                              builder: (context) {
-                                final mangaList = _mangaItems;
-                                final mangaIdx = mangaList.indexOf(item);
-                                final pageStr = mangaIdx >= 0
-                                    ? '${mangaIdx + 1} / ${mangaList.length}'
-                                    : '${_current + 1} / ${widget.items.length}';
-                                return Text(
-                                  pageStr,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0.5,
                                   ),
                                 );
                               },
                             ),
                           ),
+                  ),
+                ),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: _buildStaggeredBar(
+                    context: context,
+                    showBars: showBars,
+                    isTopBar: true,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black87,
+                            Colors.black54,
+                            Colors.transparent,
+                          ],
+                          stops: [0.0, 0.7, 1.0],
+                        ),
+                      ),
+                      child: SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 4),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.arrow_back_ios_new,
+                                    color: Colors.white, size: 20),
+                                onPressed: () {
+                                  if (_page.hasClients && _page.page != null) {
+                                    final snapped = _page.page!
+                                        .round()
+                                        .clamp(0, widget.items.length - 1);
+                                    if (_current != snapped) {
+                                      _current = snapped;
+                                    }
+                                    _page.jumpToPage(_current);
+                                  }
+                                  _isDismissing.value = true;
+                                  _activeMediaNotifier?.state = _currentItem.id;
+                                  Navigator.of(context).pop();
+                                },
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _isMangaMode && item.albumName.isNotEmpty
+                                          ? item.albumName
+                                          : MediaUtils.formatViewerDate(
+                                              item.date),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _isMangaMode
+                                          ? item.name
+                                          : MediaUtils.formatViewerTime(
+                                              item.date),
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (!widget.isTrash &&
+                                  PsdService.isPsd(item.path))
+                                IconButton(
+                                  icon: Icon(
+                                    (_psdHiddenLayers[item.path]?.isNotEmpty ??
+                                            false)
+                                        ? Icons.layers
+                                        : Icons.layers_outlined,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                  tooltip: 'Layers',
+                                  onPressed: () => _openPsdLayerSheet(item),
+                                ),
+                              if (!item.isVideo &&
+                                  !PsdService.isPsd(item.path)) ...[
+                                if (_isMangaMode)
+                                  IconButton(
+                                    key: const ValueKey(
+                                        'manga_translation_button'),
+                                    icon: Icon(
+                                      Icons.translate_rounded,
+                                      color: _translationMode != null
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                          : Colors.white,
+                                      size: 22,
+                                    ),
+                                    tooltip: 'Manga Translation',
+                                    onPressed: _showTranslationSheet,
+                                  ),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.auto_stories_rounded,
+                                    color: _isMangaMode
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.white,
+                                    size: 22,
+                                  ),
+                                  tooltip: context.tr.mangaMode,
+                                  onPressed: _toggleMangaMode,
+                                ),
+                              ],
+                              if (!widget.isTrash)
+                                IconButton(
+                                  icon: const Icon(Icons.info_outline,
+                                      color: Colors.white, size: 22),
+                                  tooltip: context.tr.details,
+                                  onPressed: () =>
+                                      showMediaInfoSheet(context, item),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              if (!_isMangaMode)
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: _buildStaggeredBar(
-                  context: context,
-                  showBars: showBars,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [
-                          Colors.black87,
-                          Colors.black54,
-                          Colors.transparent,
-                        ],
-                        stops: [0.0, 0.7, 1.0],
-                      ),
-                    ),
-                    child: SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: widget.isTrash
-                            ? Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceAround,
-                                children: [
-                                  _ViewerActionButton(
-                                    icon: const Icon(Icons.restore,
-                                        color: Colors.white, size: 22),
-                                    label: context.tr.restore,
-                                    onTap: _restoreCurrentItem,
-                                  ),
-                                  _ViewerActionButton(
-                                    icon: const Icon(Icons.info_outline,
-                                        color: Colors.white, size: 22),
-                                    label: context.tr.details,
-                                    onTap: () =>
-                                        showMediaInfoSheet(context, item),
-                                  ),
-                                  _ViewerActionButton(
-                                    icon: const Icon(Icons.delete_forever,
-                                        color: Colors.white, size: 22),
-                                    label: context.tr.delete,
-                                    onTap: _deleteCurrentItem,
-                                  ),
-                                ],
-                              )
-                            : Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceAround,
-                                children: [
-                                  _ViewerActionButton(
-                                    icon: const Icon(Icons.share_outlined,
-                                        color: Colors.white, size: 22),
-                                    label: context.tr.share,
-                                    onTap: () => ShareService.shareSingle(
-                                        item.path,
-                                        isVideo: false),
-                                  ),
-                                  Consumer(
-                                    builder: (context, ref, _) {
-                                      final isFav = ref.watch(
-                                        settingsNotifierProvider.select(
-                                          (s) =>
-                                              s.favoriteIds.contains(item.id),
-                                        ),
-                                      );
-                                      return _ViewerActionButton(
-                                        icon: Icon(
-                                          isFav
-                                              ? Icons.favorite
-                                              : Icons.favorite_border,
-                                          color: isFav
-                                              ? Colors.redAccent
-                                              : Colors.white,
-                                          size: 22,
-                                        ),
-                                        label: context.tr.favorite,
-                                        onTap: () {
-                                          HapticFeedback.lightImpact();
-                                          final currentFavs = Set<String>.from(
-                                            ref
-                                                .read(settingsNotifierProvider)
-                                                .favoriteIds,
-                                          );
-                                          if (currentFavs.contains(item.id)) {
-                                            currentFavs.remove(item.id);
-                                          } else {
-                                            currentFavs.add(item.id);
-                                          }
-                                          ref
-                                              .read(settingsNotifierProvider
-                                                  .notifier)
-                                              .update(
-                                                (s) => s.copyWith(
-                                                    favoriteIds:
-                                                        currentFavs.toList()),
-                                              );
-                                        },
-                                      );
-                                    },
-                                  ),
-                                  _ViewerActionButton(
-                                    icon: const Icon(Icons.delete_outline,
-                                        color: Colors.white, size: 22),
-                                    label: context.tr.delete,
-                                    onTap: _deleteCurrentItem,
-                                  ),
-                                  PopupMenuButton<String>(
-                                    tooltip: context.tr.moreOptions,
-                                    color: const Color(0xFF222222),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    constraints: const BoxConstraints(
-                                        minWidth: 130, maxWidth: 195),
-                                    onSelected: (value) async {
-                                      if (value == 'slideshow') {
-                                        if (_isSlideshowPlaying) {
-                                          _stopSlideshow();
-                                        } else {
-                                          _startSlideshow();
-                                        }
-                                      } else if (value == 'rename') {
-                                        final updated =
-                                            await showRenameMediaDialog(
-                                                context, item, ref);
-                                        if (updated != null && mounted) {
-                                          setState(() {
-                                            widget.items[_current] = updated;
-                                          });
-                                        }
-                                      } else if (value == 'wallpaper') {
-                                        ShareService.setAsWallpaper(item.path);
-                                      } else if (value == 'manga') {
-                                        _toggleMangaMode();
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      if (!item.isVideo && !PsdService.isPsd(item.path))
-                                        PopupMenuItem(
-                                          value: 'manga',
-                                          height: 40,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 14),
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.auto_stories_rounded,
-                                                size: 18,
-                                                color: _isMangaMode
-                                                    ? Theme.of(context).colorScheme.primary
-                                                    : Colors.white,
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Text(
-                                                context.tr.mangaMode,
-                                                style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 13.5),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      PopupMenuItem(
-                                        value: 'slideshow',
-                                        height: 40,
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 14),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              _isSlideshowPlaying
-                                                  ? Icons
-                                                      .pause_circle_outline_rounded
-                                                  : Icons.slideshow_rounded,
-                                              size: 18,
-                                              color: Colors.white,
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              _isSlideshowPlaying
-                                                  ? context.tr.pause
-                                                  : context.tr.slideshow,
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 13.5),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'rename',
-                                        height: 40,
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 14),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.edit_outlined,
-                                                size: 18, color: Colors.white),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              context.tr.rename,
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 13.5),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'wallpaper',
-                                        height: 40,
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 14),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.wallpaper_outlined,
-                                                size: 18, color: Colors.white),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              context.tr.setAsWallpaper,
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 13.5),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                    child: _ViewerActionButton(
-                                      icon: const Icon(Icons.more_vert,
-                                          color: Colors.white, size: 22),
-                                      label: context.tr.more,
-                                    ),
-                                  ),
-                                ],
+                if (_isMangaMode)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: IgnorePointer(
+                      child: SafeArea(
+                        bottom: false,
+                        child: AnimatedPadding(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeInOutCubic,
+                          padding: EdgeInsets.only(
+                            top: showBars ? 58 : 8,
+                            left: showBars ? 0 : 16,
+                            right: showBars ? 0 : 16,
+                          ),
+                          child: AnimatedAlign(
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeInOutCubic,
+                            alignment: showBars
+                                ? Alignment.topCenter
+                                : Alignment.topLeft,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black
+                                    .withValues(alpha: showBars ? 0.75 : 0.6),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.18),
+                                  width: 0.6,
+                                ),
                               ),
+                              child: Builder(
+                                builder: (context) {
+                                  final mangaList = _mangaItems;
+                                  final mangaIdx = mangaList.indexOf(item);
+                                  final pageStr = mangaIdx >= 0
+                                      ? '${mangaIdx + 1} / ${mangaList.length}'
+                                      : '${_current + 1} / ${widget.items.length}';
+                                  return Text(
+                                    pageStr,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            ],
+                if (!_isMangaMode)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: _buildStaggeredBar(
+                      context: context,
+                      showBars: showBars,
+                      isTopBar: false,
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black87,
+                              Colors.black54,
+                              Colors.transparent,
+                            ],
+                            stops: [0.0, 0.7, 1.0],
+                          ),
+                        ),
+                        child: SafeArea(
+                          top: false,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: widget.isTrash
+                                ? Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceAround,
+                                    children: [
+                                      _ViewerActionButton(
+                                        icon: const Icon(Icons.restore,
+                                            color: Colors.white, size: 22),
+                                        label: context.tr.restore,
+                                        onTap: _restoreCurrentItem,
+                                      ),
+                                      _ViewerActionButton(
+                                        icon: const Icon(Icons.info_outline,
+                                            color: Colors.white, size: 22),
+                                        label: context.tr.details,
+                                        onTap: () =>
+                                            showMediaInfoSheet(context, item),
+                                      ),
+                                      _ViewerActionButton(
+                                        icon: const Icon(Icons.delete_forever,
+                                            color: Colors.white, size: 22),
+                                        label: context.tr.delete,
+                                        onTap: _deleteCurrentItem,
+                                      ),
+                                    ],
+                                  )
+                                : Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceAround,
+                                    children: [
+                                      _ViewerActionButton(
+                                        icon: const Icon(Icons.share_outlined,
+                                            color: Colors.white, size: 22),
+                                        label: context.tr.share,
+                                        onTap: () => ShareService.shareSingle(
+                                            item.path,
+                                            isVideo: false),
+                                      ),
+                                      Consumer(
+                                        builder: (context, ref, _) {
+                                          final isFav = ref.watch(
+                                            settingsNotifierProvider.select(
+                                              (s) => s.favoriteIds
+                                                  .contains(item.id),
+                                            ),
+                                          );
+                                          return _ViewerActionButton(
+                                            icon: Icon(
+                                              isFav
+                                                  ? Icons.favorite
+                                                  : Icons.favorite_border,
+                                              color: isFav
+                                                  ? Colors.redAccent
+                                                  : Colors.white,
+                                              size: 22,
+                                            ),
+                                            label: context.tr.favorite,
+                                            onTap: () {
+                                              HapticFeedback.lightImpact();
+                                              final currentFavs =
+                                                  Set<String>.from(
+                                                ref
+                                                    .read(
+                                                        settingsNotifierProvider)
+                                                    .favoriteIds,
+                                              );
+                                              if (currentFavs
+                                                  .contains(item.id)) {
+                                                currentFavs.remove(item.id);
+                                              } else {
+                                                currentFavs.add(item.id);
+                                              }
+                                              ref
+                                                  .read(settingsNotifierProvider
+                                                      .notifier)
+                                                  .update(
+                                                    (s) => s.copyWith(
+                                                        favoriteIds: currentFavs
+                                                            .toList()),
+                                                  );
+                                            },
+                                          );
+                                        },
+                                      ),
+                                      _ViewerActionButton(
+                                        icon: const Icon(Icons.delete_outline,
+                                            color: Colors.white, size: 22),
+                                        label: context.tr.delete,
+                                        onTap: _deleteCurrentItem,
+                                      ),
+                                      PopupMenuButton<String>(
+                                        tooltip: context.tr.moreOptions,
+                                        color: const Color(0xFF222222),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                        ),
+                                        constraints: const BoxConstraints(
+                                            minWidth: 130, maxWidth: 195),
+                                        onSelected: (value) async {
+                                          if (value == 'slideshow') {
+                                            if (_isSlideshowPlaying) {
+                                              _stopSlideshow();
+                                            } else {
+                                              _startSlideshow();
+                                            }
+                                          } else if (value == 'rename') {
+                                            final updated =
+                                                await showRenameMediaDialog(
+                                                    context, item, ref);
+                                            if (updated != null && mounted) {
+                                              setState(() {
+                                                widget.items[_current] =
+                                                    updated;
+                                              });
+                                            }
+                                          } else if (value == 'wallpaper') {
+                                            ShareService.setAsWallpaper(
+                                                item.path);
+                                          } else if (value == 'manga') {
+                                            _toggleMangaMode();
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          if (!item.isVideo &&
+                                              !PsdService.isPsd(item.path))
+                                            PopupMenuItem(
+                                              value: 'manga',
+                                              height: 40,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 14),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.auto_stories_rounded,
+                                                    size: 18,
+                                                    color: _isMangaMode
+                                                        ? Theme.of(context)
+                                                            .colorScheme
+                                                            .primary
+                                                        : Colors.white,
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Text(
+                                                    context.tr.mangaMode,
+                                                    style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 13.5),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          PopupMenuItem(
+                                            value: 'slideshow',
+                                            height: 40,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 14),
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  _isSlideshowPlaying
+                                                      ? Icons
+                                                          .pause_circle_outline_rounded
+                                                      : Icons.slideshow_rounded,
+                                                  size: 18,
+                                                  color: Colors.white,
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Text(
+                                                  _isSlideshowPlaying
+                                                      ? context.tr.pause
+                                                      : context.tr.slideshow,
+                                                  style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 13.5),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'rename',
+                                            height: 40,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 14),
+                                            child: Row(
+                                              children: [
+                                                const Icon(Icons.edit_outlined,
+                                                    size: 18,
+                                                    color: Colors.white),
+                                                const SizedBox(width: 10),
+                                                Text(
+                                                  context.tr.rename,
+                                                  style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 13.5),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'wallpaper',
+                                            height: 40,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 14),
+                                            child: Row(
+                                              children: [
+                                                const Icon(
+                                                    Icons.wallpaper_outlined,
+                                                    size: 18,
+                                                    color: Colors.white),
+                                                const SizedBox(width: 10),
+                                                Text(
+                                                  context.tr.setAsWallpaper,
+                                                  style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 13.5),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                        child: _ViewerActionButton(
+                                          icon: const Icon(Icons.more_vert,
+                                              color: Colors.white, size: 22),
+                                          label: context.tr.more,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 }
 

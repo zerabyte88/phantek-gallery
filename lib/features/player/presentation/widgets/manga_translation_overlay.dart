@@ -5,7 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../../core/services/translation/translation_models.dart';
 
-/// Interactive overlay widget rendering translated manga text blocks over the source page.
+/// Overlay for translated manga text blocks.
 class MangaTranslationOverlay extends StatelessWidget {
   final TranslationResult result;
   final TranslationRenderMode mode;
@@ -36,8 +36,7 @@ class MangaTranslationOverlay extends StatelessWidget {
   }
 }
 
-/// CustomPainter that maps original image coordinates to rendered viewport dimensions
-/// and renders adaptive speech bubble patches or dual-pass stroked SFX overlays.
+/// Painter for speech bubbles and SFX text overlays.
 class MangaTranslationPainter extends CustomPainter {
   final TranslationResult result;
   final TranslationRenderMode mode;
@@ -50,7 +49,10 @@ class MangaTranslationPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final original = result.imageSize;
-    if (original.width <= 0 || original.height <= 0 || size.width <= 0 || size.height <= 0) {
+    if (original.width <= 0 ||
+        original.height <= 0 ||
+        size.width <= 0 ||
+        size.height <= 0) {
       return;
     }
 
@@ -58,7 +60,8 @@ class MangaTranslationPainter extends CustomPainter {
     final double scaleY = size.height / original.height;
 
     for (final block in result.blocks) {
-      if (mode == TranslationRenderMode.speechBubblesOnly && !block.isSpeechBubble) {
+      if (mode == TranslationRenderMode.speechBubblesOnly &&
+          !block.isSpeechBubble) {
         continue;
       }
 
@@ -79,7 +82,8 @@ class MangaTranslationPainter extends CustomPainter {
 
   void _drawSpeechBubbleBlock(Canvas canvas, Rect rect, String text) {
     final paddedRect = rect.inflate(4.0);
-    final rrect = RRect.fromRectAndRadius(paddedRect, const Radius.circular(8.0));
+    final rrect =
+        RRect.fromRectAndRadius(paddedRect, const Radius.circular(8.0));
 
     final patchPaint = Paint()
       ..color = Colors.white
@@ -121,8 +125,10 @@ class MangaTranslationPainter extends CustomPainter {
       );
     }
 
-    final double dx = paddedRect.left + (paddedRect.width - painter.width) / 2.0;
-    final double dy = paddedRect.top + (paddedRect.height - painter.height) / 2.0;
+    final double dx =
+        paddedRect.left + (paddedRect.width - painter.width) / 2.0;
+    final double dy =
+        paddedRect.top + (paddedRect.height - painter.height) / 2.0;
     painter.paint(canvas, Offset(dx, dy));
   }
 
@@ -130,7 +136,6 @@ class MangaTranslationPainter extends CustomPainter {
     final double fontSize = (rect.height * 0.45).clamp(12.0, 24.0);
     final double maxTextWidth = math.max(rect.width * 1.4, 40.0);
 
-    // Pass 1: Black outline stroke
     final strokePainter = _buildTextPainter(
       text: text,
       style: TextStyle(
@@ -145,7 +150,6 @@ class MangaTranslationPainter extends CustomPainter {
       maxWidth: maxTextWidth,
     );
 
-    // Pass 2: White fill with drop shadow
     final fillPainter = _buildTextPainter(
       text: text,
       style: TextStyle(

@@ -193,7 +193,6 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
             borderRadius: BorderRadius.circular(8),
             child: Hero(
               tag: widget.item.id,
-              transitionOnUserGestures: true,
               child: _buildThumbnail(cs),
             ),
           ),

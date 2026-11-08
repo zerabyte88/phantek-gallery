@@ -22,6 +22,7 @@ import 'widgets/media_grid_item.dart';
 import 'widgets/delete_confirmation_sheet.dart';
 import '../../../core/widgets/feedback_pill.dart';
 import '../../../core/services/psd_service.dart';
+import '../../../core/widgets/theme_header_background.dart';
 
 /// Screen displaying photos and videos belonging to a specific album.
 class AlbumDetailScreen extends ConsumerStatefulWidget {
@@ -281,6 +282,11 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          flexibleSpace: const RepaintBoundary(
+            child: ThemeHeaderBackground(),
+          ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
@@ -340,6 +346,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
               ),
             if (!_selecting)
               PopupMenuButton<String>(
+                splashRadius: 20,
                 tooltip: context.tr.moreOptions,
                 color: const Color(0xFF222222),
                 shape: RoundedRectangleBorder(
@@ -534,9 +541,12 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                 ),
               ),
             ],
-            if (hasSubfolders && !_flattenSubfolders && _selectedSubfolder != null) ...[
+            if (hasSubfolders &&
+                !_flattenSubfolders &&
+                _selectedSubfolder != null) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 color: Theme.of(context)
                     .colorScheme
                     .surfaceContainerHighest
@@ -578,9 +588,8 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                       context.tr.itemsCount(sortedItems.length),
                       style: TextStyle(
                           fontSize: 12,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant),
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -623,8 +632,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                             final subItems = albumItems
                                 .where((e) => e.immediateFolderName == sub)
                                 .toList()
-                              ..sort((a, b) =>
-                                  naturalCompare(a.name, b.name));
+                              ..sort((a, b) => naturalCompare(a.name, b.name));
                             final cover = subItems.first;
                             final subAlbum = Album(
                               name: sub,

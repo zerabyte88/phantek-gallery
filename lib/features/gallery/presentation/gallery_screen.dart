@@ -312,19 +312,24 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   void _onTabSelected(FilterOption f) {
     final targetIdx = _tabs.indexOf(f);
     if (targetIdx != -1 && targetIdx != _currentPage) {
-      setState(() {
-        _currentPage = targetIdx;
-        if (_selected.isNotEmpty) {
+      if (_selected.isNotEmpty) {
+        setState(() {
           _selected.clear();
           _selecting = false;
-        }
-      });
+        });
+      }
       if (_pageController.hasClients) {
+        final distance = (targetIdx - _currentPage).abs();
+        final duration = Duration(milliseconds: distance > 1 ? 300 : 260);
         _pageController.animateToPage(
           targetIdx,
-          duration: const Duration(milliseconds: 260),
+          duration: duration,
           curve: Curves.easeOutCubic,
         );
+      } else {
+        setState(() {
+          _currentPage = targetIdx;
+        });
       }
     }
   }
@@ -585,7 +590,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           flexibleSpace: Stack(
             fit: StackFit.expand,
             children: [
-              const ThemeHeaderBackground(),
+              const RepaintBoundary(
+                child: ThemeHeaderBackground(),
+              ),
               AnimatedBuilder(
                 animation: _searchAnimController,
                 builder: (context, _) {
@@ -960,6 +967,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           ),
         ),
         PopupMenuButton<String>(
+          splashRadius: 20,
           tooltip: context.tr.moreOptions,
           color: const Color(0xFF222222),
           shape: RoundedRectangleBorder(

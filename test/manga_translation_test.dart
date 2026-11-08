@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:phantek_gallery/core/localization/app_localizations.dart';
 import 'package:phantek_gallery/core/models/media_item.dart';
 import 'package:phantek_gallery/core/services/translation/translation_models.dart';
@@ -22,7 +23,18 @@ class MockMangaTextDetector implements MangaTextDetector {
   MockMangaTextDetector(this.mockBlocks);
 
   @override
-  Future<List<RawMangaTextBlock>> detectText(String imagePath) async => mockBlocks;
+  Future<List<RawMangaTextBlock>> detectText(String imagePath) async =>
+      mockBlocks;
+
+  @override
+  void dispose() {}
+}
+
+class ThrowingMangaTextDetector implements MangaTextDetector {
+  @override
+  Future<List<RawMangaTextBlock>> detectText(String imagePath) async {
+    throw Exception('Native OCR crash simulation');
+  }
 
   @override
   void dispose() {}
@@ -159,7 +171,9 @@ void main() {
       ]);
       final service = MangaOcrService(detector: mockDetector);
 
-      final temp = await File('${Directory.systemTemp.path}/test_manga_page.jpg').create();
+      final temp =
+          await File('${Directory.systemTemp.path}/test_manga_page.jpg')
+              .create();
       try {
         final blocks = await service.extractTextBlocks(temp.path);
         expect(blocks.length, 1);
@@ -168,6 +182,15 @@ void main() {
         await temp.delete();
         service.dispose();
       }
+    });
+
+    test(
+        'MlKitMangaTextDetector initializes lazily without throwing during instantiation',
+        () {
+      final detector =
+          MlKitMangaTextDetector(script: TextRecognitionScript.japanese);
+      expect(detector.script, TextRecognitionScript.japanese);
+      detector.dispose();
     });
   });
 
@@ -215,10 +238,41 @@ void main() {
         coordinator.dispose();
       }
     });
+
+    test(
+        'TranslationIsolateCoordinator handles detection error gracefully without crashing',
+        () async {
+      final throwingDetector = ThrowingMangaTextDetector();
+      final ocr = MangaOcrService(detector: throwingDetector);
+      final coordinator = TranslationIsolateCoordinator(ocrService: ocr);
+
+      final temp =
+          await File('${Directory.systemTemp.path}/err_test.jpg').create();
+      try {
+        coordinator.scheduleTranslation(
+          imagePath: temp.path,
+          imageSize: const Size(800, 1200),
+          mode: TranslationRenderMode.speechBubblesOnly,
+          debounceDuration: const Duration(milliseconds: 50),
+        );
+
+        await Future.delayed(const Duration(milliseconds: 150));
+
+        final result = coordinator.getResultNotifier(temp.path).value;
+        expect(result, isNotNull);
+        expect(result!.isSuccess, isFalse);
+        expect(result.errorMessage, contains('Native OCR crash simulation'));
+        expect(coordinator.getLoadingNotifier(temp.path).value, isFalse);
+      } finally {
+        await temp.delete();
+        coordinator.dispose();
+      }
+    });
   });
 
   group('MangaTranslationOverlay & Painter Widget Tests', () {
-    testWidgets('MangaTranslationOverlay renders speech bubble and SFX blocks', (tester) async {
+    testWidgets('MangaTranslationOverlay renders speech bubble and SFX blocks',
+        (tester) async {
       final result = TranslationResult(
         imagePath: '/mock/page.jpg',
         imageSize: const Size(1000, 1000),
@@ -285,7 +339,8 @@ void main() {
   });
 
   group('ImageViewerScreen Manga Translation Button & Sheet Integration', () {
-    testWidgets('Translation button appears in Manga mode and opens mode sheet', (tester) async {
+    testWidgets('Translation button appears in Manga mode and opens mode sheet',
+        (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
@@ -323,7 +378,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // In Manga Mode, the translation button must be present to the left of auto_stories_rounded
-      final translateBtn = find.byKey(const ValueKey('manga_translation_button'));
+      final translateBtn =
+          find.byKey(const ValueKey('manga_translation_button'));
       expect(translateBtn, findsOneWidget);
 
       // Tap translation button to open bottom sheet
@@ -331,20 +387,27 @@ void main() {
       await tester.pumpAndSettle();
 
       // Bottom sheet options must appear
-      expect(find.text('Terjemahkan Balon Dialog (Speech Bubbles)'), findsOneWidget);
-      expect(find.text('Terjemahkan Seluruh Halaman (Termasuk SFX)'), findsOneWidget);
+      expect(find.text('Terjemahkan Balon Dialog (Speech Bubbles)'),
+          findsOneWidget);
+      expect(find.text('Terjemahkan Seluruh Halaman (Termasuk SFX)'),
+          findsOneWidget);
 
       // Select Speech Bubbles mode
       await tester.tap(find.text('Terjemahkan Balon Dialog (Speech Bubbles)'));
       await tester.pumpAndSettle();
 
       // Sheet closes and mode is active
-      expect(find.text('Terjemahkan Balon Dialog (Speech Bubbles)'), findsNothing);
+      expect(
+          find.text('Terjemahkan Balon Dialog (Speech Bubbles)'), findsNothing);
 
       // Tap again to verify "Matikan Terjemahan" option is present
       tester.widget<IconButton>(translateBtn).onPressed!();
       await tester.pumpAndSettle();
       expect(find.text('Matikan Terjemahan'), findsOneWidget);
+
+      // Drain feedback pill timer
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
     });
   });
 }

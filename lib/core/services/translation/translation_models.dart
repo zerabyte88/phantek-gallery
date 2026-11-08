@@ -3,16 +3,13 @@
 
 import 'dart:ui';
 
-/// Rendering mode for manga text translation overlays.
+/// Translation render modes.
 enum TranslationRenderMode {
-  /// Renders clean background patches over dialog bubbles with centered English text.
   speechBubblesOnly,
-
-  /// Translates dialog bubbles and SFX/background sound effects with high contrast stroke.
   fullImageWithSfx,
 }
 
-/// Represents an individual translated text block on a manga page.
+/// Translated text block on a manga page.
 class MangaTranslatedBlock {
   final Rect boundingBox;
   final String originalText;
@@ -74,7 +71,7 @@ class MangaTranslatedBlock {
   }
 }
 
-/// Task payload dispatched to background isolate for OCR and translation.
+/// Translation task payload.
 class TranslationTask {
   final String imagePath;
   final TranslationRenderMode mode;
@@ -89,7 +86,7 @@ class TranslationTask {
   });
 }
 
-/// Outcome of processing a manga page through the translation pipeline.
+/// Translation result for an image page.
 class TranslationResult {
   final String imagePath;
   final List<MangaTranslatedBlock> blocks;

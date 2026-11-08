@@ -8,12 +8,12 @@ import 'manga_ocr_service.dart';
 import 'onnx_translation_engine.dart';
 import 'translation_models.dart';
 
-Future<List<MangaTranslatedBlock>> _translateBlocksInWorker(
+Future<List<MangaTranslatedBlock>> _translateBlocks(
   List<RawMangaTextBlock> rawBlocks,
   Size imageSize,
+  OnnxTranslationEngine engine,
 ) async {
   final List<MangaTranslatedBlock> results = [];
-  final engine = OnnxTranslationEngine.instance;
 
   for (final raw in rawBlocks) {
     final isBubble = MangaOcrService.classifyIsSpeechBubble(
@@ -33,8 +33,7 @@ Future<List<MangaTranslatedBlock>> _translateBlocksInWorker(
   return results;
 }
 
-/// Orchestrates OCR and ONNX model inference with a strict 1000ms idle-debounce timer,
-/// result caching, and background isolate dispatch to protect UI 60fps scrolling.
+/// Coordinates OCR, translation, debouncing, and result caching.
 class TranslationIsolateCoordinator {
   final MangaOcrService _ocrService;
   final OnnxTranslationEngine _translationEngine;
@@ -43,7 +42,8 @@ class TranslationIsolateCoordinator {
     MangaOcrService? ocrService,
     OnnxTranslationEngine? translationEngine,
   })  : _ocrService = ocrService ?? MangaOcrService(),
-        _translationEngine = translationEngine ?? OnnxTranslationEngine.instance;
+        _translationEngine =
+            translationEngine ?? OnnxTranslationEngine.instance;
 
   Timer? _debounceTimer;
   int _activeSequence = 0;
@@ -66,10 +66,7 @@ class TranslationIsolateCoordinator {
     );
   }
 
-  /// Schedules translation for the page at [imagePath].
-  ///
-  /// Resets the 1.000 ms debounce timer on every call so translation only initiates
-  /// once scrolling has settled completely.
+  /// Schedules translation with debouncing for [imagePath].
   void scheduleTranslation({
     required String imagePath,
     required Size imageSize,
@@ -125,9 +122,10 @@ class TranslationIsolateCoordinator {
         return;
       }
 
-      final translatedBlocks = await compute(
-        (data) => _translateBlocksInWorker(data.$1, data.$2),
-        (rawBlocks, imageSize),
+      final translatedBlocks = await _translateBlocks(
+        rawBlocks,
+        imageSize,
+        _translationEngine,
       );
 
       if (sequence != _activeSequence) return;
@@ -141,7 +139,8 @@ class TranslationIsolateCoordinator {
 
       _cache[imagePath] = result;
       resultNotifier.value = result;
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('Translation execution error on $imagePath: $e\n$stack');
       if (sequence == _activeSequence) {
         final failResult = TranslationResult.failure(
           imagePath: imagePath,

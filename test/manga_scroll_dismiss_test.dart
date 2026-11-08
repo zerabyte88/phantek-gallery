@@ -27,7 +27,7 @@ void main() {
     ),
   );
 
-  Widget buildViewer({bool mangaMode = false}) {
+  Widget buildViewer({bool mangaMode = false, List<MediaItem>? items}) {
     return ProviderScope(
       child: MaterialApp(
         localizationsDelegates: const [
@@ -38,7 +38,7 @@ void main() {
         ],
         supportedLocales: const [Locale('en'), Locale('id')],
         home: ImageViewerScreen(
-          items: testItems,
+          items: items ?? testItems,
           initialIndex: 0,
           initialMangaMode: mangaMode,
         ),
@@ -80,8 +80,7 @@ void main() {
       expect(find.byType(ListView), findsOneWidget);
     });
 
-    testWidgets(
-        'Downward drag in standard photo mode triggers dismiss pop',
+    testWidgets('Downward drag in standard photo mode triggers dismiss pop',
         (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
@@ -172,6 +171,78 @@ void main() {
       alignWidget = tester.widget<AnimatedAlign>(alignFinder);
       expect(alignWidget.alignment, Alignment.topCenter);
       expect(find.text('1 / 5'), findsOneWidget);
+    });
+
+    testWidgets(
+        '74-item manga reader initializes at 1 / 74 and displays 74 / 74 at bottom',
+        (tester) async {
+      final items74 = List.generate(
+        74,
+        (i) => MediaItem(
+          id: 'page_$i',
+          path: '/mock/manga/page_$i.jpg',
+          name: 'page_${i.toString().padLeft(3, '0')}.jpg',
+          album: '74 Chapter Manga',
+          date: DateTime(2026, 1, 1),
+          isVideo: false,
+          size: 1024 * 1024,
+          width: 800,
+          height: 1200,
+        ),
+      );
+
+      await tester.pumpWidget(buildViewer(mangaMode: true, items: items74));
+      await tester.pumpAndSettle();
+
+      // Verify initial state
+      expect(find.text('1 / 74'), findsOneWidget);
+
+      // Scroll to bottom
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      while (scrollable.position.pixels < scrollable.position.maxScrollExtent) {
+        final prev = scrollable.position.pixels;
+        scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+        await tester.pump();
+        if (scrollable.position.pixels == prev) break;
+      }
+      await tester.pumpAndSettle();
+
+      // Verify 74 / 74 is displayed at bottom
+      expect(find.text('74 / 74'), findsOneWidget);
+    });
+
+    testWidgets('169-item manga reader at maxScrollExtent displays 169 / 169',
+        (tester) async {
+      final items169 = List.generate(
+        169,
+        (i) => MediaItem(
+          id: 'page_$i',
+          path: '/mock/manga/page_$i.jpg',
+          name: 'page_${i.toString().padLeft(3, '0')}.jpg',
+          album: '169 Chapter Manga',
+          date: DateTime(2026, 1, 1),
+          isVideo: false,
+          size: 1024 * 1024,
+          width: 800,
+          height: 1200,
+        ),
+      );
+
+      await tester.pumpWidget(buildViewer(mangaMode: true, items: items169));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 / 169'), findsOneWidget);
+
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      while (scrollable.position.pixels < scrollable.position.maxScrollExtent) {
+        final prev = scrollable.position.pixels;
+        scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+        await tester.pump();
+        if (scrollable.position.pixels == prev) break;
+      }
+      await tester.pumpAndSettle();
+
+      expect(find.text('169 / 169'), findsOneWidget);
     });
   });
 }

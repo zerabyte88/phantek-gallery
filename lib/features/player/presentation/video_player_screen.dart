@@ -327,6 +327,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       },
     );
   }
+
   Timer? _slideshowTimer;
   bool _isSlideshowPlaying = false;
 
@@ -545,7 +546,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     final isDown = o.dy > 8.0;
     if (_isDraggingDown.value != isDown) {
       _isDraggingDown.value = isDown;
-      if (isDown && _pageController.hasClients && _pageController.page != null) {
+      if (isDown &&
+          _pageController.hasClients &&
+          _pageController.page != null) {
         final snapped =
             _pageController.page!.round().clamp(0, _videos.length - 1);
         if (_current != snapped) {
@@ -666,7 +669,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void _precacheAdjacentVideos(int index) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      for (final offset in const [-1, 1]) {
+      for (final offset in const [-1, 1, -2, 2]) {
         final target = index + offset;
         if (target >= 0 && target < _videos.length) {
           final item = _videos[target];
@@ -1237,7 +1240,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 duration: const Duration(milliseconds: 150),
                 opacity: isRenderingThis ? 0.65 : 1.0,
                 child: Image(
-                  key: ValueKey('psd_${item.path}_${_psdHiddenLayers[item.path]?.length}_${_psdHiddenLayers[item.path]?.join('_')}_${rendered.length}'),
+                  key: ValueKey(
+                      'psd_${item.path}_${_psdHiddenLayers[item.path]?.length}_${_psdHiddenLayers[item.path]?.join('_')}_${rendered.length}'),
                   image: MemoryImage(rendered),
                   fit: BoxFit.contain,
                   gaplessPlayback: true,
@@ -1246,11 +1250,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
               ),
               if (isRenderingThis)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.75),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.15)),
                     boxShadow: const [
                       BoxShadow(
                         color: Colors.black38,
@@ -1267,7 +1273,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF31A8FF)),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Color(0xFF31A8FF)),
                         ),
                       ),
                       SizedBox(width: 10),
@@ -1361,7 +1368,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton.icon(
-                    onPressed: () => _loadPsdDataIfNeeded(item.path, force: true),
+                    onPressed: () =>
+                        _loadPsdDataIfNeeded(item.path, force: true),
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('Retry'),
                     style: ElevatedButton.styleFrom(
@@ -1530,8 +1538,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           ValueListenableBuilder<bool>(
             valueListenable: _videoSurfaceVisible,
             builder: (context, surfaceVisible, child) => Offstage(
-              offstage: surfaceVisible &&
-                  (_controller?.value.isInitialized ?? false),
+              offstage:
+                  surfaceVisible && (_controller?.value.isInitialized ?? false),
               child: child,
             ),
             child: _VideoThumbnailPage(
@@ -2012,9 +2020,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   _startDragX = null;
                   return;
                 }
-                if (_pageController.hasClients && _pageController.page != null) {
-                  final snapped =
-                      _pageController.page!.round().clamp(0, _videos.length - 1);
+                if (_pageController.hasClients &&
+                    _pageController.page != null) {
+                  final snapped = _pageController.page!
+                      .round()
+                      .clamp(0, _videos.length - 1);
                   if (_current != snapped) {
                     _current = snapped;
                   }
@@ -2106,9 +2116,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       !_isCurrentlyVideoZoomed &&
                       d.dy > 0 &&
                       (d.dy > 85 || (vy > 550 && d.dy > 20))) {
-                    if (_pageController.hasClients && _pageController.page != null) {
-                      final targetIndex =
-                          _pageController.page!.round().clamp(0, _videos.length - 1);
+                    if (_pageController.hasClients &&
+                        _pageController.page != null) {
+                      final targetIndex = _pageController.page!
+                          .round()
+                          .clamp(0, _videos.length - 1);
                       _current = targetIndex;
                       _pageController.jumpToPage(_current);
                     }
@@ -2242,16 +2254,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                       _isScrubbing ||
                                       _activePointers.length >= 2)
                                   ? const NeverScrollableScrollPhysics()
-                                  : const ClampingScrollPhysics(
-                                      parent: PageScrollPhysics(),
-                                    ),
+                                  : const PageScrollPhysics(),
                               itemBuilder: (context, index) {
                                 final isCur = index == _current;
                                 return ListenableBuilder(
-                                  listenable:
-                                      Listenable.merge([_isDraggingDown, _isDismissing]),
+                                  listenable: Listenable.merge(
+                                      [_isDraggingDown, _isDismissing]),
                                   builder: (context, child) {
-                                    if ((_isDraggingDown.value || _isDismissing.value) &&
+                                    if ((_isDraggingDown.value ||
+                                            _isDismissing.value) &&
                                         !isCur) {
                                       return const SizedBox.shrink();
                                     }
@@ -2260,94 +2271,90 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                   child: RepaintBoundary(
                                     child: Center(
                                       child: ClipRect(
-                                        child: InteractiveViewer(
-                                        key:
-                                            ValueKey('iv_${_videos[index].id}'),
-                                        transformationController: isCur
-                                            ? _transformationController
-                                            : null,
-                                        minScale: 1.0,
-                                        maxScale: 8.0,
-                                        panEnabled:
-                                            isCur && _isCurrentlyVideoZoomed,
-                                        scaleEnabled: isCur,
-                                        clipBehavior: Clip.hardEdge,
-                                        onInteractionStart: isCur
-                                            ? (details) {
-                                                _zoomAnimController?.stop();
-                                                if (details.pointerCount >= 2) {
-                                                  _isPinching = true;
-                                                }
-                                              }
-                                            : null,
-                                        onInteractionUpdate: isCur
-                                            ? (details) {
-                                                final scale =
-                                                    _transformationController
-                                                        .value
-                                                        .getMaxScaleOnAxis();
-                                                final isZoomed = scale > 1.05;
-                                                if (isZoomed !=
-                                                    _isVideoZoomed) {
-                                                  _isVideoZoomed = isZoomed;
-                                                }
-                                              }
-                                            : null,
-                                        onInteractionEnd: isCur
-                                            ? (details) {
-                                                _isPinching = false;
-                                                final scale =
-                                                    _transformationController
-                                                        .value
-                                                        .getMaxScaleOnAxis();
-                                                if (scale <= 1.02) {
-                                                  _resetVideoZoom();
-                                                } else {
-                                                  if (!_isVideoZoomed &&
-                                                      mounted) {
-                                                    setState(() {
-                                                      _isVideoZoomed = true;
-                                                    });
+                                        child: isCur
+                                            ? InteractiveViewer(
+                                                key: ValueKey(
+                                                    'iv_${_videos[index].id}'),
+                                                transformationController:
+                                                    _transformationController,
+                                                minScale: 1.0,
+                                                maxScale: 8.0,
+                                                panEnabled:
+                                                    _isCurrentlyVideoZoomed,
+                                                scaleEnabled: true,
+                                                clipBehavior: Clip.hardEdge,
+                                                onInteractionStart: (details) {
+                                                  _zoomAnimController?.stop();
+                                                  if (details.pointerCount >=
+                                                      2) {
+                                                    _isPinching = true;
                                                   }
-                                                }
-                                              }
-                                            : null,
-                                        child: Center(
-                                          child: HeroMode(
-                                            enabled: isCur,
-                                            child: Hero(
-                                              tag: _videos[index].id,
-                                              transitionOnUserGestures: true,
-                                              flightShuttleBuilder: (
-                                                flightContext,
-                                                animation,
-                                                flightDirection,
-                                                fromHeroContext,
-                                                toHeroContext,
-                                              ) =>
-                                                  _buildHeroShuttle(
-                                                animation: animation,
-                                                flightDirection:
-                                                    flightDirection,
-                                                item: _videos[index],
-                                                fallbackChild:
-                                                    flightDirection ==
-                                                            HeroFlightDirection
-                                                                .push
-                                                        ? toHeroContext.widget
-                                                        : fromHeroContext
-                                                            .widget,
+                                                },
+                                                onInteractionUpdate: (details) {
+                                                  final scale =
+                                                      _transformationController
+                                                          .value
+                                                          .getMaxScaleOnAxis();
+                                                  final isZoomed = scale > 1.05;
+                                                  if (isZoomed !=
+                                                      _isVideoZoomed) {
+                                                    _isVideoZoomed = isZoomed;
+                                                  }
+                                                },
+                                                onInteractionEnd: (details) {
+                                                  _isPinching = false;
+                                                  final scale =
+                                                      _transformationController
+                                                          .value
+                                                          .getMaxScaleOnAxis();
+                                                  if (scale <= 1.02) {
+                                                    _resetVideoZoom();
+                                                  } else {
+                                                    if (!_isVideoZoomed &&
+                                                        mounted) {
+                                                      setState(() {
+                                                        _isVideoZoomed = true;
+                                                      });
+                                                    }
+                                                  }
+                                                },
+                                                child: Center(
+                                                  child: Hero(
+                                                    tag: _videos[index].id,
+                                                    flightShuttleBuilder: (
+                                                      flightContext,
+                                                      animation,
+                                                      flightDirection,
+                                                      fromHeroContext,
+                                                      toHeroContext,
+                                                    ) =>
+                                                        _buildHeroShuttle(
+                                                      animation: animation,
+                                                      flightDirection:
+                                                          flightDirection,
+                                                      item: _videos[index],
+                                                      fallbackChild:
+                                                          flightDirection ==
+                                                                  HeroFlightDirection
+                                                                      .push
+                                                              ? toHeroContext
+                                                                  .widget
+                                                              : fromHeroContext
+                                                                  .widget,
+                                                    ),
+                                                    child:
+                                                        _buildVideoPage(index),
+                                                  ),
+                                                ),
+                                              )
+                                            : Center(
+                                                child: _buildVideoPage(index),
                                               ),
-                                              child: _buildVideoPage(index),
-                                            ),
-                                          ),
-                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
                             ),
                           ),
                         ),
@@ -2434,9 +2441,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                           overlayContent = AnimatedBuilder(
                             animation: anim,
                             builder: (context, _) {
-                              final entrance =
-                                  const Interval(0.65, 1.0, curve: Curves.easeOut)
-                                      .transform(anim.value);
+                              final entrance = const Interval(0.65, 1.0,
+                                      curve: Curves.easeOut)
+                                  .transform(anim.value);
                               final opacity =
                                   (baseOpacity * entrance).clamp(0.0, 1.0);
                               return Opacity(
@@ -3062,9 +3069,7 @@ class _TopBar extends StatelessWidget {
               if (!isTrash && !item.isVideo && PsdService.isPsd(item.path))
                 IconButton(
                   icon: Icon(
-                    psdHasHiddenLayers
-                        ? Icons.layers
-                        : Icons.layers_outlined,
+                    psdHasHiddenLayers ? Icons.layers : Icons.layers_outlined,
                     color: Colors.white,
                     size: 22,
                   ),
@@ -3873,8 +3878,7 @@ class _BottomBarState extends State<_BottomBar> {
                     _dragFraction != null &&
                     dur.inMilliseconds > 0)
                 ? Duration(
-                    milliseconds:
-                        (_dragFraction! * dur.inMilliseconds).round())
+                    milliseconds: (_dragFraction! * dur.inMilliseconds).round())
                 : pos;
             final frac = dur.inMilliseconds > 0
                 ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))
@@ -4281,8 +4285,7 @@ class _BottomBarState extends State<_BottomBar> {
                     _dragFraction != null &&
                     dur.inMilliseconds > 0)
                 ? Duration(
-                    milliseconds:
-                        (_dragFraction! * dur.inMilliseconds).round())
+                    milliseconds: (_dragFraction! * dur.inMilliseconds).round())
                 : pos;
             final frac = dur.inMilliseconds > 0
                 ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))

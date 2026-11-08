@@ -6,13 +6,13 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
-/// Text detection abstraction for host unit testing without native platform channels.
+/// OCR detector contract.
 abstract class MangaTextDetector {
   Future<List<RawMangaTextBlock>> detectText(String imagePath);
   void dispose();
 }
 
-/// Raw detected text block before domain translation.
+/// Raw OCR text block.
 class RawMangaTextBlock {
   final Rect boundingBox;
   final String text;
@@ -25,46 +25,85 @@ class RawMangaTextBlock {
   });
 }
 
-/// Standard ML Kit implementation of text detection for on-device execution.
+/// ML Kit OCR implementation.
 class MlKitMangaTextDetector implements MangaTextDetector {
-  final TextRecognizer _recognizer;
+  final TextRecognitionScript script;
+  TextRecognizer? _recognizer;
+  TextRecognizer? _fallbackRecognizer;
 
-  MlKitMangaTextDetector({TextRecognitionScript script = TextRecognitionScript.japanese})
-      : _recognizer = TextRecognizer(script: script);
+  MlKitMangaTextDetector({this.script = TextRecognitionScript.japanese});
+
+  TextRecognizer _getRecognizer() {
+    return _recognizer ??= TextRecognizer(script: script);
+  }
+
+  TextRecognizer _getFallbackRecognizer() {
+    return _fallbackRecognizer ??=
+        TextRecognizer(script: TextRecognitionScript.latin);
+  }
 
   @override
   Future<List<RawMangaTextBlock>> detectText(String imagePath) async {
     try {
       final inputImage = InputImage.fromFilePath(imagePath);
-      final recognized = await _recognizer.processImage(inputImage);
+      final recognizer = _getRecognizer();
+      final recognized = await recognizer.processImage(inputImage);
+      return _mapBlocks(recognized);
+    } catch (e, stack) {
+      debugPrint('ML Kit OCR error on $imagePath ($script): $e\n$stack');
 
-      return recognized.blocks.map((block) {
-        final box = block.boundingBox;
-        return RawMangaTextBlock(
-          boundingBox: Rect.fromLTWH(
-            box.left.toDouble(),
-            box.top.toDouble(),
-            box.width.toDouble(),
-            box.height.toDouble(),
-          ),
-          text: block.text,
-          recognizedLanguages: block.recognizedLanguages,
-        );
-      }).toList();
-    } catch (e) {
-      debugPrint('ML Kit OCR error on $imagePath: $e');
-      return [];
+      if (script == TextRecognitionScript.latin) {
+        return [];
+      }
+
+      // Fallback to Latin if script model is unavailable
+      try {
+        debugPrint(
+            'Attempting safe fallback to Latin script recognition for $imagePath');
+        final inputImage = InputImage.fromFilePath(imagePath);
+        final fallbackRecognizer = _getFallbackRecognizer();
+        final fallbackRecognized =
+            await fallbackRecognizer.processImage(inputImage);
+        return _mapBlocks(fallbackRecognized);
+      } catch (fallbackError) {
+        debugPrint(
+            'ML Kit Latin fallback OCR error on $imagePath: $fallbackError');
+        return [];
+      }
     }
+  }
+
+  List<RawMangaTextBlock> _mapBlocks(RecognizedText recognized) {
+    return recognized.blocks.map((block) {
+      final box = block.boundingBox;
+      return RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(
+          box.left.toDouble(),
+          box.top.toDouble(),
+          box.width.toDouble(),
+          box.height.toDouble(),
+        ),
+        text: block.text,
+        recognizedLanguages: block.recognizedLanguages,
+      );
+    }).toList();
   }
 
   @override
   void dispose() {
-    _recognizer.close();
+    try {
+      _recognizer?.close();
+    } catch (_) {}
+    _recognizer = null;
+
+    try {
+      _fallbackRecognizer?.close();
+    } catch (_) {}
+    _fallbackRecognizer = null;
   }
 }
 
-/// Offline OCR service specialized in manga layouts, classifying text blocks into
-/// dialog speech bubbles vs outer SFX based on geometric aspect ratio and structure.
+/// Manga OCR service with speech bubble vs SFX classification.
 class MangaOcrService {
   final MangaTextDetector _detector;
 
@@ -79,9 +118,9 @@ class MangaOcrService {
     return _detector.detectText(imagePath);
   }
 
-  /// Evaluates whether a bounding box and text block belongs to a speech bubble
-  /// versus outer comic sound effects (SFX) / background art text.
-  static bool classifyIsSpeechBubble(Rect boundingBox, String text, Size imageSize) {
+  /// Returns true if text block matches speech bubble geometry.
+  static bool classifyIsSpeechBubble(
+      Rect boundingBox, String text, Size imageSize) {
     if (boundingBox.width <= 0 || boundingBox.height <= 0) return false;
 
     final trimmed = text.trim();
@@ -89,17 +128,18 @@ class MangaOcrService {
 
     final aspectRatio = boundingBox.width / boundingBox.height;
 
-    // Extreme aspect ratio heuristic: ultra-tall or ultra-wide text bursts are SFX
+    // Extreme aspect ratio indicates SFX
     if (aspectRatio < 0.25 || aspectRatio > 4.2) {
       return false;
     }
 
-    // Isolated single-character bursts outside typical bubble dimensions
-    if (trimmed.length == 1 && (boundingBox.width > 120 || boundingBox.height > 120)) {
+    // Single large character indicates SFX
+    if (trimmed.length == 1 &&
+        (boundingBox.width > 120 || boundingBox.height > 120)) {
       return false;
     }
 
-    // Full-page overlay text exceeding 75% width is likely an SFX title or splash
+    // Full-page banner indicates SFX
     if (imageSize.width > 0 && boundingBox.width > imageSize.width * 0.75) {
       return false;
     }

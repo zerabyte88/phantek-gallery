@@ -53,6 +53,10 @@ android {
         release {
             isMinifyEnabled   = false  // keep false – media paths must not be obfuscated
             isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
@@ -60,6 +64,12 @@ android {
             }
         }
     }
+}
+
+dependencies {
+    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
 }
 
 kotlin {
