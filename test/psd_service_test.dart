@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:phantek_gallery/core/services/license_service.dart';
 import 'package:phantek_gallery/core/services/psd_service.dart';
+import 'package:phantek_gallery/core/services/settings_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _SyntheticLayer {
   final String pascalName;
@@ -484,6 +486,67 @@ void main() {
 
       await tempDir.delete(recursive: true);
     });
+
+    test('loadPsdDocument applies getSavedLayerVisibility when saved', () async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final tempDir = await Directory.systemTemp.createTemp('psd_saved_layers_');
+      final psdFile = File('${tempDir.path}/test_saved.psd');
+
+      // Layer 0: Solid Red (255, 0, 0), Layer 1: Solid Blue (0, 0, 255)
+      final psdBytes = _createRenderableSyntheticPsd(
+        width: 10,
+        height: 10,
+        layerColors: [
+          img.ColorRgba8(255, 0, 0, 255),
+          img.ColorRgba8(0, 0, 255, 255),
+        ],
+      );
+      await psdFile.writeAsBytes(psdBytes);
+
+      // Save Layer 1 as hidden
+      await PsdService.instance.saveLayerVisibility(psdFile.path, {1});
+      expect(PsdService.instance.getSavedLayerVisibility(psdFile.path), equals({1}));
+
+      // loadPsdDocument should apply saved visibility ({1} hidden -> only Red visible)
+      final rendered = await PsdService.instance.loadPsdDocument(psdFile.path);
+      expect(rendered, isNotNull);
+      final decoded = img.decodeJpg(rendered!)!;
+      final pixel = decoded.getPixel(5, 5);
+      expect(pixel.r.toInt(), greaterThan(200));
+      expect(pixel.b.toInt(), lessThan(50));
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('renderWithLayers with empty hiddenLayerIndices does not fall back to Photoshop composite when layers were originally hidden in Photoshop', () async {
+      final tempDir = await Directory.systemTemp.createTemp('psd_hidden_comp_');
+      final psdFile = File('${tempDir.path}/test_hidden_comp.psd');
+
+      final bytes = _createRenderablePsdWithHiddenLayerAndWhiteComposite(
+        width: 10,
+        height: 10,
+      );
+      await psdFile.writeAsBytes(bytes);
+
+      final layers = await PsdService.instance.getLayers(psdFile.path);
+      expect(layers.length, 2);
+      expect(layers[1].isVisible, isFalse);
+
+      final rendered = await PsdService.instance.renderWithLayers(
+        psdFile.path,
+        hiddenLayerIndices: {},
+      );
+      expect(rendered, isNotNull);
+      final decoded = img.decodeJpg(rendered!)!;
+      final pixel = decoded.getPixel(5, 5);
+      expect(pixel.r.toInt(), greaterThan(200));
+      expect(pixel.g.toInt(), lessThan(50));
+      expect(pixel.b.toInt(), lessThan(50));
+
+      await tempDir.delete(recursive: true);
+    });
   });
 }
 
@@ -574,6 +637,113 @@ Uint8List _createRenderableSyntheticPsd({
   bb.add(sec4Meta.buffer.asUint8List());
   bb.add(recordsBytes);
   bb.add(channelDataBytes);
+
+  return bb.toBytes();
+}
+
+Uint8List _createRenderablePsdWithHiddenLayerAndWhiteComposite({
+  int width = 10,
+  int height = 10,
+}) {
+  final bb = BytesBuilder();
+
+  // 1. Header (26 bytes)
+  bb.add([0x38, 0x42, 0x50, 0x53]); // '8BPS'
+  final headerMeta = ByteData(22);
+  headerMeta.setUint16(0, 1);
+  headerMeta.setUint16(8, 3);
+  headerMeta.setUint32(10, height);
+  headerMeta.setUint32(14, width);
+  headerMeta.setUint16(18, 8);
+  headerMeta.setUint16(20, 3);
+  bb.add(headerMeta.buffer.asUint8List());
+
+  // 2. Color Mode Data
+  bb.add([0, 0, 0, 0]);
+
+  // 3. Image Resources
+  bb.add([0, 0, 0, 0]);
+
+  final channelLen = 2 + width * height;
+
+  // 4. Section 4: Layer records
+  final recordsBuilder = BytesBuilder();
+  final countData = ByteData(2);
+  countData.setInt16(0, 2);
+  recordsBuilder.add(countData.buffer.asUint8List());
+
+  // Layer 0: White background (visible: flags = 0)
+  final rect0 = ByteData(16);
+  rect0.setInt32(0, 0);
+  rect0.setInt32(4, 0);
+  rect0.setInt32(8, height);
+  rect0.setInt32(12, width);
+  recordsBuilder.add(rect0.buffer.asUint8List());
+  final chanCount0 = ByteData(2);
+  chanCount0.setUint16(0, 3);
+  recordsBuilder.add(chanCount0.buffer.asUint8List());
+  final chanInfo0 = ByteData(3 * 6);
+  for (var c = 0; c < 3; c++) {
+    chanInfo0.setInt16(c * 6, c);
+    chanInfo0.setUint32(c * 6 + 2, channelLen);
+  }
+  recordsBuilder.add(chanInfo0.buffer.asUint8List());
+  recordsBuilder.add([0x38, 0x42, 0x49, 0x4D]);
+  recordsBuilder.add([0x6E, 0x6F, 0x72, 0x6D]);
+  recordsBuilder.add([255, 0, 0, 0]); // visible
+  recordsBuilder.add([0, 0, 0, 0]);
+
+  // Layer 1: Red Box (hidden in PS: flags = 2)
+  final rect1 = ByteData(16);
+  rect1.setInt32(0, 0);
+  rect1.setInt32(4, 0);
+  rect1.setInt32(8, height);
+  rect1.setInt32(12, width);
+  recordsBuilder.add(rect1.buffer.asUint8List());
+  final chanCount1 = ByteData(2);
+  chanCount1.setUint16(0, 3);
+  recordsBuilder.add(chanCount1.buffer.asUint8List());
+  final chanInfo1 = ByteData(3 * 6);
+  for (var c = 0; c < 3; c++) {
+    chanInfo1.setInt16(c * 6, c);
+    chanInfo1.setUint32(c * 6 + 2, channelLen);
+  }
+  recordsBuilder.add(chanInfo1.buffer.asUint8List());
+  recordsBuilder.add([0x38, 0x42, 0x49, 0x4D]);
+  recordsBuilder.add([0x6E, 0x6F, 0x72, 0x6D]);
+  recordsBuilder.add([255, 0, 2, 0]); // bit 1 set -> hidden in PS
+  recordsBuilder.add([0, 0, 0, 0]);
+
+  // Channel image data
+  final channelDataBuilder = BytesBuilder();
+  for (var c = 0; c < 3; c++) {
+    channelDataBuilder.add([0, 0]);
+    channelDataBuilder.add(List.filled(width * height, 255));
+  }
+  channelDataBuilder.add([0, 0]);
+  channelDataBuilder.add(List.filled(width * height, 255)); // R
+  channelDataBuilder.add([0, 0]);
+  channelDataBuilder.add(List.filled(width * height, 0)); // G
+  channelDataBuilder.add([0, 0]);
+  channelDataBuilder.add(List.filled(width * height, 0)); // B
+
+  final recordsBytes = recordsBuilder.toBytes();
+  final channelDataBytes = channelDataBuilder.toBytes();
+  final layerInfoLen = recordsBytes.length + channelDataBytes.length;
+
+  final sec4Meta = ByteData(8);
+  sec4Meta.setUint32(0, 4 + layerInfoLen);
+  sec4Meta.setUint32(4, layerInfoLen);
+  bb.add(sec4Meta.buffer.asUint8List());
+  bb.add(recordsBytes);
+  bb.add(channelDataBytes);
+
+  // 5. Section 5: Merged composite from Photoshop without Red Box (pure white!)
+  bb.add([0, 0]);
+  final whitePlane = List.filled(width * height, 255);
+  bb.add(whitePlane); // R
+  bb.add(whitePlane); // G
+  bb.add(whitePlane); // B
 
   return bb.toBytes();
 }

@@ -225,7 +225,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           .renderWithLayers(
         path,
         hiddenLayerIndices: savedHidden,
-        maxDimension: 2048,
+        maxDimension: 1600,
       )
           .then((bytes) {
         if (!mounted) return;

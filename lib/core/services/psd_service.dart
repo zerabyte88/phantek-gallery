@@ -876,28 +876,38 @@ class PsdService {
 
       // 3. Last-resort fallback when both renderers return null and all layers are visible
       if (hiddenLayerIndices.isEmpty) {
-        final composite = await extractMergedComposite(
-          filePath,
-          maxDimension: maxDimension,
-        );
-        if (composite != null && composite.isNotEmpty) {
-          return composite;
+        final layers = await getLayers(filePath);
+        final allVisibleInPs =
+            layers.isNotEmpty && layers.every((l) => l.isVisible);
+        if (allVisibleInPs) {
+          final composite = await extractMergedComposite(
+            filePath,
+            maxDimension: maxDimension,
+          );
+          if (composite != null && composite.isNotEmpty) {
+            return composite;
+          }
+          return await decodeThumbnail(filePath, maxDimension: maxDimension);
         }
-        return await decodeThumbnail(filePath, maxDimension: maxDimension);
       }
 
       return null;
     } catch (e) {
       debugPrint('[PsdService] renderWithLayers error for $filePath: $e');
       if (hiddenLayerIndices.isEmpty) {
-        final composite = await extractMergedComposite(
-          filePath,
-          maxDimension: maxDimension,
-        );
-        if (composite != null && composite.isNotEmpty) {
-          return composite;
+        final layers = await getLayers(filePath);
+        final allVisibleInPs =
+            layers.isNotEmpty && layers.every((l) => l.isVisible);
+        if (allVisibleInPs) {
+          final composite = await extractMergedComposite(
+            filePath,
+            maxDimension: maxDimension,
+          );
+          if (composite != null && composite.isNotEmpty) {
+            return composite;
+          }
+          return await decodeThumbnail(filePath, maxDimension: maxDimension);
         }
-        return await decodeThumbnail(filePath, maxDimension: maxDimension);
       }
       return null;
     }
@@ -918,6 +928,19 @@ class PsdService {
 
       // Pre-cache layer thumbnails in background so they are ready for layer sheet
       unawaited(getLayerThumbnails(filePath).catchError((_) => <int, Uint8List>{}));
+
+      // Check if user has saved custom layer visibility
+      final savedHidden = getSavedLayerVisibility(filePath);
+      if (savedHidden != null) {
+        final rendered = await renderWithLayers(
+          filePath,
+          hiddenLayerIndices: savedHidden,
+          maxDimension: maxDimension,
+        );
+        if (rendered != null && rendered.isNotEmpty) {
+          return rendered;
+        }
+      }
 
       // Tier 1: Merged composite from Section 5
       try {
@@ -1150,6 +1173,8 @@ Uint8List? _isolateRenderWithLayers(_RenderWithLayersParams params) {
     }
 
     img.Image? rendered;
+    final allVisibleInPs = psd.layers.isNotEmpty &&
+        psd.layers.every((l) => (l.flags & img.PsdFlag.hidden) == 0);
 
     if (psd.layers.isNotEmpty) {
       for (var i = 0; i < psd.layers.length; i++) {
@@ -1191,12 +1216,14 @@ Uint8List? _isolateRenderWithLayers(_RenderWithLayersParams params) {
           rendered = canvas;
         } catch (_) {}
       }
-    } else if (params.hiddenLayerIndices.isEmpty && psd.mergedImage != null) {
+    } else if (params.hiddenLayerIndices.isEmpty &&
+        allVisibleInPs &&
+        psd.mergedImage != null) {
       rendered = psd.mergedImage;
     }
 
     if (rendered == null) {
-      if (params.hiddenLayerIndices.isEmpty) {
+      if (params.hiddenLayerIndices.isEmpty && allVisibleInPs) {
         rendered = psd.mergedImage ?? decoder.decode(bytes);
       }
     }

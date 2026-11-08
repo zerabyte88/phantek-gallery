@@ -194,12 +194,13 @@ class SettingsService {
 
   // ── PSD Layer Visibility Persistence ────────────────────────────────────────
 
-  String _psdLayerKey(String normalizedPath) =>
-      'psd_hidden_layers_${normalizedPath.hashCode}';
+  String _psdLayerKey(String path) {
+    final normalized = path.replaceAll(r'\', '/').toLowerCase();
+    return 'psd_hidden_layers_${normalized.hashCode}';
+  }
 
   Set<int>? getSavedPsdHiddenLayers(String path) {
-    final normalized = path.replaceAll(r'\', '/');
-    final key = _psdLayerKey(normalized);
+    final key = _psdLayerKey(path);
     final raw = _prefs.getString(key);
     if (raw == null) return null;
     try {
@@ -211,14 +212,12 @@ class SettingsService {
   }
 
   Future<void> savePsdHiddenLayers(String path, Set<int> hiddenIndices) async {
-    final normalized = path.replaceAll(r'\', '/');
-    final key = _psdLayerKey(normalized);
+    final key = _psdLayerKey(path);
     await _prefs.setString(key, jsonEncode(hiddenIndices.toList()));
   }
 
   Future<void> clearSavedPsdHiddenLayers(String path) async {
-    final normalized = path.replaceAll(r'\', '/');
-    final key = _psdLayerKey(normalized);
+    final key = _psdLayerKey(path);
     await _prefs.remove(key);
   }
 
