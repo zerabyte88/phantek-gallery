@@ -6,13 +6,15 @@ enum SortCriterion {
   shootingTime,
   timeAdded,
   name,
-  size;
+  size,
+  album;
 
   String get label => switch (this) {
         SortCriterion.shootingTime => 'By shooting time',
         SortCriterion.timeAdded => 'By time added',
         SortCriterion.name => 'By name',
         SortCriterion.size => 'By size',
+        SortCriterion.album => 'By album',
       };
 
   String localizedLabel(BuildContext context) => switch (this) {
@@ -20,6 +22,7 @@ enum SortCriterion {
         SortCriterion.timeAdded => context.tr.sortByTimeAdded,
         SortCriterion.name => context.tr.sortByName,
         SortCriterion.size => context.tr.sortBySize,
+        SortCriterion.album => context.tr.sortByAlbum,
       };
 
   SortDirection get defaultDirection => switch (this) {
@@ -27,6 +30,7 @@ enum SortCriterion {
         SortCriterion.timeAdded => SortDirection.descending,
         SortCriterion.name => SortDirection.ascending,
         SortCriterion.size => SortDirection.descending,
+        SortCriterion.album => SortDirection.ascending,
       };
 
   String directionLabel(SortDirection direction) => switch (this) {
@@ -35,7 +39,8 @@ enum SortCriterion {
           direction == SortDirection.ascending
               ? 'Oldest to newest'
               : 'Newest to oldest',
-        SortCriterion.name =>
+        SortCriterion.name ||
+        SortCriterion.album =>
           direction == SortDirection.ascending ? 'A to Z' : 'Z to A',
         SortCriterion.size => direction == SortDirection.ascending
             ? 'Smallest to largest'
@@ -50,9 +55,11 @@ enum SortCriterion {
           direction == SortDirection.ascending
               ? context.tr.oldestToNewest
               : context.tr.newestToOldest,
-        SortCriterion.name => direction == SortDirection.ascending
-            ? context.tr.aToZ
-            : context.tr.zToA,
+        SortCriterion.name ||
+        SortCriterion.album =>
+          direction == SortDirection.ascending
+              ? context.tr.aToZ
+              : context.tr.zToA,
         SortCriterion.size => direction == SortDirection.ascending
             ? context.tr.smallestToLargest
             : context.tr.largestToSmallest,
@@ -83,17 +90,23 @@ enum SortOption {
   /// Shooting time: oldest first.
   shootingTimeAsc,
 
-  /// File name A → Z (case-insensitive).
+  /// File name A → Z (natural alphanumeric).
   nameAZ,
 
-  /// File name Z → A (case-insensitive).
+  /// File name Z → A (natural alphanumeric).
   nameZA,
 
   /// File size: largest first.
   sizeDesc,
 
   /// File size: smallest first.
-  sizeAsc;
+  sizeAsc,
+
+  /// Album A → Z, then file name A → Z.
+  albumAZ,
+
+  /// Album Z → A, then file name A → Z.
+  albumZA;
 
   SortCriterion get criterion => switch (this) {
         SortOption.newest || SortOption.oldest => SortCriterion.timeAdded,
@@ -102,18 +115,21 @@ enum SortOption {
           SortCriterion.shootingTime,
         SortOption.nameAZ || SortOption.nameZA => SortCriterion.name,
         SortOption.sizeDesc || SortOption.sizeAsc => SortCriterion.size,
+        SortOption.albumAZ || SortOption.albumZA => SortCriterion.album,
       };
 
   SortDirection get direction => switch (this) {
         SortOption.oldest ||
         SortOption.shootingTimeAsc ||
         SortOption.nameAZ ||
-        SortOption.sizeAsc =>
+        SortOption.sizeAsc ||
+        SortOption.albumAZ =>
           SortDirection.ascending,
         SortOption.newest ||
         SortOption.shootingTimeDesc ||
         SortOption.nameZA ||
-        SortOption.sizeDesc =>
+        SortOption.sizeDesc ||
+        SortOption.albumZA =>
           SortDirection.descending,
       };
 
@@ -140,6 +156,9 @@ enum SortOption {
       SortCriterion.size => direction == SortDirection.descending
           ? SortOption.sizeDesc
           : SortOption.sizeAsc,
+      SortCriterion.album => direction == SortDirection.descending
+          ? SortOption.albumZA
+          : SortOption.albumAZ,
     };
   }
 }

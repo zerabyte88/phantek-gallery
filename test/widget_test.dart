@@ -264,13 +264,14 @@ void main() {
       expect(find.text('By time added'), findsOneWidget);
       expect(find.text('By name'), findsOneWidget);
       expect(find.text('By size'), findsOneWidget);
+      expect(find.text('By album'), findsOneWidget);
       expect(find.text('Restore defaults'), findsOneWidget);
 
       // Tap "By name" and verify subtitle changes to "A to Z"
       await tester.tap(find.text('By name'));
       await tester.pumpAndSettle();
 
-      expect(find.text('A to Z'), findsOneWidget);
+      expect(find.text('A to Z'), findsAtLeastNWidgets(1));
 
       // Tap Close button
       await tester.tap(find.byIcon(Icons.close));

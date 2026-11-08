@@ -275,7 +275,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         final bytes = await PsdService.instance.renderWithLayers(
           path,
           hiddenLayerIndices: newHidden,
-          maxDimension: 2048,
+          maxDimension: 1600,
         );
         if (mounted && _psdRenderSeq[path] == seq) {
           setState(() {
@@ -464,6 +464,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void _onRouteAnimationStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed) {
       _routeTransitionComplete = true;
+      if (mounted && _controller != null && _controller!.value.isInitialized) {
+        _videoSurfaceVisible.value = true;
+      }
       _startPlaybackAfterTransition();
     } else if (status == AnimationStatus.reverse) {
       _videoSurfaceVisible.value = false;
@@ -620,19 +623,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         if (target >= 0 && target < _videos.length) {
           final item = _videos[target];
           if (item.isVideo) {
-            // Avoid native decoder contention when 4K / 60fps video is playing
-            if (_controller?.value.isPlaying != true) {
-              ThumbnailService.instance
-                  .getHighResVideoThumbnail(
-                item.id,
-                filePath: item.path,
-              )
-                  .then((hrBytes) {
-                if (hrBytes != null && mounted) {
-                  precacheImage(MemoryImage(hrBytes), context);
-                }
-              });
-            }
             final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
             if (mem != null && mounted) {
               precacheImage(MemoryImage(mem), context);
@@ -713,20 +703,61 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _lastPositionSaveTime = null;
 
     final settings = ref.read(settingsNotifierProvider);
-    final newController = VideoPlayerController.file(
-      File(path),
-      videoPlayerOptions: VideoPlayerOptions(
-        mixWithOthers: false,
-        allowBackgroundPlayback: false,
-        backBufferDurationMs: 2500,
-      ),
-    );
+    final bool isKnownHighRes = _current < _videos.length &&
+        ((_videos[_current].width != null && _videos[_current].width! > 1920) ||
+            (_videos[_current].height != null &&
+                _videos[_current].height! > 1920));
+
+    final primaryViewType = isKnownHighRes
+        ? VideoViewType.platformView
+        : VideoViewType.textureView;
+    final fallbackViewType = isKnownHighRes
+        ? VideoViewType.textureView
+        : VideoViewType.platformView;
+
+    VideoPlayerController createCandidate(VideoViewType viewType) {
+      return VideoPlayerController.file(
+        File(path),
+        viewType: viewType,
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: false,
+          allowBackgroundPlayback: false,
+        ),
+      );
+    }
+
+    VideoPlayerController? newController;
+    VideoPlayerController? candidate;
 
     try {
-      await newController.initialize();
-    } catch (e) {
-      debugPrint('[VideoPlayer] Initialization error for $path: $e');
-      newController.dispose();
+      candidate = createCandidate(primaryViewType);
+      await candidate.initialize();
+      newController = candidate;
+    } catch (primaryError) {
+      debugPrint(
+        '[VideoPlayer] Primary init ($primaryViewType) failed for $path: $primaryError. Trying fallback ($fallbackViewType)...',
+      );
+      try {
+        await candidate?.dispose();
+      } catch (_) {}
+      candidate = null;
+
+      try {
+        candidate = createCandidate(fallbackViewType);
+        await candidate.initialize();
+        newController = candidate;
+      } catch (fallbackError) {
+        debugPrint(
+          '[VideoPlayer] Fallback init ($fallbackViewType) also failed for $path: $fallbackError',
+        );
+        try {
+          await candidate?.dispose();
+        } catch (_) {}
+        candidate = null;
+      }
+    }
+
+    if (newController == null) {
       return;
     }
 
@@ -766,7 +797,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
     if (mounted) {
       setState(() {});
-      if (_routeTransitionComplete) {
+      if (_routeTransitionComplete ||
+          _routeAnimation == null ||
+          _routeAnimation?.isCompleted == true) {
         _videoSurfaceVisible.value = true;
       }
     }
@@ -779,6 +812,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (val.hasError) {
       debugPrint('[VideoPlayer] Playback error: ${val.errorDescription}');
       return;
+    }
+
+    if (val.isInitialized &&
+        _routeTransitionComplete &&
+        !_videoSurfaceVisible.value) {
+      _videoSurfaceVisible.value = true;
     }
 
     final isPlaying = val.isPlaying;
@@ -1447,7 +1486,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           ValueListenableBuilder<bool>(
             valueListenable: _videoSurfaceVisible,
             builder: (context, surfaceVisible, child) => Offstage(
-              offstage: surfaceVisible,
+              offstage: surfaceVisible &&
+                  (_controller?.value.isInitialized ?? false),
               child: child,
             ),
             child: _VideoThumbnailPage(
@@ -1478,9 +1518,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         ? SizedBox(
                             width: _controller!.value.size.width,
                             height: _controller!.value.size.height,
-                            child: RepaintBoundary(
-                              child: VideoPlayer(_controller!),
-                            ),
+                            child: VideoPlayer(_controller!),
                           )
                         : const SizedBox.shrink(),
                   ),
@@ -2387,6 +2425,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                               generation: thisGen);
                                         } else {
                                           _controller?.play();
+                                          if (!_videoSurfaceVisible.value) {
+                                            _videoSurfaceVisible.value = true;
+                                          }
                                         }
                                         if (!_hasStartedPlaying) {
                                           setState(
@@ -2467,6 +2508,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                             right: 0,
                             child: _BottomBar(
                               controller: _controller,
+                              videoSurfaceVisible: _videoSurfaceVisible,
                               item: item,
                               isVertical: _isCurrentVideoPortrait(),
                               isTrash: widget.isTrash,
@@ -3090,6 +3132,7 @@ class _TooltipCaretPainter extends CustomPainter {
 class _BottomBar extends StatefulWidget {
   const _BottomBar({
     required this.controller,
+    this.videoSurfaceVisible,
     required this.item,
     required this.isVertical,
     required this.isFullscreen,
@@ -3112,6 +3155,7 @@ class _BottomBar extends StatefulWidget {
   });
 
   final VideoPlayerController? controller;
+  final ValueNotifier<bool>? videoSurfaceVisible;
   final MediaItem item;
   final bool isVertical;
   final bool isFullscreen;
@@ -3392,6 +3436,10 @@ class _BottomBarState extends State<_BottomBar> {
     widget.controller?.seekTo(target);
     if (_wasPlayingBeforeDrag) {
       widget.controller?.play();
+      if (widget.videoSurfaceVisible != null &&
+          !widget.videoSurfaceVisible!.value) {
+        widget.videoSurfaceVisible!.value = true;
+      }
     }
     widget.onScrubbingChanged?.call(false);
     _debounceTimer?.cancel();
@@ -3790,6 +3838,10 @@ class _BottomBarState extends State<_BottomBar> {
                         widget.controller?.pause();
                       } else {
                         widget.controller?.play();
+                        if (widget.videoSurfaceVisible != null &&
+                            !widget.videoSurfaceVisible!.value) {
+                          widget.videoSurfaceVisible!.value = true;
+                        }
                       }
                     },
                     child: Padding(
@@ -4322,6 +4374,10 @@ class _BottomBarState extends State<_BottomBar> {
                             widget.controller?.pause();
                           } else {
                             widget.controller?.play();
+                            if (widget.videoSurfaceVisible != null &&
+                                !widget.videoSurfaceVisible!.value) {
+                              widget.videoSurfaceVisible!.value = true;
+                            }
                           }
                         },
                       );

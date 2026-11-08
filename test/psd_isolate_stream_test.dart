@@ -142,6 +142,121 @@ void main() {
 
       await tempDir.delete(recursive: true);
     });
+
+    test('Individual layer toggling toggles specific layers independently', () async {
+      final tempDir = await Directory.systemTemp.createTemp('psd_multi_');
+      final psdFile = File('${tempDir.path}/test_multi.psd');
+
+      final bytes = _createMultiLayerTogglePsd();
+      await psdFile.writeAsBytes(bytes);
+
+      // Case 1: Both layers visible
+      final renderBoth = await PsdService.instance.renderWithLayers(
+        psdFile.path,
+        hiddenLayerIndices: {},
+      );
+      expect(renderBoth, isNotNull);
+      final imgBoth = img.decodeImage(renderBoth!);
+      expect(imgBoth, isNotNull);
+      // Left pixel (5, 10) is Red (Layer 1)
+      final leftBoth = imgBoth!.getPixel(5, 10);
+      expect(leftBoth.r.toInt() > 200, isTrue);
+      expect(leftBoth.g.toInt() < 50, isTrue);
+      // Right pixel (15, 10) is Green (Layer 2)
+      final rightBoth = imgBoth.getPixel(15, 10);
+      expect(rightBoth.r.toInt() < 50, isTrue);
+      expect(rightBoth.g.toInt() > 200, isTrue);
+
+      // Case 2: Layer 1 (Red) hidden, Layer 2 (Green) visible
+      final renderHideRed = await PsdService.instance.renderWithLayers(
+        psdFile.path,
+        hiddenLayerIndices: {1},
+      );
+      expect(renderHideRed, isNotNull);
+      final imgHideRed = img.decodeImage(renderHideRed!);
+      expect(imgHideRed, isNotNull);
+      // Left pixel is now white background
+      final leftHideRed = imgHideRed!.getPixel(5, 10);
+      expect(leftHideRed.r.toInt() > 200, isTrue);
+      expect(leftHideRed.g.toInt() > 200, isTrue);
+      expect(leftHideRed.b.toInt() > 200, isTrue);
+      // Right pixel is still green
+      final rightHideRed = imgHideRed.getPixel(15, 10);
+      expect(rightHideRed.r.toInt() < 50, isTrue);
+      expect(rightHideRed.g.toInt() > 200, isTrue);
+
+      // Case 3: Layer 1 (Red) visible, Layer 2 (Green) hidden
+      final renderHideGreen = await PsdService.instance.renderWithLayers(
+        psdFile.path,
+        hiddenLayerIndices: {2},
+      );
+      expect(renderHideGreen, isNotNull);
+      final imgHideGreen = img.decodeImage(renderHideGreen!);
+      expect(imgHideGreen, isNotNull);
+      // Left pixel is red
+      final leftHideGreen = imgHideGreen!.getPixel(5, 10);
+      expect(leftHideGreen.r.toInt() > 200, isTrue);
+      expect(leftHideGreen.g.toInt() < 50, isTrue);
+      // Right pixel is now white background
+      final rightHideGreen = imgHideGreen.getPixel(15, 10);
+      expect(rightHideGreen.r.toInt() > 200, isTrue);
+      expect(rightHideGreen.g.toInt() > 200, isTrue);
+      expect(rightHideGreen.b.toInt() > 200, isTrue);
+
+      // Case 4: Both Layer 1 and 2 hidden
+      final renderHideBoth = await PsdService.instance.renderWithLayers(
+        psdFile.path,
+        hiddenLayerIndices: {1, 2},
+      );
+      expect(renderHideBoth, isNotNull);
+      final imgHideBoth = img.decodeImage(renderHideBoth!);
+      expect(imgHideBoth, isNotNull);
+      // Both left and right are white background
+      final leftHideBoth = imgHideBoth!.getPixel(5, 10);
+      expect(leftHideBoth.r.toInt() > 200, isTrue);
+      expect(leftHideBoth.g.toInt() > 200, isTrue);
+      final rightHideBoth = imgHideBoth.getPixel(15, 10);
+      expect(rightHideBoth.r.toInt() > 200, isTrue);
+      expect(rightHideBoth.g.toInt() > 200, isTrue);
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('Channels with odd byte lengths and 2-byte word padding decode cleanly', () async {
+      final tempDir = await Directory.systemTemp.createTemp('psd_odd_');
+      final psdFile = File('${tempDir.path}/test_odd.psd');
+
+      final bytes = _createMultiLayerTogglePsd(padOddChannels: true, forceOddLength: true);
+      await psdFile.writeAsBytes(bytes);
+
+      final rendered = await PsdService.instance.renderWithLayers(
+        psdFile.path,
+        hiddenLayerIndices: {1},
+      );
+      expect(rendered, isNotNull);
+      final decoded = img.decodeImage(rendered!);
+      expect(decoded, isNotNull);
+      final rightPixel = decoded!.getPixel(15, 10);
+      expect(rightPixel.g.toInt() > 200, isTrue);
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('Raw DEFLATE channel data decompresses via ZLib fallback', () {
+      final data = Uint8List.fromList(List.generate(20, (i) => i * 10));
+      final deflated = Uint8List.fromList(ZLibEncoder(raw: true).convert(data));
+      final rawChannelData = Uint8List(2 + deflated.length);
+      final bd = ByteData.sublistView(rawChannelData);
+      bd.setUint16(0, 2); // compression = 2 (ZIP)
+      rawChannelData.setRange(2, rawChannelData.length, deflated);
+
+      final decompressed = decompressChannelData(rawChannelData, 20, 1);
+      expect(decompressed, isNotNull);
+      expect(decompressed!.length, 20);
+      expect(decompressed[0], 0);
+      expect(decompressed[1], 10);
+      expect(decompressed[19], 190);
+    });
   });
 }
 
@@ -551,4 +666,145 @@ class _LayerSpec {
 
   _LayerSpec(this.index, this.top, this.left, this.bottom, this.right, this.name, this.color,
       {this.isFolder = false, this.isClosing = false, this.isVisible = true});
+}
+
+Uint8List _createMultiLayerTogglePsd({bool padOddChannels = true, bool forceOddLength = false}) {
+  final bb = BytesBuilder();
+  const docW = 20;
+  const docH = 20;
+
+  // 1. Header (26 bytes)
+  bb.add([0x38, 0x42, 0x50, 0x53]); // '8BPS'
+  final head = ByteData(22);
+  head.setUint16(0, 1); // version 1
+  head.setUint16(8, 3); // channels = 3
+  head.setUint32(10, docH);
+  head.setUint32(14, docW);
+  head.setUint16(18, 8); // 8-bit
+  head.setUint16(20, 3); // RGB
+  bb.add(head.buffer.asUint8List());
+
+  // 2. Color mode data
+  bb.add([0, 0, 0, 0]);
+
+  // 3. Image resources
+  bb.add([0, 0, 0, 0]);
+
+  // 4. Section 4:
+  // Layer 0: Background (white, 20x20)
+  // Layer 1: Red Layer (0, 0, 20, 10) - left half
+  // Layer 2: Green Layer (0, 10, 20, 20) - right half
+  final layerSpecs = [
+    _LayerSpec(0, 0, 0, 20, 20, 'Background', img.ColorRgba8(255, 255, 255, 255), isVisible: true),
+    _LayerSpec(1, 0, 0, 20, 10, 'Red Layer', img.ColorRgba8(255, 0, 0, 255), isVisible: true),
+    _LayerSpec(2, 0, 10, 20, 20, 'Green Layer', img.ColorRgba8(0, 255, 0, 255), isVisible: true),
+  ];
+
+  final recordsBuilder = BytesBuilder();
+  final countData = ByteData(2);
+  countData.setInt16(0, layerSpecs.length);
+  recordsBuilder.add(countData.buffer.asUint8List());
+
+  final channelDataList = <Uint8List>[];
+
+  for (final spec in layerSpecs) {
+    final w = spec.right - spec.left;
+    final h = spec.bottom - spec.top;
+
+    final chanLens = <int>[];
+    final chanColors = [spec.color.r.toInt(), spec.color.g.toInt(), spec.color.b.toInt(), spec.color.a.toInt()];
+    for (var cIdx = 0; cIdx < chanColors.length; cIdx++) {
+      final val = chanColors[cIdx];
+      final scanlines = <Uint8List>[];
+      for (var row = 0; row < h; row++) {
+        final rowBytes = List.filled(w, val);
+        scanlines.add(_encodePackBitsScanline(rowBytes));
+      }
+      final scanlineTable = ByteData(h * 2);
+      for (var row = 0; row < h; row++) {
+        scanlineTable.setUint16(row * 2, scanlines[row].length);
+      }
+      final chBuilder = BytesBuilder();
+      chBuilder.add([0, 1]); // compression = 1 (RLE)
+      chBuilder.add(scanlineTable.buffer.asUint8List());
+      for (final sl in scanlines) {
+        chBuilder.add(sl);
+      }
+      if (forceOddLength && (chBuilder.length % 2 == 0)) {
+        // Add a harmless NOP byte (-128) in RLE stream to make channel length odd
+        chBuilder.addByte(0x80);
+      }
+      final chBytes = chBuilder.toBytes();
+      chanLens.add(chBytes.length);
+      channelDataList.add(chBytes);
+    }
+
+    final rect = ByteData(16);
+    rect.setInt32(0, spec.top);
+    rect.setInt32(4, spec.left);
+    rect.setInt32(8, spec.bottom);
+    rect.setInt32(12, spec.right);
+    recordsBuilder.add(rect.buffer.asUint8List());
+
+    final chanCount = ByteData(2);
+    chanCount.setUint16(0, 4);
+    recordsBuilder.add(chanCount.buffer.asUint8List());
+
+    final chanInfo = ByteData(4 * 6);
+    final chanIds = [0, 1, 2, -1];
+    for (var c = 0; c < 4; c++) {
+      chanInfo.setInt16(c * 6, chanIds[c]);
+      chanInfo.setUint32(c * 6 + 2, chanLens[c]);
+    }
+    recordsBuilder.add(chanInfo.buffer.asUint8List());
+
+    recordsBuilder.add([0x38, 0x42, 0x49, 0x4D]);
+    recordsBuilder.add([0x6E, 0x6F, 0x72, 0x6D]);
+    recordsBuilder.add([255, 0, 0, 0]);
+
+    final extraBuilder = BytesBuilder();
+    extraBuilder.add([0, 0, 0, 0]); // mask
+    extraBuilder.add([0, 0, 0, 0]); // blend
+
+    final nameBytes = spec.name.codeUnits;
+    final nameLen = nameBytes.length;
+    extraBuilder.addByte(nameLen);
+    extraBuilder.add(nameBytes);
+    final pad = (4 - ((nameLen + 1) % 4)) % 4;
+    if (pad > 0) extraBuilder.add(List.filled(pad, 0));
+
+    final extraBytes = extraBuilder.toBytes();
+    final extraLenData = ByteData(4);
+    extraLenData.setUint32(0, extraBytes.length);
+    recordsBuilder.add(extraLenData.buffer.asUint8List());
+    recordsBuilder.add(extraBytes);
+  }
+
+  final channelDataBuilder = BytesBuilder();
+  for (final ch in channelDataList) {
+    channelDataBuilder.add(ch);
+    if (padOddChannels && (ch.length % 2 != 0)) {
+      channelDataBuilder.addByte(0); // WORD alignment padding
+    }
+  }
+
+  final recordsBytes = recordsBuilder.toBytes();
+  final channelDataBytes = channelDataBuilder.toBytes();
+  final layerInfoLen = recordsBytes.length + channelDataBytes.length;
+
+  final sec4Meta = ByteData(8);
+  sec4Meta.setUint32(0, 4 + layerInfoLen);
+  sec4Meta.setUint32(4, layerInfoLen);
+  bb.add(sec4Meta.buffer.asUint8List());
+  bb.add(recordsBytes);
+  bb.add(channelDataBytes);
+
+  // 5. Section 5: Merged composite
+  bb.add([0, 0]); // compression = 0 (RAW)
+  final whitePlane = List.filled(docW * docH, 255);
+  bb.add(whitePlane); // R
+  bb.add(whitePlane); // G
+  bb.add(whitePlane); // B
+
+  return bb.toBytes();
 }

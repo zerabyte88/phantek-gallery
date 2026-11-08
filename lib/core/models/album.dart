@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../enums/sort_option.dart';
+import '../utils/natural_sort.dart';
 import 'media_item.dart';
 
 /// Represents a media album (folder) containing photos and videos.
@@ -62,11 +63,13 @@ List<Album> groupMediaIntoAlbums(
       case SortOption.shootingTimeAsc:
         albums.sort((a, b) => a.coverItem.date.compareTo(b.coverItem.date));
       case SortOption.nameAZ:
-        albums.sort(
-            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        albums.sort((a, b) => naturalCompare(a.name, b.name));
       case SortOption.nameZA:
-        albums.sort(
-            (a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+        albums.sort((a, b) => naturalCompare(b.name, a.name));
+      case SortOption.albumAZ:
+        albums.sort((a, b) => naturalCompare(a.name, b.name));
+      case SortOption.albumZA:
+        albums.sort((a, b) => naturalCompare(b.name, a.name));
       case SortOption.sizeDesc:
         albums.sort((a, b) => b.itemCount.compareTo(a.itemCount));
       case SortOption.sizeAsc:

@@ -97,6 +97,9 @@ class AppLocalizations {
   String get sortByTimeAdded => _t('sortByTimeAdded');
   String get sortByName => _t('sortByName');
   String get sortBySize => _t('sortBySize');
+  String get sortByAlbum => _t('sortByAlbum');
+  String get mangaMode => _t('mangaMode');
+  String get readAsManga => _t('readAsManga');
   String get oldestToNewest => _t('oldestToNewest');
   String get newestToOldest => _t('newestToOldest');
   String get aToZ => _t('aToZ');

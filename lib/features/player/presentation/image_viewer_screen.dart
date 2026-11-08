@@ -134,12 +134,14 @@ class ImageViewerScreen extends ConsumerStatefulWidget {
     required this.initialIndex,
     this.isTrash = false,
     this.startSlideshow = false,
+    this.initialMangaMode = false,
   });
 
   final List<MediaItem> items;
   final int initialIndex;
   final bool isTrash;
   final bool startSlideshow;
+  final bool initialMangaMode;
 
   @override
   ConsumerState<ImageViewerScreen> createState() => _ImageViewerScreenState();
@@ -168,6 +170,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   bool _isMultiTouch = false;
   final Set<int> _activePointers = {};
   final ValueNotifier<bool> _isSwipingPage = ValueNotifier<bool>(false);
+  late bool _isMangaMode;
+  late final ScrollController _mangaScrollController;
   Timer? _slideshowTimer;
   bool _isSlideshowPlaying = false;
   bool _didSetMaxBrightness = false;
@@ -277,6 +281,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         final bytes = await PsdService.instance.renderWithLayers(
           path,
           hiddenLayerIndices: newHidden,
+          maxDimension: 1600,
         );
         if (mounted && _psdRenderSeq[path] == seq) {
           setState(() {
@@ -339,6 +344,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   void initState() {
     super.initState();
     _current = widget.initialIndex;
+    _isMangaMode = widget.initialMangaMode;
+    _mangaScrollController = ScrollController();
+    _mangaScrollController.addListener(_onMangaScroll);
+
+    if (_isMangaMode && widget.initialIndex > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentInManga();
+      });
+    }
     _page = PageController(initialPage: _current);
     _transformationController = TransformationController();
     _settle = AnimationController.unbounded(vsync: this)
@@ -408,6 +422,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   @override
   void dispose() {
+    _mangaScrollController.removeListener(_onMangaScroll);
+    _mangaScrollController.dispose();
     _stopSlideshow();
     final notifier = _activeMediaNotifier;
     if (notifier != null) {
@@ -430,6 +446,119 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _drag.dispose();
     _page.dispose();
     super.dispose();
+  }
+
+  void _onMangaScroll() {
+    if (!_mangaScrollController.hasClients || widget.items.isEmpty) return;
+    final offset = _mangaScrollController.offset;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+    double cumulative = 0.0;
+    int activeIndex = 0;
+    for (int i = 0; i < widget.items.length; i++) {
+      final it = widget.items[i];
+      final ar = (it.width != null && it.height != null && it.width! > 0 && it.height! > 0)
+          ? (it.width! / it.height!)
+          : 1.0;
+      final itemHeight = screenWidth / ar;
+      cumulative += itemHeight;
+      if (cumulative > offset + 120) {
+        activeIndex = i;
+        break;
+      }
+      activeIndex = i;
+    }
+
+    if (activeIndex != _current && activeIndex >= 0 && activeIndex < widget.items.length) {
+      setState(() {
+        _current = activeIndex;
+      });
+      _activeMediaNotifier?.state = widget.items[activeIndex].id;
+    }
+  }
+
+  void _scrollToCurrentInManga() {
+    if (!_mangaScrollController.hasClients || _current == 0) return;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    double targetOffset = 0.0;
+    for (int i = 0; i < _current; i++) {
+      final it = widget.items[i];
+      final ar = (it.width != null && it.height != null && it.width! > 0 && it.height! > 0)
+          ? (it.width! / it.height!)
+          : 1.0;
+      targetOffset += screenWidth / ar;
+    }
+    final maxScroll = _mangaScrollController.position.maxScrollExtent;
+    _mangaScrollController.jumpTo(targetOffset.clamp(0.0, maxScroll));
+  }
+
+  void _toggleMangaMode() {
+    setState(() {
+      _isMangaMode = !_isMangaMode;
+    });
+    if (!_isMangaMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_page.hasClients) {
+          _page.jumpToPage(_current);
+        }
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentInManga();
+      });
+    }
+  }
+
+  Widget _buildMangaView() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggleBars,
+      child: ListView.builder(
+        controller: _mangaScrollController,
+        padding: EdgeInsets.zero,
+        physics: const BouncingScrollPhysics(),
+        itemCount: widget.items.length,
+        itemBuilder: (context, index) {
+          final it = widget.items[index];
+          return RepaintBoundary(
+            child: Image(
+              image: screenDisplayImage(it.path),
+              fit: BoxFit.fitWidth,
+              width: double.infinity,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
+              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                if (wasSynchronouslyLoaded) return child;
+                final loaded = frame != null;
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AnimatedOpacity(
+                      opacity: loaded ? 0.0 : 1.0,
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      child: _thumb(it.id, it.path),
+                    ),
+                    AnimatedOpacity(
+                      opacity: loaded ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      child: child,
+                    ),
+                  ],
+                );
+              },
+              errorBuilder: (_, __, ___) => Container(
+                height: 300,
+                color: Colors.black26,
+                alignment: Alignment.center,
+                child: const Icon(Icons.broken_image, size: 60, color: Colors.white38),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   MediaItem get _currentItem => widget.items[_current];
@@ -1250,7 +1379,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       child: child,
                     );
                   },
-                  child: NotificationListener<ScrollNotification>(
+                  child: _isMangaMode
+                      ? _buildMangaView()
+                      : NotificationListener<ScrollNotification>(
                     onNotification: (notification) {
                       if (notification is ScrollStartNotification) {
                         if (notification.dragDetails != null) {
@@ -1470,6 +1601,17 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 tooltip: 'Layers',
                                 onPressed: () => _openPsdLayerSheet(item),
                               ),
+                            IconButton(
+                              icon: Icon(
+                                Icons.auto_stories_rounded,
+                                color: _isMangaMode
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.white,
+                                size: 22,
+                              ),
+                              tooltip: context.tr.mangaMode,
+                              onPressed: _toggleMangaMode,
+                            ),
                             if (!widget.isTrash)
                               IconButton(
                                 icon: const Icon(Icons.info_outline,
@@ -1485,6 +1627,34 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   ),
                 ),
               ),
+              if (_isMangaMode)
+                Positioned(
+                  bottom: showBars ? 90 : 28,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.75),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Text(
+                        '${item.albumName.isNotEmpty ? '${item.albumName} • ' : ''}${_current + 1} / ${widget.items.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -1622,9 +1792,35 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                         }
                                       } else if (value == 'wallpaper') {
                                         ShareService.setAsWallpaper(item.path);
+                                      } else if (value == 'manga') {
+                                        _toggleMangaMode();
                                       }
                                     },
                                     itemBuilder: (context) => [
+                                      PopupMenuItem(
+                                        value: 'manga',
+                                        height: 40,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 14),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.auto_stories_rounded,
+                                              size: 18,
+                                              color: _isMangaMode
+                                                  ? Theme.of(context).colorScheme.primary
+                                                  : Colors.white,
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              context.tr.mangaMode,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 13.5),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                       PopupMenuItem(
                                         value: 'slideshow',
                                         height: 40,

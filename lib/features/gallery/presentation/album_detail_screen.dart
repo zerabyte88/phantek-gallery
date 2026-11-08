@@ -6,6 +6,7 @@ import '../../../app/router.dart';
 import '../../../core/enums/filter_option.dart';
 import '../../../core/enums/sort_option.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/utils/natural_sort.dart';
 import '../../../core/models/media_item.dart';
 import '../../../core/models/settings_model.dart';
 import '../../../core/providers/media_provider.dart';
@@ -224,13 +225,23 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
       SortOption.shootingTimeAsc => [...filteredItems]
         ..sort((a, b) => a.date.compareTo(b.date)),
       SortOption.nameAZ => [...filteredItems]
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
+        ..sort((a, b) => naturalCompare(a.name, b.name)),
       SortOption.nameZA => [...filteredItems]
-        ..sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase())),
+        ..sort((a, b) => naturalCompare(b.name, a.name)),
       SortOption.sizeDesc => [...filteredItems]
         ..sort((a, b) => b.size.compareTo(a.size)),
       SortOption.sizeAsc => [...filteredItems]
         ..sort((a, b) => a.size.compareTo(b.size)),
+      SortOption.albumAZ => [...filteredItems]
+        ..sort((a, b) {
+          final c = naturalCompare(a.albumName, b.albumName);
+          return c != 0 ? c : naturalCompare(a.name, b.name);
+        }),
+      SortOption.albumZA => [...filteredItems]
+        ..sort((a, b) {
+          final c = naturalCompare(b.albumName, a.albumName);
+          return c != 0 ? c : naturalCompare(a.name, b.name);
+        }),
     };
 
     ref.listen<String?>(activeViewerMediaIdProvider, (_, nextId) {
@@ -275,6 +286,21 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                   ],
                 ),
           actions: [
+            if (!_selecting && sortedItems.isNotEmpty)
+              BouncyTap(
+                scaleDown: 0.88,
+                child: IconButton(
+                  icon: const Icon(Icons.auto_stories_rounded),
+                  tooltip: context.tr.readAsManga,
+                  onPressed: () {
+                    Navigator.of(context).openImage(
+                      sortedItems,
+                      0,
+                      initialMangaMode: true,
+                    );
+                  },
+                ),
+              ),
             if (_selecting) ...[
               BouncyTap(
                 scaleDown: 0.88,

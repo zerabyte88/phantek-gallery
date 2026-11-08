@@ -37,6 +37,7 @@ Route<dynamic> generateRoute(RouteSettings s) {
           initialIndex: args.initialIndex,
           isTrash: args.isTrash,
           startSlideshow: args.startSlideshow,
+          initialMangaMode: args.initialMangaMode,
         ),
         duration: const Duration(milliseconds: 300),
       );
@@ -111,11 +112,13 @@ class _ViewerArgs {
     required this.initialIndex,
     this.isTrash = false,
     this.startSlideshow = false,
+    this.initialMangaMode = false,
   });
   final List<MediaItem> items;
   final int initialIndex;
   final bool isTrash;
   final bool startSlideshow;
+  final bool initialMangaMode;
 }
 
 /// Helper extension on [NavigatorState] so call sites are clean.
@@ -125,6 +128,7 @@ extension AppNav on NavigatorState {
     int index, {
     bool isTrash = false,
     bool startSlideshow = false,
+    bool initialMangaMode = false,
   }) =>
       pushNamed(
         AppRoutes.image,
@@ -133,6 +137,7 @@ extension AppNav on NavigatorState {
           initialIndex: index,
           isTrash: isTrash,
           startSlideshow: startSlideshow,
+          initialMangaMode: initialMangaMode,
         ),
       );
 

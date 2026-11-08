@@ -30,6 +30,7 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
       SortCriterion.timeAdded: SortDirection.descending,
       SortCriterion.name: SortDirection.ascending,
       SortCriterion.size: SortDirection.descending,
+      SortCriterion.album: SortDirection.ascending,
     };
     // Initialize active criterion with current sort direction.
     _directions[_criterion] = widget.currentSort.direction;

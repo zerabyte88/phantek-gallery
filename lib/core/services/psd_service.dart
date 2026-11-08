@@ -851,7 +851,7 @@ class PsdService {
                 hiddenLayerIndices: hiddenLayerIndices,
                 maxDimension: maxDimension,
               ),
-            ).timeout(const Duration(seconds: 12), onTimeout: () => null));
+            ).timeout(const Duration(seconds: 30), onTimeout: () => null));
         if (streamed != null && streamed.isNotEmpty) {
           return streamed;
         }
@@ -867,7 +867,7 @@ class PsdService {
               hiddenLayerIndices: hiddenLayerIndices,
               maxDimension: maxDimension,
             ),
-          ).timeout(const Duration(seconds: 12), onTimeout: () => null));
+          ).timeout(const Duration(seconds: 30), onTimeout: () => null));
 
       if (result != null && result.isNotEmpty) {
         return result;
@@ -1107,6 +1107,7 @@ Uint8List? _isolateRenderWithLayers(_RenderWithLayersParams params) {
     final decoder = img.PsdDecoder(maxPixels: 0);
     final psd = decoder.decodePsd(bytes);
     if (psd == null) {
+      if (params.hiddenLayerIndices.isNotEmpty) return null;
       final fallback = decoder.decode(bytes);
       if (fallback == null) return null;
       var rendered = fallback;
@@ -1169,7 +1170,11 @@ Uint8List? _isolateRenderWithLayers(_RenderWithLayersParams params) {
       rendered = psd.mergedImage;
     }
 
-    rendered ??= psd.mergedImage ?? decoder.decode(bytes);
+    if (rendered == null) {
+      if (params.hiddenLayerIndices.isEmpty) {
+        rendered = psd.mergedImage ?? decoder.decode(bytes);
+      }
+    }
     if (rendered == null) return null;
 
     if (params.maxDimension > 0 &&
@@ -1201,6 +1206,7 @@ class _LayerChannelRecord {
 
 class _StreamLayerInfo {
   final int index;
+  final String name;
   final int top;
   final int left;
   final int bottom;
@@ -1218,6 +1224,7 @@ class _StreamLayerInfo {
 
   _StreamLayerInfo({
     required this.index,
+    this.name = '',
     required this.top,
     required this.left,
     required this.bottom,
@@ -1275,15 +1282,6 @@ Uint8List _decodePackBits(
     // n == -128 is NOP
   }
   return dst;
-}
-
-int _getSample(Uint8List? data, int idx, int depth) {
-  if (data == null) return 0;
-  if (depth == 16) {
-    final byteIdx = idx * 2;
-    return byteIdx < data.length ? data[byteIdx] : 0;
-  }
-  return idx < data.length ? data[idx] : 0;
 }
 
 Uint8List? _decompressChannelData(
@@ -1351,7 +1349,13 @@ Uint8List? _decompressChannelData(
 
       case 2: // ZIP without prediction
         final compressed = rawChannelData.sublist(2);
-        final decompressed = Uint8List.fromList(zlib.decode(compressed));
+        List<int> decomp;
+        try {
+          decomp = zlib.decode(compressed);
+        } catch (_) {
+          decomp = ZLibDecoder(raw: true).convert(compressed);
+        }
+        final decompressed = Uint8List.fromList(decomp);
         if (decompressed.length >= expectedBytes) {
           return decompressed.length == expectedBytes
               ? decompressed
@@ -1364,7 +1368,13 @@ Uint8List? _decompressChannelData(
 
       case 3: // ZIP with delta differencing
         final compressed = rawChannelData.sublist(2);
-        final decompressed = Uint8List.fromList(zlib.decode(compressed));
+        List<int> decomp;
+        try {
+          decomp = zlib.decode(compressed);
+        } catch (_) {
+          decomp = ZLibDecoder(raw: true).convert(compressed);
+        }
+        final decompressed = Uint8List.fromList(decomp);
         for (var y = 0; y < height; y++) {
           final rowStart = y * rowBytes;
           for (var x = 1; x < rowBytes; x++) {
@@ -1555,16 +1565,24 @@ class _ChannelScanlineReader {
     return null;
   }
 
-  int getSample(int sx, int sy) {
+  Uint8List? getScanline(int sy) {
+    if (sy < 0 || sy >= height) return null;
     if (fullDecompressed != null) {
-      return _getSample(fullDecompressed, sy * width + sx, depth);
+      final start = sy * rowBytes;
+      if (start + rowBytes <= fullDecompressed!.length) {
+        return Uint8List.sublistView(fullDecompressed!, start, start + rowBytes);
+      }
+      return null;
     }
     if (compression == 0) {
-      final offset = 2 + sy * rowBytes + (depth == 16 ? sx * 2 : sx);
-      return (offset < raw.length) ? raw[offset] : 0;
-    } else if (compression == 1) {
-      if (scanlineOffsets == null || scanlineLengths == null) return 0;
-      if (sy < 0 || sy >= height) return 0;
+      final start = 2 + sy * rowBytes;
+      if (start + rowBytes <= raw.length) {
+        return Uint8List.sublistView(raw, start, start + rowBytes);
+      }
+      return null;
+    }
+    if (compression == 1) {
+      if (scanlineOffsets == null || scanlineLengths == null) return null;
       if (_cachedRow != sy) {
         final off = scanlineOffsets![sy];
         final len = scanlineLengths![sy];
@@ -1578,12 +1596,16 @@ class _ChannelScanlineReader {
         }
         _cachedRow = sy;
       }
-      final sl = _cachedScanline;
-      if (sl == null) return 0;
-      final bIdx = (depth == 16) ? sx * 2 : sx;
-      return (bIdx < sl.length) ? sl[bIdx] : 0;
+      return _cachedScanline;
     }
-    return 0;
+    return null;
+  }
+
+  int getSample(int sx, int sy) {
+    final sl = getScanline(sy);
+    if (sl == null) return 0;
+    final bIdx = (depth == 16) ? sx * 2 : sx;
+    return (bIdx < sl.length) ? sl[bIdx] : 0;
   }
 }
 
@@ -1722,6 +1744,8 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
 
       bool isFolder = false;
       bool isClosingDelimiter = false;
+      String? pascalName;
+      String? unicodeName;
       if (extraLen > 0) {
         if (raf.positionSync() + 4 <= extraEnd) {
           final maskLen = ByteData.sublistView(raf.readSync(4)).getUint32(0);
@@ -1736,8 +1760,9 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
         if (raf.positionSync() + 1 <= extraEnd) {
           final nameLen = raf.readSync(1)[0];
           if (raf.positionSync() + nameLen <= extraEnd) {
-            raf.setPositionSync(raf.positionSync() + nameLen);
-            final padding = (4 - (nameLen % 4)) - 1;
+            final nameBytes = raf.readSync(nameLen);
+            pascalName = ascii.decode(nameBytes, allowInvalid: true);
+            final padding = (4 - ((nameLen + 1) % 4)) % 4;
             final nextPos = raf.positionSync() + padding;
             raf.setPositionSync(nextPos <= extraEnd ? nextPos : extraEnd);
           }
@@ -1767,14 +1792,46 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
                 }
               }
             }
+          } else if (tagKey == 'luni') {
+            if (tagLen >= 4) {
+              final countBytes = raf.readSync(4);
+              if (countBytes.length == 4) {
+                final charCount = ByteData.sublistView(countBytes).getUint32(0);
+                final byteCount = charCount * 2;
+                if (byteCount > 0 && byteCount <= tagLen - 4) {
+                  final uniBytes = raf.readSync(byteCount);
+                  final codeUnits = <int>[];
+                  for (var c = 0;
+                      c < charCount && (c * 2 + 1) < uniBytes.length;
+                      c++) {
+                    final ch = (uniBytes[c * 2] << 8) | uniBytes[c * 2 + 1];
+                    if (ch != 0) codeUnits.add(ch);
+                  }
+                  if (codeUnits.isNotEmpty) {
+                    unicodeName = String.fromCharCodes(codeUnits);
+                  }
+                }
+              }
+            }
           }
           raf.setPositionSync(nextTagPos);
         }
         raf.setPositionSync(extraEnd);
       }
 
+      final effectiveName = (unicodeName != null && unicodeName.trim().isNotEmpty)
+          ? unicodeName.trim()
+          : (pascalName != null && pascalName.trim().isNotEmpty
+              ? pascalName.trim()
+              : 'Layer ${i + 1}');
+
+      if (effectiveName == '</Layer group>' || effectiveName == '</Layer set>') {
+        isClosingDelimiter = true;
+      }
+
       layers.add(_StreamLayerInfo(
         index: i,
+        name: effectiveName,
         top: top,
         left: left,
         bottom: bottom,
@@ -1790,21 +1847,54 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
 
     if (layers.isEmpty) return null;
 
+    int lastFolderIdx = -1;
+    int lastDelimiterIdx = -1;
+    for (final l in layers) {
+      if (l.isFolder) lastFolderIdx = l.index;
+      if (l.isClosingDelimiter) lastDelimiterIdx = l.index;
+    }
+    final bool isStandardPsOrder = lastDelimiterIdx == -1 ||
+        lastFolderIdx == -1 ||
+        lastFolderIdx > lastDelimiterIdx;
+
     final folderStack = <int>[];
     final parentMap = <int, int>{};
-    for (var idx = layers.length - 1; idx >= 0; idx--) {
-      final l = layers[idx];
-      if (l.isClosingDelimiter) {
-        if (folderStack.isNotEmpty) folderStack.removeLast();
-        continue;
+
+    if (isStandardPsOrder) {
+      for (var idx = layers.length - 1; idx >= 0; idx--) {
+        final l = layers[idx];
+        if (l.isClosingDelimiter ||
+            l.name == '</Layer group>' ||
+            l.name == '</Layer set>') {
+          if (folderStack.isNotEmpty) folderStack.removeLast();
+          continue;
+        }
+        final pIndex = folderStack.isNotEmpty ? folderStack.last : null;
+        l.parentIndex = pIndex;
+        if (pIndex != null) {
+          parentMap[l.index] = pIndex;
+        }
+        if (l.isFolder) {
+          folderStack.add(l.index);
+        }
       }
-      final pIndex = folderStack.isNotEmpty ? folderStack.last : null;
-      l.parentIndex = pIndex;
-      if (pIndex != null) {
-        parentMap[l.index] = pIndex;
-      }
-      if (l.isFolder) {
-        folderStack.add(l.index);
+    } else {
+      for (var idx = 0; idx < layers.length; idx++) {
+        final l = layers[idx];
+        if (l.isClosingDelimiter ||
+            l.name == '</Layer group>' ||
+            l.name == '</Layer set>') {
+          if (folderStack.isNotEmpty) folderStack.removeLast();
+          continue;
+        }
+        final pIndex = folderStack.isNotEmpty ? folderStack.last : null;
+        l.parentIndex = pIndex;
+        if (pIndex != null) {
+          parentMap[l.index] = pIndex;
+        }
+        if (l.isFolder) {
+          folderStack.add(l.index);
+        }
       }
     }
 
@@ -1836,7 +1926,7 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
     for (final layer in layers) {
       for (final ch in layer.channels) {
         ch.fileOffset = currentOffset;
-        currentOffset += ch.length;
+        currentOffset += ch.length + (ch.length % 2);
       }
     }
 
@@ -1900,66 +1990,99 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
         final r3 = readers[3];
         final rAlpha = readers[-1] ?? readers[-2];
 
+        // Skip mask-only or adjustment layers in color modes
+        if (colorMode != 1 && r0 == null && r1 == null && r2 == null && r3 == null) {
+          continue;
+        }
         if (r0 == null && r1 == null && r2 == null && r3 == null && rAlpha == null) {
           continue;
         }
 
+        final startDstX = (layer.left * scale).round();
+        final startDstY = (layer.top * scale).round();
+        final endDstX = ((layer.left + layer.width) * scale).round();
+        final endDstY = ((layer.top + layer.height) * scale).round();
+        final targetW = max(1, endDstX - startDstX);
+        final targetH = max(1, endDstY - startDstY);
+
+        final minCy = max(0, startDstY);
+        final maxCy = min(canvasH, endDstY);
+        final minCx = max(0, startDstX);
+        final maxCx = min(canvasW, endDstX);
+        if (minCx >= maxCx || minCy >= maxCy) continue;
+
         final layerW = layer.width;
         final layerH = layer.height;
-        final targetW = max(1, (layerW * scale).round());
-        final targetH = max(1, (layerH * scale).round());
-        final layerImg = img.Image(width: targetW, height: targetH, numChannels: 4);
+        final layerOpacity = layer.opacity.clamp(0, 255);
 
-        final stepX = layerW / targetW;
-        final stepY = layerH / targetH;
+        for (var cy = minCy; cy < maxCy; cy++) {
+          final ty = cy - startDstY;
+          final sy = (ty * layerH ~/ targetH).clamp(0, layerH - 1);
 
-        for (var ty = 0; ty < targetH; ty++) {
-          final sy = (ty * stepY).toInt().clamp(0, layerH - 1);
-          for (var tx = 0; tx < targetW; tx++) {
-            final sx = (tx * stepX).toInt().clamp(0, layerW - 1);
+          final rScan = r0?.getScanline(sy);
+          final gScan = r1?.getScanline(sy) ?? rScan;
+          final bScan = r2?.getScanline(sy) ?? rScan;
+          final kScan = r3?.getScanline(sy);
+          final aScan = rAlpha?.getScanline(sy);
 
-            int r, g, b, a;
+          for (var cx = minCx; cx < maxCx; cx++) {
+            final tx = cx - startDstX;
+            final sx = (tx * layerW ~/ targetW).clamp(0, layerW - 1);
+            final sIdx = (depth == 16) ? sx * 2 : sx;
+
+            int r = 0, g = 0, b = 0, a = 255;
             if (colorMode == 4) {
               // CMYK
-              final c = r0?.getSample(sx, sy) ?? 0;
-              final m = r1?.getSample(sx, sy) ?? 0;
-              final y = r2?.getSample(sx, sy) ?? 0;
-              final k = r3?.getSample(sx, sy) ?? 0;
+              final c = (rScan != null && sIdx < rScan.length) ? rScan[sIdx] : 0;
+              final m = (gScan != null && sIdx < gScan.length) ? gScan[sIdx] : 0;
+              final y = (bScan != null && sIdx < bScan.length) ? bScan[sIdx] : 0;
+              final k = (kScan != null && sIdx < kScan.length) ? kScan[sIdx] : 0;
               r = ((255 - c) * (255 - k)) ~/ 255;
               g = ((255 - m) * (255 - k)) ~/ 255;
               b = ((255 - y) * (255 - k)) ~/ 255;
             } else if (colorMode == 1) {
               // Grayscale
-              final gray = r0?.getSample(sx, sy) ?? 0;
+              final gray = (rScan != null && sIdx < rScan.length) ? rScan[sIdx] : 0;
               r = gray;
               g = gray;
               b = gray;
-            } else if (r0 == null && r1 == null && r2 == null) {
-              // Mask-only / alpha-only layer
-              final mask = rAlpha?.getSample(sx, sy) ?? 0;
-              r = mask;
-              g = mask;
-              b = mask;
             } else {
               // RGB
-              r = r0?.getSample(sx, sy) ?? 0;
-              g = r1 != null ? r1.getSample(sx, sy) : (r0?.getSample(sx, sy) ?? 0);
-              b = r2 != null ? r2.getSample(sx, sy) : (r0?.getSample(sx, sy) ?? 0);
+              r = (rScan != null && sIdx < rScan.length) ? rScan[sIdx] : 0;
+              g = (gScan != null && sIdx < gScan.length) ? gScan[sIdx] : r;
+              b = (bScan != null && sIdx < bScan.length) ? bScan[sIdx] : r;
             }
 
-            if (r0 == null && r1 == null && r2 == null && r3 == null && rAlpha != null) {
-              a = 255;
+            if (aScan != null && sIdx < aScan.length) {
+              a = aScan[sIdx];
+            }
+
+            final effA = (a * layerOpacity) ~/ 255;
+            if (effA <= 0) continue;
+
+            if (effA >= 255) {
+              canvas.setPixelRgba(cx, cy, r, g, b, 255);
             } else {
-              a = (rAlpha != null) ? rAlpha.getSample(sx, sy) : 255;
+              final cp = canvas.getPixel(cx, cy);
+              final da = cp.a.toInt();
+              final invSa = 255 - effA;
+              final outA = effA + (da * invSa ~/ 255);
+              if (outA > 0) {
+                final outR = ((r * effA) + (cp.r.toInt() * da * invSa ~/ 255)) ~/ outA;
+                final outG = ((g * effA) + (cp.g.toInt() * da * invSa ~/ 255)) ~/ outA;
+                final outB = ((b * effA) + (cp.b.toInt() * da * invSa ~/ 255)) ~/ outA;
+                canvas.setPixelRgba(
+                  cx,
+                  cy,
+                  outR.clamp(0, 255),
+                  outG.clamp(0, 255),
+                  outB.clamp(0, 255),
+                  outA.clamp(0, 255),
+                );
+              }
             }
-
-            layerImg.setPixelRgba(tx, ty, r, g, b, a);
           }
         }
-
-        final dstX = (layer.left * scale).round();
-        final dstY = (layer.top * scale).round();
-        _compositeLayer(canvas, layerImg, dstX, dstY, layer.opacity);
       } catch (layerErr) {
         debugPrint('[PsdService] stream render error on layer ${layer.index}: $layerErr');
       }
@@ -2152,7 +2275,7 @@ Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) 
     for (final layer in layers) {
       for (final ch in layer.channels) {
         ch.fileOffset = currentOffset;
-        currentOffset += ch.length;
+        currentOffset += ch.length + (ch.length % 2);
       }
     }
 

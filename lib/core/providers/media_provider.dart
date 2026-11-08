@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/media_item.dart';
 import '../enums/sort_option.dart';
 import '../enums/filter_option.dart';
+import '../utils/natural_sort.dart';
 import '../services/media_scanner_service.dart';
 import '../services/media_cache_service.dart';
 import 'settings_provider.dart';
@@ -135,12 +136,22 @@ List<MediaItem> applyFiltersAndSort(
     SortOption.shootingTimeAsc => [...result]
       ..sort((a, b) => a.date.compareTo(b.date)),
     SortOption.nameAZ => [...result]
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
+      ..sort((a, b) => naturalCompare(a.name, b.name)),
     SortOption.nameZA => [...result]
-      ..sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase())),
+      ..sort((a, b) => naturalCompare(b.name, a.name)),
     SortOption.sizeDesc => [...result]
       ..sort((a, b) => b.size.compareTo(a.size)),
     SortOption.sizeAsc => [...result]..sort((a, b) => a.size.compareTo(b.size)),
+    SortOption.albumAZ => [...result]
+      ..sort((a, b) {
+        final c = naturalCompare(a.albumName, b.albumName);
+        return c != 0 ? c : naturalCompare(a.name, b.name);
+      }),
+    SortOption.albumZA => [...result]
+      ..sort((a, b) {
+        final c = naturalCompare(b.albumName, a.albumName);
+        return c != 0 ? c : naturalCompare(a.name, b.name);
+      }),
   };
 }
 
