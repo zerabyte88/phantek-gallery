@@ -166,7 +166,7 @@ const Map<String, String> arTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'النظام',
   'themeSakuraDesc': 'أسود نقي مع وردي زهر الكرز',

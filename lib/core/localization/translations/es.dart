@@ -178,7 +178,7 @@ const Map<String, String> esTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'Sistema',
   'themeSakuraDesc': 'Negro puro con rosa flor de cerezo',

@@ -175,6 +175,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   Timer? _slideshowTimer;
   bool _isSlideshowPlaying = false;
   bool _didSetMaxBrightness = false;
+  final Set<String> _precachedImagePaths = {};
 
   final Map<String, List<PsdLayerInfo>> _psdLayersCache = {};
   final Map<String, Set<int>> _psdHiddenLayers = {};
@@ -441,19 +442,24 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   void _precacheAdjacent(int index) {
     if (!mounted) return;
-    // Pre-cache ±2 neighbor images.
-    for (final offset in const [-1, 1, -2, 2]) {
-      final target = index + offset;
-      if (target >= 0 && target < widget.items.length) {
-        final item = widget.items[target];
-        if (item.isVideo || PsdService.isPsd(item.path)) continue;
-        final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
-        if (mem != null) {
-          precacheImage(MemoryImage(mem), context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Pre-cache immediate ±1 neighbor images.
+      for (final offset in const [-1, 1]) {
+        final target = index + offset;
+        if (target >= 0 && target < widget.items.length) {
+          final item = widget.items[target];
+          if (item.isVideo || PsdService.isPsd(item.path)) continue;
+          if (_precachedImagePaths.add(item.path)) {
+            final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
+            if (mem != null) {
+              precacheImage(MemoryImage(mem), context);
+            }
+            precacheImage(screenDisplayImage(item.path), context);
+          }
         }
-        precacheImage(screenDisplayImage(item.path), context);
       }
-    }
+    });
   }
 
   @override
@@ -1272,6 +1278,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             if (_drag.value != Offset.zero) _setDrag(Offset.zero);
             return;
           }
+          if (_page.hasClients && _page.page != null) {
+            final snapped =
+                _page.page!.round().clamp(0, widget.items.length - 1);
+            if (_current != snapped) {
+              _current = snapped;
+            }
+          }
           _startDragY = e.position.dy;
           _startDragX = e.position.dx;
           _vt = VelocityTracker.withKind(e.kind);
@@ -1294,7 +1307,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           final ady = dy.abs();
 
           if (!_isSwipingHorizontal && _drag.value == Offset.zero) {
-            if (adx > 6 && adx >= ady) {
+            if (adx > 6 && adx > ady) {
               _isSwipingHorizontal = true;
               return;
             }
@@ -1304,9 +1317,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
           _vt.addPosition(e.timeStamp, e.position);
 
-          if (_drag.value != Offset.zero || (dy > 24 && dy > adx * 1.8)) {
+          if (_drag.value != Offset.zero || (dy > 18 && dy > adx * 1.5)) {
             final dampedDx = dx * 0.45;
-            final dragY = (dy - 24).clamp(0.0, 650.0);
+            final dragY = (dy - 18).clamp(0.0, 650.0);
             _setDrag(Offset(dampedDx, dragY));
           }
         },
@@ -1328,6 +1341,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 !_isCurrentlyZoomed &&
                 d.dy > 0 &&
                 (d.dy > 85 || (vy > 550 && d.dy > 20))) {
+              if (_page.hasClients && _page.page != null) {
+                final targetIndex =
+                    _page.page!.round().clamp(0, widget.items.length - 1);
+                _current = targetIndex;
+              }
               _activeMediaNotifier?.state = _currentItem.id;
               Navigator.of(context).pop();
               return;
@@ -1453,7 +1471,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               _isMultiTouch ||
                               _activePointers.length >= 2)
                           ? const NeverScrollableScrollPhysics()
-                          : const BouncingScrollPhysics(
+                          : const ClampingScrollPhysics(
                               parent: PageScrollPhysics(),
                             ),
                       itemBuilder: (context, index) {

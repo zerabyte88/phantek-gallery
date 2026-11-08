@@ -749,13 +749,13 @@ class _ModernTile extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest
-                      .withValues(alpha: isDark ? 0.45 : 0.55),
+                  color: (iconColor ?? cs.primary)
+                      .withValues(alpha: isDark ? 0.14 : 0.10),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
                   icon,
-                  color: cs.onSurfaceVariant,
+                  color: iconColor ?? cs.primary,
                   size: 18,
                 ),
               ),
@@ -1622,15 +1622,15 @@ class _ThemeOptionCard extends StatelessWidget {
           Icons.wb_sunny_rounded,
           const Color(0xFFF59E0B),
           const LinearGradient(
-            colors: [Color(0xFFFAFAFA), Color(0xFFE2E8F0)],
+            colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)],
           ),
           context.tr.themeLightDesc,
         ),
       AppThemeMode.cleanLight => (
-          Icons.wb_sunny_outlined,
-          const Color(0xFF0EA5E9),
+          Icons.light_mode_rounded,
+          const Color(0xFF2563EB),
           const LinearGradient(
-            colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFC)],
+            colors: [Color(0xFFFFFFFF), Color(0xFFEDF2FA)],
           ),
           context.tr.themeCleanLightDesc,
         ),
@@ -1638,31 +1638,31 @@ class _ThemeOptionCard extends StatelessWidget {
           Icons.ac_unit_rounded,
           const Color(0xFF38BDF8),
           const LinearGradient(
-            colors: [Color(0xFF000000), Color(0xFF0C1322)],
+            colors: [Color(0xFF000000), Color(0xFF0D1830)],
           ),
           context.tr.themeDarkDesc,
         ),
       AppThemeMode.amoledMidnight => (
           Icons.nights_stay_rounded,
-          const Color(0xFF818CF8),
+          const Color(0xFFA78BFA),
           const LinearGradient(
-            colors: [Color(0xFF000000), Color(0xFF0A0A0A)],
+            colors: [Color(0xFF000000), Color(0xFF130E20)],
           ),
           context.tr.themeAmoledDesc,
         ),
       AppThemeMode.amoledPure => (
-          Icons.brightness_2_outlined,
-          const Color(0xFF60A5FA),
+          Icons.dark_mode_rounded,
+          const Color(0xFF3B82F6),
           const LinearGradient(
-            colors: [Color(0xFF000000), Color(0xFF121214)],
+            colors: [Color(0xFF000000), Color(0xFF111620)],
           ),
           context.tr.themeAmoledPureDesc,
         ),
       AppThemeMode.amoledSakura => (
           Icons.local_florist_rounded,
-          const Color(0xFFFF7597),
+          const Color(0xFFF472B6),
           const LinearGradient(
-            colors: [Color(0xFF000000), Color(0xFF1E0F16)],
+            colors: [Color(0xFF000000), Color(0xFF140D13)],
           ),
           context.tr.themeSakuraDesc,
         ),
@@ -2027,14 +2027,14 @@ Future<T?> _showModernOptionDialog<T>(
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest
-                    .withValues(alpha: isDark ? 0.45 : 0.55),
+                color: (headerColor ?? cs.primary)
+                    .withValues(alpha: isDark ? 0.14 : 0.10),
                 borderRadius: BorderRadius.circular(9),
               ),
               child: Icon(
                 headerIcon,
                 size: 18,
-                color: cs.onSurface,
+                color: headerColor ?? cs.primary,
               ),
             ),
             const SizedBox(width: 12),

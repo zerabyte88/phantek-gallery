@@ -172,7 +172,7 @@ const Map<String, String> frTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'Système',
   'themeSakuraDesc': 'Noir absolu avec rose fleur de cerisier',

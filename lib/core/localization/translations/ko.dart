@@ -164,7 +164,7 @@ const Map<String, String> koTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': '시스템',
   'themeSakuraDesc': '순수 블랙과 벚꽃 핑크',

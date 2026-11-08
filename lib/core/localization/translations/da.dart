@@ -172,7 +172,7 @@ const Map<String, String> daTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'System',
   'themeSakuraDesc': 'Helt sort med sakura-kirsebærlyserød',

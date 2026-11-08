@@ -176,7 +176,7 @@ const Map<String, String> ptTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'Sistema',
   'themeSakuraDesc': 'Preto puro com rosa flor de cerejeira',

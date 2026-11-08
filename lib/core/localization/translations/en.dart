@@ -179,7 +179,7 @@ const Map<String, String> enTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'System',
   'themeSakuraDesc': 'Soft elegance of fluttering sakura petals',

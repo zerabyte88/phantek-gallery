@@ -519,7 +519,8 @@ void main() {
       expect(AppTheme.amoledPure.scaffoldBackgroundColor, Colors.black);
       expect(AppTheme.amoledSakura.scaffoldBackgroundColor, Colors.black);
       expect(
-          AppTheme.cleanLight.scaffoldBackgroundColor, const Color(0xFFF8FAFC));
+          AppTheme.cleanLight.scaffoldBackgroundColor, const Color(0xFFEDF2FA));
+      expect(AppThemeMode.light.label, 'Sunlight');
     });
 
     testWidgets('AMOLED Sakura theme is available by default in Theme dialog',
@@ -1268,7 +1269,7 @@ void main() {
       final restoreTextFinder = find.text('Restore defaults');
       expect(restoreTextFinder, findsOneWidget);
       final Text restoreText = tester.widget(restoreTextFinder);
-      expect(restoreText.style?.color, const Color(0xFFFF7597)); // Sakura pink!
+      expect(restoreText.style?.color, const Color(0xFFF472B6)); // Sakura pink!
     });
 
     test(
@@ -1640,13 +1641,12 @@ void main() {
         // Verify corresponding icon in AnimatedFlameTitle
         final expectedIcon = switch (mode) {
           AppThemeMode.amoledMidnight => Icons.nights_stay_rounded,
-          AppThemeMode.amoledPure => Icons.brightness_2_outlined,
+          AppThemeMode.amoledPure => Icons.dark_mode_rounded,
           AppThemeMode.amoledSakura => Icons.local_florist_rounded,
-          AppThemeMode.cleanLight => Icons.wb_sunny_outlined,
+          AppThemeMode.cleanLight => Icons.light_mode_rounded,
           AppThemeMode.amoledSnowfall => Icons.ac_unit_rounded,
           AppThemeMode.light => Icons.wb_sunny_rounded,
-          AppThemeMode.system => Icons
-              .brightness_2_outlined, // in dark theme, defaults to pure amoled
+          AppThemeMode.system => Icons.dark_mode_rounded,
         };
         expect(find.byIcon(expectedIcon), findsOneWidget);
       }

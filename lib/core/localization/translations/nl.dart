@@ -172,7 +172,7 @@ const Map<String, String> nlTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'Systeem',
   'themeSakuraDesc': 'Zuiver zwart met sakura kersenbloesemroze',

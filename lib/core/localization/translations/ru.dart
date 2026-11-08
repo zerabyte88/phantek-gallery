@@ -169,7 +169,7 @@ const Map<String, String> ruTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'Системная',
   'themeSakuraDesc': 'Глубокий черный с акцентом сакуры',

@@ -168,7 +168,7 @@ const Map<String, String> hiTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'सिस्टम',
   'themeSakuraDesc': 'चेरी सकुरा गुलाबी के साथ शुद्ध काला',

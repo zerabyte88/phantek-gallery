@@ -163,7 +163,7 @@ const Map<String, String> jaTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'システム',
   'themeSakuraDesc': '漆黒に桜色のアクセント',

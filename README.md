@@ -5,7 +5,7 @@
 
   **Fast, privacy-focused offline photo and video gallery for Android with PSD layer support.**
 
-  [![Version](https://img.shields.io/badge/Version-v2.14.20-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.14.21-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20ExoPlayer-6366f1.svg?style=flat-square)](https://developer.android.com/media/media3)
@@ -25,7 +25,7 @@
 - **Recycle Bin & Safe Deletion** : Staged `.trash` bin with configurable auto-purge (7, 14, 30 days or never) and batch restore/permanent delete.
 - **Privacy & Security** : Enforce Android `FLAG_SECURE` to block screenshots, screen recordings, and blur recent apps switcher previews.
 - **EXIF & Media Inspector** : Detailed technical metadata for photos (ISO, aperture, focal length, resolution) and videos (bitrate, fps, codec, channels).
-- **Custom Visual Themes** : 6 hand-crafted visual themes (*Dark Mode*, *Light Mode*, *Sunburst*, *Snowfall*, *Midnight*, *Sakura*) with dynamic artistic headers.
+- **Custom Visual Themes** : 6 hand-crafted visual themes (*Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, *Sakura*) with dynamic artistic headers.
 - **Multilingual Support** : Complete localization across 22 languages with instant runtime switching without app restart.
 - **100% Offline & Private** : Zero cloud sync, zero telemetry, zero analytics, and zero unsolicited network requests.
 

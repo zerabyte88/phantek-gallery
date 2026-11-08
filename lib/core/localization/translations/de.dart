@@ -176,7 +176,7 @@ const Map<String, String> deTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'System',
   'themeSakuraDesc': 'Tiefschwarz mit Sakura-Kirschblütenrosa',

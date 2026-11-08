@@ -24,59 +24,59 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  // Snowfall
+  // Snowfall (Snow Blue)
   static const _darkColors = [
-    Color(0xFF38BDF8),
-    Color(0xFFCFF0FF),
-    Color(0xFFBAE6FD),
-    Color(0xFFFDE047),
-    Color(0xFF0284C7),
-    Color(0xFF38BDF8),
-  ];
-
-  static const _amoledColors = [
-    Color(0xFF6366F1), // Indigo
-    Color(0xFF8B5CF6), // Purple
-    Color(0xFF38BDF8), // Celestial Cyan
-    Color(0xFFE2E8F0), // Starlight Silver
-    Color(0xFF818CF8), // Soft Violet
-    Color(0xFF6366F1),
-  ];
-
-  static const _sakuraColors = [
-    Color(0xFFFF7597), // Rose Pink
-    Color(0xFFFFB7C5), // Cherry Blossom
-    Color(0xFFFF4081), // Vivid Blossom
-    Color(0xFFFF8DA1), // Pastel Pink
-    Color(0xFFFFC0CB), // Light Pink
-    Color(0xFFFF7597),
-  ];
-
-  static const _lightColors = [
-    Color(0xFF0284C7), // Sky Azure
-    Color(0xFF8B5CF6), // Prismatic Violet
-    Color(0xFFF43F5E), // Rose Quartz
-    Color(0xFF06B6D4), // Arctic Cyan
-    Color(0xFF38BDF8), // Light Cyan
-    Color(0xFF0284C7),
-  ];
-
-  static const _cleanLightColors = [
-    Color(0xFF0EA5E9),
     Color(0xFF38BDF8),
     Color(0xFF7DD3FC),
     Color(0xFFBAE6FD),
     Color(0xFF0284C7),
-    Color(0xFF0EA5E9),
+    Color(0xFF38BDF8),
   ];
 
+  // Midnight (Midnight Purple)
+  static const _amoledColors = [
+    Color(0xFFA78BFA),
+    Color(0xFFC4B5FD),
+    Color(0xFF818CF8),
+    Color(0xFFDDD6FE),
+    Color(0xFF7C3AED),
+    Color(0xFFA78BFA),
+  ];
+
+  // Sakura (Sakura Pink)
+  static const _sakuraColors = [
+    Color(0xFFF472B6),
+    Color(0xFFFDA4AF),
+    Color(0xFFFBCFE8),
+    Color(0xFFFB7185),
+    Color(0xFFF472B6),
+  ];
+
+  // Sunlight (Warm Golden Yellow)
+  static const _lightColors = [
+    Color(0xFFF59E0B),
+    Color(0xFFFBBF24),
+    Color(0xFFFDE68A),
+    Color(0xFFD97706),
+    Color(0xFFF59E0B),
+  ];
+
+  // Clean Light (Royal Sapphire Blue)
+  static const _cleanLightColors = [
+    Color(0xFF2563EB),
+    Color(0xFF3B82F6),
+    Color(0xFF60A5FA),
+    Color(0xFF1D4ED8),
+    Color(0xFF2563EB),
+  ];
+
+  // AMOLED Pure / Dark Mode (Cobalt Blue)
   static const _amoledPureColors = [
+    Color(0xFF3B82F6),
     Color(0xFF60A5FA),
     Color(0xFF93C5FD),
-    Color(0xFF3B82F6),
-    Color(0xFFBFDBFE),
     Color(0xFF1D4ED8),
-    Color(0xFF60A5FA),
+    Color(0xFF3B82F6),
   ];
 
   @override
@@ -113,43 +113,43 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
       AppThemeMode.amoledMidnight => (
           _amoledColors,
           Icons.nights_stay_rounded,
-          const Color(0xFF818CF8),
-          const Color(0xFF38BDF8),
+          const Color(0xFFA78BFA),
+          const Color(0xFFDDD6FE),
         ),
       AppThemeMode.amoledPure => (
           _amoledPureColors,
-          Icons.brightness_2_outlined,
-          const Color(0xFF60A5FA),
+          Icons.dark_mode_rounded,
+          const Color(0xFF3B82F6),
           const Color(0xFF93C5FD),
         ),
       AppThemeMode.amoledSakura => (
           _sakuraColors,
           Icons.local_florist_rounded,
-          const Color(0xFFFF7597),
-          const Color(0xFFFFB7C5),
+          const Color(0xFFF472B6),
+          const Color(0xFFFDA4AF),
         ),
       AppThemeMode.cleanLight => (
           _cleanLightColors,
-          Icons.wb_sunny_outlined,
-          const Color(0xFF0EA5E9),
-          const Color(0xFF38BDF8),
+          Icons.light_mode_rounded,
+          const Color(0xFF2563EB),
+          const Color(0xFF60A5FA),
         ),
       AppThemeMode.amoledSnowfall => (
           _darkColors,
           Icons.ac_unit_rounded,
-          const Color(0xFFCFF0FF),
           const Color(0xFF38BDF8),
+          const Color(0xFFBAE6FD),
         ),
       AppThemeMode.light => (
           _lightColors,
           Icons.wb_sunny_rounded,
-          const Color(0xFF0284C7),
-          const Color(0xFF8B5CF6),
+          const Color(0xFFF59E0B),
+          const Color(0xFFFDE68A),
         ),
       AppThemeMode.system => (
           _amoledPureColors,
-          Icons.brightness_2_outlined,
-          const Color(0xFF60A5FA),
+          Icons.dark_mode_rounded,
+          const Color(0xFF3B82F6),
           const Color(0xFF93C5FD),
         ),
     };

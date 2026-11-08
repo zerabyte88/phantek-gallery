@@ -168,7 +168,7 @@ const Map<String, String> viTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'Hệ thống',
   'themeSakuraDesc': 'Màu đen tuyền với màu hồng hoa anh đào sakura',

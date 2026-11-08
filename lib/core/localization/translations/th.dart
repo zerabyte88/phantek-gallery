@@ -167,7 +167,7 @@ const Map<String, String> thTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'ระบบ',
   'themeSakuraDesc': 'สีดำสนิทพร้อมสีชมพูซากุระ',

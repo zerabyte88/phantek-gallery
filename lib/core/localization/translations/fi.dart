@@ -173,7 +173,7 @@ const Map<String, String> fiTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'Järjestelmä',
   'themeSakuraDesc': 'Täysin musta sakura-kirsikankukalla',

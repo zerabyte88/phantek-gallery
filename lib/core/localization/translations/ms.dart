@@ -177,7 +177,7 @@ const Map<String, String> msTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': 'Sistem',
   'themeSakuraDesc': 'Keindahan lembut kelopak bunga sakura yang berguguran',

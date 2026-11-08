@@ -214,7 +214,7 @@ enum AppThemeMode {
 extension AppThemeModeLabel on AppThemeMode {
   String get label => switch (this) {
         AppThemeMode.system => 'System',
-        AppThemeMode.light => 'Sunburst',
+        AppThemeMode.light => 'Sunlight',
         AppThemeMode.cleanLight => 'Light Mode',
         AppThemeMode.amoledSnowfall => 'Snowfall',
         AppThemeMode.amoledMidnight => 'Midnight',

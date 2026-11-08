@@ -169,6 +169,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   Animation<double>? _routeAnimation;
   StateController<String?>? _activeMediaNotifier;
   bool _didSetMaxBrightness = false;
+  final Set<String> _precachedMediaPaths = {};
 
   final Map<String, List<PsdLayerInfo>> _psdLayersCache = {};
   final Map<String, Set<int>> _psdHiddenLayers = {};
@@ -654,10 +655,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void _precacheAdjacentVideos(int index) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      for (final offset in const [-1, 1, -2, 2]) {
+      for (final offset in const [-1, 1]) {
         final target = index + offset;
         if (target >= 0 && target < _videos.length) {
           final item = _videos[target];
+          if (!_precachedMediaPaths.add(item.path)) continue;
           if (item.isVideo) {
             final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
             if (mem != null && mounted) {
@@ -739,17 +741,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _lastPositionSaveTime = null;
 
     final settings = ref.read(settingsNotifierProvider);
-    final bool isKnownHighRes = _current < _videos.length &&
-        ((_videos[_current].width != null && _videos[_current].width! > 1920) ||
-            (_videos[_current].height != null &&
-                _videos[_current].height! > 1920));
-
-    final primaryViewType = isKnownHighRes
-        ? VideoViewType.platformView
-        : VideoViewType.textureView;
-    final fallbackViewType = isKnownHighRes
-        ? VideoViewType.textureView
-        : VideoViewType.platformView;
+    // Always use textureView as primary for fluid rendering, interactive zoom,
+    // and seamless compositing across all resolutions (1080p, 2K, 4K).
+    // PlatformView is retained strictly as fallback if textureView initialization fails.
+    const primaryViewType = VideoViewType.textureView;
+    const fallbackViewType = VideoViewType.platformView;
 
     VideoPlayerController createCandidate(VideoViewType viewType) {
       return VideoPlayerController.file(
@@ -1997,6 +1993,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   _startDragX = null;
                   return;
                 }
+                if (_pageController.hasClients && _pageController.page != null) {
+                  final snapped =
+                      _pageController.page!.round().clamp(0, _videos.length - 1);
+                  if (_current != snapped) {
+                    _current = snapped;
+                  }
+                }
                 _startDragY = e.position.dy;
                 _startDragX = e.position.dx;
                 _vt = VelocityTracker.withKind(e.kind);
@@ -2016,7 +2019,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                   final ady = (e.position.dy - _startDragY!).abs();
                   if (!_isSwipingHorizontal &&
                       _dragNotifier.value == Offset.zero) {
-                    if (adx > 6 && adx >= ady) {
+                    if (adx > 6 && adx > ady) {
                       if (_videoSurfaceVisible.value) {
                         _videoSurfaceVisible.value = false;
                       }
@@ -2050,11 +2053,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 final adx = dx.abs();
                 // Intentional vertical swipe deadzone: natural downward drag
                 if (_dragNotifier.value != Offset.zero ||
-                    (dy > 24 && dy > adx * 1.8)) {
+                    (dy > 18 && dy > adx * 1.5)) {
                   final dampedDx = dx * 0.45;
-                  final dragY = (dy - 24).clamp(0.0, 650.0);
+                  final dragY = (dy - 18).clamp(0.0, 650.0);
                   _setDrag(Offset(dampedDx, dragY));
-                  if (_isPlaying && dy > 16) {
+                  if (_isPlaying && dy > 18) {
                     _controller?.pause();
                   }
                 }
@@ -2084,6 +2087,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       !_isCurrentlyVideoZoomed &&
                       d.dy > 0 &&
                       (d.dy > 85 || (vy > 550 && d.dy > 20))) {
+                    if (_pageController.hasClients && _pageController.page != null) {
+                      final targetIndex =
+                          _pageController.page!.round().clamp(0, _videos.length - 1);
+                      _current = targetIndex;
+                    }
                     _videoSurfaceVisible.value = false;
                     if (_videos.isNotEmpty &&
                         _current < _videos.length &&
@@ -2213,7 +2221,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                       _isScrubbing ||
                                       _activePointers.length >= 2)
                                   ? const NeverScrollableScrollPhysics()
-                                  : const BouncingScrollPhysics(
+                                  : const ClampingScrollPhysics(
                                       parent: PageScrollPhysics(),
                                     ),
                               itemBuilder: (context, index) {

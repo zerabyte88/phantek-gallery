@@ -163,7 +163,7 @@ const Map<String, String> zhTwTranslations = {
   'themeModeAmoledPure': 'Dark Mode',
   'themeModeCleanLight': 'Light Mode',
   'themeModeDark': 'Snowfall',
-  'themeModeLight': 'Sunburst',
+  'themeModeLight': 'Sunlight',
   'themeModeSakura': 'Sakura',
   'themeModeSystem': '系統預設',
   'themeSakuraDesc': '純黑底色搭配櫻花粉',
