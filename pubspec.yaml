@@ -1,7 +1,7 @@
 name: phantek_gallery
 description: "Phantek Gallery - offline-first photo & video gallery for Android."
 publish_to: 'none'
-version: 2.16.1+762475
+version: 2.16.2+762476
 homepage: https://github.com/zerabyte88/phantek-gallery
 repository: https://github.com/zerabyte88/phantek-gallery
 issue_tracker: https://github.com/zerabyte88/phantek-gallery/issues
@@ -53,3 +53,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
+    - assets/tokenizers/

@@ -214,19 +214,19 @@ class MlKitTranslationEngine {
   }
 
   /// Checks status for all 5 manga translation languages.
-  /// In the Offline Local LLM architecture, all models are on-device and ready out of the box.
+  /// Reflects whether the local ONNX engine is actually initialized and ready.
   Future<AllModelsStatus> checkAllModelsStatus() async {
-    return const AllModelsStatus(
-      missingLanguages: [],
+    return AllModelsStatus(
+      missingLanguages: const [],
       downloadedLanguages: allMangaLanguages,
       totalNeededMb: 0.0,
-      isReady: true,
+      isReady: _onnxEngine.isReady,
       modelDescription: localLlmDescription,
     );
   }
 
-  /// Gets the pair download status. In the Offline Local LLM architecture,
-  /// models run on-device without requiring remote Google Play Services downloads.
+  /// Gets the pair download status.
+  /// Reflects whether the local ONNX engine is actually initialized and ready.
   Future<ModelPairStatus> getPairStatus(
     TranslationSourceLanguage source,
     TranslationTargetLanguage target,
@@ -241,7 +241,7 @@ class MlKitTranslationEngine {
       sourceLangName: _getSourceLangName(effectiveSource),
       targetLangName: _getTargetLangName(target),
       totalNeededMb: 0.0,
-      isReady: true,
+      isReady: _onnxEngine.isReady,
       modelDescription: localLlmDescription,
     );
   }

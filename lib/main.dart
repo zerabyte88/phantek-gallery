@@ -32,6 +32,12 @@ Future<void> main() async {
   await SettingsService.init();
   await ThumbnailService.init();
   await OnnxLocalLlmEngine.ensureModelsDirectoryExists();
+  OnnxLocalLlmEngine.instance
+      .initializeSession()
+      .catchError((e) {
+        debugPrint('Initial LLM init: $e');
+        return false;
+      });
 
   final initialCleanup =
       SettingsService.instance.settings.autoTrashCleanup.inDays;

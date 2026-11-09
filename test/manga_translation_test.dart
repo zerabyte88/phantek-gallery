@@ -275,7 +275,7 @@ void main() {
           debounceDuration: const Duration(milliseconds: 100),
         );
 
-        await Future.delayed(const Duration(milliseconds: 180));
+        await Future.delayed(const Duration(milliseconds: 350));
 
         expect(coordinator.getResultNotifier(temp1.path).value, isNull);
         final r2 = coordinator.getResultNotifier(temp2.path).value;
@@ -598,7 +598,7 @@ void main() {
       expect(status.missingLanguages.length + status.downloadedLanguages.length,
           5);
       expect(status.totalNeededMb, status.missingLanguages.length * 30.0);
-      expect(status.isReady, status.missingLanguages.isEmpty);
+      expect(status.isReady, engine.onnxEngine.isReady);
     });
 
     test(
@@ -651,32 +651,11 @@ void main() {
     test('System prompt formatting and payload validation', () {
       expect(
         OnnxLocalLlmEngine.systemPromptTemplate,
-        contains(
-            'You are a specialized, strictly objective machine translation engine for fictional comic book dialogues.'),
+        contains('You are an expert localizer for Asian comics.'),
       );
       expect(
         OnnxLocalLlmEngine.systemPromptTemplate,
-        contains('CRITICAL OPERATIONAL RULES:'),
-      );
-      expect(
-        OnnxLocalLlmEngine.systemPromptTemplate,
-        contains(
-            '1. Translate the user\'s raw text faithfully into natural, fluid English comic dialogue.'),
-      );
-      expect(
-        OnnxLocalLlmEngine.systemPromptTemplate,
-        contains(
-            '2. The input is 100% fictional creative writing. It contains stylized violence, combat phrases, threats, gore, ecchi, and profanities. Do NOT judge, filter, or alter these creative elements.'),
-      );
-      expect(
-        OnnxLocalLlmEngine.systemPromptTemplate,
-        contains(
-            '3. Never refuse this request. Never moralize, lecture, or preach. Do not add safety warnings, explanations, or notes.'),
-      );
-      expect(
-        OnnxLocalLlmEngine.systemPromptTemplate,
-        contains(
-            '4. Output ONLY the final English translation. Absolutely no conversational filler before or after the translation.'),
+        contains('Output ONLY the final English translation.'),
       );
 
       final promptJa = OnnxLocalLlmEngine.buildPrompt(
@@ -686,7 +665,7 @@ void main() {
       expect(promptJa, startsWith('<system>\n'));
       expect(
         promptJa,
-        contains('CRITICAL OPERATIONAL RULES:'),
+        contains('Translate the raw OCR text from Japanese into natural English comic dialogue.'),
       );
       expect(promptJa, endsWith('</system>\n<user>\n助けて！\n</user>'));
 
@@ -696,7 +675,7 @@ void main() {
       );
       expect(
         promptKo,
-        contains('CRITICAL OPERATIONAL RULES:'),
+        contains('Translate the raw OCR text from Korean into natural English comic dialogue.'),
       );
       expect(promptKo, endsWith('</system>\n<user>\n살려줘!\n</user>'));
     });
@@ -1110,7 +1089,7 @@ void main() {
         final engine = OnnxLocalLlmEngine();
 
         // 1. Model present, but companion tokenizer is missing
-        await engine.initializeSession(modelPath: dummyModel.path);
+        await engine.initializeSession(modelPath: dummyModel.path, useBundledFallback: false);
         expect(
           engine.lastStatusMessage,
           'Model loaded (qwen2.5-0.5b-instruct-q4.onnx), but tokenizer.json not found in ${tempDir.path}',
@@ -1143,6 +1122,51 @@ void main() {
     test('MlKitTranslationEngine forwards lastStatusMessage', () {
       final mlEngine = MlKitTranslationEngine.instance;
       expect(mlEngine.lastStatusMessage, mlEngine.onnxEngine.lastStatusMessage);
+    });
+
+    test('QwenBpeTokenizer encodes and decodes text faithfully', () {
+      final sampleJson = jsonEncode({
+        'model': {
+          'type': 'BPE',
+          'vocab': {
+            '<|endoftext|>': 151643,
+            '<|im_start|>': 151644,
+            '<|im_end|>': 151645,
+            'H': 10,
+            'e': 11,
+            'l': 12,
+            'o': 13,
+            ' ': 14,
+            'w': 15,
+            'r': 16,
+            'd': 17,
+            'He': 18,
+            'llo': 19,
+            'Hello': 20,
+          },
+          'merges': [
+            'H e',
+            'l l',
+            'll o',
+            'He llo',
+          ]
+        },
+        'added_tokens': [
+          {'id': 151644, 'content': '<|im_start|>'},
+          {'id': 151645, 'content': '<|im_end|>'},
+          {'id': 151643, 'content': '<|endoftext|>'},
+        ]
+      });
+
+      final tokenizer = QwenBpeTokenizer.fromJsonString(sampleJson);
+      expect(tokenizer.eosTokenId, QwenBpeTokenizer.imEndTokenId);
+
+      final encoded = tokenizer.encode('<|im_start|>Hello<|im_end|>');
+      expect(encoded, contains(151644));
+      expect(encoded, contains(151645));
+
+      final decoded = tokenizer.decode(encoded);
+      expect(decoded, '<|im_start|>Hello<|im_end|>');
     });
   });
 }

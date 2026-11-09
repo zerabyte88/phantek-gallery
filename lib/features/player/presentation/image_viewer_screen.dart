@@ -644,13 +644,24 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
   }
 
-  void _setTranslationMode(TranslationRenderMode? mode) {
+  Future<void> _setTranslationMode(TranslationRenderMode? mode) async {
     setState(() {
       _translationMode = mode;
     });
     if (mode != null && _mangaItems.isNotEmpty) {
+      if (!MlKitTranslationEngine.instance.isLocalLlmReady) {
+        await MlKitTranslationEngine.instance.onnxEngine.initializeSession();
+        if (!MlKitTranslationEngine.instance.isLocalLlmReady && mounted) {
+          showFeedbackPill(
+            context,
+            message: MlKitTranslationEngine.instance.lastStatusMessage ??
+                'No AI model found. Place .onnx in /storage/emulated/0/models/',
+            icon: Icons.info_outline_rounded,
+          );
+        }
+      }
       final status = MlKitTranslationEngine.instance.lastStatusMessage;
-      if (status != null && !status.startsWith('Ready')) {
+      if (status != null && !status.startsWith('Ready') && mounted) {
         showFeedbackPill(
           context,
           message: status,
