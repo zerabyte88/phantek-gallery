@@ -20,7 +20,7 @@ subprojects {
 }
 
 subprojects {
-    if (project.name != "app") {
+    if (project.name == "onnxruntime") {
         fun updateCompileSdk() {
             val android = project.extensions.findByName("android")
             if (android != null) {
@@ -29,7 +29,7 @@ subprojects {
                         it.name == "compileSdkVersion" && it.parameterTypes.size == 1 &&
                         (it.parameterTypes[0] == Int::class.javaPrimitiveType || it.parameterTypes[0] == Integer::class.java)
                     }
-                    compileSdkMethod?.invoke(android, 36)
+                    compileSdkMethod?.invoke(android, 37)
                 } catch (_: Throwable) {}
             }
         }

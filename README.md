@@ -57,7 +57,7 @@ The translation model is not included in the APK. This keeps the app small and l
 2. Open **Settings** and add the model file in the translation section.
 3. Open a manga chapter and start translating.
 
-> **Note:** Small models are fast and light on memory, but translation quality can vary. Larger models usually translate better and need more RAM and time.
+> **Note :** Smaller models are faster and lighter on memory, but translation quality may vary. Larger models usually translate better but need more RAM and processing time. Try a few models to find the best balance for your device.
 
 ---
 
