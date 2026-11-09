@@ -96,6 +96,7 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
         }
       }
     }
+
     collect(folderIndex);
     return descendants;
   }
@@ -296,7 +297,8 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
                             height: 12,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF31A8FF)),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF31A8FF)),
                             ),
                           ),
                           const SizedBox(width: 4),
@@ -449,8 +451,7 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
                   child: Row(
                     children: [
                       // 2. Folder depth indent
-                      if (layer.depth > 0)
-                        SizedBox(width: layer.depth * 20.0),
+                      if (layer.depth > 0) SizedBox(width: layer.depth * 20.0),
 
                       // 3. If folder: Chevron
                       if (layer.isFolder) ...[
@@ -538,8 +539,7 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
                                 child: Container(
                                   padding: const EdgeInsets.all(1),
                                   decoration: BoxDecoration(
-                                    color:
-                                        Colors.black.withValues(alpha: 0.65),
+                                    color: Colors.black.withValues(alpha: 0.65),
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                   child: const Icon(

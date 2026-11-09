@@ -232,7 +232,9 @@ void main() {
       expect(updated.name, 'Background');
     });
 
-    test('PsdService streaming and getLayers accurately detects layers, folders, and unicode names', () async {
+    test(
+        'PsdService streaming and getLayers accurately detects layers, folders, and unicode names',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('psd_test_');
       final psdFile = File('${tempDir.path}/test_multi.psd');
 
@@ -263,7 +265,8 @@ void main() {
       await psdFile.writeAsBytes(_createSyntheticPsd(layers: syntheticLayers));
 
       // Test streamLayerRecords
-      final streamed = await PsdService.instance.streamLayerRecords(psdFile.path);
+      final streamed =
+          await PsdService.instance.streamLayerRecords(psdFile.path);
       expect(streamed.length, 3); // closing delimiter excluded!
 
       expect(streamed[0].index, 0);
@@ -291,7 +294,8 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('PsdService streaming correctly parses PSB (version 2) format', () async {
+    test('PsdService streaming correctly parses PSB (version 2) format',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('psb_test_');
       final psbFile = File('${tempDir.path}/test_large.psb');
 
@@ -309,7 +313,8 @@ void main() {
         ),
       ];
 
-      await psbFile.writeAsBytes(_createSyntheticPsd(version: 2, layers: syntheticLayers));
+      await psbFile.writeAsBytes(
+          _createSyntheticPsd(version: 2, layers: syntheticLayers));
 
       final layers = await PsdService.instance.getLayers(psbFile.path);
       expect(layers.length, 2);
@@ -320,7 +325,9 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('PsdService streaming accurately calculates depth, parentIndex, and clipping mask', () async {
+    test(
+        'PsdService streaming accurately calculates depth, parentIndex, and clipping mask',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('psd_hier_test_');
       final psdFile = File('${tempDir.path}/hierarchy.psd');
 
@@ -329,7 +336,8 @@ void main() {
         const _SyntheticLayer(pascalName: 'Group A', isFolder: true),
         const _SyntheticLayer(pascalName: 'Child 1', isVisible: true),
         const _SyntheticLayer(pascalName: 'Child 2 Clipped', isClipped: true),
-        const _SyntheticLayer(pascalName: '</Layer group>', isClosingDelimiter: true),
+        const _SyntheticLayer(
+            pascalName: '</Layer group>', isClosingDelimiter: true),
       ];
 
       await psdFile.writeAsBytes(_createSyntheticPsd(layers: syntheticLayers));
@@ -361,7 +369,9 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('getLayerThumbnails extracts per-layer PNG thumbnails with correct dimensions', () async {
+    test(
+        'getLayerThumbnails extracts per-layer PNG thumbnails with correct dimensions',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('psd_thumb_test_');
       final psdFile = File('${tempDir.path}/renderable.psd');
 
@@ -375,7 +385,8 @@ void main() {
       );
       await psdFile.writeAsBytes(psdBytes);
 
-      final thumbs = await PsdService.instance.getLayerThumbnails(psdFile.path, maxThumbDim: 48);
+      final thumbs = await PsdService.instance
+          .getLayerThumbnails(psdFile.path, maxThumbDim: 48);
       expect(thumbs.length, 2);
       expect(thumbs.containsKey(0), isTrue);
       expect(thumbs.containsKey(1), isTrue);
@@ -388,13 +399,17 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('PackBits decompression decodes literal runs and repeat runs accurately', () {
+    test(
+        'PackBits decompression decodes literal runs and repeat runs accurately',
+        () {
       final src = Uint8List.fromList([2, 1, 2, 3, 0xFE, 9, 0x80]);
       final decoded = decodePackBits(src, 0, src.length, 6);
       expect(decoded, equals(Uint8List.fromList([1, 2, 3, 9, 9, 9])));
     });
 
-    test('Channel decompression handles raw, PackBits, ZIP, and ZIP delta differencing', () {
+    test(
+        'Channel decompression handles raw, PackBits, ZIP, and ZIP delta differencing',
+        () {
       // 1. Raw
       final rawData = Uint8List.fromList([0, 0, 10, 20, 30, 40]);
       final decRaw = decompressChannelData(rawData, 2, 2);
@@ -443,7 +458,9 @@ void main() {
       expect(p00.r.toInt(), 255);
     });
 
-    test('renderWithLayers excludes hidden layers and reflects layer toggling in output image', () async {
+    test(
+        'renderWithLayers excludes hidden layers and reflects layer toggling in output image',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('psd_render_test_');
       final psdFile = File('${tempDir.path}/two_layers.psd');
 
@@ -487,11 +504,13 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('loadPsdDocument applies getSavedLayerVisibility when saved', () async {
+    test('loadPsdDocument applies getSavedLayerVisibility when saved',
+        () async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
-      final tempDir = await Directory.systemTemp.createTemp('psd_saved_layers_');
+      final tempDir =
+          await Directory.systemTemp.createTemp('psd_saved_layers_');
       final psdFile = File('${tempDir.path}/test_saved.psd');
 
       // Layer 0: Solid Red (255, 0, 0), Layer 1: Solid Blue (0, 0, 255)
@@ -507,7 +526,8 @@ void main() {
 
       // Save Layer 1 as hidden
       await PsdService.instance.saveLayerVisibility(psdFile.path, {1});
-      expect(PsdService.instance.getSavedLayerVisibility(psdFile.path), equals({1}));
+      expect(PsdService.instance.getSavedLayerVisibility(psdFile.path),
+          equals({1}));
 
       // loadPsdDocument should apply saved visibility ({1} hidden -> only Red visible)
       final rendered = await PsdService.instance.loadPsdDocument(psdFile.path);
@@ -520,7 +540,9 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('renderWithLayers with empty hiddenLayerIndices does not fall back to Photoshop composite when layers were originally hidden in Photoshop', () async {
+    test(
+        'renderWithLayers with empty hiddenLayerIndices does not fall back to Photoshop composite when layers were originally hidden in Photoshop',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('psd_hidden_comp_');
       final psdFile = File('${tempDir.path}/test_hidden_comp.psd');
 
@@ -574,7 +596,8 @@ Uint8List _createRenderableSyntheticPsd({
   // 3. Image Resources
   bb.add([0, 0, 0, 0]);
 
-  final channelLen = 2 + width * height; // 2 bytes comp + uncompressed raw pixels
+  final channelLen =
+      2 + width * height; // 2 bytes comp + uncompressed raw pixels
 
   // 4. Section 4: Layer records
   final recordsBuilder = BytesBuilder();

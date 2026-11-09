@@ -5,14 +5,16 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'manga_ocr_service.dart';
-import 'onnx_translation_engine.dart';
+import 'mlkit_translation_engine.dart';
 import 'translation_models.dart';
 
 Future<List<MangaTranslatedBlock>> _translateBlocks(
   List<RawMangaTextBlock> rawBlocks,
   Size imageSize,
-  OnnxTranslationEngine engine,
-) async {
+  MlKitTranslationEngine engine, {
+  TranslationSourceLanguage language = TranslationSourceLanguage.auto,
+  required TranslationTargetLanguage targetLanguage,
+}) async {
   final List<MangaTranslatedBlock> results = [];
 
   for (final raw in rawBlocks) {
@@ -21,7 +23,11 @@ Future<List<MangaTranslatedBlock>> _translateBlocks(
       raw.text,
       imageSize,
     );
-    final translated = await engine.translate(raw.text);
+    final translated = await engine.translateText(
+      raw.text,
+      source: language,
+      target: targetLanguage,
+    );
 
     results.add(MangaTranslatedBlock(
       boundingBox: raw.boundingBox,
@@ -36,14 +42,14 @@ Future<List<MangaTranslatedBlock>> _translateBlocks(
 /// Coordinates OCR, translation, debouncing, and result caching.
 class TranslationIsolateCoordinator {
   final MangaOcrService _ocrService;
-  final OnnxTranslationEngine _translationEngine;
+  final MlKitTranslationEngine _translationEngine;
 
   TranslationIsolateCoordinator({
     MangaOcrService? ocrService,
-    OnnxTranslationEngine? translationEngine,
+    MlKitTranslationEngine? translationEngine,
   })  : _ocrService = ocrService ?? MangaOcrService(),
         _translationEngine =
-            translationEngine ?? OnnxTranslationEngine.instance;
+            translationEngine ?? MlKitTranslationEngine.instance;
 
   Timer? _debounceTimer;
   int _activeSequence = 0;
@@ -71,11 +77,14 @@ class TranslationIsolateCoordinator {
     required String imagePath,
     required Size imageSize,
     required TranslationRenderMode mode,
+    TranslationSourceLanguage language = TranslationSourceLanguage.auto,
+    required TranslationTargetLanguage targetLanguage,
     Duration debounceDuration = const Duration(milliseconds: 1000),
   }) {
     _debounceTimer?.cancel();
 
-    final cached = _cache[imagePath];
+    final cacheKey = '${imagePath}_${language.name}_${targetLanguage.name}';
+    final cached = _cache[cacheKey] ?? _cache[imagePath];
     if (cached != null) {
       getResultNotifier(imagePath).value = cached;
       getLoadingNotifier(imagePath).value = false;
@@ -88,6 +97,8 @@ class TranslationIsolateCoordinator {
         imagePath: imagePath,
         imageSize: imageSize,
         mode: mode,
+        language: language,
+        targetLanguage: targetLanguage,
         sequence: seq,
       );
     });
@@ -97,6 +108,8 @@ class TranslationIsolateCoordinator {
     required String imagePath,
     required Size imageSize,
     required TranslationRenderMode mode,
+    required TranslationSourceLanguage language,
+    required TranslationTargetLanguage targetLanguage,
     required int sequence,
   }) async {
     if (sequence != _activeSequence) return;
@@ -106,15 +119,24 @@ class TranslationIsolateCoordinator {
 
     loadingNotifier.value = true;
 
+    // Resolve accurate dimensions if missing or zero for coordinate scaling
+    Size actualSize = imageSize;
+    if (actualSize.width <= 0 || actualSize.height <= 0) {
+      actualSize = await MangaOcrService.getImageDimensions(imagePath);
+    }
+
     try {
-      final rawBlocks = await _ocrService.extractTextBlocks(imagePath);
+      final rawBlocks = await _ocrService.extractTextBlocks(
+        imagePath,
+        language: language,
+      );
       if (sequence != _activeSequence) return;
 
       if (rawBlocks.isEmpty) {
         final emptyResult = TranslationResult(
           imagePath: imagePath,
           blocks: const [],
-          imageSize: imageSize,
+          imageSize: actualSize,
           isSuccess: true,
         );
         _cache[imagePath] = emptyResult;
@@ -124,8 +146,10 @@ class TranslationIsolateCoordinator {
 
       final translatedBlocks = await _translateBlocks(
         rawBlocks,
-        imageSize,
+        actualSize,
         _translationEngine,
+        language: language,
+        targetLanguage: targetLanguage,
       );
 
       if (sequence != _activeSequence) return;
@@ -133,7 +157,7 @@ class TranslationIsolateCoordinator {
       final result = TranslationResult(
         imagePath: imagePath,
         blocks: translatedBlocks,
-        imageSize: imageSize,
+        imageSize: actualSize,
         isSuccess: true,
       );
 
@@ -145,7 +169,7 @@ class TranslationIsolateCoordinator {
         final failResult = TranslationResult.failure(
           imagePath: imagePath,
           errorMessage: e.toString(),
-          imageSize: imageSize,
+          imageSize: actualSize,
         );
         resultNotifier.value = failResult;
       }

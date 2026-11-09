@@ -5,10 +5,14 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'translation_models.dart';
 
 /// OCR detector contract.
 abstract class MangaTextDetector {
-  Future<List<RawMangaTextBlock>> detectText(String imagePath);
+  Future<List<RawMangaTextBlock>> detectText(
+    String imagePath, {
+    TranslationSourceLanguage language = TranslationSourceLanguage.auto,
+  });
   void dispose();
 }
 
@@ -25,43 +29,75 @@ class RawMangaTextBlock {
   });
 }
 
-/// ML Kit OCR implementation.
+/// Multi-script ML Kit OCR implementation with Korean, Chinese, Japanese, and Latin fallback.
 class MlKitMangaTextDetector implements MangaTextDetector {
   final TextRecognitionScript script;
-  TextRecognizer? _recognizer;
-  TextRecognizer? _fallbackRecognizer;
+  final Map<TextRecognitionScript, TextRecognizer> _recognizers = {};
 
   MlKitMangaTextDetector({this.script = TextRecognitionScript.japanese});
 
-  TextRecognizer _getRecognizer() {
-    return _recognizer ??= TextRecognizer(script: script);
+  TextRecognizer _getRecognizer(TextRecognitionScript s) {
+    return _recognizers.putIfAbsent(s, () => TextRecognizer(script: s));
   }
 
-  TextRecognizer _getFallbackRecognizer() {
-    return _fallbackRecognizer ??=
-        TextRecognizer(script: TextRecognitionScript.latin);
+  TextRecognitionScript _scriptForLanguage(TranslationSourceLanguage lang) {
+    switch (lang) {
+      case TranslationSourceLanguage.japanese:
+        return TextRecognitionScript.japanese;
+      case TranslationSourceLanguage.korean:
+        return TextRecognitionScript.korean;
+      case TranslationSourceLanguage.chinese:
+        return TextRecognitionScript.chinese;
+      case TranslationSourceLanguage.auto:
+        return script;
+    }
   }
 
   @override
-  Future<List<RawMangaTextBlock>> detectText(String imagePath) async {
+  Future<List<RawMangaTextBlock>> detectText(
+    String imagePath, {
+    TranslationSourceLanguage language = TranslationSourceLanguage.auto,
+  }) async {
+    final targetScript = _scriptForLanguage(language);
+
     try {
       final inputImage = InputImage.fromFilePath(imagePath);
-      final recognizer = _getRecognizer();
+      final recognizer = _getRecognizer(targetScript);
       final recognized = await recognizer.processImage(inputImage);
-      return _mapBlocks(recognized);
-    } catch (e, stack) {
-      debugPrint('ML Kit OCR error on $imagePath ($script): $e\n$stack');
+      final blocks = _mapBlocks(recognized);
 
-      if (script == TextRecognitionScript.latin) {
+      // In auto mode, if initial script returns no blocks, try Korean and Chinese scripts
+      if (language == TranslationSourceLanguage.auto && blocks.isEmpty) {
+        for (final altScript in [
+          TextRecognitionScript.korean,
+          TextRecognitionScript.chinese,
+        ]) {
+          if (altScript == targetScript) continue;
+          try {
+            final altRec = _getRecognizer(altScript);
+            final altRecognized = await altRec.processImage(inputImage);
+            final altBlocks = _mapBlocks(altRecognized);
+            if (altBlocks.isNotEmpty) {
+              return altBlocks;
+            }
+          } catch (_) {}
+        }
+      }
+
+      return blocks;
+    } catch (e, stack) {
+      debugPrint('ML Kit OCR error on $imagePath ($targetScript): $e\n$stack');
+
+      if (targetScript == TextRecognitionScript.latin) {
         return [];
       }
 
-      // Fallback to Latin if script model is unavailable
+      // Safe fallback to Latin script recognition if language-specific model fails
       try {
         debugPrint(
             'Attempting safe fallback to Latin script recognition for $imagePath');
         final inputImage = InputImage.fromFilePath(imagePath);
-        final fallbackRecognizer = _getFallbackRecognizer();
+        final fallbackRecognizer = _getRecognizer(TextRecognitionScript.latin);
         final fallbackRecognized =
             await fallbackRecognizer.processImage(inputImage);
         return _mapBlocks(fallbackRecognized);
@@ -91,31 +127,50 @@ class MlKitMangaTextDetector implements MangaTextDetector {
 
   @override
   void dispose() {
-    try {
-      _recognizer?.close();
-    } catch (_) {}
-    _recognizer = null;
-
-    try {
-      _fallbackRecognizer?.close();
-    } catch (_) {}
-    _fallbackRecognizer = null;
+    for (final recognizer in _recognizers.values) {
+      try {
+        recognizer.close();
+      } catch (_) {}
+    }
+    _recognizers.clear();
   }
 }
 
-/// Manga OCR service with speech bubble vs SFX classification.
+/// Manga OCR service with speech bubble vs SFX classification and dimension resolution.
 class MangaOcrService {
   final MangaTextDetector _detector;
 
   MangaOcrService({MangaTextDetector? detector})
       : _detector = detector ?? MlKitMangaTextDetector();
 
-  Future<List<RawMangaTextBlock>> extractTextBlocks(String imagePath) async {
+  Future<List<RawMangaTextBlock>> extractTextBlocks(
+    String imagePath, {
+    TranslationSourceLanguage language = TranslationSourceLanguage.auto,
+  }) async {
     final file = File(imagePath);
     if (!await file.exists()) {
       return [];
     }
-    return _detector.detectText(imagePath);
+    return _detector.detectText(imagePath, language: language);
+  }
+
+  /// Reads actual image dimensions from file header if missing or zero.
+  static Future<Size> getImageDimensions(String imagePath) async {
+    try {
+      final file = File(imagePath);
+      if (!await file.exists()) return Size.zero;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return Size.zero;
+      final buffer = await ImmutableBuffer.fromUint8List(bytes);
+      final descriptor = await ImageDescriptor.encoded(buffer);
+      final size =
+          Size(descriptor.width.toDouble(), descriptor.height.toDouble());
+      descriptor.dispose();
+      buffer.dispose();
+      return size;
+    } catch (_) {
+      return Size.zero;
+    }
   }
 
   /// Returns true if text block matches speech bubble geometry.

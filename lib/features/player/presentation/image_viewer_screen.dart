@@ -25,6 +25,7 @@ import 'widgets/rename_dialog.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
 import '../../../core/widgets/feedback_pill.dart';
 import '../../../core/services/translation/translation_models.dart';
+import '../../../core/services/translation/mlkit_translation_engine.dart';
 import '../../../core/services/translation/translation_isolate_coordinator.dart';
 import 'widgets/manga_translation_overlay.dart';
 
@@ -180,6 +181,18 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   final GlobalKey _mangaListKey = GlobalKey();
   RenderSliverMultiBoxAdaptor? _cachedMangaSliver;
   TranslationRenderMode? _translationMode;
+  TranslationSourceLanguage _translationLanguage =
+      TranslationSourceLanguage.auto;
+  TranslationTargetLanguage _translationTargetLanguage =
+      TranslationTargetLanguage.indonesian;
+  late List<MediaItem> _cachedMangaList;
+  late final ValueNotifier<int> _activeMangaPageNotifier;
+
+  void _updateMangaList() {
+    _cachedMangaList = widget.items
+        .where((it) => !it.isVideo && !PsdService.isPsd(it.path))
+        .toList();
+  }
 
   RenderSliverMultiBoxAdaptor? _getMangaSliver() {
     if (_cachedMangaSliver != null && _cachedMangaSliver!.attached) {
@@ -413,9 +426,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   void initState() {
     super.initState();
     _current = widget.initialIndex;
-    final hasValidManga =
-        widget.items.any((it) => !it.isVideo && !PsdService.isPsd(it.path));
+    _updateMangaList();
+    final hasValidManga = _cachedMangaList.isNotEmpty;
     _isMangaMode = widget.initialMangaMode && hasValidManga;
+    final initialActive = _cachedMangaList.isNotEmpty
+        ? _cachedMangaList
+            .indexOf(_currentItem)
+            .clamp(0, _cachedMangaList.length - 1)
+        : 0;
+    _activeMangaPageNotifier = ValueNotifier<int>(initialActive);
     _mangaScrollController = ScrollController();
     _mangaScrollController.addListener(_onMangaScroll);
     _translationCoordinator = TranslationIsolateCoordinator();
@@ -498,7 +517,16 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   }
 
   @override
+  void didUpdateWidget(ImageViewerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.items != oldWidget.items) {
+      _updateMangaList();
+    }
+  }
+
+  @override
   void dispose() {
+    _activeMangaPageNotifier.dispose();
     _translationCoordinator.dispose();
     _mangaScrollController.removeListener(_onMangaScroll);
     _mangaScrollController.dispose();
@@ -589,10 +617,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     final globalIndex = widget.items.indexOf(activeItem);
 
     if (globalIndex != -1 && globalIndex != _current) {
-      setState(() {
-        _current = globalIndex;
-      });
+      _current = globalIndex;
       _activeMediaNotifier?.state = activeItem.id;
+    }
+    if (_activeMangaPageNotifier.value != activeMangaIndex) {
+      _activeMangaPageNotifier.value = activeMangaIndex;
     }
 
     if (_isMangaMode && _translationMode != null) {
@@ -608,7 +637,31 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         imagePath: it.path,
         imageSize: Size(w, h),
         mode: _translationMode!,
+        language: _translationLanguage,
+        targetLanguage: _translationTargetLanguage,
       );
+    }
+  }
+
+  void _setTranslationLanguage(TranslationSourceLanguage lang) {
+    if (_translationLanguage == lang) return;
+    setState(() {
+      _translationLanguage = lang;
+    });
+    _translationCoordinator.clearCache();
+    if (_translationMode != null && _mangaItems.isNotEmpty) {
+      _onMangaScroll();
+    }
+  }
+
+  void _setTranslationTargetLanguage(TranslationTargetLanguage lang) {
+    if (_translationTargetLanguage == lang) return;
+    setState(() {
+      _translationTargetLanguage = lang;
+    });
+    _translationCoordinator.clearCache();
+    if (_translationMode != null && _mangaItems.isNotEmpty) {
+      _onMangaScroll();
     }
   }
 
@@ -624,78 +677,475 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   }
 
   void _showTranslationSheet() {
+    final loc = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E1E22),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.chat_bubble_outline_rounded,
-                      color: Colors.white),
-                  title: const Text(
-                    'Terjemahkan Balon Dialog (Speech Bubbles)',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  selected: _translationMode ==
-                      TranslationRenderMode.speechBubblesOnly,
-                  selectedColor: Theme.of(context).colorScheme.primary,
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _setTranslationMode(
-                        TranslationRenderMode.speechBubblesOnly);
-                    showFeedbackPill(
-                      context,
-                      message: 'Mengaktifkan terjemahan offline...',
-                      icon: Icons.translate_rounded,
-                    );
-                  },
-                ),
-                ListTile(
-                  leading:
-                      const Icon(Icons.image_outlined, color: Colors.white),
-                  title: const Text(
-                    'Terjemahkan Seluruh Halaman (Termasuk SFX)',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  selected: _translationMode ==
-                      TranslationRenderMode.fullImageWithSfx,
-                  selectedColor: Theme.of(context).colorScheme.primary,
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _setTranslationMode(TranslationRenderMode.fullImageWithSfx);
-                    showFeedbackPill(
-                      context,
-                      message: 'Mengaktifkan terjemahan offline...',
-                      icon: Icons.translate_rounded,
-                    );
-                  },
-                ),
-                if (_translationMode != null)
-                  ListTile(
-                    leading: const Icon(Icons.close_rounded,
-                        color: Colors.redAccent),
-                    title: const Text(
-                      'Matikan Terjemahan',
-                      style: TextStyle(color: Colors.redAccent),
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return FutureBuilder<bool>(
+              future: MlKitTranslationEngine.instance.isPairReady(
+                _translationLanguage,
+                _translationTargetLanguage,
+              ),
+              builder: (context, snapshot) {
+                final isReady = snapshot.data ?? false;
+                final isLoading =
+                    snapshot.connectionState == ConnectionState.waiting;
+
+                return SafeArea(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Drag handle
+                          Center(
+                            child: Container(
+                              width: 40,
+                              height: 4,
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.white24,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+
+                          // Header
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: primary.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(Icons.translate_rounded,
+                                    color: primary, size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  loc.mangaTranslation,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close_rounded,
+                                    color: Colors.white70, size: 22),
+                                onPressed: () => Navigator.pop(sheetContext),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Section 1: Source Language
+                          Text(
+                            loc.sourceLanguage.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _buildLanguageChip(
+                                  label: '🌐 ${loc.autoDetect}',
+                                  selected: _translationLanguage ==
+                                      TranslationSourceLanguage.auto,
+                                  onTap: () {
+                                    setSheetState(() {});
+                                    _setTranslationLanguage(
+                                        TranslationSourceLanguage.auto);
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                _buildLanguageChip(
+                                  label: '🇯🇵 ${loc.langJapanese}',
+                                  selected: _translationLanguage ==
+                                      TranslationSourceLanguage.japanese,
+                                  onTap: () {
+                                    setSheetState(() {});
+                                    _setTranslationLanguage(
+                                        TranslationSourceLanguage.japanese);
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                _buildLanguageChip(
+                                  label: '🇰🇷 ${loc.langKorean}',
+                                  selected: _translationLanguage ==
+                                      TranslationSourceLanguage.korean,
+                                  onTap: () {
+                                    setSheetState(() {});
+                                    _setTranslationLanguage(
+                                        TranslationSourceLanguage.korean);
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                _buildLanguageChip(
+                                  label: '🇨🇳 ${loc.langChinese}',
+                                  selected: _translationLanguage ==
+                                      TranslationSourceLanguage.chinese,
+                                  onTap: () {
+                                    setSheetState(() {});
+                                    _setTranslationLanguage(
+                                        TranslationSourceLanguage.chinese);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Section 2: Target Language
+                          Text(
+                            loc.targetLanguage.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              _buildLanguageChip(
+                                label: '🇮🇩 ${loc.langIndonesian}',
+                                selected: _translationTargetLanguage ==
+                                    TranslationTargetLanguage.indonesian,
+                                onTap: () {
+                                  setSheetState(() {});
+                                  _setTranslationTargetLanguage(
+                                      TranslationTargetLanguage.indonesian);
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              _buildLanguageChip(
+                                label: '🇺🇸 ${loc.langEnglish}',
+                                selected: _translationTargetLanguage ==
+                                    TranslationTargetLanguage.english,
+                                onTap: () {
+                                  setSheetState(() {});
+                                  _setTranslationTargetLanguage(
+                                      TranslationTargetLanguage.english);
+                                },
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Section 3: AI Model Status Card
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isReady
+                                  ? const Color(0xFF132A1C)
+                                  : const Color(0xFF24201A),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isReady
+                                    ? Colors.greenAccent.withValues(alpha: 0.3)
+                                    : Colors.orangeAccent
+                                        .withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isReady
+                                      ? Icons.check_circle_rounded
+                                      : Icons.cloud_download_rounded,
+                                  color: isReady
+                                      ? Colors.greenAccent
+                                      : Colors.orangeAccent,
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        isReady
+                                            ? loc.modelReady
+                                            : loc.downloadModelPrompt,
+                                        style: TextStyle(
+                                          color: isReady
+                                              ? Colors.greenAccent
+                                              : Colors.orangeAccent,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Text(
+                                        isReady
+                                            ? 'Google Neural MT (100% On-Device)'
+                                            : loc.modelDownloadRequired,
+                                        style: TextStyle(
+                                          color: Colors.white
+                                              .withValues(alpha: 0.6),
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (!isReady)
+                                  TextButton(
+                                    style: TextButton.styleFrom(
+                                      backgroundColor: Colors.orangeAccent
+                                          .withValues(alpha: 0.2),
+                                      foregroundColor: Colors.orangeAccent,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    onPressed: isLoading
+                                        ? null
+                                        : () async {
+                                            showFeedbackPill(
+                                              context,
+                                              message: loc.downloadingModel,
+                                              icon: Icons.downloading_rounded,
+                                            );
+                                            await MlKitTranslationEngine
+                                                .instance
+                                                .downloadPair(
+                                              _translationLanguage,
+                                              _translationTargetLanguage,
+                                            );
+                                            setSheetState(() {});
+                                          },
+                                    child: const Text(
+                                      'Download',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Section 4: Render Mode Option Cards
+                          _buildModeCard(
+                            title: loc.translateSpeechBubbles,
+                            subtitle: loc.translateSpeechBubblesSubtitle,
+                            icon: Icons.chat_bubble_outline_rounded,
+                            selected: _translationMode ==
+                                TranslationRenderMode.speechBubblesOnly,
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              _setTranslationMode(
+                                  TranslationRenderMode.speechBubblesOnly);
+                              showFeedbackPill(
+                                context,
+                                message: '${loc.mangaTranslation}...',
+                                icon: Icons.translate_rounded,
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          _buildModeCard(
+                            title: loc.translateFullPage,
+                            subtitle: loc.translateFullPageSubtitle,
+                            icon: Icons.auto_stories_outlined,
+                            selected: _translationMode ==
+                                TranslationRenderMode.fullImageWithSfx,
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              _setTranslationMode(
+                                  TranslationRenderMode.fullImageWithSfx);
+                              showFeedbackPill(
+                                context,
+                                message: '${loc.mangaTranslation}...',
+                                icon: Icons.translate_rounded,
+                              );
+                            },
+                          ),
+
+                          // Section 5: Turn off translation
+                          if (_translationMode != null) ...[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.redAccent,
+                                  side: BorderSide(
+                                      color: Colors.redAccent
+                                          .withValues(alpha: 0.4)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                icon: const Icon(
+                                    Icons.power_settings_new_rounded,
+                                    size: 18),
+                                label: Text(
+                                  loc.disableTranslation,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(sheetContext);
+                                  _setTranslationMode(null);
+                                },
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _setTranslationMode(null);
-                    },
                   ),
-              ],
-            ),
-          ),
+                );
+              },
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _buildModeCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? primary.withValues(alpha: 0.12)
+              : Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? primary : Colors.white12,
+            width: selected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color:
+                    selected ? primary.withValues(alpha: 0.2) : Colors.white10,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                color: selected ? primary : Colors.white70,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: selected
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.9),
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.bold : FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.55),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              Icon(Icons.check_circle_rounded, color: primary, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? primary.withValues(alpha: 0.25) : Colors.white10,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? primary : Colors.white24,
+            width: selected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : Colors.white70,
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
     );
   }
 
@@ -764,6 +1214,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         key: _mangaListKey,
         controller: _mangaScrollController,
         padding: EdgeInsets.zero,
+        scrollCacheExtent: const ScrollCacheExtent.pixels(2500.0),
         physics: const BouncingScrollPhysics(),
         itemCount: mangaList.length,
         itemBuilder: (context, index) {
@@ -775,25 +1226,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             gaplessPlayback: true,
             filterQuality: FilterQuality.medium,
             frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-              if (wasSynchronouslyLoaded) return child;
-              final loaded = frame != null;
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  AnimatedOpacity(
-                    opacity: loaded ? 0.0 : 1.0,
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOut,
-                    child: _thumb(it.id, it.path),
-                  ),
-                  AnimatedOpacity(
-                    opacity: loaded ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOut,
-                    child: child,
-                  ),
-                ],
-              );
+              if (wasSynchronouslyLoaded || frame != null) return child;
+              return _thumb(it.id, it.path);
             },
             errorBuilder: (_, __, ___) => Container(
               height: 300,
@@ -847,9 +1281,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     );
   }
 
-  List<MediaItem> get _mangaItems => widget.items
-      .where((it) => !it.isVideo && !PsdService.isPsd(it.path))
-      .toList();
+  List<MediaItem> get _mangaItems => _cachedMangaList;
 
   MediaItem get _currentItem => widget.items[_current];
 
@@ -2059,12 +2491,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   width: 0.6,
                                 ),
                               ),
-                              child: Builder(
-                                builder: (context) {
+                              child: ValueListenableBuilder<int>(
+                                valueListenable: _activeMangaPageNotifier,
+                                builder: (context, activeIdx, _) {
                                   final mangaList = _mangaItems;
-                                  final mangaIdx = mangaList.indexOf(item);
-                                  final pageStr = mangaIdx >= 0
-                                      ? '${mangaIdx + 1} / ${mangaList.length}'
+                                  final pageStr = mangaList.isNotEmpty
+                                      ? '${activeIdx + 1} / ${mangaList.length}'
                                       : '${_current + 1} / ${widget.items.length}';
                                   return Text(
                                     pageStr,

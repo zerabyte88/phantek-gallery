@@ -1,7 +1,7 @@
 name: phantek_gallery
 description: "Phantek Gallery - offline-first photo & video gallery for Android."
 publish_to: 'none'
-version: 2.14.26+762468
+version: 2.15.0+762469
 homepage: https://github.com/zerabyte88/phantek-gallery
 repository: https://github.com/zerabyte88/phantek-gallery
 issue_tracker: https://github.com/zerabyte88/phantek-gallery/issues
@@ -41,7 +41,7 @@ dependencies:
 
   # ── On-device ML & Offline Translation (Permissive Licenses: Apache 2.0 / MIT) ──
   google_mlkit_text_recognition: ^1.0.1
-  flutter_onnxruntime: ^1.9.0
+  google_mlkit_translation: ^1.0.1
 
 dev_dependencies:
   flutter_test:

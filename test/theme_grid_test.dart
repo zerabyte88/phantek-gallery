@@ -48,7 +48,8 @@ void main() {
   }
 
   group('ModernThemeGrid Tests', () {
-    testWidgets('Renders all 7 theme cards and badges correctly', (tester) async {
+    testWidgets('Renders all 7 theme cards and badges correctly',
+        (tester) async {
       await tester.pumpWidget(
         buildTestWidget(
           currentTheme: AppThemeMode.system,
@@ -81,7 +82,8 @@ void main() {
       expect(find.text('Sakura'), findsOneWidget);
     });
 
-    testWidgets('Tapping on a theme card fires onThemeSelected callback', (tester) async {
+    testWidgets('Tapping on a theme card fires onThemeSelected callback',
+        (tester) async {
       AppThemeMode? selectedMode;
 
       await tester.pumpWidget(
@@ -125,7 +127,8 @@ void main() {
       expect(find.text('Live'), findsNWidgets(4));
     });
 
-    testWidgets('Renders properly without overflow on compact screens', (tester) async {
+    testWidgets('Renders properly without overflow on compact screens',
+        (tester) async {
       await tester.pumpWidget(
         buildTestWidget(
           currentTheme: AppThemeMode.amoledSnowfall,

@@ -101,6 +101,27 @@ class AppLocalizations {
   String get sortByAlbum => _t('sortByAlbum');
   String get mangaMode => _t('mangaMode');
   String get readAsManga => _t('readAsManga');
+
+  String get mangaTranslation => _t('mangaTranslation');
+  String get sourceLanguage => _t('sourceLanguage');
+  String get targetLanguage => _t('targetLanguage');
+  String get autoDetect => _t('autoDetect');
+  String get langJapanese => _t('langJapanese');
+  String get langKorean => _t('langKorean');
+  String get langChinese => _t('langChinese');
+  String get langIndonesian => _t('langIndonesian');
+  String get langEnglish => _t('langEnglish');
+  String get translateSpeechBubbles => _t('translateSpeechBubbles');
+  String get translateSpeechBubblesSubtitle =>
+      _t('translateSpeechBubblesSubtitle');
+  String get translateFullPage => _t('translateFullPage');
+  String get translateFullPageSubtitle => _t('translateFullPageSubtitle');
+  String get disableTranslation => _t('disableTranslation');
+  String get modelReady => _t('modelReady');
+  String get downloadModelPrompt => _t('downloadModelPrompt');
+  String get downloadingModel => _t('downloadingModel');
+  String get modelDownloadRequired => _t('modelDownloadRequired');
+
   String get flattenSubfolders => _t('flattenSubfolders');
   String get showSubfolders => _t('showSubfolders');
   String get allChapters => _t('allChapters');

@@ -507,8 +507,7 @@ class PsdService {
         if ((await raf.position()) + 2 > fileLen) break;
         final chanCountBytes = await raf.read(2);
         if (chanCountBytes.length < 2) break;
-        final numChannels =
-            ByteData.sublistView(chanCountBytes).getUint16(0);
+        final numChannels = ByteData.sublistView(chanCountBytes).getUint16(0);
 
         // Skip channel info: numChannels * (version == 2 ? 10 : 6)
         final chanInfoLen = numChannels * (version == 2 ? 10 : 6);
@@ -601,8 +600,7 @@ class PsdService {
               if (tagLen >= 4) {
                 final typeBytes = await raf.read(4);
                 if (typeBytes.length == 4) {
-                  final type =
-                      ByteData.sublistView(typeBytes).getUint32(0);
+                  final type = ByteData.sublistView(typeBytes).getUint32(0);
                   if (type == 1 || type == 2) {
                     isFolder = true;
                   } else if (type == 3) {
@@ -623,8 +621,7 @@ class PsdService {
                     for (var c = 0;
                         c < charCount && (c * 2 + 1) < uniBytes.length;
                         c++) {
-                      final ch =
-                          (uniBytes[c * 2] << 8) | uniBytes[c * 2 + 1];
+                      final ch = (uniBytes[c * 2] << 8) | uniBytes[c * 2 + 1];
                       if (ch != 0) codeUnits.add(ch);
                     }
                     if (codeUnits.isNotEmpty) {
@@ -690,8 +687,7 @@ class PsdService {
             continue;
           }
 
-          final parentIndex =
-              folderStack.isNotEmpty ? folderStack.last : null;
+          final parentIndex = folderStack.isNotEmpty ? folderStack.last : null;
           final depth = folderStack.length;
 
           processed.add(PsdLayerInfo(
@@ -723,8 +719,7 @@ class PsdService {
             continue;
           }
 
-          final parentIndex =
-              folderStack.isNotEmpty ? folderStack.last : null;
+          final parentIndex = folderStack.isNotEmpty ? folderStack.last : null;
           final depth = folderStack.length;
 
           processed.add(PsdLayerInfo(
@@ -780,7 +775,8 @@ class PsdService {
         return await _renderGate.run(() => compute(
               _isolateGetLayers,
               filePath,
-            ).timeout(const Duration(seconds: 12), onTimeout: () => <PsdLayerInfo>[]));
+            ).timeout(const Duration(seconds: 12),
+                onTimeout: () => <PsdLayerInfo>[]));
       }
 
       return [];
@@ -927,7 +923,8 @@ class PsdService {
       if (!await file.exists()) return null;
 
       // Pre-cache layer thumbnails in background so they are ready for layer sheet
-      unawaited(getLayerThumbnails(filePath).catchError((_) => <int, Uint8List>{}));
+      unawaited(
+          getLayerThumbnails(filePath).catchError((_) => <int, Uint8List>{}));
 
       // Check if user has saved custom layer visibility
       final savedHidden = getSavedLayerVisibility(filePath);
@@ -1319,7 +1316,9 @@ Uint8List _decodePackBits(
 
     if (n >= 0) {
       final count = n + 1;
-      for (var i = 0; i < count && inIdx < inEnd && outIdx < expectedLength; i++) {
+      for (var i = 0;
+          i < count && inIdx < inEnd && outIdx < expectedLength;
+          i++) {
         dst[outIdx++] = src[inIdx++];
       }
     } else if (n > -128) {
@@ -1370,9 +1369,8 @@ Uint8List? _decompressChannelData(
         final bd = ByteData.sublistView(rawChannelData);
 
         for (var row = 0; row < height; row++) {
-          final scanlineLen = isPsb
-              ? bd.getUint32(2 + row * 4)
-              : bd.getUint16(2 + row * 2);
+          final scanlineLen =
+              isPsb ? bd.getUint32(2 + row * 4) : bd.getUint16(2 + row * 2);
           if (dataOffset + scanlineLen > rawChannelData.length) {
             final remaining = rawChannelData.length - dataOffset;
             if (remaining > 0) {
@@ -1622,7 +1620,8 @@ class _ChannelScanlineReader {
     if (fullDecompressed != null) {
       final start = sy * rowBytes;
       if (start + rowBytes <= fullDecompressed!.length) {
-        return Uint8List.sublistView(fullDecompressed!, start, start + rowBytes);
+        return Uint8List.sublistView(
+            fullDecompressed!, start, start + rowBytes);
       }
       return null;
     }
@@ -1871,13 +1870,15 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
         raf.setPositionSync(extraEnd);
       }
 
-      final effectiveName = (unicodeName != null && unicodeName.trim().isNotEmpty)
-          ? unicodeName.trim()
-          : (pascalName != null && pascalName.trim().isNotEmpty
-              ? pascalName.trim()
-              : 'Layer ${i + 1}');
+      final effectiveName =
+          (unicodeName != null && unicodeName.trim().isNotEmpty)
+              ? unicodeName.trim()
+              : (pascalName != null && pascalName.trim().isNotEmpty
+                  ? pascalName.trim()
+                  : 'Layer ${i + 1}');
 
-      if (effectiveName == '</Layer group>' || effectiveName == '</Layer set>') {
+      if (effectiveName == '</Layer group>' ||
+          effectiveName == '</Layer set>') {
         isClosingDelimiter = true;
       }
 
@@ -2041,7 +2042,8 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
         if (baseIndex != null &&
             (params.hiddenLayerIndices.contains(baseIndex) ||
                 (layers[baseIndex].parentIndex != null &&
-                    (params.hiddenLayerIndices.contains(layers[baseIndex].parentIndex) ||
+                    (params.hiddenLayerIndices
+                            .contains(layers[baseIndex].parentIndex) ||
                         isAncestorHidden(layers[baseIndex].parentIndex))))) {
           continue;
         }
@@ -2081,10 +2083,18 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
         final rAlpha = readers[-1] ?? readers[-2];
 
         // Skip mask-only or adjustment layers in color modes
-        if (colorMode != 1 && r0 == null && r1 == null && r2 == null && r3 == null) {
+        if (colorMode != 1 &&
+            r0 == null &&
+            r1 == null &&
+            r2 == null &&
+            r3 == null) {
           continue;
         }
-        if (r0 == null && r1 == null && r2 == null && r3 == null && rAlpha == null) {
+        if (r0 == null &&
+            r1 == null &&
+            r2 == null &&
+            r3 == null &&
+            rAlpha == null) {
           continue;
         }
 
@@ -2123,16 +2133,21 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
             int r = 0, g = 0, b = 0, a = 255;
             if (colorMode == 4) {
               // CMYK
-              final c = (rScan != null && sIdx < rScan.length) ? rScan[sIdx] : 0;
-              final m = (gScan != null && sIdx < gScan.length) ? gScan[sIdx] : 0;
-              final y = (bScan != null && sIdx < bScan.length) ? bScan[sIdx] : 0;
-              final k = (kScan != null && sIdx < kScan.length) ? kScan[sIdx] : 0;
+              final c =
+                  (rScan != null && sIdx < rScan.length) ? rScan[sIdx] : 0;
+              final m =
+                  (gScan != null && sIdx < gScan.length) ? gScan[sIdx] : 0;
+              final y =
+                  (bScan != null && sIdx < bScan.length) ? bScan[sIdx] : 0;
+              final k =
+                  (kScan != null && sIdx < kScan.length) ? kScan[sIdx] : 0;
               r = ((255 - c) * (255 - k)) ~/ 255;
               g = ((255 - m) * (255 - k)) ~/ 255;
               b = ((255 - y) * (255 - k)) ~/ 255;
             } else if (colorMode == 1) {
               // Grayscale
-              final gray = (rScan != null && sIdx < rScan.length) ? rScan[sIdx] : 0;
+              final gray =
+                  (rScan != null && sIdx < rScan.length) ? rScan[sIdx] : 0;
               r = gray;
               g = gray;
               b = gray;
@@ -2158,9 +2173,12 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
               final invSa = 255 - effA;
               final outA = effA + (da * invSa ~/ 255);
               if (outA > 0) {
-                final outR = ((r * effA) + (cp.r.toInt() * da * invSa ~/ 255)) ~/ outA;
-                final outG = ((g * effA) + (cp.g.toInt() * da * invSa ~/ 255)) ~/ outA;
-                final outB = ((b * effA) + (cp.b.toInt() * da * invSa ~/ 255)) ~/ outA;
+                final outR =
+                    ((r * effA) + (cp.r.toInt() * da * invSa ~/ 255)) ~/ outA;
+                final outG =
+                    ((g * effA) + (cp.g.toInt() * da * invSa ~/ 255)) ~/ outA;
+                final outB =
+                    ((b * effA) + (cp.b.toInt() * da * invSa ~/ 255)) ~/ outA;
                 canvas.setPixelRgba(
                   cx,
                   cy,
@@ -2175,7 +2193,8 @@ Uint8List? _isolateStreamRenderWithLayers(_StreamRenderParams params) {
         }
         renderedLayerCount++;
       } catch (layerErr) {
-        debugPrint('[PsdService] stream render error on layer ${layer.index}: $layerErr');
+        debugPrint(
+            '[PsdService] stream render error on layer ${layer.index}: $layerErr');
       }
     }
 
@@ -2211,7 +2230,8 @@ Uint8List? decompressChannelData(
   bool isPsb = false,
   int depth = 8,
 }) =>
-    _decompressChannelData(rawChannelData, width, height, isPsb: isPsb, depth: depth);
+    _decompressChannelData(rawChannelData, width, height,
+        isPsb: isPsb, depth: depth);
 
 @visibleForTesting
 void compositeLayer(
@@ -2229,7 +2249,8 @@ class _ExtractThumbParams {
   const _ExtractThumbParams(this.filePath, this.maxThumbDim);
 }
 
-Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) {
+Map<int, Uint8List>? _isolateExtractLayerThumbnails(
+    _ExtractThumbParams params) {
   RandomAccessFile? raf;
   try {
     final file = File(params.filePath);
@@ -2442,7 +2463,11 @@ Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) 
       final r3 = readers[3];
       final rAlpha = readers[-1] ?? readers[-2];
 
-      if (r0 == null && r1 == null && r2 == null && r3 == null && rAlpha == null) {
+      if (r0 == null &&
+          r1 == null &&
+          r2 == null &&
+          r3 == null &&
+          rAlpha == null) {
         continue;
       }
 
@@ -2492,11 +2517,19 @@ Map<int, Uint8List>? _isolateExtractLayerThumbnails(_ExtractThumbParams params) 
           } else {
             // RGB
             r = r0?.getSample(sx, sy) ?? 0;
-            g = r1 != null ? r1.getSample(sx, sy) : (r0?.getSample(sx, sy) ?? 0);
-            b = r2 != null ? r2.getSample(sx, sy) : (r0?.getSample(sx, sy) ?? 0);
+            g = r1 != null
+                ? r1.getSample(sx, sy)
+                : (r0?.getSample(sx, sy) ?? 0);
+            b = r2 != null
+                ? r2.getSample(sx, sy)
+                : (r0?.getSample(sx, sy) ?? 0);
           }
 
-          if (r0 == null && r1 == null && r2 == null && r3 == null && rAlpha != null) {
+          if (r0 == null &&
+              r1 == null &&
+              r2 == null &&
+              r3 == null &&
+              rAlpha != null) {
             a = (255 * opacity) ~/ 255;
           } else {
             final rawA = (rAlpha != null) ? rAlpha.getSample(sx, sy) : 255;

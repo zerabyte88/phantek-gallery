@@ -159,7 +159,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                   ),
                                   const SizedBox(height: 1),
                                   Text(
-                                    context.tr.themeModeLabel(settings.themeMode),
+                                    context.tr
+                                        .themeModeLabel(settings.themeMode),
                                     style: TextStyle(
                                       fontSize: 12.5,
                                       fontWeight: FontWeight.w600,
@@ -172,7 +173,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             Icon(
                               Icons.chevron_right_rounded,
                               size: 20,
-                              color: cs.onSurfaceVariant.withValues(alpha: 0.38),
+                              color:
+                                  cs.onSurfaceVariant.withValues(alpha: 0.38),
                             ),
                           ],
                         ),
@@ -582,8 +584,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
                             side: BorderSide(
-                              color: dCs.outlineVariant.withValues(
-                                  alpha: dIsDark ? 0.12 : 0.18),
+                              color: dCs.outlineVariant
+                                  .withValues(alpha: dIsDark ? 0.12 : 0.18),
                               width: 1,
                             ),
                           ),
@@ -668,9 +670,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   icon: _hasManageStorage
                       ? Icons.verified_user_rounded
                       : Icons.folder_shared_outlined,
-                  iconColor: _hasManageStorage
-                      ? const Color(0xFF10B981)
-                      : null,
+                  iconColor: _hasManageStorage ? const Color(0xFF10B981) : null,
                   title: context.tr.allFilesAccess,
                   subtitle: _hasManageStorage
                       ? context.tr.allFilesGranted
@@ -929,8 +929,7 @@ class _ModernSwitchTile extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: cs.primary
-                      .withValues(alpha: isDark ? 0.14 : 0.10),
+                  color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
@@ -1016,8 +1015,7 @@ class _ModernSliderTile extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: cs.primary
-                      .withValues(alpha: isDark ? 0.14 : 0.10),
+                  color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
@@ -1060,15 +1058,13 @@ class _ModernSliderTile extends StatelessWidget {
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
               activeTrackColor: cs.primary,
-              inactiveTrackColor: cs.outlineVariant
-                  .withValues(alpha: isDark ? 0.25 : 0.35),
+              inactiveTrackColor:
+                  cs.outlineVariant.withValues(alpha: isDark ? 0.25 : 0.35),
               thumbColor: cs.primary,
               overlayColor: cs.primary.withValues(alpha: 0.12),
               trackHeight: 3.0,
-              thumbShape:
-                  const RoundSliderThumbShape(enabledThumbRadius: 6),
-              overlayShape:
-                  const RoundSliderOverlayShape(overlayRadius: 14),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
             ),
             child: Slider(
               value: value.clamp(min, max),
@@ -1134,8 +1130,8 @@ Future<void> _showExcludedFoldersDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
               side: BorderSide(
-                color: cs.outlineVariant
-                    .withValues(alpha: isDark ? 0.12 : 0.18),
+                color:
+                    cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
                 width: 1,
               ),
             ),
@@ -1147,8 +1143,7 @@ Future<void> _showExcludedFoldersDialog(
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: cs.primary
-                        .withValues(alpha: isDark ? 0.14 : 0.10),
+                    color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(
@@ -1371,8 +1366,9 @@ Future<void> _showExcludedFoldersDialog(
                           vertical: 10, horizontal: 16),
                     ),
                     onPressed: () {
-                      ref.read(settingsNotifierProvider.notifier).update(
-                          (s) => s.copyWith(excludedFolders: current));
+                      ref
+                          .read(settingsNotifierProvider.notifier)
+                          .update((s) => s.copyWith(excludedFolders: current));
                       Navigator.pop(ctx);
                     },
                     child: Text(context.tr.save),
@@ -1417,8 +1413,7 @@ Future<AppLanguage?> _showModernLanguageDialog(
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: cs.primary
-                        .withValues(alpha: isDark ? 0.14 : 0.10),
+                    color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(
@@ -1624,8 +1619,7 @@ Future<AppThemeMode?> _showModernThemeDialog(
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: cs.primary
-                          .withValues(alpha: isDark ? 0.14 : 0.10),
+                      color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
                       borderRadius: BorderRadius.circular(9),
                     ),
                     child: Icon(
@@ -1882,8 +1876,7 @@ Future<int?> _showModernGridColumnsDialog(
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: cs.primary
-                          .withValues(alpha: isDark ? 0.14 : 0.10),
+                      color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
                       borderRadius: BorderRadius.circular(9),
                     ),
                     child: Icon(
@@ -2221,8 +2214,7 @@ Future<T?> _showModernOptionDialog<T>(
                     else
                       Icon(
                         Icons.circle_outlined,
-                        color:
-                            cs.outlineVariant.withValues(alpha: 0.6),
+                        color: cs.outlineVariant.withValues(alpha: 0.6),
                         size: 20,
                       ),
                   ],

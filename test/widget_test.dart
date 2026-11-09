@@ -551,8 +551,7 @@ void main() {
       // Verify themes are in dialog
       final dialogFinder = find.byType(Dialog);
       expect(dialogFinder, findsOneWidget);
-      expect(
-          find.descendant(of: dialogFinder, matching: find.text('Midnight')),
+      expect(find.descendant(of: dialogFinder, matching: find.text('Midnight')),
           findsOneWidget);
       expect(
           find.descendant(of: dialogFinder, matching: find.text('Dark Mode')),
@@ -560,8 +559,7 @@ void main() {
       expect(
           find.descendant(of: dialogFinder, matching: find.text('Light Mode')),
           findsOneWidget);
-      expect(
-          find.descendant(of: dialogFinder, matching: find.text('Sakura')),
+      expect(find.descendant(of: dialogFinder, matching: find.text('Sakura')),
           findsOneWidget);
 
       // Select Sakura theme from dialog
@@ -624,8 +622,7 @@ void main() {
       expect(find.text('MIT License'), findsOneWidget);
     });
 
-    test(
-        'LicenseService registers phantek_gallery and native dependencies',
+    test('LicenseService registers phantek_gallery and native dependencies',
         () async {
       LicenseService.resetForTesting();
       LicenseService.registerLicenses();
@@ -1882,11 +1879,8 @@ void main() {
     });
 
     test('AppLanguage enum, codes, and locale mappings', () {
-      expect(AppLanguage.values.length, 23);
+      expect(AppLanguage.values.length, 22);
       expect(AppLanguage.supportedLocales.length, 22);
-
-      expect(AppLanguage.system.code, isNull);
-      expect(AppLanguage.system.locale, isNull);
 
       expect(AppLanguage.id.code, 'id');
       expect(AppLanguage.id.nativeName, 'Bahasa Indonesia');
@@ -1927,11 +1921,10 @@ void main() {
       expect(AppLanguage.fromCode('ar'), AppLanguage.ar);
       expect(AppLanguage.fromCode('fr'), AppLanguage.fr);
       expect(AppLanguage.fromCode('ru'), AppLanguage.ru);
-      expect(AppLanguage.fromCode('unknown'), AppLanguage.system);
-      expect(AppLanguage.fromCode(null), AppLanguage.system);
+      expect(AppLanguage.fromCode('unknown'), AppLanguage.en);
+      expect(AppLanguage.fromCode(null), AppLanguage.en);
 
       // Test flagEmoji
-      expect(AppLanguage.system.flagEmoji, isNull);
       expect(AppLanguage.id.flagEmoji, '🇮🇩');
       expect(AppLanguage.en.flagEmoji, '🇺🇸');
       expect(AppLanguage.zh.flagEmoji, '🇨🇳');
@@ -1942,14 +1935,10 @@ void main() {
       expect(AppLanguage.ar.flagEmoji, '🇸🇦');
 
       for (final lang in AppLanguage.values) {
-        if (lang == AppLanguage.system) {
-          expect(lang.flagEmoji, isNull);
-        } else {
-          expect(lang.flagEmoji, isNotNull,
-              reason: '${lang.name} flagEmoji should not be null');
-          expect(lang.flagEmoji!.isNotEmpty, isTrue,
-              reason: '${lang.name} flagEmoji should not be empty');
-        }
+        expect(lang.flagEmoji, isNotNull,
+            reason: '${lang.name} flagEmoji should not be null');
+        expect(lang.flagEmoji!.isNotEmpty, isTrue,
+            reason: '${lang.name} flagEmoji should not be empty');
       }
     });
 
@@ -1957,8 +1946,7 @@ void main() {
         'AppLocalizations translation dictionary coverage across all supported languages',
         () {
       for (final lang in AppLanguage.values) {
-        if (lang == AppLanguage.system || lang.code == null) continue;
-        final loc = AppLocalizations(Locale(lang.code!));
+        final loc = AppLocalizations(Locale(lang.code));
         expect(loc.all.isNotEmpty, isTrue, reason: '${lang.code} all');
         expect(loc.photos.isNotEmpty, isTrue, reason: '${lang.code} photos');
         expect(loc.videos.isNotEmpty, isTrue, reason: '${lang.code} videos');
@@ -1979,6 +1967,42 @@ void main() {
             reason: '${lang.code} pickFromManager');
         expect(loc.clearAll.isNotEmpty, isTrue,
             reason: '${lang.code} clearAll');
+        expect(loc.mangaTranslation.isNotEmpty, isTrue,
+            reason: '${lang.code} mangaTranslation');
+        expect(loc.sourceLanguage.isNotEmpty, isTrue,
+            reason: '${lang.code} sourceLanguage');
+        expect(loc.targetLanguage.isNotEmpty, isTrue,
+            reason: '${lang.code} targetLanguage');
+        expect(loc.autoDetect.isNotEmpty, isTrue,
+            reason: '${lang.code} autoDetect');
+        expect(loc.langJapanese.isNotEmpty, isTrue,
+            reason: '${lang.code} langJapanese');
+        expect(loc.langKorean.isNotEmpty, isTrue,
+            reason: '${lang.code} langKorean');
+        expect(loc.langChinese.isNotEmpty, isTrue,
+            reason: '${lang.code} langChinese');
+        expect(loc.langIndonesian.isNotEmpty, isTrue,
+            reason: '${lang.code} langIndonesian');
+        expect(loc.langEnglish.isNotEmpty, isTrue,
+            reason: '${lang.code} langEnglish');
+        expect(loc.translateSpeechBubbles.isNotEmpty, isTrue,
+            reason: '${lang.code} translateSpeechBubbles');
+        expect(loc.translateSpeechBubblesSubtitle.isNotEmpty, isTrue,
+            reason: '${lang.code} translateSpeechBubblesSubtitle');
+        expect(loc.translateFullPage.isNotEmpty, isTrue,
+            reason: '${lang.code} translateFullPage');
+        expect(loc.translateFullPageSubtitle.isNotEmpty, isTrue,
+            reason: '${lang.code} translateFullPageSubtitle');
+        expect(loc.disableTranslation.isNotEmpty, isTrue,
+            reason: '${lang.code} disableTranslation');
+        expect(loc.modelReady.isNotEmpty, isTrue,
+            reason: '${lang.code} modelReady');
+        expect(loc.downloadModelPrompt.isNotEmpty, isTrue,
+            reason: '${lang.code} downloadModelPrompt');
+        expect(loc.downloadingModel.isNotEmpty, isTrue,
+            reason: '${lang.code} downloadingModel');
+        expect(loc.modelDownloadRequired.isNotEmpty, isTrue,
+            reason: '${lang.code} modelDownloadRequired');
       }
     });
 
@@ -1987,7 +2011,7 @@ void main() {
       await SettingsService.init();
 
       const defaultModel = SettingsModel();
-      expect(defaultModel.language, AppLanguage.system);
+      expect(defaultModel.language, AppLanguage.en);
 
       final modified = defaultModel.copyWith(language: AppLanguage.id);
       expect(modified.language, AppLanguage.id);
@@ -2039,8 +2063,8 @@ void main() {
       // Modal bottom sheet should show language options
       expect(find.text('Bahasa Indonesia'), findsOneWidget);
       expect(find.text('English'), findsWidgets);
-      expect(find.text('System Default'), findsOneWidget);
-      expect(find.byIcon(Icons.language_rounded), findsWidgets);
+      expect(find.text('System Default'), findsNothing);
+      expect(find.text('🇮🇩'), findsOneWidget);
       expect(find.text('SYS'), findsNothing);
 
       // Select Bahasa Indonesia
@@ -2066,7 +2090,9 @@ void main() {
       expect(find.text('Pilih lewat File Manager'), findsOneWidget);
     });
 
-    testWidgets('Clear thumbnail cache dialog has Cancel on left, Clear Cache on right with theme color', (tester) async {
+    testWidgets(
+        'Clear thumbnail cache dialog has Cancel on left, Clear Cache on right with theme color',
+        (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
@@ -2169,7 +2195,7 @@ void main() {
     test('AppLocalizations complete coverage across all 22 supported languages',
         () {
       for (final lang in AppLanguage.values) {
-        if (lang == AppLanguage.system || lang.code == null) continue;
+        // Checked across all 22 languages
         final loc = AppLocalizations(lang.locale!);
         expect(loc.keepScreenOn.isNotEmpty, isTrue,
             reason: '${lang.code} keepScreenOn');
@@ -3081,7 +3107,8 @@ void main() {
       expect(find.byType(MediaGridItem), findsOneWidget);
     });
 
-    test('PSD layer visibility persistence saves, retrieves, and clears', () async {
+    test('PSD layer visibility persistence saves, retrieves, and clears',
+        () async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 

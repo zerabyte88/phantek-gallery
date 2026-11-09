@@ -9,6 +9,20 @@ enum TranslationRenderMode {
   fullImageWithSfx,
 }
 
+/// Source language selection for translation.
+enum TranslationSourceLanguage {
+  auto,
+  japanese,
+  korean,
+  chinese,
+}
+
+/// Target language selection for translation.
+enum TranslationTargetLanguage {
+  indonesian,
+  english,
+}
+
 /// Translated text block on a manga page.
 class MangaTranslatedBlock {
   final Rect boundingBox;
@@ -76,14 +90,36 @@ class TranslationTask {
   final String imagePath;
   final TranslationRenderMode mode;
   final Size originalImageSize;
+  final TranslationSourceLanguage language;
+  final TranslationTargetLanguage targetLanguage;
   final int sequence;
 
   const TranslationTask({
     required this.imagePath,
     required this.mode,
     required this.originalImageSize,
+    this.language = TranslationSourceLanguage.auto,
+    this.targetLanguage = TranslationTargetLanguage.indonesian,
     this.sequence = 0,
   });
+
+  TranslationTask copyWith({
+    String? imagePath,
+    TranslationRenderMode? mode,
+    Size? originalImageSize,
+    TranslationSourceLanguage? language,
+    TranslationTargetLanguage? targetLanguage,
+    int? sequence,
+  }) {
+    return TranslationTask(
+      imagePath: imagePath ?? this.imagePath,
+      mode: mode ?? this.mode,
+      originalImageSize: originalImageSize ?? this.originalImageSize,
+      language: language ?? this.language,
+      targetLanguage: targetLanguage ?? this.targetLanguage,
+      sequence: sequence ?? this.sequence,
+    );
+  }
 }
 
 /// Translation result for an image page.

@@ -64,7 +64,9 @@ void main() {
       ),
     ];
 
-    test('Filters out all videos and PSD files (including uppercase extensions)', () {
+    test(
+        'Filters out all videos and PSD files (including uppercase extensions)',
+        () {
       final mangaFiltered = sampleItems
           .where((e) => !e.isVideo && !PsdService.isPsd(e.path))
           .toList();
@@ -72,10 +74,12 @@ void main() {
       expect(mangaFiltered.length, 2);
       expect(mangaFiltered.every((e) => !e.isVideo), isTrue);
       expect(mangaFiltered.every((e) => !PsdService.isPsd(e.path)), isTrue);
-      expect(mangaFiltered.map((e) => e.name).toList(), containsAll(['page_01.jpg', 'page_02.png']));
+      expect(mangaFiltered.map((e) => e.name).toList(),
+          containsAll(['page_01.jpg', 'page_02.png']));
     });
 
-    test('compareMangaCanonical correctly sorts filtered manga pages naturally', () {
+    test('compareMangaCanonical correctly sorts filtered manga pages naturally',
+        () {
       final mangaFiltered = sampleItems
           .where((e) => !e.isVideo && !PsdService.isPsd(e.path))
           .toList()
@@ -85,7 +89,8 @@ void main() {
       expect(mangaFiltered[1].name, 'page_02.png');
     });
 
-    test('Returns empty list when collection contains only videos and PSDs', () {
+    test('Returns empty list when collection contains only videos and PSDs',
+        () {
       final nonMangaOnly = [
         sampleItems[0], // video
         sampleItems[1], // psd
@@ -100,7 +105,9 @@ void main() {
       expect(filtered.isEmpty, isTrue);
     });
 
-    test('compareMangaCanonical sorts chapters by folder name first, then filename', () {
+    test(
+        'compareMangaCanonical sorts chapters by folder name first, then filename',
+        () {
       final multiChapterItems = [
         MediaItem(
           id: 'c2_p1',
@@ -140,7 +147,9 @@ void main() {
   });
 
   group('MediaGridItem PSD Badge Tests', () {
-    testWidgets('MediaGridItem renders PSD badge in bottom-right when showBadges is true', (tester) async {
+    testWidgets(
+        'MediaGridItem renders PSD badge in bottom-right when showBadges is true',
+        (tester) async {
       final psdItem = MediaItem(
         id: 'psd_item_1',
         path: '/storage/sample.psd',
@@ -169,7 +178,9 @@ void main() {
       expect(find.text('PSD'), findsOneWidget);
     });
 
-    testWidgets('MediaGridItem does NOT render PSD badge when showBadges is false', (tester) async {
+    testWidgets(
+        'MediaGridItem does NOT render PSD badge when showBadges is false',
+        (tester) async {
       final psdItem = MediaItem(
         id: 'psd_item_2',
         path: '/storage/sample.psd',
@@ -198,7 +209,8 @@ void main() {
       expect(find.text('PSD'), findsNothing);
     });
 
-    testWidgets('MediaGridItem does NOT render PSD badge for non-PSD images', (tester) async {
+    testWidgets('MediaGridItem does NOT render PSD badge for non-PSD images',
+        (tester) async {
       final imageItem = MediaItem(
         id: 'img_item_1',
         path: '/storage/sample.jpg',

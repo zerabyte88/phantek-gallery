@@ -204,8 +204,7 @@ void main() {
     expect(heroesAt2.contains('item3'), isFalse);
 
     // Fast diagonal downward flick (natural thumb arc with negative dx)
-    await tester.drag(
-        find.byType(ImageViewerScreen), const Offset(-30, 200));
+    await tester.drag(find.byType(ImageViewerScreen), const Offset(-30, 200));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 

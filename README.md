@@ -3,9 +3,9 @@
 
   # Phantek - Gallery
 
-  **Fast, privacy-focused offline photo and video gallery for Android with PSD layer support.**
+  **Fast, privacy-focused offline-first photo & video gallery for Android with PSD layer support and on-device AI manga translation.**
 
-  [![Version](https://img.shields.io/badge/Version-v2.14.26-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.15.0-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20ExoPlayer-6366f1.svg?style=flat-square)](https://developer.android.com/media/media3)
@@ -22,12 +22,13 @@
 - **PSD Layer Viewer** : Full Adobe Photoshop (`.psd`) support with seekable embedded JPEG extraction (<1ms) and interactive layer visibility toggle sheet.
 - **Hardware Video Playback** : Powered by AndroidX Media3 / ExoPlayer with dual SurfaceView pipeline for smooth 2K & 4K playback, double-tap seek, smart zoom, gesture controls for brightness and volume, and playback position resume.
 - **Manga Reader & Natural Sort** : Continuous vertical reader mode with edge-to-edge view, chapter progress pills, and natural album/chapter sorting (`Chapter 1`, `1.1`, `2.1`, `10`, `25`).
+- **On-Device AI Manga Translation** : Real-time text detection & on-device machine translation for Japanese, Korean, and Chinese manga into Indonesian or English (US) via Google ML Kit. Models are downloaded on-demand once and executed locally on-device.
 - **Recycle Bin & Safe Deletion** : Staged `.trash` bin with configurable auto-purge (7, 14, 30 days or never) and batch restore/permanent delete.
 - **Privacy & Security** : Enforce Android `FLAG_SECURE` to block screenshots, screen recordings, and blur recent apps switcher previews.
 - **EXIF & Media Inspector** : Detailed technical metadata for photos (ISO, aperture, focal length, resolution) and videos (bitrate, fps, codec, channels).
 - **Custom Visual Themes** : 6 hand-crafted visual themes (*Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, *Sakura*) with dynamic artistic headers.
 - **Multilingual Support** : Complete localization across 22 languages with instant runtime switching without app restart.
-- **100% Offline & Private** : Zero cloud sync, zero telemetry, zero analytics, and zero unsolicited network requests.
+- **Offline-First & Privacy-Focused** : Zero user tracking, zero telemetry, and zero cloud sync. Media files never leave your device. Network access is strictly limited to downloading on-device translation language models (or developer avatar) upon explicit user request.
 
 ---
 
@@ -55,6 +56,7 @@
 | **Framework** | Flutter (Dart SDK `^3.5`) | UI rendering, animations, gestures, and localization |
 | **State Management** | `flutter_riverpod` (`^2.5.1`) | Reactive state management and dependency injection |
 | **Video Engine** | `video_player` (`^2.9.2`) | AndroidX Media3 / ExoPlayer hardware video playback |
+| **On-Device ML** | `google_mlkit_text_recognition`, `google_mlkit_translation` | Manga OCR detection & on-device neural machine translation |
 | **Media Scanning** | `photo_manager`, `permission_handler` | Scoped storage media queries and permission handling |
 | **Native Bridge** | Kotlin MethodChannels | Android `FLAG_SECURE`, MediaStore thumbnail loader, FileProvider |
 | **Storage & Caching** | `shared_preferences`, `path_provider` | Key-value settings persistence and thumbnail disk caching |
@@ -74,7 +76,7 @@
 | `READ_EXTERNAL_STORAGE` / `WRITE_EXTERNAL_STORAGE` | Storage access on Android 12 and below |
 | `MANAGE_EXTERNAL_STORAGE` | Direct file manipulation for `.trash` recycle bin management |
 | `ACCESS_MEDIA_LOCATION` | Read geographic and EXIF location metadata from camera photos |
-| `INTERNET` | Optional network access for loading developer avatar in About card |
+| `INTERNET` | One-time model download for on-device ML Kit translation and loading developer avatar |
 
 </div>
 

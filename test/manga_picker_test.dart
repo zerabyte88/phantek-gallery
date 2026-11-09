@@ -200,7 +200,8 @@ void main() {
       ),
     ];
 
-    testWidgets('Renders header, counts, search bar, and manga tiles', (tester) async {
+    testWidgets('Renders header, counts, search bar, and manga tiles',
+        (tester) async {
       await tester.pumpWidget(_wrap(MangaFolderPickerSheet(items: testItems)));
       await tester.pumpAndSettle();
 
@@ -209,7 +210,8 @@ void main() {
       expect(find.text('2 manga folders'), findsOneWidget);
 
       // Search bar
-      expect(find.byKey(const ValueKey('manga_picker_search_field')), findsOneWidget);
+      expect(find.byKey(const ValueKey('manga_picker_search_field')),
+          findsOneWidget);
 
       // Albums
       expect(find.text('Berserk'), findsOneWidget);
@@ -276,7 +278,8 @@ void main() {
 
       expect(selectedItems, isNotNull);
       expect(selectedItems!.length, 2);
-      expect(selectedItems!.every((e) => e.immediateFolderName == 'Chapter 2'), isTrue);
+      expect(selectedItems!.every((e) => e.immediateFolderName == 'Chapter 2'),
+          isTrue);
       expect(selectedIndex, 0);
     });
 
@@ -315,14 +318,16 @@ void main() {
       await tester.pumpAndSettle();
 
       // Search by manga title
-      await tester.enterText(find.byKey(const ValueKey('manga_picker_search_field')), 'Solo');
+      await tester.enterText(
+          find.byKey(const ValueKey('manga_picker_search_field')), 'Solo');
       await tester.pumpAndSettle();
 
       expect(find.text('Solo Leveling'), findsOneWidget);
       expect(find.text('Berserk'), findsNothing);
 
       // Search by chapter name
-      await tester.enterText(find.byKey(const ValueKey('manga_picker_search_field')), 'Chapter 1');
+      await tester.enterText(
+          find.byKey(const ValueKey('manga_picker_search_field')), 'Chapter 1');
       await tester.pumpAndSettle();
 
       expect(find.text('Berserk'), findsOneWidget);
@@ -330,7 +335,9 @@ void main() {
       expect(find.widgetWithText(ListTile, 'Chapter 1'), findsOneWidget);
 
       // No matches
-      await tester.enterText(find.byKey(const ValueKey('manga_picker_search_field')), 'Nonexistent');
+      await tester.enterText(
+          find.byKey(const ValueKey('manga_picker_search_field')),
+          'Nonexistent');
       await tester.pumpAndSettle();
 
       expect(find.text('No manga matching "Nonexistent"'), findsOneWidget);
@@ -343,7 +350,9 @@ void main() {
       expect(find.text('Solo Leveling'), findsOneWidget);
     });
 
-    testWidgets('MangaFolderPickerSheet.show with empty list displays feedback pill', (tester) async {
+    testWidgets(
+        'MangaFolderPickerSheet.show with empty list displays feedback pill',
+        (tester) async {
       await tester.pumpWidget(
         _wrap(
           Builder(

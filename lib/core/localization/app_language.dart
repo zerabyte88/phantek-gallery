@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 /// Supported application languages.
 enum AppLanguage {
-  system(null, 'System Default', 'Default Sistem'),
   ar('ar', 'Arabic', 'العربية'),
   zh('zh', 'Chinese Simplified', '简体中文'),
   zhTw('zh_TW', 'Chinese Traditional', '繁體中文'),
@@ -28,8 +27,8 @@ enum AppLanguage {
 
   const AppLanguage(this.code, this.englishName, this.nativeName);
 
-  /// ISO language code (null for system default).
-  final String? code;
+  /// ISO language code.
+  final String code;
 
   /// English display name.
   final String englishName;
@@ -37,21 +36,18 @@ enum AppLanguage {
   /// Native script display name.
   final String nativeName;
 
-  /// Corresponding [Locale] or null for system default.
+  /// Corresponding [Locale].
   Locale? get locale {
-    if (code == null) return null;
-    if (code!.contains('_')) {
-      final parts = code!.split('_');
+    if (code.contains('_')) {
+      final parts = code.split('_');
       return Locale(parts[0], parts[1]);
     }
-    return Locale(code!);
+    return Locale(code);
   }
 
-  /// Official national flag emoji, or null for system default.
+  /// Official national flag emoji.
   String? get flagEmoji {
     switch (this) {
-      case AppLanguage.system:
-        return null;
       case AppLanguage.ar:
         return '🇸🇦';
       case AppLanguage.zh:
@@ -101,20 +97,18 @@ enum AppLanguage {
 
   /// Look up [AppLanguage] from language code.
   static AppLanguage fromCode(String? code) {
-    if (code == null) return AppLanguage.system;
+    if (code == null) return AppLanguage.en;
     return AppLanguage.values.firstWhere(
       (l) => l.code == code,
-      orElse: () => AppLanguage.system,
+      orElse: () => AppLanguage.en,
     );
   }
 
-  /// Languages sorted alphabetically (A-Z) by [englishName], with [system] pinned at the top.
+  /// Languages sorted alphabetically (A-Z) by [englishName].
   static List<AppLanguage> get sortedLanguages {
-    final list = AppLanguage.values
-        .where((l) => l != AppLanguage.system)
-        .toList()
+    final list = AppLanguage.values.toList()
       ..sort((a, b) => a.englishName.compareTo(b.englishName));
-    return [AppLanguage.system, ...list];
+    return list;
   }
 
   /// All supported [Locale]s for [MaterialApp].

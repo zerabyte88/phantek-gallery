@@ -12,7 +12,7 @@ import '../localization/app_language.dart';
 class SettingsModel extends Equatable {
   const SettingsModel({
     this.themeMode = AppThemeMode.system,
-    this.language = AppLanguage.system,
+    this.language = AppLanguage.en,
     this.gridColumns = 3,
     this.albumGridColumns = 3,
     this.showBadges = true,

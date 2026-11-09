@@ -240,4 +240,25 @@ const Map<String, String> esTranslations = {
   'movedToTrash': 'Movido a la papelera',
   'itemMovedToTrash': '"{name}" movido a la papelera',
   'itemsMovedToTrashCount': '{count} elementos movidos a la papelera',
+  'mangaTranslation': 'Traducción de manga',
+  'sourceLanguage': 'Idioma de origen',
+  'targetLanguage': 'Idioma de destino',
+  'autoDetect': 'Detección automática',
+  'langJapanese': 'Japonés',
+  'langKorean': 'Coreano',
+  'langChinese': 'Chino',
+  'langIndonesian': 'Indonesio',
+  'langEnglish': 'Inglés (EE. UU.)',
+  'translateSpeechBubbles': 'Solo bocadillos de diálogo',
+  'translateSpeechBubblesSubtitle':
+      'Traducir el texto dentro de los bocadillos',
+  'translateFullPage': 'Página completa (con efectos de sonido)',
+  'translateFullPageSubtitle':
+      'Traducir diálogos, narración y efectos de sonido',
+  'disableTranslation': 'Desactivar traducción',
+  'modelReady': 'Modelo IA listo (sin conexión)',
+  'downloadModelPrompt': 'Descargar modelo IA (~30 MB)',
+  'downloadingModel': 'Descargando modelo de traducción...',
+  'modelDownloadRequired':
+      'Se requiere descargar el modelo para traducir sin conexión',
 };

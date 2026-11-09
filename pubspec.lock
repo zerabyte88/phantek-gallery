@@ -131,14 +131,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_onnxruntime:
-    dependency: "direct main"
-    description:
-      name: flutter_onnxruntime
-      sha256: "94565ad2a3f6f92b2e09c1b274c8e5f47f7c0cda0675c5484d5e16a2c4761123"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.9.0"
   flutter_riverpod:
     dependency: "direct main"
     description:
@@ -170,6 +162,14 @@ packages:
     description:
       name: google_mlkit_text_recognition
       sha256: b8de7cf1b21dd8f10e8031e61fc060925ac45dfb1c9b1a2ff5e70ea8fc7f11c6
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
+  google_mlkit_translation:
+    dependency: "direct main"
+    description:
+      name: google_mlkit_translation
+      sha256: a709a01d5f9e095c8a1b27a29023ff7312de49849a61150869292731c10cfa6b
       url: "https://pub.dev"
     source: hosted
     version: "1.0.1"

@@ -71,7 +71,7 @@ class SettingsService {
     };
     return SettingsModel(
       themeMode: themeMode,
-      language: _readEnum(_K.language, AppLanguage.values, AppLanguage.system),
+      language: _readEnum(_K.language, AppLanguage.values, AppLanguage.en),
       gridColumns: _prefs.getInt(_K.gridColumns) ?? 3,
       albumGridColumns: _prefs.getInt(_K.albumGridColumns) ?? 3,
       showBadges: _prefs.getBool(_K.showBadges) ?? true,

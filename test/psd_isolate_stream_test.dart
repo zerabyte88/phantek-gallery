@@ -23,7 +23,8 @@ void main() {
       await psdFile.writeAsBytes(bytes);
 
       final layers = await PsdService.instance.getLayers(psdFile.path);
-      expect(layers.length, 4); // background, red, group 1, blue (delimiter filtered)
+      expect(layers.length,
+          4); // background, red, group 1, blue (delimiter filtered)
 
       final thumbs = await PsdService.instance.getLayerThumbnails(psdFile.path);
       expect(thumbs.containsKey(0), isTrue);
@@ -71,12 +72,14 @@ void main() {
       expect(decoded[1], 0x34);
     });
 
-    test('Scanline-targeted layer thumbnail extraction is fast and accurate', () async {
+    test('Scanline-targeted layer thumbnail extraction is fast and accurate',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('psd_subsample_');
       final psdFile = File('${tempDir.path}/test_subsample.psd');
       await psdFile.writeAsBytes(_createPhotoshopLikePsd());
 
-      final thumbs = await PsdService.instance.getLayerThumbnails(psdFile.path, maxThumbDim: 24);
+      final thumbs = await PsdService.instance
+          .getLayerThumbnails(psdFile.path, maxThumbDim: 24);
       expect(thumbs.isNotEmpty, isTrue);
       for (final thumbBytes in thumbs.values) {
         final decoded = img.decodePng(thumbBytes);
@@ -88,7 +91,9 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('Layer saved hidden in Photoshop renders when toggled ON (hiddenLayerIndices: {})', () async {
+    test(
+        'Layer saved hidden in Photoshop renders when toggled ON (hiddenLayerIndices: {})',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('psd_hidden_');
       final psdFile = File('${tempDir.path}/test_hidden.psd');
 
@@ -104,7 +109,8 @@ void main() {
       expect(layers[1].isVisible, isFalse);
 
       // 2. Verify Photoshop Section 5 merged composite is pure white (red box missing)
-      final composite = await PsdService.instance.extractMergedComposite(psdFile.path);
+      final composite =
+          await PsdService.instance.extractMergedComposite(psdFile.path);
       expect(composite, isNotNull);
       final compositeImg = img.decodeImage(composite!);
       expect(compositeImg, isNotNull);
@@ -143,7 +149,8 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('Individual layer toggling toggles specific layers independently', () async {
+    test('Individual layer toggling toggles specific layers independently',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('psd_multi_');
       final psdFile = File('${tempDir.path}/test_multi.psd');
 
@@ -222,11 +229,14 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('Channels with odd byte lengths and 2-byte word padding decode cleanly', () async {
+    test(
+        'Channels with odd byte lengths and 2-byte word padding decode cleanly',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('psd_odd_');
       final psdFile = File('${tempDir.path}/test_odd.psd');
 
-      final bytes = _createMultiLayerTogglePsd(padOddChannels: true, forceOddLength: true);
+      final bytes = _createMultiLayerTogglePsd(
+          padOddChannels: true, forceOddLength: true);
       await psdFile.writeAsBytes(bytes);
 
       final rendered = await PsdService.instance.renderWithLayers(
@@ -299,7 +309,8 @@ Uint8List _createCmykPsd() {
   }
   recordsBuilder.add(chanInfo.buffer.asUint8List());
 
-  recordsBuilder.add([0x38, 0x42, 0x49, 0x4D, 0x6E, 0x6F, 0x72, 0x6D, 255, 0, 0, 0]);
+  recordsBuilder
+      .add([0x38, 0x42, 0x49, 0x4D, 0x6E, 0x6F, 0x72, 0x6D, 255, 0, 0, 0]);
   recordsBuilder.add([0, 0, 0, 0]); // extra len = 0
 
   final channelDataBuilder = BytesBuilder();
@@ -336,7 +347,9 @@ Uint8List _encodePackBitsScanline(List<int> bytes) {
   var i = 0;
   while (i < bytes.length) {
     var runLen = 1;
-    while (i + runLen < bytes.length && bytes[i + runLen] == bytes[i] && runLen < 128) {
+    while (i + runLen < bytes.length &&
+        bytes[i + runLen] == bytes[i] &&
+        runLen < 128) {
       runLen++;
     }
     if (runLen > 1) {
@@ -347,7 +360,8 @@ Uint8List _encodePackBitsScanline(List<int> bytes) {
       var litLen = 1;
       while (i + litLen < bytes.length &&
           litLen < 128 &&
-          (i + litLen + 1 >= bytes.length || bytes[i + litLen] != bytes[i + litLen + 1])) {
+          (i + litLen + 1 >= bytes.length ||
+              bytes[i + litLen] != bytes[i + litLen + 1])) {
         litLen++;
       }
       out.addByte(litLen - 1);
@@ -392,11 +406,17 @@ Uint8List _createPhotoshopLikePsd() {
   // Layer 4: Group 1 (0,0,0,0)
   // Note: in standard Photoshop, Group 1 header is at a HIGHER index than closing delimiter!
   final layerSpecs = [
-    _LayerSpec(0, 0, 0, 30, 30, 'Background', img.ColorRgba8(255, 255, 255, 255), isFolder: false),
-    _LayerSpec(1, 5, 5, 15, 15, 'Red Box', img.ColorRgba8(255, 0, 0, 255), isFolder: false),
-    _LayerSpec(2, 0, 0, 0, 0, '</Layer group>', img.ColorRgba8(0, 0, 0, 0), isClosing: true),
-    _LayerSpec(3, 15, 15, 25, 25, 'Blue Box', img.ColorRgba8(0, 0, 255, 255), isFolder: false),
-    _LayerSpec(4, 0, 0, 0, 0, 'Group 1', img.ColorRgba8(0, 0, 0, 0), isFolder: true),
+    _LayerSpec(
+        0, 0, 0, 30, 30, 'Background', img.ColorRgba8(255, 255, 255, 255),
+        isFolder: false),
+    _LayerSpec(1, 5, 5, 15, 15, 'Red Box', img.ColorRgba8(255, 0, 0, 255),
+        isFolder: false),
+    _LayerSpec(2, 0, 0, 0, 0, '</Layer group>', img.ColorRgba8(0, 0, 0, 0),
+        isClosing: true),
+    _LayerSpec(3, 15, 15, 25, 25, 'Blue Box', img.ColorRgba8(0, 0, 255, 255),
+        isFolder: false),
+    _LayerSpec(4, 0, 0, 0, 0, 'Group 1', img.ColorRgba8(0, 0, 0, 0),
+        isFolder: true),
   ];
 
   final recordsBuilder = BytesBuilder();
@@ -420,7 +440,12 @@ Uint8List _createPhotoshopLikePsd() {
       }
     } else {
       // 4 channels: R, G, B, A (IDs: 0, 1, 2, -1)
-      final chanColors = [spec.color.r.toInt(), spec.color.g.toInt(), spec.color.b.toInt(), spec.color.a.toInt()];
+      final chanColors = [
+        spec.color.r.toInt(),
+        spec.color.g.toInt(),
+        spec.color.b.toInt(),
+        spec.color.a.toInt()
+      ];
       for (final val in chanColors) {
         final scanlines = <Uint8List>[];
         for (var row = 0; row < h; row++) {
@@ -544,8 +569,11 @@ Uint8List _createPhotoshopPsdWithHiddenLayer() {
   // Layer 0: Background (white, 20x20, visible)
   // Layer 1: Red Box (5, 5, 15, 15, red, HIDDEN in Photoshop: isVisible = false)
   final layerSpecs = [
-    _LayerSpec(0, 0, 0, 20, 20, 'Background', img.ColorRgba8(255, 255, 255, 255), isVisible: true),
-    _LayerSpec(1, 5, 5, 15, 15, 'Red Box', img.ColorRgba8(255, 0, 0, 255), isVisible: false),
+    _LayerSpec(
+        0, 0, 0, 20, 20, 'Background', img.ColorRgba8(255, 255, 255, 255),
+        isVisible: true),
+    _LayerSpec(1, 5, 5, 15, 15, 'Red Box', img.ColorRgba8(255, 0, 0, 255),
+        isVisible: false),
   ];
 
   final recordsBuilder = BytesBuilder();
@@ -560,7 +588,12 @@ Uint8List _createPhotoshopPsdWithHiddenLayer() {
     final h = spec.bottom - spec.top;
 
     final chanLens = <int>[];
-    final chanColors = [spec.color.r.toInt(), spec.color.g.toInt(), spec.color.b.toInt(), spec.color.a.toInt()];
+    final chanColors = [
+      spec.color.r.toInt(),
+      spec.color.g.toInt(),
+      spec.color.b.toInt(),
+      spec.color.a.toInt()
+    ];
     for (final val in chanColors) {
       final scanlines = <Uint8List>[];
       for (var row = 0; row < h; row++) {
@@ -664,11 +697,13 @@ class _LayerSpec {
   final bool isClosing;
   final bool isVisible;
 
-  _LayerSpec(this.index, this.top, this.left, this.bottom, this.right, this.name, this.color,
+  _LayerSpec(this.index, this.top, this.left, this.bottom, this.right,
+      this.name, this.color,
       {this.isFolder = false, this.isClosing = false, this.isVisible = true});
 }
 
-Uint8List _createMultiLayerTogglePsd({bool padOddChannels = false, bool forceOddLength = false}) {
+Uint8List _createMultiLayerTogglePsd(
+    {bool padOddChannels = false, bool forceOddLength = false}) {
   final bb = BytesBuilder();
   const docW = 20;
   const docH = 20;
@@ -695,9 +730,13 @@ Uint8List _createMultiLayerTogglePsd({bool padOddChannels = false, bool forceOdd
   // Layer 1: Red Layer (0, 0, 20, 10) - left half
   // Layer 2: Green Layer (0, 10, 20, 20) - right half
   final layerSpecs = [
-    _LayerSpec(0, 0, 0, 20, 20, 'Background', img.ColorRgba8(255, 255, 255, 255), isVisible: true),
-    _LayerSpec(1, 0, 0, 20, 10, 'Red Layer', img.ColorRgba8(255, 0, 0, 255), isVisible: true),
-    _LayerSpec(2, 0, 10, 20, 20, 'Green Layer', img.ColorRgba8(0, 255, 0, 255), isVisible: true),
+    _LayerSpec(
+        0, 0, 0, 20, 20, 'Background', img.ColorRgba8(255, 255, 255, 255),
+        isVisible: true),
+    _LayerSpec(1, 0, 0, 20, 10, 'Red Layer', img.ColorRgba8(255, 0, 0, 255),
+        isVisible: true),
+    _LayerSpec(2, 0, 10, 20, 20, 'Green Layer', img.ColorRgba8(0, 255, 0, 255),
+        isVisible: true),
   ];
 
   final recordsBuilder = BytesBuilder();
@@ -712,7 +751,12 @@ Uint8List _createMultiLayerTogglePsd({bool padOddChannels = false, bool forceOdd
     final h = spec.bottom - spec.top;
 
     final chanLens = <int>[];
-    final chanColors = [spec.color.r.toInt(), spec.color.g.toInt(), spec.color.b.toInt(), spec.color.a.toInt()];
+    final chanColors = [
+      spec.color.r.toInt(),
+      spec.color.g.toInt(),
+      spec.color.b.toInt(),
+      spec.color.a.toInt()
+    ];
     for (var cIdx = 0; cIdx < chanColors.length; cIdx++) {
       final val = chanColors[cIdx];
       final scanlines = <Uint8List>[];

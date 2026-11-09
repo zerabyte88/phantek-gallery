@@ -55,7 +55,9 @@ void main() {
       ),
     ];
 
-    test('SortOption.albumAZ sorts chapters and pages in exact natural reading order', () {
+    test(
+        'SortOption.albumAZ sorts chapters and pages in exact natural reading order',
+        () {
       final sorted = applyFiltersAndSort(
         items,
         sort: SortOption.albumAZ,
@@ -72,7 +74,8 @@ void main() {
       ]);
     });
 
-    test('SortOption.albumZA sorts chapters descending but pages ascending', () {
+    test('SortOption.albumZA sorts chapters descending but pages ascending',
+        () {
       final sorted = applyFiltersAndSort(
         items,
         sort: SortOption.albumZA,
@@ -99,7 +102,9 @@ void main() {
       ]);
     });
 
-    test('SortOption.fromCriterionAndDirection handles album criterion correctly', () {
+    test(
+        'SortOption.fromCriterionAndDirection handles album criterion correctly',
+        () {
       expect(
         SortOption.fromCriterionAndDirection(
             SortCriterion.album, SortDirection.ascending),
@@ -112,7 +117,8 @@ void main() {
       );
     });
 
-    test('MediaItem resolves nested parent album for manga with subfolders', () {
+    test('MediaItem resolves nested parent album for manga with subfolders',
+        () {
       final mangaItem = MediaItem(
         id: 'op_c1_p1',
         path: '/storage/emulated/0/Download/One Piece/Chapter 1/01.jpg',
@@ -140,7 +146,8 @@ void main() {
       expect(standardItem.albumName, 'Camera');
     });
 
-    test('groupMediaIntoAlbums groups nested chapters under the parent album', () {
+    test('groupMediaIntoAlbums groups nested chapters under the parent album',
+        () {
       final mangaPages = [
         MediaItem(
           id: 'p1',

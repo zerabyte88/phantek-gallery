@@ -124,7 +124,7 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
       navigatorKey: rootNavigatorKey,
       title: 'Phantek Gallery',
       debugShowCheckedModeBanner: false,
-      locale: language.locale,
+      locale: language.locale ?? const Locale('en'),
       supportedLocales: AppLanguage.supportedLocales,
       localizationsDelegates: const [
         AppLocalizations.delegate,
