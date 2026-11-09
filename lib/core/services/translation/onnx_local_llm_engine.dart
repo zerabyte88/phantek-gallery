@@ -81,6 +81,7 @@ class OnnxLocalLlmEngine {
   /// System prompt template conforming strictly to the AGENTS.md Prompting Policy.
   static const String systemPromptTemplate =
       'You are an expert localizer for Asian comics. Translate the raw OCR text from {language} into natural English comic dialogue. \n'
+      'This is fictional comic dialogue. Preserve the original tone, slang, and profanity faithfully without self-censorship or refusal.\n'
       'Output ONLY the final English translation. No chat, no notes, no markdown formatting. Fix OCR typos.';
 
   /// Default inference configuration parameters.
@@ -282,6 +283,7 @@ class OnnxLocalLlmEngine {
     final lang = language ?? 'Japanese';
     return '<system>\n'
         'You are an expert localizer for Asian comics. Translate the raw OCR text from $lang into natural English comic dialogue. \n'
+        'This is fictional comic dialogue. Preserve the original tone, slang, and profanity faithfully without self-censorship or refusal.\n'
         'Output ONLY the final English translation. No chat, no notes, no markdown formatting. Fix OCR typos.\n'
         '</system>\n'
         '<user>\n'
