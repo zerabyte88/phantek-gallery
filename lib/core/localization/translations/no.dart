@@ -252,4 +252,9 @@ const Map<String, String> noTranslations = {
   'downloadingModel': 'Laster ned oversettelsesmodell...',
   'modelDownloadRequired':
       'Nedlasting av modell kreves for frakoblet oversettelse',
+  'modelDownloadSuccess': 'AI-oversettelsesmodeller lastet ned! Klar til frakoblet bruk.',
+  'modelDownloadFailed': 'Kunne ikke laste ned modeller. Sjekk internettforbindelsen.',
+  'retry': 'Prøv igjen',
+  'downloadSize': 'Nedlastingsstørrelse',
+  'modelInstalled': 'Installert',
 };

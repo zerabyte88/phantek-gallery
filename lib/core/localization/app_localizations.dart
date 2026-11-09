@@ -121,6 +121,12 @@ class AppLocalizations {
   String get downloadModelPrompt => _t('downloadModelPrompt');
   String get downloadingModel => _t('downloadingModel');
   String get modelDownloadRequired => _t('modelDownloadRequired');
+  String get modelDownloadSuccess => _t('modelDownloadSuccess');
+  String get modelDownloadFailed => _t('modelDownloadFailed');
+  String get retry => _t('retry');
+  String get downloadSize => _t('downloadSize');
+  String get modelInstalled => _t('modelInstalled');
+
 
   String get flattenSubfolders => _t('flattenSubfolders');
   String get showSubfolders => _t('showSubfolders');

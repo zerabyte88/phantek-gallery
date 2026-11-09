@@ -258,4 +258,9 @@ const Map<String, String> ptTranslations = {
   'downloadingModel': 'Baixando modelo de tradução...',
   'modelDownloadRequired':
       'Download do modelo necessário para tradução offline',
+  'modelDownloadSuccess': 'Modelos de tradução de IA baixados! Prontos para uso offline.',
+  'modelDownloadFailed': 'Falha ao baixar modelos. Verifique a conexão com a internet.',
+  'retry': 'Tentar novamente',
+  'downloadSize': 'Tamanho do download',
+  'modelInstalled': 'Instalado',
 };

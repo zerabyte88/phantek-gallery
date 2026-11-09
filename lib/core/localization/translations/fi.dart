@@ -253,4 +253,9 @@ const Map<String, String> fiTranslations = {
   'downloadModelPrompt': 'Lataa tekoälymalli (~30 Mt)',
   'downloadingModel': 'Ladataan käännösmallia...',
   'modelDownloadRequired': 'Mallin lataaminen vaaditaan offline-kääntämiseen',
+  'modelDownloadSuccess': 'Tekoälykäännösmallit ladattu! Valmis offline-käyttöön.',
+  'modelDownloadFailed': 'Mallien lataus epäonnistui. Tarkista internetyhteys.',
+  'retry': 'Yritä uudelleen',
+  'downloadSize': 'Latauskoko',
+  'modelInstalled': 'Asennettu',
 };

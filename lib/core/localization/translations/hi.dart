@@ -254,4 +254,9 @@ const Map<String, String> hiTranslations = {
   'downloadModelPrompt': 'AI मॉडल डाउनलोड करें (~30MB)',
   'downloadingModel': 'अनुवाद मॉडल डाउनलोड हो रहा है...',
   'modelDownloadRequired': 'ऑफ़लाइन अनुवाद के लिए मॉडल डाउनलोड आवश्यक है',
+  'modelDownloadSuccess': 'AI अनुवाद मॉडल डाउनलोड हो गए! ऑफ़लाइन उपयोग के लिए तैयार।',
+  'modelDownloadFailed': 'मॉडल डाउनलोड करने में विफल। इंटरनेट कनेक्शन जांचें।',
+  'retry': 'पुनः प्रयास करें',
+  'downloadSize': 'डाउनलोड आकार',
+  'modelInstalled': 'स्थापित',
 };

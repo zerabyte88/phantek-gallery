@@ -252,4 +252,9 @@ const Map<String, String> idTranslations = {
   'downloadModelPrompt': 'Unduh Model AI (~30MB)',
   'downloadingModel': 'Mengunduh model terjemahan...',
   'modelDownloadRequired': 'Perlu unduh model untuk terjemahan offline',
+  'modelDownloadSuccess': 'Model terjemahan AI berhasil diunduh! Siap digunakan secara offline.',
+  'modelDownloadFailed': 'Gagal mengunduh model. Periksa koneksi internet.',
+  'retry': 'Coba Lagi',
+  'downloadSize': 'Ukuran Unduhan',
+  'modelInstalled': 'Terpasang',
 };

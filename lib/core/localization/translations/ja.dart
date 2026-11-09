@@ -244,4 +244,9 @@ const Map<String, String> jaTranslations = {
   'downloadModelPrompt': 'AIモデルをダウンロード（約30MB）',
   'downloadingModel': '翻訳モデルをダウンロード中...',
   'modelDownloadRequired': 'オフライン翻訳にはモデルのダウンロードが必要です',
+  'modelDownloadSuccess': 'AI翻訳モデルがダウンロードされました！オフラインで使用できます。',
+  'modelDownloadFailed': 'モデルのダウンロードに失敗しました。インターネット接続を確認してください。',
+  'retry': '再試行',
+  'downloadSize': 'ダウンロードサイズ',
+  'modelInstalled': 'インストール済み',
 };

@@ -253,4 +253,9 @@ const Map<String, String> viTranslations = {
   'downloadModelPrompt': 'Tải mô hình AI (~30MB)',
   'downloadingModel': 'Đang tải mô hình dịch...',
   'modelDownloadRequired': 'Cần tải mô hình để dịch ngoại tuyến',
+  'modelDownloadSuccess': 'Đã tải xuống mô hình dịch AI! Sẵn sàng sử dụng ngoại tuyến.',
+  'modelDownloadFailed': 'Không thể tải xuống mô hình. Vui lòng kiểm tra kết nối internet.',
+  'retry': 'Thử lại',
+  'downloadSize': 'Kích thước tải xuống',
+  'modelInstalled': 'Đã cài đặt',
 };

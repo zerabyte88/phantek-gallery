@@ -28,6 +28,7 @@ import '../../../core/services/translation/translation_models.dart';
 import '../../../core/services/translation/mlkit_translation_engine.dart';
 import '../../../core/services/translation/translation_isolate_coordinator.dart';
 import 'widgets/manga_translation_overlay.dart';
+import 'widgets/zigzag_progress_bar.dart';
 
 // 4096px cap fits imageCache while staying sharp up to 3x zoom.
 ImageProvider displayImage(String path, {int maxDimension = 4096}) =>
@@ -691,14 +692,22 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return FutureBuilder<bool>(
-              future: MlKitTranslationEngine.instance.isPairReady(
+            return FutureBuilder<ModelPairStatus>(
+              future: MlKitTranslationEngine.instance.getPairStatus(
                 _translationLanguage,
                 _translationTargetLanguage,
               ),
               builder: (context, snapshot) {
-                final isReady = snapshot.data ?? false;
-                final isLoading =
+                final pairStatus = snapshot.data ??
+                    const ModelPairStatus(
+                      sourceDownloaded: false,
+                      targetDownloaded: false,
+                      sourceLangName: '',
+                      targetLangName: '',
+                      totalNeededMb: 60.0,
+                      isReady: false,
+                    );
+                final isModelLoading =
                     snapshot.connectionState == ConnectionState.waiting;
 
                 return SafeArea(
@@ -858,108 +867,214 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
                           const SizedBox(height: 16),
 
-                          // Section 3: AI Model Status Card
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: isReady
-                                  ? const Color(0xFF132A1C)
-                                  : const Color(0xFF24201A),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: isReady
-                                    ? Colors.greenAccent.withValues(alpha: 0.3)
-                                    : Colors.orangeAccent
-                                        .withValues(alpha: 0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  isReady
-                                      ? Icons.check_circle_rounded
-                                      : Icons.cloud_download_rounded,
-                                  color: isReady
-                                      ? Colors.greenAccent
-                                      : Colors.orangeAccent,
-                                  size: 22,
+                                                    // Section 3: AI Model Status Card
+                          ValueListenableBuilder<TranslationDownloadProgress>(
+                            valueListenable:
+                                MlKitTranslationEngine.instance.downloadProgressNotifier,
+                            builder: (context, downloadProgress, _) {
+                              final isDownloading = downloadProgress.isDownloading;
+                              final hasError = !isDownloading &&
+                                  !pairStatus.isReady &&
+                                  downloadProgress.errorMessage != null &&
+                                  downloadProgress.errorMessage!.isNotEmpty;
+                              final isReady = pairStatus.isReady && !isDownloading;
+
+                              Color cardBg;
+                              Color borderColor;
+                              if (isReady) {
+                                cardBg = const Color(0xFF132A1C);
+                                borderColor = Colors.greenAccent.withValues(alpha: 0.3);
+                              } else if (isDownloading) {
+                                cardBg = const Color(0xFF131D2A);
+                                borderColor =
+                                    const Color(0xFF00E5FF).withValues(alpha: 0.35);
+                              } else if (hasError) {
+                                cardBg = const Color(0xFF2C1517);
+                                borderColor =
+                                    Colors.redAccent.withValues(alpha: 0.35);
+                              } else {
+                                cardBg = const Color(0xFF24201A);
+                                borderColor =
+                                    Colors.orangeAccent.withValues(alpha: 0.3);
+                              }
+
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: cardBg,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: borderColor, width: 1),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        isReady
-                                            ? loc.modelReady
-                                            : loc.downloadModelPrompt,
-                                        style: TextStyle(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          isReady
+                                              ? Icons.check_circle_rounded
+                                              : isDownloading
+                                                  ? Icons.downloading_rounded
+                                                  : hasError
+                                                      ? Icons.error_outline_rounded
+                                                      : Icons.cloud_download_rounded,
                                           color: isReady
                                               ? Colors.greenAccent
-                                              : Colors.orangeAccent,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
+                                              : isDownloading
+                                                  ? const Color(0xFF00E5FF)
+                                                  : hasError
+                                                      ? Colors.redAccent
+                                                      : Colors.orangeAccent,
+                                          size: 22,
                                         ),
-                                      ),
-                                      Text(
-                                        isReady
-                                            ? 'Google Neural MT (100% On-Device)'
-                                            : loc.modelDownloadRequired,
-                                        style: TextStyle(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.6),
-                                          fontSize: 11,
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                isReady
+                                                    ? '✓ ${loc.modelReady}'
+                                                    : isDownloading
+                                                        ? downloadProgress.currentStep
+                                                        : hasError
+                                                            ? loc.modelDownloadFailed
+                                                            : loc.downloadModelPrompt,
+                                                style: TextStyle(
+                                                  color: isReady
+                                                      ? Colors.greenAccent
+                                                      : isDownloading
+                                                          ? const Color(0xFF00E5FF)
+                                                          : hasError
+                                                              ? Colors.redAccent
+                                                              : Colors.orangeAccent,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                isReady
+                                                    ? 'Google Neural MT (100% On-Device Offline)'
+                                                    : isDownloading
+                                                        ? '${downloadProgress.downloadedMb.toStringAsFixed(1)} MB / ${downloadProgress.totalMb.toStringAsFixed(1)} MB (${(downloadProgress.progress * 100).toInt()}%)'
+                                                        : hasError
+                                                            ? (downloadProgress
+                                                                    .errorMessage ??
+                                                                '')
+                                                            : loc.modelDownloadRequired,
+                                                style: TextStyle(
+                                                  color: Colors.white
+                                                      .withValues(alpha: 0.65),
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
+                                        if (!isReady && !isDownloading && !hasError) ...[
+                                          const SizedBox(width: 8),
+                                          TextButton(
+                                            style: TextButton.styleFrom(
+                                              backgroundColor: Colors.orangeAccent
+                                                  .withValues(alpha: 0.2),
+                                              foregroundColor: Colors.orangeAccent,
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 12, vertical: 6),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                            ),
+                                            onPressed: isModelLoading
+                                                ? null
+                                                : () async {
+                                                    final success =
+                                                        await MlKitTranslationEngine
+                                                            .instance
+                                                            .downloadPairWithProgress(
+                                                      _translationLanguage,
+                                                      _translationTargetLanguage,
+                                                    );
+                                                    if (success && sheetContext.mounted) {
+                                                      showFeedbackPill(
+                                                        sheetContext,
+                                                        message:
+                                                            loc.modelDownloadSuccess,
+                                                        icon: Icons.check_circle_rounded,
+                                                      );
+                                                    }
+                                                    setSheetState(() {});
+                                                  },
+                                            child: Text(
+                                              'Download (~${pairStatus.totalNeededMb.toInt()} MB)',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ] else if (hasError) ...[
+                                          const SizedBox(width: 8),
+                                          TextButton(
+                                            style: TextButton.styleFrom(
+                                              backgroundColor: Colors.redAccent
+                                                  .withValues(alpha: 0.2),
+                                              foregroundColor: Colors.redAccent,
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 12, vertical: 6),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                            ),
+                                            onPressed: () async {
+                                              final success =
+                                                  await MlKitTranslationEngine.instance
+                                                      .downloadPairWithProgress(
+                                                _translationLanguage,
+                                                _translationTargetLanguage,
+                                              );
+                                              if (success && sheetContext.mounted) {
+                                                showFeedbackPill(
+                                                  sheetContext,
+                                                  message: loc.modelDownloadSuccess,
+                                                  icon: Icons.check_circle_rounded,
+                                                );
+                                              }
+                                              setSheetState(() {});
+                                            },
+                                            child: Text(
+                                              loc.retry,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    if (isDownloading) ...[
+                                      const SizedBox(height: 10),
+                                      ZigzagProgressBar(
+                                        progress: downloadProgress.progress,
+                                        isProcessing: true,
+                                        color: const Color(0xFF00E5FF),
+                                        deepColor: const Color(0xFF007799),
+                                        crestColor: Colors.white,
+                                        height: 20,
                                       ),
                                     ],
-                                  ),
+                                  ],
                                 ),
-                                if (!isReady)
-                                  TextButton(
-                                    style: TextButton.styleFrom(
-                                      backgroundColor: Colors.orangeAccent
-                                          .withValues(alpha: 0.2),
-                                      foregroundColor: Colors.orangeAccent,
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 6),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                    onPressed: isLoading
-                                        ? null
-                                        : () async {
-                                            showFeedbackPill(
-                                              context,
-                                              message: loc.downloadingModel,
-                                              icon: Icons.downloading_rounded,
-                                            );
-                                            await MlKitTranslationEngine
-                                                .instance
-                                                .downloadPair(
-                                              _translationLanguage,
-                                              _translationTargetLanguage,
-                                            );
-                                            setSheetState(() {});
-                                          },
-                                    child: const Text(
-                                      'Download',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
 
                           const SizedBox(height: 16),
 
-                          // Section 4: Render Mode Option Cards
+// Section 4: Render Mode Option Cards
                           _buildModeCard(
                             title: loc.translateSpeechBubbles,
                             subtitle: loc.translateSpeechBubblesSubtitle,

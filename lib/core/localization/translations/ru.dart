@@ -256,4 +256,9 @@ const Map<String, String> ruTranslations = {
   'downloadModelPrompt': 'Скачать ИИ-модель (~30 МБ)',
   'downloadingModel': 'Загрузка модели перевода...',
   'modelDownloadRequired': 'Для офлайн-перевода требуется загрузить модель',
+  'modelDownloadSuccess': 'Модели ИИ-перевода загружены! Готовы к офлайн-использованию.',
+  'modelDownloadFailed': 'Не удалось загрузить модели. Проверьте подключение к интернету.',
+  'retry': 'Повторить',
+  'downloadSize': 'Размер загрузки',
+  'modelInstalled': 'Установлено',
 };

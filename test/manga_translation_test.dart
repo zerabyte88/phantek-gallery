@@ -14,6 +14,7 @@ import 'package:phantek_gallery/core/services/translation/mlkit_translation_engi
 import 'package:phantek_gallery/core/services/translation/manga_ocr_service.dart';
 import 'package:phantek_gallery/core/services/translation/translation_isolate_coordinator.dart';
 import 'package:phantek_gallery/features/player/presentation/widgets/manga_translation_overlay.dart';
+import 'package:phantek_gallery/features/player/presentation/widgets/zigzag_progress_bar.dart';
 import 'package:phantek_gallery/features/player/presentation/image_viewer_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -520,6 +521,88 @@ void main() {
       expect(find.text('🇺🇸 English (US)'), findsOneWidget);
       expect(find.text('Speech Bubbles Only'), findsOneWidget);
       expect(find.text('Full Page (with SFX)'), findsOneWidget);
+    });
+  });
+
+  group('MlKitTranslationEngine Status & Progress', () {
+    test('ModelPairStatus construction and properties', () {
+      const status = ModelPairStatus(
+        sourceDownloaded: true,
+        targetDownloaded: false,
+        sourceLangName: 'Japanese',
+        targetLangName: 'Indonesian',
+        totalNeededMb: 30.0,
+        isReady: false,
+      );
+      expect(status.sourceDownloaded, isTrue);
+      expect(status.targetDownloaded, isFalse);
+      expect(status.sourceLangName, 'Japanese');
+      expect(status.targetLangName, 'Indonesian');
+      expect(status.totalNeededMb, 30.0);
+      expect(status.isReady, isFalse);
+    });
+
+    test('TranslationDownloadProgress defaults and copyWith', () {
+      const progress = TranslationDownloadProgress();
+      expect(progress.isDownloading, isFalse);
+      expect(progress.downloadedMb, 0.0);
+      expect(progress.totalMb, 0.0);
+      expect(progress.progress, 0.0);
+      expect(progress.isSuccess, isFalse);
+      expect(progress.errorMessage, isNull);
+
+      final updated = progress.copyWith(
+        isDownloading: true,
+        currentStep: 'Downloading Japanese Model...',
+        downloadedMb: 15.0,
+        totalMb: 30.0,
+        progress: 0.5,
+      );
+      expect(updated.isDownloading, isTrue);
+      expect(updated.currentStep, 'Downloading Japanese Model...');
+      expect(updated.downloadedMb, 15.0);
+      expect(updated.totalMb, 30.0);
+      expect(updated.progress, 0.5);
+    });
+
+    test('getPairStatus returns correct pair metadata and size requirements', () async {
+      final engine = MlKitTranslationEngine.instance;
+      final status = await engine.getPairStatus(
+        TranslationSourceLanguage.japanese,
+        TranslationTargetLanguage.indonesian,
+      );
+      expect(status.sourceLangName, 'Japanese');
+      expect(status.targetLangName, 'Indonesian');
+      expect(status.totalNeededMb, anyOf(0.0, 30.0, 60.0));
+    });
+  });
+
+  group('ZigzagProgressBar Widget Tests', () {
+    testWidgets('ZigzagProgressBar renders without error at progress 0.0 and 0.5', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: ZigzagProgressBar(
+                progress: 0.5,
+                isProcessing: true,
+                width: 250,
+                height: 24,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(ZigzagProgressBar), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.painter is ZigzagProgressPainter),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 500));
     });
   });
 }

@@ -255,4 +255,9 @@ const Map<String, String> nlTranslations = {
   'downloadModelPrompt': 'AI-model downloaden (~30 MB)',
   'downloadingModel': 'Vertalingsmodel downloaden...',
   'modelDownloadRequired': 'Modeldownload vereist voor offline vertalen',
+  'modelDownloadSuccess': 'AI-vertaalmodellen gedownload! Klaar voor offline gebruik.',
+  'modelDownloadFailed': 'Modellen downloaden mislukt. Controleer internetverbinding.',
+  'retry': 'Opnieuw proberen',
+  'downloadSize': 'Downloadgrootte',
+  'modelInstalled': 'Geïnstalleerd',
 };

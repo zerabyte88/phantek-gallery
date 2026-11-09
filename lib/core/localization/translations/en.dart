@@ -252,4 +252,9 @@ const Map<String, String> enTranslations = {
   'downloadModelPrompt': 'Download AI Model (~30MB)',
   'downloadingModel': 'Downloading translation model...',
   'modelDownloadRequired': 'Model download required for offline translation',
+  'modelDownloadSuccess': 'AI translation models downloaded! Ready for offline use.',
+  'modelDownloadFailed': 'Failed to download models. Check internet connection.',
+  'retry': 'Retry',
+  'downloadSize': 'Download Size',
+  'modelInstalled': 'Installed',
 };

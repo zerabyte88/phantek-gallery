@@ -249,4 +249,9 @@ const Map<String, String> arTranslations = {
   'downloadModelPrompt': 'تنزيل نموذج الذكاء الاصطناعي (~30 ميغابايت)',
   'downloadingModel': 'جارٍ تنزيل نموذج الترجمة...',
   'modelDownloadRequired': 'يلزم تنزيل النموذج للترجمة دون اتصال',
+  'modelDownloadSuccess': 'تم تنزيل نماذج الترجمة بالذكاء الاصطناعي! جاهز للاستخدام دون اتصال.',
+  'modelDownloadFailed': 'فشل تنزيل النماذج. تحقق من الاتصال بالإنترنت.',
+  'retry': 'إعادة المحاولة',
+  'downloadSize': 'حجم التنزيل',
+  'modelInstalled': 'مثبت',
 };

@@ -245,4 +245,9 @@ const Map<String, String> koTranslations = {
   'downloadModelPrompt': 'AI 모델 다운로드 (~30MB)',
   'downloadingModel': '번역 모델 다운로드 중...',
   'modelDownloadRequired': '오프라인 번역을 위해 모델 다운로드가 필요합니다',
+  'modelDownloadSuccess': 'AI 번역 모델 다운로드 완료! 오프라인에서 사용할 수 있습니다.',
+  'modelDownloadFailed': '모델 다운로드 실패. 인터넷 연결을 확인하세요.',
+  'retry': '다시 시도',
+  'downloadSize': '다운로드 크기',
+  'modelInstalled': '설치됨',
 };

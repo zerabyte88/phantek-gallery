@@ -258,4 +258,9 @@ const Map<String, String> msTranslations = {
   'downloadingModel': 'Memuat turun model terjemahan...',
   'modelDownloadRequired':
       'Muat turun model diperlukan untuk terjemahan luar talian',
+  'modelDownloadSuccess': 'Model terjemahan AI telah dimuat turun! Sedia untuk kegunaan luar talian.',
+  'modelDownloadFailed': 'Gagal memuat turun model. Periksa sambungan internet.',
+  'retry': 'Cuba Semula',
+  'downloadSize': 'Saiz Muat Turun',
+  'modelInstalled': 'Dipasang',
 };

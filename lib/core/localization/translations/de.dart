@@ -257,4 +257,9 @@ const Map<String, String> deTranslations = {
   'downloadingModel': 'Übersetzungsmodell wird heruntergeladen...',
   'modelDownloadRequired':
       'Für Offline-Übersetzung ist ein Modell-Download erforderlich',
+  'modelDownloadSuccess': 'KI-Übersetzungsmodelle heruntergeladen! Bereit für Offline-Nutzung.',
+  'modelDownloadFailed': 'Modelle konnten nicht heruntergeladen werden. Internetverbindung prüfen.',
+  'retry': 'Wiederholen',
+  'downloadSize': 'Download-Größe',
+  'modelInstalled': 'Installiert',
 };

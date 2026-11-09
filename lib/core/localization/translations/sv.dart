@@ -252,4 +252,9 @@ const Map<String, String> svTranslations = {
   'downloadingModel': 'Laddar ner översättningsmodell...',
   'modelDownloadRequired':
       'Nedladdning av modell krävs för offlineöversättning',
+  'modelDownloadSuccess': 'AI-översättningsmodeller nedladdade! Redo för offline-användning.',
+  'modelDownloadFailed': 'Kunde inte ladda ner modeller. Kontrollera internetanslutningen.',
+  'retry': 'Försök igen',
+  'downloadSize': 'Nedladdningsstorlek',
+  'modelInstalled': 'Installerad',
 };

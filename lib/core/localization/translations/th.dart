@@ -249,4 +249,9 @@ const Map<String, String> thTranslations = {
   'downloadModelPrompt': 'ดาวน์โหลดโมเดล AI (~30MB)',
   'downloadingModel': 'กำลังดาวน์โหลดโมเดลการแปล...',
   'modelDownloadRequired': 'จำเป็นต้องดาวน์โหลดโมเดลสำหรับการแปลแบบออฟไลน์',
+  'modelDownloadSuccess': 'ดาวน์โหลดโมเดลการแปล AI แล้ว! พร้อมใช้งานแบบออฟไลน์',
+  'modelDownloadFailed': 'ดาวน์โหลดโมเดลไม่สำเร็จ โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต',
+  'retry': 'ลองอีกครั้ง',
+  'downloadSize': 'ขนาดดาวน์โหลด',
+  'modelInstalled': 'ติดตั้งแล้ว',
 };

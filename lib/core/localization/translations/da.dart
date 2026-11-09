@@ -250,4 +250,9 @@ const Map<String, String> daTranslations = {
   'downloadModelPrompt': 'Download AI-model (~30 MB)',
   'downloadingModel': 'Downloader oversættelsesmodel...',
   'modelDownloadRequired': 'Modeldownload påkrævet til offline oversættelse',
+  'modelDownloadSuccess': 'AI-oversættelsesmodeller downloadet! Klar til offline brug.',
+  'modelDownloadFailed': 'Kunne ikke downloade modeller. Tjek internetforbindelsen.',
+  'retry': 'Prøv igen',
+  'downloadSize': 'Downloadstørrelse',
+  'modelInstalled': 'Installeret',
 };

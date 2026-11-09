@@ -262,4 +262,9 @@ const Map<String, String> itTranslations = {
   'downloadingModel': 'Download del modello di traduzione in corso...',
   'modelDownloadRequired':
       'Download del modello richiesto per la traduzione offline',
+  'modelDownloadSuccess': 'Modelli di traduzione AI scaricati! Pronti per l\'uso offline.',
+  'modelDownloadFailed': 'Impossibile scaricare i modelli. Controlla la connessione internet.',
+  'retry': 'Riprova',
+  'downloadSize': 'Dimensione download',
+  'modelInstalled': 'Installato',
 };

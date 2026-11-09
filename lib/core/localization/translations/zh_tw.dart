@@ -244,4 +244,9 @@ const Map<String, String> zhTwTranslations = {
   'downloadModelPrompt': '下載 AI 模型（約 30MB）',
   'downloadingModel': '正在下載翻譯模型...',
   'modelDownloadRequired': '離線翻譯需要下載模型',
+  'modelDownloadSuccess': 'AI 翻譯模型已下載！可離線使用。',
+  'modelDownloadFailed': '模型下載失敗。請檢查網路連線。',
+  'retry': '重試',
+  'downloadSize': '下載大小',
+  'modelInstalled': '已安裝',
 };

@@ -261,4 +261,9 @@ const Map<String, String> esTranslations = {
   'downloadingModel': 'Descargando modelo de traducción...',
   'modelDownloadRequired':
       'Se requiere descargar el modelo para traducir sin conexión',
+  'modelDownloadSuccess': '¡Modelos de traducción de IA descargados! Listos para usar sin conexión.',
+  'modelDownloadFailed': 'Error al descargar los modelos. Comprueba la conexión a internet.',
+  'retry': 'Reintentar',
+  'downloadSize': 'Tamaño de descarga',
+  'modelInstalled': 'Instalado',
 };

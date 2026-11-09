@@ -256,4 +256,9 @@ const Map<String, String> frTranslations = {
   'downloadingModel': 'Téléchargement du modèle de traduction...',
   'modelDownloadRequired':
       'Téléchargement du modèle requis pour la traduction hors ligne',
+  'modelDownloadSuccess': 'Modèles de traduction IA téléchargés ! Prêts pour une utilisation hors ligne.',
+  'modelDownloadFailed': 'Échec du téléchargement des modèles. Vérifiez la connexion Internet.',
+  'retry': 'Réessayer',
+  'downloadSize': 'Taille du téléchargement',
+  'modelInstalled': 'Installé',
 };
