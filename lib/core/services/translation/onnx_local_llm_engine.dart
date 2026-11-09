@@ -8,6 +8,8 @@ import 'package:dart_sentencepiece_tokenizer/dart_sentencepiece_tokenizer.dart';
 import 'package:flutter/foundation.dart';
 import 'package:onnxruntime/onnxruntime.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../settings_service.dart';
 import 'qwen_bpe_tokenizer.dart';
 import 'translation_models.dart';
@@ -126,9 +128,53 @@ class OnnxLocalLlmEngine {
   static const List<String> defaultScanDirectories = [
     '/storage/emulated/0/models/',
     '/storage/emulated/0/Download/models/',
+    '/storage/emulated/0/Download/',
     'models/',
     'assets/models/',
   ];
+
+  /// Checks whether storage permission (MANAGE_EXTERNAL_STORAGE on Android) is granted.
+  static Future<bool> isStoragePermissionGranted() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      return await Permission.manageExternalStorage.isGranted;
+    } catch (e) {
+      debugPrint('isStoragePermissionGranted error: $e');
+      return false;
+    }
+  }
+
+  /// Requests storage permission (MANAGE_EXTERNAL_STORAGE on Android).
+  static Future<bool> requestStoragePermission() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      final status = await Permission.manageExternalStorage.request();
+      return status.isGranted;
+    } catch (e) {
+      debugPrint('requestStoragePermission error: $e');
+      return false;
+    }
+  }
+
+  /// Discovers app-specific directories that might contain model weights.
+  static Future<List<String>> getAppModelDirectories() async {
+    final dirs = <String>[];
+    try {
+      final ext = await getExternalStorageDirectory();
+      if (ext != null) {
+        dirs.add(p.join(ext.path, 'models'));
+      }
+    } catch (e) {
+      debugPrint('getExternalStorageDirectory error: $e');
+    }
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      dirs.add(p.join(docs.path, 'models'));
+    } catch (e) {
+      debugPrint('getApplicationDocumentsDirectory error: $e');
+    }
+    return dirs;
+  }
 
   /// Ensures that the target or default models directory exists.
   static Future<void> ensureModelsDirectoryExists({String? targetPath}) async {
@@ -147,7 +193,19 @@ class OnnxLocalLlmEngine {
     List<String>? searchDirectories,
   }) async {
     await ensureModelsDirectoryExists();
-    final dirsToScan = searchDirectories ?? defaultScanDirectories;
+    final dirsToScan = <String>[];
+    if (searchDirectories != null) {
+      dirsToScan.addAll(searchDirectories);
+    } else {
+      dirsToScan.addAll(defaultScanDirectories);
+      try {
+        final appDirs = await getAppModelDirectories();
+        dirsToScan.addAll(appDirs);
+      } catch (e) {
+        debugPrint('Error getting app model directories: $e');
+      }
+    }
+
     final models = <DiscoveredAiModel>[];
     final seenPaths = <String>{};
 
@@ -172,6 +230,8 @@ class OnnxLocalLlmEngine {
             }
           }
         }
+      } on FileSystemException catch (e) {
+        debugPrint('FileSystemException scanning $rawDirPath for models: $e');
       } catch (e) {
         debugPrint('Error scanning $rawDirPath for models: $e');
       }
@@ -380,6 +440,11 @@ class OnnxLocalLlmEngine {
     bool useBundledFallback = true,
   }) async {
     try {
+      if (Platform.isAndroid && !(await isStoragePermissionGranted())) {
+        lastStatusMessage =
+            'Izin Akses Semua File diperlukan untuk membaca /storage/emulated/0/models/';
+      }
+
       await ensureModelsDirectoryExists();
 
       _env ??= OrtEnv.instance..init();
@@ -417,7 +482,7 @@ class OnnxLocalLlmEngine {
         }
       }
 
-      // 3. Fallback search in defaultModelsDirectoryPath and defaultModelCandidatePaths
+      // 3. Fallback search in defaultModelsDirectoryPath, candidate paths, app dirs, and scan dirs
       if (resolvedPath == null && modelBytes == null) {
         try {
           final defaultDir = Directory(defaultModelsDirectoryPath);
@@ -442,11 +507,50 @@ class OnnxLocalLlmEngine {
             }
           }
         }
+
+        if (resolvedPath == null) {
+          try {
+            final appDirs = await getAppModelDirectories();
+            for (final appDir in appDirs) {
+              final d = Directory(appDir);
+              if (d.existsSync()) {
+                final entries = d.listSync(recursive: false);
+                for (final entry in entries) {
+                  if (entry is File && entry.path.toLowerCase().endsWith('.onnx')) {
+                    resolvedPath = entry.path;
+                    break;
+                  }
+                }
+                if (resolvedPath != null) break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (resolvedPath == null) {
+          for (final scanDir in defaultScanDirectories) {
+            try {
+              final d = Directory(scanDir);
+              if (d.existsSync()) {
+                final entries = d.listSync(recursive: false);
+                for (final entry in entries) {
+                  if (entry is File && entry.path.toLowerCase().endsWith('.onnx')) {
+                    resolvedPath = entry.path;
+                    break;
+                  }
+                }
+                if (resolvedPath != null) break;
+              }
+            } catch (_) {}
+          }
+        }
       }
 
       // If model file is not found
       if ((resolvedPath == null || !File(resolvedPath).existsSync()) && modelBytes == null) {
-        lastStatusMessage = 'No .onnx model found in $defaultModelsDirectoryPath';
+        if (lastStatusMessage == null || !lastStatusMessage!.startsWith('Izin')) {
+          lastStatusMessage = 'Tidak ada model .onnx di /storage/emulated/0/models/';
+        }
         _isNativeAvailable = false;
         _session = null;
         return false;
@@ -479,6 +583,8 @@ class OnnxLocalLlmEngine {
         }
       }
 
+      bool isBundledFallbackUsed = false;
+
       // Load companion tokenizer if found
       if (resolvedTokPath != null && File(resolvedTokPath).existsSync()) {
         try {
@@ -499,6 +605,9 @@ class OnnxLocalLlmEngine {
       if (_tokenizer == null && useBundledFallback) {
         try {
           _tokenizer = await QwenBpeTokenizer.loadBundledAsset();
+          if (_tokenizer != null) {
+            isBundledFallbackUsed = true;
+          }
         } catch (e) {
           debugPrint('Failed to load bundled fallback tokenizer: $e');
           _tokenizer = null;
@@ -507,7 +616,11 @@ class OnnxLocalLlmEngine {
 
       if (resolvedPath != null && File(resolvedPath).existsSync()) {
         if (_tokenizer != null) {
-          lastStatusMessage = 'Ready: ${p.basename(resolvedPath)}';
+          if (isBundledFallbackUsed) {
+            lastStatusMessage = 'Ready: ${p.basename(resolvedPath)} (built-in tokenizer)';
+          } else {
+            lastStatusMessage = 'Ready: ${p.basename(resolvedPath)}';
+          }
         } else {
           lastStatusMessage =
               'Model loaded (${p.basename(resolvedPath)}), but tokenizer.json not found in ${p.dirname(resolvedPath)}';
@@ -550,6 +663,7 @@ class OnnxLocalLlmEngine {
         }
       }
     } catch (e) {
+      lastStatusMessage = 'ONNX runtime initialization error: $e';
       debugPrint('ONNX Native runtime initialization error: $e');
       _isNativeAvailable = false;
       _session = null;
@@ -610,6 +724,7 @@ class OnnxLocalLlmEngine {
           return cleanLlmOutput(nativeOutput);
         }
       } catch (e) {
+        lastStatusMessage = 'Translation execution error: $e';
         debugPrint('Local LLM ONNX native execution failed: $e');
       }
     }
@@ -681,6 +796,25 @@ class OnnxLocalLlmEngine {
     return expProbs.length - 1;
   }
 
+  /// Formats the constitutional prompt payload into model-specific chat templates
+  /// (e.g. ChatML for Qwen 2.5).
+  static String formatForModel(String prompt, LlmTokenizer? tokenizer) {
+    if (tokenizer is QwenBpeTokenizer) {
+      final systemMatch =
+          RegExp(r'<system>([\s\S]*?)</system>', caseSensitive: false)
+              .firstMatch(prompt);
+      final userMatch =
+          RegExp(r'<user>([\s\S]*?)</user>', caseSensitive: false)
+              .firstMatch(prompt);
+      if (systemMatch != null && userMatch != null) {
+        final sysContent = systemMatch.group(1)!.trim();
+        final userContent = userMatch.group(1)!.trim();
+        return '<|im_start|>system\n$sysContent<|im_end|>\n<|im_start|>user\n$userContent<|im_end|>\n<|im_start|>assistant\n';
+      }
+    }
+    return prompt;
+  }
+
   /// Executes inference on the loaded native ONNX session.
   Future<String> _runNativeInference({
     required String prompt,
@@ -695,7 +829,8 @@ class OnnxLocalLlmEngine {
     }
 
     try {
-      final List<int> inputIds = _tokenizer!.encode(prompt);
+      final String effectivePrompt = formatForModel(prompt, _tokenizer);
+      final List<int> inputIds = _tokenizer!.encode(effectivePrompt);
       if (inputIds.isEmpty) return '';
 
       final List<int> currentInputIds = List<int>.from(inputIds);
@@ -734,9 +869,12 @@ class OnnxLocalLlmEngine {
                 orElse: () => null,
               );
 
-      final String outputName = _session!.outputNames.isNotEmpty
-          ? _session!.outputNames.first
-          : 'logits';
+      final String outputName = _session!.outputNames.firstWhere(
+        (n) => n.toLowerCase().contains('logits'),
+        orElse: () => _session!.outputNames.isNotEmpty
+            ? _session!.outputNames.first
+            : 'logits',
+      );
 
       for (int step = 0; step < effectiveMaxTokens; step++) {
         final OrtRunOptions runOptions = OrtRunOptions();
@@ -821,6 +959,7 @@ class OnnxLocalLlmEngine {
 
       return _tokenizer!.decode(generatedTokenIds);
     } catch (e) {
+      lastStatusMessage = 'Inference error: $e';
       debugPrint('ONNX Native inference error: $e');
       return '';
     }

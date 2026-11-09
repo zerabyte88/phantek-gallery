@@ -264,188 +264,47 @@ class MlKitTranslationEngine {
         isWifiRequired: isWifiRequired);
   }
 
-  Future<bool> _downloadModelWithPolling({
-    required MangaLanguage lang,
-    required double stepBaseMb,
-    required double stepTotalMb,
-    required double overallTotalMb,
-    required String stepName,
-    bool isWifiRequired = false,
-  }) async {
-    downloadProgressNotifier.value = TranslationDownloadProgress(
-      isDownloading: true,
-      currentStep: stepName,
-      downloadedMb: stepBaseMb,
-      totalMb: overallTotalMb,
-      progress: (stepBaseMb / overallTotalMb).clamp(0.0, 1.0),
-    );
-
-    final completer = Completer<bool>();
-    final stopwatch = Stopwatch()..start();
-
-    final progressTimer =
-        Timer.periodic(const Duration(milliseconds: 250), (t) {
-      if (completer.isCompleted) {
-        t.cancel();
-        return;
-      }
-      final elapsedMs = stopwatch.elapsedMilliseconds;
-      double stepFraction;
-      if (elapsedMs <= 25000) {
-        stepFraction = (elapsedMs / 25000.0) * 0.95;
-      } else {
-        final creepProgress = ((elapsedMs - 25000) / 275000.0).clamp(0.0, 1.0);
-        stepFraction = 0.95 + (0.04 * creepProgress);
-      }
-      stepFraction = stepFraction.clamp(0.0, 0.99);
-
-      final currentMb = stepBaseMb + (stepTotalMb * stepFraction);
-      downloadProgressNotifier.value = TranslationDownloadProgress(
-        isDownloading: true,
-        currentStep: stepName,
-        downloadedMb: double.parse(currentMb.toStringAsFixed(1)),
-        totalMb: overallTotalMb,
-        progress: (currentMb / overallTotalMb).clamp(0.0, 1.0),
-      );
-    });
-
-    final pollTimer = Timer.periodic(const Duration(seconds: 1), (t) async {
-      if (completer.isCompleted) {
-        t.cancel();
-        return;
-      }
-      try {
-        final isDownloaded = await isLanguageDownloaded(lang);
-        if (isDownloaded && !completer.isCompleted) {
-          completer.complete(true);
-        }
-      } catch (_) {}
-    });
-
-    final timeoutTimer = Timer(const Duration(seconds: 300), () {
-      if (!completer.isCompleted) {
-        completer.complete(false);
-      }
-    });
-
-    downloadLanguage(lang, isWifiRequired: isWifiRequired).then((success) {
-      if (success && !completer.isCompleted) {
-        completer.complete(true);
-      }
-    }).catchError((e) {
-      debugPrint('Primary downloadLanguage error for ${lang.name}: $e');
-    });
-
-    final success = await completer.future;
-    progressTimer.cancel();
-    pollTimer.cancel();
-    timeoutTimer.cancel();
-    stopwatch.stop();
-
-    if (success) {
-      final completedMb = stepBaseMb + stepTotalMb;
-      downloadProgressNotifier.value = TranslationDownloadProgress(
-        isDownloading: true,
-        currentStep: stepName,
-        downloadedMb: double.parse(completedMb.toStringAsFixed(1)),
-        totalMb: overallTotalMb,
-        progress: (completedMb / overallTotalMb).clamp(0.0, 1.0),
-      );
-      return true;
-    } else {
-      final finalCheck = await isLanguageDownloaded(lang);
-      if (finalCheck) {
-        final completedMb = stepBaseMb + stepTotalMb;
-        downloadProgressNotifier.value = TranslationDownloadProgress(
-          isDownloading: true,
-          currentStep: stepName,
-          downloadedMb: double.parse(completedMb.toStringAsFixed(1)),
-          totalMb: overallTotalMb,
-          progress: (completedMb / overallTotalMb).clamp(0.0, 1.0),
-        );
-        return true;
-      }
-      return false;
-    }
-  }
-
   /// Downloads all missing manga translation models sequentially (id, en, ja, ko, zh).
   Future<bool> downloadAllModelsWithProgress({
     bool isWifiRequired = false,
   }) async {
-    try {
-      final status = await checkAllModelsStatus();
-      if (status.isReady) {
-        downloadProgressNotifier.value = const TranslationDownloadProgress(
-          isDownloading: false,
-          currentStep: 'Ready',
-          downloadedMb: 0.0,
-          totalMb: 0.0,
-          progress: 1.0,
-          isSuccess: true,
-        );
-        return true;
-      }
-
-      final missing = status.missingLanguages;
-      final totalMb = status.totalNeededMb;
-      double currentDownloaded = 0.0;
-
-      downloadProgressNotifier.value = TranslationDownloadProgress(
-        isDownloading: true,
-        currentStep: 'Downloading model...',
-        downloadedMb: 0.0,
-        totalMb: totalMb,
-        progress: 0.0,
-      );
-
-      for (final lang in missing) {
-        final ok = await _downloadModelWithPolling(
-          lang: lang,
-          stepBaseMb: currentDownloaded,
-          stepTotalMb: 30.0,
-          overallTotalMb: totalMb,
-          stepName: 'Downloading model...',
-          isWifiRequired: isWifiRequired,
-        );
-
-        if (!ok) {
-          downloadProgressNotifier.value = TranslationDownloadProgress(
-            isDownloading: false,
-            currentStep: 'Failed',
-            downloadedMb: currentDownloaded,
-            totalMb: totalMb,
-            progress: (currentDownloaded / totalMb).clamp(0.0, 1.0),
-            isSuccess: false,
-            errorMessage: 'Failed to download ${lang.name} model',
-          );
-          return false;
-        }
-
-        currentDownloaded += 30.0;
-      }
-
-      downloadProgressNotifier.value = TranslationDownloadProgress(
+    if (_onnxEngine.isReady) {
+      downloadProgressNotifier.value = const TranslationDownloadProgress(
         isDownloading: false,
         currentStep: 'Ready',
-        downloadedMb: totalMb,
-        totalMb: totalMb,
+        downloadedMb: 0.0,
+        totalMb: 0.0,
         progress: 1.0,
         isSuccess: true,
       );
       return true;
-    } catch (e) {
-      downloadProgressNotifier.value = TranslationDownloadProgress(
+    }
+
+    await _onnxEngine.initializeSession();
+
+    if (_onnxEngine.isReady) {
+      downloadProgressNotifier.value = const TranslationDownloadProgress(
         isDownloading: false,
-        currentStep: 'Error',
+        currentStep: 'Ready',
         downloadedMb: 0.0,
         totalMb: 0.0,
-        progress: 0.0,
-        isSuccess: false,
-        errorMessage: e.toString(),
+        progress: 1.0,
+        isSuccess: true,
       );
-      return false;
+      return true;
     }
+
+    final errorMsg = _onnxEngine.lastStatusMessage ?? 'No .onnx model loaded';
+    downloadProgressNotifier.value = TranslationDownloadProgress(
+      isDownloading: false,
+      currentStep: 'Failed',
+      downloadedMb: 0.0,
+      totalMb: 0.0,
+      progress: 0.0,
+      isSuccess: false,
+      errorMessage: errorMsg,
+    );
+    return false;
   }
 
   /// Downloads missing pair models with realistic smooth progress updates.
@@ -454,106 +313,43 @@ class MlKitTranslationEngine {
     TranslationTargetLanguage target, {
     bool isWifiRequired = false,
   }) async {
-    try {
-      final status = await getPairStatus(source, target);
-      if (status.isReady) {
-        downloadProgressNotifier.value = const TranslationDownloadProgress(
-          isDownloading: false,
-          currentStep: 'Ready',
-          downloadedMb: 0.0,
-          totalMb: 0.0,
-          progress: 1.0,
-          isSuccess: true,
-        );
-        return true;
-      }
-
-      final totalMb = status.totalNeededMb;
-      final targetLang = mapTargetLanguage(target);
-      final effectiveSource = (source == TranslationSourceLanguage.auto)
-          ? TranslationSourceLanguage.japanese
-          : source;
-      final sourceLang = mapSourceLanguage(effectiveSource);
-
-      double currentDownloaded = 0.0;
-
-      downloadProgressNotifier.value = TranslationDownloadProgress(
-        isDownloading: true,
-        currentStep: 'Downloading model...',
-        downloadedMb: 0.0,
-        totalMb: totalMb,
-        progress: 0.0,
-      );
-
-      if (!status.targetDownloaded) {
-        final ok = await _downloadModelWithPolling(
-          lang: targetLang,
-          stepBaseMb: currentDownloaded,
-          stepTotalMb: 30.0,
-          overallTotalMb: totalMb,
-          stepName: 'Downloading model...',
-          isWifiRequired: isWifiRequired,
-        );
-        if (!ok) {
-          downloadProgressNotifier.value = TranslationDownloadProgress(
-            isDownloading: false,
-            currentStep: 'Failed',
-            downloadedMb: currentDownloaded,
-            totalMb: totalMb,
-            progress: (currentDownloaded / totalMb).clamp(0.0, 1.0),
-            isSuccess: false,
-            errorMessage: 'Failed to download ${status.targetLangName} model',
-          );
-          return false;
-        }
-        currentDownloaded += 30.0;
-      }
-
-      if (!status.sourceDownloaded) {
-        final ok = await _downloadModelWithPolling(
-          lang: sourceLang,
-          stepBaseMb: currentDownloaded,
-          stepTotalMb: 30.0,
-          overallTotalMb: totalMb,
-          stepName: 'Downloading model...',
-          isWifiRequired: isWifiRequired,
-        );
-        if (!ok) {
-          downloadProgressNotifier.value = TranslationDownloadProgress(
-            isDownloading: false,
-            currentStep: 'Failed',
-            downloadedMb: currentDownloaded,
-            totalMb: totalMb,
-            progress: (currentDownloaded / totalMb).clamp(0.0, 1.0),
-            isSuccess: false,
-            errorMessage: 'Failed to download ${status.sourceLangName} model',
-          );
-          return false;
-        }
-        currentDownloaded += 30.0;
-      }
-
-      downloadProgressNotifier.value = TranslationDownloadProgress(
+    if (_onnxEngine.isReady) {
+      downloadProgressNotifier.value = const TranslationDownloadProgress(
         isDownloading: false,
         currentStep: 'Ready',
-        downloadedMb: totalMb,
-        totalMb: totalMb,
+        downloadedMb: 0.0,
+        totalMb: 0.0,
         progress: 1.0,
         isSuccess: true,
       );
       return true;
-    } catch (e) {
-      downloadProgressNotifier.value = TranslationDownloadProgress(
+    }
+
+    await _onnxEngine.initializeSession();
+
+    if (_onnxEngine.isReady) {
+      downloadProgressNotifier.value = const TranslationDownloadProgress(
         isDownloading: false,
-        currentStep: 'Error',
+        currentStep: 'Ready',
         downloadedMb: 0.0,
         totalMb: 0.0,
-        progress: 0.0,
-        isSuccess: false,
-        errorMessage: e.toString(),
+        progress: 1.0,
+        isSuccess: true,
       );
-      return false;
+      return true;
     }
+
+    final errorMsg = _onnxEngine.lastStatusMessage ?? 'No .onnx model loaded';
+    downloadProgressNotifier.value = TranslationDownloadProgress(
+      isDownloading: false,
+      currentStep: 'Failed',
+      downloadedMb: 0.0,
+      totalMb: 0.0,
+      progress: 0.0,
+      isSuccess: false,
+      errorMessage: errorMsg,
+    );
+    return false;
   }
 
   /// Translates [text] from [source] language to [target] language using

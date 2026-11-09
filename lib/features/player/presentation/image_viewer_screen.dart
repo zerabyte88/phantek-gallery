@@ -28,7 +28,8 @@ import '../../../core/services/translation/translation_models.dart';
 import '../../../core/services/translation/mlkit_translation_engine.dart';
 import '../../../core/services/translation/translation_isolate_coordinator.dart';
 import 'widgets/manga_translation_overlay.dart';
-import 'widgets/zigzag_progress_bar.dart';
+import '../../../core/services/settings_service.dart';
+import '../../../core/services/translation/onnx_local_llm_engine.dart';
 
 // 4096px cap fits imageCache while staying sharp up to 3x zoom.
 ImageProvider displayImage(String path, {int maxDimension = 4096}) =>
@@ -689,25 +690,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return FutureBuilder<ModelPairStatus>(
-              future: MlKitTranslationEngine.instance.getPairStatus(
-                _translationLanguage,
-                _translationTargetLanguage,
-              ),
-              builder: (context, snapshot) {
-                final pairStatus = snapshot.data ??
-                    const ModelPairStatus(
-                      sourceDownloaded: false,
-                      targetDownloaded: false,
-                      sourceLangName: '',
-                      targetLangName: '',
-                      totalNeededMb: 60.0,
-                      isReady: false,
-                    );
-                final isModelLoading =
-                    snapshot.connectionState == ConnectionState.waiting;
-
-                return SafeArea(
+            return SafeArea(
                   child: SingleChildScrollView(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
@@ -761,39 +744,22 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
                           const SizedBox(height: 16),
 
-                          // Section 3: AI Model Status Card
-                          ValueListenableBuilder<TranslationDownloadProgress>(
-                            valueListenable: MlKitTranslationEngine
-                                .instance.downloadProgressNotifier,
-                            builder: (context, downloadProgress, _) {
-                              final isDownloading =
-                                  downloadProgress.isDownloading;
-                              final hasError = !isDownloading &&
-                                  !pairStatus.isReady &&
-                                  downloadProgress.errorMessage != null &&
-                                  downloadProgress.errorMessage!.isNotEmpty;
+                          // Section 3: Offline Model Status Card
+                          FutureBuilder<bool>(
+                            future: OnnxLocalLlmEngine.isStoragePermissionGranted(),
+                            builder: (context, permSnapshot) {
+                              final hasStoragePerm = permSnapshot.data ?? true;
                               final isReady =
-                                  pairStatus.isReady && !isDownloading;
+                                  MlKitTranslationEngine.instance.isLocalLlmReady;
+                              final lastStatus =
+                                  MlKitTranslationEngine.instance.lastStatusMessage;
 
-                              Color cardBg;
-                              Color borderColor;
-                              if (isReady) {
-                                cardBg = const Color(0xFF132A1C);
-                                borderColor =
-                                    Colors.greenAccent.withValues(alpha: 0.3);
-                              } else if (isDownloading) {
-                                cardBg = const Color(0xFF131D2A);
-                                borderColor = const Color(0xFF00E5FF)
-                                    .withValues(alpha: 0.35);
-                              } else if (hasError) {
-                                cardBg = const Color(0xFF2C1517);
-                                borderColor =
-                                    Colors.redAccent.withValues(alpha: 0.35);
-                              } else {
-                                cardBg = const Color(0xFF24201A);
-                                borderColor =
-                                    Colors.orangeAccent.withValues(alpha: 0.3);
-                              }
+                              final cardBg = isReady
+                                  ? const Color(0xFF132A1C)
+                                  : const Color(0xFF261D13);
+                              final borderColor = isReady
+                                  ? Colors.greenAccent.withValues(alpha: 0.3)
+                                  : Colors.orangeAccent.withValues(alpha: 0.3);
 
                               return Container(
                                 padding: const EdgeInsets.symmetric(
@@ -808,24 +774,16 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
                                       children: [
                                         Icon(
                                           isReady
                                               ? Icons.check_circle_rounded
-                                              : isDownloading
-                                                  ? Icons.downloading_rounded
-                                                  : hasError
-                                                      ? Icons
-                                                          .error_outline_rounded
-                                                      : Icons
-                                                          .cloud_download_rounded,
+                                              : Icons.smart_toy_outlined,
                                           color: isReady
                                               ? Colors.greenAccent
-                                              : isDownloading
-                                                  ? const Color(0xFF00E5FF)
-                                                  : hasError
-                                                      ? Colors.redAccent
-                                                      : Colors.orangeAccent,
+                                              : Colors.orangeAccent,
                                           size: 22,
                                         ),
                                         const SizedBox(width: 10),
@@ -836,24 +794,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                             children: [
                                               Text(
                                                 isReady
-                                                    ? '✓ ${loc.modelReady}'
-                                                    : isDownloading
-                                                        ? loc.downloadingModel
-                                                        : hasError
-                                                            ? loc
-                                                                .modelDownloadFailed
-                                                            : loc
-                                                                .downloadModelPrompt,
+                                                    ? '✓ '
+                                                    : 'Model AI Belum Terdeteksi',
                                                 style: TextStyle(
                                                   color: isReady
                                                       ? Colors.greenAccent
-                                                      : isDownloading
-                                                          ? const Color(
-                                                              0xFF00E5FF)
-                                                          : hasError
-                                                              ? Colors.redAccent
-                                                              : Colors
-                                                                  .orangeAccent,
+                                                      : Colors.orangeAccent,
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w600,
                                                 ),
@@ -861,15 +807,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                               const SizedBox(height: 2),
                                               Text(
                                                 isReady
-                                                    ? 'Local LLM Engine (ONNX / Gemma 3 Nano)'
-                                                    : isDownloading
-                                                        ? '${downloadProgress.downloadedMb.toStringAsFixed(1)} MB / ${downloadProgress.totalMb.toStringAsFixed(1)} MB (${(downloadProgress.progress * 100).toInt()}%)'
-                                                        : hasError
-                                                            ? (downloadProgress
-                                                                    .errorMessage ??
-                                                                '')
-                                                            : loc
-                                                                .modelDownloadRequired,
+                                                    ? (lastStatus ??
+                                                        'qwen2.5-0.5b-instruct-abliterated-q4.onnx')
+                                                    : (lastStatus ??
+                                                        'Letakkan file .onnx di /storage/emulated/0/models/'),
                                                 style: TextStyle(
                                                   color: Colors.white
                                                       .withValues(alpha: 0.65),
@@ -879,17 +820,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                             ],
                                           ),
                                         ),
-                                        if (!isReady &&
-                                            !isDownloading &&
-                                            !hasError) ...[
-                                          const SizedBox(width: 8),
+                                        if (isReady)
                                           TextButton(
                                             style: TextButton.styleFrom(
                                               backgroundColor: Colors
-                                                  .orangeAccent
-                                                  .withValues(alpha: 0.2),
+                                                  .greenAccent
+                                                  .withValues(alpha: 0.15),
                                               foregroundColor:
-                                                  Colors.orangeAccent,
+                                                  Colors.greenAccent,
                                               padding:
                                                   const EdgeInsets.symmetric(
                                                       horizontal: 12,
@@ -899,92 +837,100 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                     BorderRadius.circular(8),
                                               ),
                                             ),
-                                            onPressed: isModelLoading
-                                                ? null
-                                                : () async {
-                                                    final success =
-                                                        await MlKitTranslationEngine
-                                                            .instance
-                                                            .downloadPairWithProgress(
-                                                      _translationLanguage,
-                                                      _translationTargetLanguage,
-                                                    );
-                                                    if (success &&
-                                                        sheetContext.mounted) {
-                                                      showFeedbackPill(
-                                                        sheetContext,
-                                                        message: loc
-                                                            .modelDownloadSuccess,
-                                                        icon: Icons
-                                                            .check_circle_rounded,
-                                                      );
-                                                    }
-                                                    setSheetState(() {});
-                                                  },
-                                            child: Text(
-                                              loc.download,
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
-                                              ),
+                                            onPressed: () =>
+                                                _showMangaAiModelDialog(
+                                                    sheetContext, setSheetState),
+                                            child: const Text(
+                                              'Ganti',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold),
                                             ),
                                           ),
-                                        ] else if (hasError) ...[
-                                          const SizedBox(width: 8),
-                                          TextButton(
-                                            style: TextButton.styleFrom(
-                                              backgroundColor: Colors.redAccent
-                                                  .withValues(alpha: 0.2),
-                                              foregroundColor: Colors.redAccent,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                            ),
-                                            onPressed: () async {
-                                              final success =
-                                                  await MlKitTranslationEngine
-                                                      .instance
-                                                      .downloadPairWithProgress(
-                                                _translationLanguage,
-                                                _translationTargetLanguage,
-                                              );
-                                              if (success &&
-                                                  sheetContext.mounted) {
-                                                showFeedbackPill(
-                                                  sheetContext,
-                                                  message:
-                                                      loc.modelDownloadSuccess,
-                                                  icon: Icons
-                                                      .check_circle_rounded,
-                                                );
-                                              }
-                                              setSheetState(() {});
-                                            },
-                                            child: Text(
-                                              loc.retry,
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
                                       ],
                                     ),
-                                    if (isDownloading) ...[
+                                    if (!isReady) ...[
                                       const SizedBox(height: 10),
-                                      ZigzagProgressBar(
-                                        progress: downloadProgress.progress,
-                                        isProcessing: true,
-                                        color: const Color(0xFF00E5FF),
-                                        deepColor: const Color(0xFF007799),
-                                        crestColor: Colors.white,
-                                        height: 20,
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: [
+                                          if (!hasStoragePerm)
+                                            TextButton.icon(
+                                              style: TextButton.styleFrom(
+                                                backgroundColor: Colors
+                                                    .orangeAccent
+                                                    .withValues(alpha: 0.2),
+                                                foregroundColor:
+                                                    Colors.orangeAccent,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 6),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                              ),
+                                              icon: const Icon(
+                                                  Icons.security_rounded,
+                                                  size: 16),
+                                              label: const Text(
+                                                'Izinkan Akses File',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight:
+                                                        FontWeight.bold),
+                                              ),
+                                              onPressed: () async {
+                                                final granted =
+                                                    await OnnxLocalLlmEngine
+                                                        .requestStoragePermission();
+                                                if (granted) {
+                                                  await MlKitTranslationEngine
+                                                      .instance.onnxEngine
+                                                      .initializeSession();
+                                                  if (sheetContext.mounted) {
+                                                    showFeedbackPill(
+                                                      sheetContext,
+                                                      message:
+                                                          'Izin diberikan. Memuat model...',
+                                                      icon: Icons
+                                                          .check_circle_rounded,
+                                                    );
+                                                  }
+                                                }
+                                                setSheetState(() {});
+                                              },
+                                            ),
+                                          TextButton.icon(
+                                            style: TextButton.styleFrom(
+                                              backgroundColor: Colors.white
+                                                  .withValues(alpha: 0.08),
+                                              foregroundColor: Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 6),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                            ),
+                                            icon: const Icon(
+                                                Icons.folder_open_rounded,
+                                                size: 16),
+                                            label: const Text(
+                                              'Pilih Model',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold),
+                                            ),
+                                            onPressed: () =>
+                                                _showMangaAiModelDialog(
+                                                    sheetContext, setSheetState),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ],
@@ -1069,7 +1015,259 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                     ),
                   ),
                 );
-              },
+          },
+        );
+      },
+    );
+  }
+
+
+  void _showMangaAiModelDialog(BuildContext parentContext, [void Function(void Function())? parentSetState]) {
+    final loc = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    showModalBottomSheet(
+      context: parentContext,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E1E22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.memory_rounded, color: primary, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                loc.mangaAiModel,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                loc.mangaAiModelSubtitle,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.65),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 22),
+                          tooltip: loc.rescanModels,
+                          onPressed: () => setDialogState(() {}),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 22),
+                          onPressed: () => Navigator.pop(dialogContext),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            loc.modelsDirectoryNotice,
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                          const SizedBox(height: 4),
+                          const SelectableText(
+                            '/storage/emulated/0/models/',
+                            style: TextStyle(
+                              color: Color(0xFF00E5FF),
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    FutureBuilder<List<DiscoveredAiModel>>(
+                      future: OnnxLocalLlmEngine.scanAvailableModels(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2.5),
+                            ),
+                          );
+                        }
+                        final models = snapshot.data ?? [];
+                        if (models.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  Icon(Icons.folder_off_outlined,
+                                      size: 40, color: Colors.white.withValues(alpha: 0.4)),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    loc.noModelsFound,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Unduh model (.onnx) ke folder /storage/emulated/0/models/.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.6),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        final activePath = SettingsService.instance.settings.activeAiModelPath;
+
+                        return ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: MediaQuery.of(context).size.height * 0.4,
+                          ),
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: models.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final model = models[index];
+                              final isActive = activePath.isNotEmpty
+                                  ? (activePath == model.path)
+                                  : index == 0;
+
+                              return InkWell(
+                                onTap: () async {
+                                  await SettingsService.instance.setActiveAiModelPath(
+                                    model.path,
+                                  );
+                                  await MlKitTranslationEngine.instance.onnxEngine.initializeSession(
+                                    modelPath: model.path,
+                                  );
+                                  if (dialogContext.mounted) {
+                                    showFeedbackPill(
+                                      dialogContext,
+                                      message: 'Model AI aktif: ${model.name}',
+                                      icon: Icons.check_circle_rounded,
+                                    );
+                                    Navigator.pop(dialogContext);
+                                  }
+                                  if (parentSetState != null) {
+                                    parentSetState(() {});
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: isActive
+                                        ? primary.withValues(alpha: 0.15)
+                                        : Colors.white.withValues(alpha: 0.05),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isActive ? primary : Colors.white12,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isActive
+                                            ? Icons.check_circle_rounded
+                                            : Icons.extension_rounded,
+                                        color: isActive ? primary : Colors.white60,
+                                        size: 22,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              model.name,
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 13,
+                                                fontWeight:
+                                                    isActive ? FontWeight.bold : FontWeight.w500,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              ' • ',
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(alpha: 0.55),
+                                                fontSize: 10.5,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
             );
           },
         );

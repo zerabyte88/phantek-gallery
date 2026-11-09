@@ -1168,5 +1168,23 @@ void main() {
       final decoded = tokenizer.decode(encoded);
       expect(decoded, '<|im_start|>Hello<|im_end|>');
     });
+
+    test('formatForModel maps constitutional prompt to ChatML for Qwen', () {
+      final prompt = OnnxLocalLlmEngine.buildPrompt(
+        language: 'Japanese',
+        rawOcrText: 'サバイバートーク',
+      );
+      final tokenizer = QwenBpeTokenizer(
+        vocab: {},
+        reverseVocab: {},
+        bpeRanks: {},
+      );
+
+      final chatMl = OnnxLocalLlmEngine.formatForModel(prompt, tokenizer);
+      expect(chatMl, contains('<|im_start|>system'));
+      expect(chatMl, contains('<|im_end|>'));
+      expect(chatMl, contains('<|im_start|>user\nサバイバートーク<|im_end|>'));
+      expect(chatMl, endsWith('<|im_start|>assistant\n'));
+    });
   });
 }
