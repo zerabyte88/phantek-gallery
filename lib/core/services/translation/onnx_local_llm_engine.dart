@@ -22,6 +22,22 @@ import 'translation_models.dart';
 
 export 'qwen_bpe_tokenizer.dart' show LlmTokenizer, QwenBpeTokenizer;
 
+/// Persistent native prefix KV-cache entry for reusing `<system>` prefix
+/// `past_key_values` tensors across bubble translations within the same session.
+class _CachedPrefixKv {
+  final int sessionAddress;
+  final String prefixKey;
+  final int prefixLength;
+  final Map<String, int> kvAddresses; // pkvInputName -> OrtValue.address
+
+  const _CachedPrefixKv({
+    required this.sessionAddress,
+    required this.prefixKey,
+    required this.prefixLength,
+    required this.kvAddresses,
+  });
+}
+
 /// Discovered ONNX model file metadata from local storage.
 class DiscoveredAiModel {
   final String name;
@@ -264,6 +280,19 @@ class OnnxLocalLlmEngine {
   LlmTokenizer? _tokenizer;
   LlmTokenizer? get tokenizer => _tokenizer;
 
+  static _CachedPrefixKv? _cachedPrefixKv;
+
+  static void _releaseCachedPrefixKv() {
+    final cached = _cachedPrefixKv;
+    _cachedPrefixKv = null;
+    if (cached == null) return;
+    for (final int addr in cached.kvAddresses.values) {
+      try {
+        OrtValueTensor.fromAddress(addr).release();
+      } catch (_) {}
+    }
+  }
+
   String? lastStatusMessage;
 
   @visibleForTesting
@@ -304,6 +333,24 @@ class OnnxLocalLlmEngine {
         '<user>\n'
         '$rawOcrText\n'
         '</user>';
+  }
+
+  /// Extracts `(language, userContent)` from a `<system>...from {language} into...</system><user>{userContent}</user>` prompt.
+  static ({String language, String userContent}) extractPromptParts(
+    String prompt,
+  ) {
+    final langMatch = RegExp(
+      r'from\s+(\w+)\s+into',
+      caseSensitive: false,
+    ).firstMatch(prompt);
+    final userMatch = RegExp(
+      r'<user>([\s\S]*?)</user>',
+      caseSensitive: false,
+    ).firstMatch(prompt);
+    return (
+      language: langMatch?.group(1)?.trim() ?? 'Japanese',
+      userContent: userMatch?.group(1)?.trim() ?? prompt.trim(),
+    );
   }
 
   static final RegExp _cjkRegex = RegExp(
@@ -433,6 +480,20 @@ class OnnxLocalLlmEngine {
     text = text.replaceAll(
       RegExp(
         r'Translate the raw OCR text from[^\n]*\n?',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    text = text.replaceAll(
+      RegExp(
+        r'(?:On the other hand,\s*)?(?:you are|you\x27re)\s+(?:an?\s+)?(?:expert\s+)?(?:localizer|translator)[^\n.]*[\n.]?\s*',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    text = text.replaceAll(
+      RegExp(
+        r'translate\s+(?:the\s+)?(?:raw\s+ocr|japanese|korean|chinese|comic)[^\n.]*[\n.]?\s*',
         caseSensitive: false,
       ),
       '',
@@ -731,6 +792,7 @@ class OnnxLocalLlmEngine {
       }
 
       if (resolvedPath != null && File(resolvedPath).existsSync()) {
+        _releaseCachedPrefixKv();
         try {
           _session?.release();
         } catch (_) {}
@@ -818,6 +880,7 @@ class OnnxLocalLlmEngine {
           return false;
         }
       } else if (modelBytes != null) {
+        _releaseCachedPrefixKv();
         try {
           _session?.release();
         } catch (_) {}
@@ -1126,18 +1189,22 @@ class OnnxLocalLlmEngine {
   }
 
   /// Autoregressive token generation loop executed in a background isolate
-  /// with KV-cache reuse and zero-copy FFI logits inspection.
-  static List<int> _generateTokensInIsolate({
+  /// with single-token incremental prefill, persistent prefix KV-cache reuse,
+  /// and zero-copy FFI logits inspection.
+  static ({
+    List<int> tokenIds,
+    Map<String, int>? newPrefixKvAddresses,
+    int prefixLen,
+  }) _generateTokensInIsolate({
     required int sessionAddress,
-    required List<int> inputIds,
+    required List<int> prefixIds,
+    required List<int> suffixIds,
+    Map<String, int>? cachedPrefixKvAddresses,
     required double temperature,
     required int maxTokens,
     required Set<int> eosTokenIds,
     Set<int> newlineTokenIds = const <int>{198, 271},
   }) {
-    // Ensure OrtEnv singleton in this isolate has its FFI bindings ready.
-    // Note: Do not call OrtEnv.instance.init() if the native process already has an environment,
-    // or guard it with try-catch.
     final OrtSession session = OrtSession.fromAddress(sessionAddress);
 
     final String inputIdsName = session.inputNames.isNotEmpty
@@ -1185,34 +1252,416 @@ class OnnxLocalLlmEngine {
     ];
 
     final List<int> generatedTokenIds = <int>[];
-    Map<String, OrtValue> pastKv = <String, OrtValue>{};
     final OrtRunOptions runOptions = OrtRunOptions();
+    Map<String, int>? newPrefixKvAddresses;
+    final int prefixLen = prefixIds.length;
 
+    if (canUseKvCache) {
+      Map<String, OrtValue> prefixKv = <String, OrtValue>{};
+      Map<String, OrtValue> stepKv = <String, OrtValue>{};
+      bool ownsStepKv = false;
+
+      try {
+        // Step A: Prefix KV-Cache initialization or reuse
+        if (cachedPrefixKvAddresses != null &&
+            cachedPrefixKvAddresses.isNotEmpty) {
+          prefixKv = <String, OrtValue>{
+            for (final e in cachedPrefixKvAddresses.entries)
+              e.key: OrtValueTensor.fromAddress(e.value),
+          };
+        } else if (prefixIds.isNotEmpty) {
+          for (int i = 0; i < prefixIds.length; i++) {
+            final List<OrtValueTensor> allocs = <OrtValueTensor>[];
+            final OrtValueTensor inTensor =
+                OrtValueTensor.createTensorWithDataList(
+              <int>[prefixIds[i]],
+              const <int>[1, 1],
+            );
+            allocs.add(inTensor);
+            final Map<String, OrtValue> inputs = <String, OrtValue>{
+              inputIdsName: inTensor,
+            };
+
+            if (attentionMaskName != null && attentionMaskName.isNotEmpty) {
+              final OrtValueTensor maskTensor =
+                  OrtValueTensor.createTensorWithDataList(
+                List<int>.filled(i + 1, 1),
+                <int>[1, i + 1],
+              );
+              allocs.add(maskTensor);
+              inputs[attentionMaskName] = maskTensor;
+            }
+
+            if (positionIdsName != null && positionIdsName.isNotEmpty) {
+              final OrtValueTensor posTensor =
+                  OrtValueTensor.createTensorWithDataList(
+                <int>[i],
+                const <int>[1, 1],
+              );
+              allocs.add(posTensor);
+              inputs[positionIdsName] = posTensor;
+            }
+
+            if (i == 0) {
+              final OrtValueTensor emptyKv =
+                  OrtValueTensor.createTensorWithDataList(
+                Float32List(0),
+                const <int>[1, 2, 0, 64],
+              );
+              allocs.add(emptyKv);
+              for (final String pkvName in pkvInputNames) {
+                inputs[pkvName] = emptyKv;
+              }
+            } else {
+              inputs.addAll(prefixKv);
+            }
+
+            List<OrtValue?> outputs;
+            try {
+              outputs = session.run(runOptions, inputs, requestedOutputs);
+            } finally {
+              for (final OrtValueTensor t in allocs) {
+                try {
+                  t.release();
+                } catch (_) {}
+              }
+            }
+
+            if (outputs.isNotEmpty) {
+              try {
+                outputs.first?.release();
+              } catch (_) {}
+            }
+
+            for (final OrtValue oldKv in prefixKv.values) {
+              try {
+                oldKv.release();
+              } catch (_) {}
+            }
+            prefixKv.clear();
+
+            if (outputs.length == 1 + presentOutputNames.length) {
+              final Map<String, OrtValue> nextKv = <String, OrtValue>{};
+              for (int j = 0; j < presentOutputNames.length; j++) {
+                final OrtValue? presentVal = outputs[1 + j];
+                if (presentVal != null) {
+                  final String pkvKey = presentOutputNames[j]
+                      .replaceFirst('present.', 'past_key_values.');
+                  nextKv[pkvKey] = presentVal;
+                }
+              }
+              prefixKv = nextKv;
+            } else {
+              for (int j = 1; j < outputs.length; j++) {
+                try {
+                  outputs[j]?.release();
+                } catch (_) {}
+              }
+              break;
+            }
+          }
+
+          if (prefixKv.isNotEmpty) {
+            newPrefixKvAddresses = <String, int>{
+              for (final e in prefixKv.entries) e.key: e.value.address,
+            };
+          }
+        }
+
+        // Step B: Suffix prefill (1 token at a time)
+        stepKv = prefixKv;
+        ownsStepKv = false;
+        int nextToken = -1;
+
+        for (int k = 0; k < suffixIds.length; k++) {
+          final int pos = prefixLen + k;
+          final List<OrtValueTensor> allocs = <OrtValueTensor>[];
+          final OrtValueTensor inTensor =
+              OrtValueTensor.createTensorWithDataList(
+            <int>[suffixIds[k]],
+            const <int>[1, 1],
+          );
+          allocs.add(inTensor);
+          final Map<String, OrtValue> inputs = <String, OrtValue>{
+            inputIdsName: inTensor,
+          };
+
+          if (attentionMaskName != null && attentionMaskName.isNotEmpty) {
+            final OrtValueTensor maskTensor =
+                OrtValueTensor.createTensorWithDataList(
+              List<int>.filled(pos + 1, 1),
+              <int>[1, pos + 1],
+            );
+            allocs.add(maskTensor);
+            inputs[attentionMaskName] = maskTensor;
+          }
+
+          if (positionIdsName != null && positionIdsName.isNotEmpty) {
+            final OrtValueTensor posTensor =
+                OrtValueTensor.createTensorWithDataList(
+              <int>[pos],
+              const <int>[1, 1],
+            );
+            allocs.add(posTensor);
+            inputs[positionIdsName] = posTensor;
+          }
+
+          if (stepKv.isEmpty) {
+            final OrtValueTensor emptyKv =
+                OrtValueTensor.createTensorWithDataList(
+              Float32List(0),
+              const <int>[1, 2, 0, 64],
+            );
+            allocs.add(emptyKv);
+            for (final String pkvName in pkvInputNames) {
+              inputs[pkvName] = emptyKv;
+            }
+          } else {
+            inputs.addAll(stepKv);
+          }
+
+          List<OrtValue?> outputs;
+          try {
+            outputs = session.run(runOptions, inputs, requestedOutputs);
+          } finally {
+            for (final OrtValueTensor t in allocs) {
+              try {
+                t.release();
+              } catch (_) {}
+            }
+          }
+
+          if (outputs.isEmpty || outputs.first == null) {
+            for (final OrtValue? out in outputs) {
+              try {
+                out?.release();
+              } catch (_) {}
+            }
+            nextToken = -1;
+            break;
+          }
+
+          final OrtValue logitsVal = outputs.first!;
+          try {
+            if (k == suffixIds.length - 1) {
+              nextToken = selectNextTokenFromOrtValue(
+                logitsVal,
+                1,
+                temperature,
+                generatedTokenIds,
+              );
+            }
+          } finally {
+            try {
+              logitsVal.release();
+            } catch (_) {}
+          }
+
+          if (ownsStepKv) {
+            for (final OrtValue oldKv in stepKv.values) {
+              try {
+                oldKv.release();
+              } catch (_) {}
+            }
+          }
+
+          if (outputs.length == 1 + presentOutputNames.length) {
+            final Map<String, OrtValue> nextKv = <String, OrtValue>{};
+            for (int j = 0; j < presentOutputNames.length; j++) {
+              final OrtValue? presentVal = outputs[1 + j];
+              if (presentVal != null) {
+                final String pkvKey = presentOutputNames[j]
+                    .replaceFirst('present.', 'past_key_values.');
+                nextKv[pkvKey] = presentVal;
+              }
+            }
+            stepKv = nextKv;
+            ownsStepKv = true;
+          } else {
+            for (int j = 1; j < outputs.length; j++) {
+              try {
+                outputs[j]?.release();
+              } catch (_) {}
+            }
+            stepKv = <String, OrtValue>{};
+            ownsStepKv = false;
+            nextToken = -1;
+            break;
+          }
+        }
+
+        // Step C: Autoregressive generation loop
+        for (int step = 0; step < maxTokens; step++) {
+          if (nextToken == -1 || eosTokenIds.contains(nextToken)) {
+            break;
+          }
+
+          // Stop on newline once dialogue tokens have been produced
+          if (generatedTokenIds.isNotEmpty &&
+              newlineTokenIds.contains(nextToken)) {
+            break;
+          }
+
+          // Skip leading whitespace/newline tokens without recording them
+          final bool isLeadingNewline = generatedTokenIds.isEmpty &&
+              newlineTokenIds.contains(nextToken);
+
+          if (!isLeadingNewline) {
+            // Early stop: repetitive single token (3 in a row)
+            if (generatedTokenIds.length >= 2 &&
+                generatedTokenIds.last == nextToken &&
+                generatedTokenIds[generatedTokenIds.length - 2] == nextToken) {
+              break;
+            }
+
+            // Early stop: repetitive 2-token cycle (e.g. A B A B)
+            if (generatedTokenIds.length >= 4 &&
+                generatedTokenIds[generatedTokenIds.length - 1] ==
+                    generatedTokenIds[generatedTokenIds.length - 3] &&
+                generatedTokenIds[generatedTokenIds.length - 2] ==
+                    generatedTokenIds[generatedTokenIds.length - 4] &&
+                nextToken == generatedTokenIds[generatedTokenIds.length - 2]) {
+              break;
+            }
+
+            generatedTokenIds.add(nextToken);
+            if (generatedTokenIds.length >= maxTokens) {
+              break;
+            }
+          }
+
+          final int pos = prefixLen + suffixIds.length + step;
+          final List<OrtValueTensor> allocs = <OrtValueTensor>[];
+          final OrtValueTensor inTensor =
+              OrtValueTensor.createTensorWithDataList(
+            <int>[nextToken],
+            const <int>[1, 1],
+          );
+          allocs.add(inTensor);
+
+          final Map<String, OrtValue> inputs = <String, OrtValue>{
+            inputIdsName: inTensor,
+          };
+
+          if (attentionMaskName != null && attentionMaskName.isNotEmpty) {
+            final OrtValueTensor maskTensor =
+                OrtValueTensor.createTensorWithDataList(
+              List<int>.filled(pos + 1, 1),
+              <int>[1, pos + 1],
+            );
+            allocs.add(maskTensor);
+            inputs[attentionMaskName] = maskTensor;
+          }
+
+          if (positionIdsName != null && positionIdsName.isNotEmpty) {
+            final OrtValueTensor posTensor =
+                OrtValueTensor.createTensorWithDataList(
+              <int>[pos],
+              const <int>[1, 1],
+            );
+            allocs.add(posTensor);
+            inputs[positionIdsName] = posTensor;
+          }
+
+          inputs.addAll(stepKv);
+
+          List<OrtValue?> outputs;
+          try {
+            outputs = session.run(runOptions, inputs, requestedOutputs);
+          } finally {
+            for (final OrtValueTensor t in allocs) {
+              try {
+                t.release();
+              } catch (_) {}
+            }
+          }
+
+          if (outputs.isEmpty || outputs.first == null) {
+            for (final OrtValue? out in outputs) {
+              try {
+                out?.release();
+              } catch (_) {}
+            }
+            break;
+          }
+
+          final OrtValue logitsVal = outputs.first!;
+          try {
+            nextToken = selectNextTokenFromOrtValue(
+              logitsVal,
+              1,
+              temperature,
+              generatedTokenIds,
+            );
+          } finally {
+            try {
+              logitsVal.release();
+            } catch (_) {}
+          }
+
+          if (ownsStepKv) {
+            for (final OrtValue oldKv in stepKv.values) {
+              try {
+                oldKv.release();
+              } catch (_) {}
+            }
+          }
+
+          if (outputs.length == 1 + presentOutputNames.length) {
+            final Map<String, OrtValue> nextKv = <String, OrtValue>{};
+            for (int j = 0; j < presentOutputNames.length; j++) {
+              final OrtValue? presentVal = outputs[1 + j];
+              if (presentVal != null) {
+                final String pkvKey = presentOutputNames[j]
+                    .replaceFirst('present.', 'past_key_values.');
+                nextKv[pkvKey] = presentVal;
+              }
+            }
+            stepKv = nextKv;
+            ownsStepKv = true;
+          } else {
+            for (int j = 1; j < outputs.length; j++) {
+              try {
+                outputs[j]?.release();
+              } catch (_) {}
+            }
+            stepKv = <String, OrtValue>{};
+            ownsStepKv = false;
+            break;
+          }
+        }
+      } finally {
+        if (ownsStepKv) {
+          for (final OrtValue kv in stepKv.values) {
+            try {
+              kv.release();
+            } catch (_) {}
+          }
+        }
+        try {
+          runOptions.release();
+        } catch (_) {}
+      }
+
+      return (
+        tokenIds: generatedTokenIds,
+        newPrefixKvAddresses: newPrefixKvAddresses,
+        prefixLen: prefixLen,
+      );
+    }
+
+    // Fallback path for models without KV cache inputs
+    final List<int> allInputIds = <int>[...prefixIds, ...suffixIds];
     try {
       for (int step = 0; step < maxTokens; step++) {
         final List<OrtValueTensor> stepAllocations = <OrtValueTensor>[];
-        final bool isFirstStep = step == 0;
-
-        final List<int> stepTokens;
-        final int stepSeqLen;
-        final int totalSeqLen;
-        final List<int> posList;
-
-        if (canUseKvCache) {
-          stepTokens = isFirstStep ? inputIds : <int>[generatedTokenIds.last];
-          stepSeqLen = stepTokens.length;
-          final int pastSeqLen =
-              isFirstStep ? 0 : (inputIds.length + step - 1);
-          totalSeqLen = pastSeqLen + stepSeqLen;
-          posList = isFirstStep
-              ? List<int>.generate(stepSeqLen, (i) => i)
-              : <int>[pastSeqLen];
-        } else {
-          stepTokens = <int>[...inputIds, ...generatedTokenIds];
-          stepSeqLen = stepTokens.length;
-          totalSeqLen = stepSeqLen;
-          posList = List<int>.generate(stepSeqLen, (i) => i);
-        }
+        final List<int> stepTokens = <int>[
+          ...allInputIds,
+          ...generatedTokenIds,
+        ];
+        final int stepSeqLen = stepTokens.length;
+        final int totalSeqLen = stepSeqLen;
+        final List<int> posList = List<int>.generate(stepSeqLen, (i) => i);
 
         final OrtValueTensor inputTensor =
             OrtValueTensor.createTensorWithDataList(
@@ -1245,21 +1694,7 @@ class OnnxLocalLlmEngine {
           inputs[positionIdsName] = posTensor;
         }
 
-        if (canUseKvCache) {
-          if (isFirstStep) {
-            final OrtValueTensor emptyKv =
-                OrtValueTensor.createTensorWithDataList(
-              Float32List(0),
-              const <int>[1, 2, 0, 64],
-            );
-            stepAllocations.add(emptyKv);
-            for (final String pkvName in pkvInputNames) {
-              inputs[pkvName] = emptyKv;
-            }
-          } else {
-            inputs.addAll(pastKv);
-          }
-        } else if (pkvInputNames.isNotEmpty) {
+        if (pkvInputNames.isNotEmpty) {
           final OrtValueTensor emptyKv =
               OrtValueTensor.createTensorWithDataList(
             Float32List(0),
@@ -1306,51 +1741,27 @@ class OnnxLocalLlmEngine {
           } catch (_) {}
         }
 
-        for (final OrtValue oldKv in pastKv.values) {
+        for (int i = 1; i < outputs.length; i++) {
           try {
-            oldKv.release();
+            outputs[i]?.release();
           } catch (_) {}
-        }
-        pastKv.clear();
-
-        if (canUseKvCache &&
-            outputs.length == 1 + presentOutputNames.length) {
-          final Map<String, OrtValue> nextKv = <String, OrtValue>{};
-          for (int i = 0; i < presentOutputNames.length; i++) {
-            final OrtValue? presentVal = outputs[1 + i];
-            if (presentVal != null) {
-              final String pkvKey = presentOutputNames[i]
-                  .replaceFirst('present.', 'past_key_values.');
-              nextKv[pkvKey] = presentVal;
-            }
-          }
-          pastKv = nextKv;
-        } else {
-          for (int i = 1; i < outputs.length; i++) {
-            try {
-              outputs[i]?.release();
-            } catch (_) {}
-          }
         }
 
         if (nextToken == -1 || eosTokenIds.contains(nextToken)) {
           break;
         }
 
-        // Early stop: newline after producing dialogue tokens
-        if (generatedTokenIds.length >= 2 &&
+        if (generatedTokenIds.isNotEmpty &&
             newlineTokenIds.contains(nextToken)) {
           break;
         }
 
-        // Early stop: repetitive single token (3 in a row)
         if (generatedTokenIds.length >= 2 &&
             generatedTokenIds.last == nextToken &&
             generatedTokenIds[generatedTokenIds.length - 2] == nextToken) {
           break;
         }
 
-        // Early stop: repetitive 2-token cycle (e.g. A B A B)
         if (generatedTokenIds.length >= 4 &&
             generatedTokenIds[generatedTokenIds.length - 1] ==
                 generatedTokenIds[generatedTokenIds.length - 3] &&
@@ -1363,18 +1774,16 @@ class OnnxLocalLlmEngine {
         generatedTokenIds.add(nextToken);
       }
     } finally {
-      for (final OrtValue kv in pastKv.values) {
-        try {
-          kv.release();
-        } catch (_) {}
-      }
-      pastKv.clear();
       try {
         runOptions.release();
       } catch (_) {}
     }
 
-    return generatedTokenIds;
+    return (
+      tokenIds: generatedTokenIds,
+      newPrefixKvAddresses: null,
+      prefixLen: prefixLen,
+    );
   }
 
   /// Executes inference on the loaded native ONNX session.
@@ -1391,12 +1800,38 @@ class OnnxLocalLlmEngine {
     }
 
     try {
-      final String effectivePrompt = formatForModel(prompt, _tokenizer);
-      final List<int> inputIds = _tokenizer!.encode(effectivePrompt);
-      if (inputIds.isEmpty) return '';
-
-      final int effectiveMaxTokens = constrainMaxTokens(maxTokens);
+      final int effectiveMaxTokens = maxTokens.clamp(8, maxTokensLimit);
       final int sessionAddress = _session!.address;
+
+      List<int> prefixIds;
+      List<int> suffixIds;
+      Map<String, int>? cachedKvAddresses;
+      String? prefixKey;
+
+      if (_tokenizer is QwenBpeTokenizer) {
+        final parts = extractPromptParts(prompt);
+        final String prefixStr =
+            '<|im_start|>system\nTranslate ${parts.language} comic dialogue to English. Output only English.<|im_end|>\n<|im_start|>user\n';
+        final String suffixStr =
+            '${parts.userContent.replaceAll('\n', ' ').trim()}<|im_end|>\n<|im_start|>assistant\n';
+        prefixKey = prefixStr;
+
+        if (_cachedPrefixKv != null &&
+            (_cachedPrefixKv!.sessionAddress != sessionAddress ||
+                _cachedPrefixKv!.prefixKey != prefixStr)) {
+          _releaseCachedPrefixKv();
+        }
+
+        prefixIds = _tokenizer!.encode(prefixStr);
+        suffixIds = _tokenizer!.encode(suffixStr);
+        cachedKvAddresses = _cachedPrefixKv?.kvAddresses;
+      } else {
+        prefixIds = const <int>[];
+        final String effectivePrompt = formatForModel(prompt, _tokenizer);
+        suffixIds = _tokenizer!.encode(effectivePrompt);
+      }
+
+      if (prefixIds.isEmpty && suffixIds.isEmpty) return '';
 
       final Set<int> eosTokenIds = <int>{
         151645, // <|im_end|> (Qwen)
@@ -1413,10 +1848,12 @@ class OnnxLocalLlmEngine {
         if (_tokenizer != null) ..._tokenizer!.encode('\n\n'),
       };
 
-      final List<int> generatedTokenIds = await Isolate.run<List<int>>(
+      final result = await Isolate.run(
         () => _generateTokensInIsolate(
           sessionAddress: sessionAddress,
-          inputIds: inputIds,
+          prefixIds: prefixIds,
+          suffixIds: suffixIds,
+          cachedPrefixKvAddresses: cachedKvAddresses,
           temperature: temperature,
           maxTokens: effectiveMaxTokens,
           eosTokenIds: eosTokenIds,
@@ -1424,9 +1861,18 @@ class OnnxLocalLlmEngine {
         ),
       );
 
-      if (generatedTokenIds.isEmpty) return '';
+      if (result.newPrefixKvAddresses != null && prefixKey != null) {
+        _cachedPrefixKv = _CachedPrefixKv(
+          sessionAddress: sessionAddress,
+          prefixKey: prefixKey,
+          prefixLength: result.prefixLen,
+          kvAddresses: result.newPrefixKvAddresses!,
+        );
+      }
 
-      return _tokenizer!.decode(generatedTokenIds);
+      if (result.tokenIds.isEmpty) return '';
+
+      return _tokenizer!.decode(result.tokenIds);
     } catch (e) {
       lastStatusMessage = 'Inference error: $e';
       debugPrint('ONNX Native inference error: $e');
@@ -1436,6 +1882,7 @@ class OnnxLocalLlmEngine {
 
   /// Releases native ONNX resources and tokenizer safely.
   void dispose() {
+    _releaseCachedPrefixKv();
     try {
       _session?.release();
     } catch (_) {}

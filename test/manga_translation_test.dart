@@ -1335,6 +1335,35 @@ void main() {
       expect(chatMl, contains('<|im_end|>'));
       expect(chatMl, contains('<|im_start|>user\nサバイバートーク<|im_end|>'));
       expect(chatMl, endsWith('<|im_start|>assistant\n'));
+
+      final parts = OnnxLocalLlmEngine.extractPromptParts(prompt);
+      expect(parts.language, 'Japanese');
+      expect(parts.userContent, 'サバイバートーク');
+
+      final koPrompt = OnnxLocalLlmEngine.buildPrompt(
+        language: 'Korean',
+        rawOcrText: '살려줘!',
+      );
+      final koParts = OnnxLocalLlmEngine.extractPromptParts(koPrompt);
+      expect(koParts.language, 'Korean');
+      expect(koParts.userContent, '살려줘!');
+    });
+
+    test(
+        'cleanLlmOutput strips residual instruction and translator role echoes',
+        () {
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput(
+          'You are an expert translator for manga. Wait right there!',
+        ),
+        'Wait right there!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput(
+          'Translate Japanese comic dialogue to English. Help me!',
+        ),
+        'Help me!',
+      );
     });
 
     test(
