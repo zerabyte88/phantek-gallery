@@ -41,7 +41,6 @@ dependencies:
 
   # ── On-device ML & Offline Translation (Permissive Licenses: Apache 2.0 / MIT) ──
   google_mlkit_text_recognition: ^1.0.1
-  google_mlkit_translation: ^1.0.1
   onnxruntime: ^1.4.1
 
 dev_dependencies:

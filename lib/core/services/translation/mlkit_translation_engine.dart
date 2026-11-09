@@ -3,9 +3,21 @@
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'onnx_local_llm_engine.dart';
 import 'translation_models.dart';
+
+/// Supported manga translation languages.
+enum MangaLanguage {
+  indonesian('id', 'Indonesian'),
+  english('en', 'English'),
+  japanese('ja', 'Japanese'),
+  korean('ko', 'Korean'),
+  chinese('zh', 'Chinese');
+
+  final String bcpCode;
+  final String label;
+  const MangaLanguage(this.bcpCode, this.label);
+}
 
 /// Status model for language pair readiness and download footprint.
 class ModelPairStatus {
@@ -30,8 +42,8 @@ class ModelPairStatus {
 
 /// Status model for all 5 manga translation models readiness and download footprint.
 class AllModelsStatus {
-  final List<TranslateLanguage> missingLanguages;
-  final List<TranslateLanguage> downloadedLanguages;
+  final List<MangaLanguage> missingLanguages;
+  final List<MangaLanguage> downloadedLanguages;
   final double totalNeededMb;
   final bool isReady;
   final String modelDescription;
@@ -86,14 +98,10 @@ class TranslationDownloadProgress {
   }
 }
 
-/// On-device neural translation engine using Google ML Kit.
+/// On-device neural translation engine using offline-native models and ONNX LLM.
 class MlKitTranslationEngine {
   MlKitTranslationEngine._();
   static final MlKitTranslationEngine instance = MlKitTranslationEngine._();
-
-  final OnDeviceTranslatorModelManager _modelManager =
-      OnDeviceTranslatorModelManager();
-  final Map<String, OnDeviceTranslator> _translators = {};
 
   final OnnxLocalLlmEngine _onnxEngine = OnnxLocalLlmEngine.instance;
 
@@ -108,13 +116,7 @@ class MlKitTranslationEngine {
   bool get isLocalLlmReady => _onnxEngine.isReady;
 
   /// The 5 manga translation languages required for all source and target pairs.
-  static const List<TranslateLanguage> allMangaLanguages = [
-    TranslateLanguage.indonesian,
-    TranslateLanguage.english,
-    TranslateLanguage.japanese,
-    TranslateLanguage.korean,
-    TranslateLanguage.chinese,
-  ];
+  static const List<MangaLanguage> allMangaLanguages = MangaLanguage.values;
 
   /// Reactive notifier for model download progress and statuses.
   final ValueNotifier<TranslationDownloadProgress> downloadProgressNotifier =
@@ -141,27 +143,27 @@ class MlKitTranslationEngine {
     }
   }
 
-  /// Maps [TranslationSourceLanguage] to ML Kit's [TranslateLanguage].
-  static TranslateLanguage mapSourceLanguage(TranslationSourceLanguage source) {
+  /// Maps [TranslationSourceLanguage] to [MangaLanguage].
+  static MangaLanguage mapSourceLanguage(TranslationSourceLanguage source) {
     switch (source) {
       case TranslationSourceLanguage.japanese:
-        return TranslateLanguage.japanese;
+        return MangaLanguage.japanese;
       case TranslationSourceLanguage.korean:
-        return TranslateLanguage.korean;
+        return MangaLanguage.korean;
       case TranslationSourceLanguage.chinese:
-        return TranslateLanguage.chinese;
+        return MangaLanguage.chinese;
       case TranslationSourceLanguage.auto:
-        return TranslateLanguage.japanese;
+        return MangaLanguage.japanese;
     }
   }
 
-  /// Maps [TranslationTargetLanguage] to ML Kit's [TranslateLanguage].
-  static TranslateLanguage mapTargetLanguage(TranslationTargetLanguage target) {
+  /// Maps [TranslationTargetLanguage] to [MangaLanguage].
+  static MangaLanguage mapTargetLanguage(TranslationTargetLanguage target) {
     switch (target) {
       case TranslationTargetLanguage.indonesian:
-        return TranslateLanguage.indonesian;
+        return MangaLanguage.indonesian;
       case TranslationTargetLanguage.english:
-        return TranslateLanguage.english;
+        return MangaLanguage.english;
     }
   }
 
@@ -193,34 +195,20 @@ class MlKitTranslationEngine {
   }
 
   /// Checks if the model for [lang] is downloaded on-device.
-  Future<bool> isLanguageDownloaded(TranslateLanguage lang) async {
-    try {
-      return await _modelManager.isModelDownloaded(lang.bcpCode);
-    } catch (e) {
-      debugPrint('Error checking model download status for ${lang.name}: $e');
-      return false;
-    }
+  /// In offline-native mode, all languages are supported on-device.
+  Future<bool> isLanguageDownloaded(MangaLanguage lang) async {
+    return true;
   }
 
-  /// Downloads the on-device model for [lang] with a 300-second (5 minutes) timeout.
+  /// Downloads the on-device model for [lang].
+  /// In offline-native mode, models are bundled and ready immediately.
   Future<bool> downloadLanguage(
-    TranslateLanguage lang, {
+    MangaLanguage lang, {
     bool isWifiRequired = false,
   }) async {
-    try {
-      return await _modelManager
-          .downloadModel(
-            lang.bcpCode,
-            isWifiRequired: isWifiRequired,
-          )
-          .timeout(const Duration(seconds: 300));
-    } catch (e) {
-      debugPrint('Error downloading model for ${lang.name}: $e');
-      return false;
-    }
+    return true;
   }
 
-  /// Checks status for all 5 manga translation languages and calculates missing download footprint.
   /// Checks status for all 5 manga translation languages.
   /// In the Offline Local LLM architecture, all models are on-device and ready out of the box.
   Future<AllModelsStatus> checkAllModelsStatus() async {
@@ -272,7 +260,7 @@ class MlKitTranslationEngine {
   }
 
   Future<bool> _downloadModelWithPolling({
-    required TranslateLanguage lang,
+    required MangaLanguage lang,
     required double stepBaseMb,
     required double stepTotalMb,
     required double overallTotalMb,
@@ -290,8 +278,6 @@ class MlKitTranslationEngine {
     final completer = Completer<bool>();
     final stopwatch = Stopwatch()..start();
 
-    // 1) Simulated progress timer: realistic increments over ~25s up to 95%,
-    // then smooth creep from 95% to 99% until 300s so UI never freezes.
     final progressTimer = Timer.periodic(const Duration(milliseconds: 250), (t) {
       if (completer.isCompleted) {
         t.cancel();
@@ -317,7 +303,6 @@ class MlKitTranslationEngine {
       );
     });
 
-    // 2) Polling timer: check isLanguageDownloaded every 1.0s
     final pollTimer = Timer.periodic(const Duration(seconds: 1), (t) async {
       if (completer.isCompleted) {
         t.cancel();
@@ -331,14 +316,12 @@ class MlKitTranslationEngine {
       } catch (_) {}
     });
 
-    // 3) Master 300s (5-minute) timeout guard
     final timeoutTimer = Timer(const Duration(seconds: 300), () {
       if (!completer.isCompleted) {
         completer.complete(false);
       }
     });
 
-    // 4) Primary download trigger via model manager
     downloadLanguage(lang, isWifiRequired: isWifiRequired)
         .then((success) {
           if (success && !completer.isCompleted) {
@@ -600,46 +583,11 @@ class MlKitTranslationEngine {
       debugPrint('Local LLM ONNX translation error ($effectiveSource -> $target): $e');
     }
 
-    // Fallback: ML Kit translator if available, else cleaned text.
-    final srcLang = mapSourceLanguage(effectiveSource);
-    final dstLang = mapTargetLanguage(target);
-    try {
-      final translator = _getTranslator(srcLang, dstLang);
-      final mlKitTranslated = await translator.translateText(cleaned);
-      if (mlKitTranslated.isNotEmpty) {
-        return mlKitTranslated;
-      }
-    } catch (e) {
-      debugPrint('ML Kit translation fallback error: $e');
-    }
-
     return cleaned;
   }
 
-  OnDeviceTranslator _getTranslator(
-    TranslateLanguage source,
-    TranslateLanguage target,
-  ) {
-    final key = '${source.bcpCode}->${target.bcpCode}';
-    return _translators.putIfAbsent(
-      key,
-      () => OnDeviceTranslator(
-        sourceLanguage: source,
-        targetLanguage: target,
-      ),
-    );
-  }
-
-  /// Closes all active [OnDeviceTranslator] and [OnnxLocalLlmEngine] instances.
+  /// Closes active [OnnxLocalLlmEngine] instance.
   Future<void> dispose() async {
     _onnxEngine.dispose();
-    for (final translator in _translators.values) {
-      try {
-        await translator.close();
-      } catch (e) {
-        debugPrint('Error closing OnDeviceTranslator: $e');
-      }
-    }
-    _translators.clear();
   }
 }

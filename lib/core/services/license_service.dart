@@ -72,10 +72,14 @@ class LicenseService {
         _mlkitLicenseText,
       );
 
-      // 7. Google ML Kit Translation (MIT)
+      // 7. Microsoft ONNX Runtime (MIT)
       yield const LicenseEntryWithLineBreaks(
-        <String>['google_mlkit_translation'],
-        _mlkitTranslationLicenseText,
+        <String>[
+          'onnxruntime',
+          'com.microsoft.onnxruntime',
+          'ONNX Runtime',
+        ],
+        _onnxRuntimeLicenseText,
       );
     });
   }
@@ -380,9 +384,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.''';
 
-  static const String _mlkitTranslationLicenseText = '''
-Google ML Kit Translation
-Copyright (c) 2026 Google LLC & Flutter Community Authors
+
+  static const String _onnxRuntimeLicenseText = '''
+ONNX Runtime
+Copyright (c) Microsoft Corporation. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

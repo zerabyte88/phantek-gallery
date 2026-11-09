@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:phantek_gallery/core/localization/app_localizations.dart';
 import 'package:phantek_gallery/core/models/media_item.dart';
 import 'package:phantek_gallery/core/models/settings_model.dart';
@@ -127,31 +126,31 @@ void main() {
       );
     });
 
-    test('Language enum mapping to ML Kit TranslateLanguage', () {
+    test('Language enum mapping to MangaLanguage', () {
       expect(
         MlKitTranslationEngine.mapSourceLanguage(
             TranslationSourceLanguage.japanese),
-        TranslateLanguage.japanese,
+        MangaLanguage.japanese,
       );
       expect(
         MlKitTranslationEngine.mapSourceLanguage(
             TranslationSourceLanguage.korean),
-        TranslateLanguage.korean,
+        MangaLanguage.korean,
       );
       expect(
         MlKitTranslationEngine.mapSourceLanguage(
             TranslationSourceLanguage.chinese),
-        TranslateLanguage.chinese,
+        MangaLanguage.chinese,
       );
       expect(
         MlKitTranslationEngine.mapTargetLanguage(
             TranslationTargetLanguage.indonesian),
-        TranslateLanguage.indonesian,
+        MangaLanguage.indonesian,
       );
       expect(
         MlKitTranslationEngine.mapTargetLanguage(
             TranslationTargetLanguage.english),
-        TranslateLanguage.english,
+        MangaLanguage.english,
       );
     });
 
@@ -562,11 +561,11 @@ void main() {
       expect(
         MlKitTranslationEngine.allMangaLanguages,
         containsAllInOrder([
-          TranslateLanguage.indonesian,
-          TranslateLanguage.english,
-          TranslateLanguage.japanese,
-          TranslateLanguage.korean,
-          TranslateLanguage.chinese,
+          MangaLanguage.indonesian,
+          MangaLanguage.english,
+          MangaLanguage.japanese,
+          MangaLanguage.korean,
+          MangaLanguage.chinese,
         ]),
       );
       expect(MlKitTranslationEngine.allMangaLanguages.length, 5);
@@ -574,11 +573,11 @@ void main() {
 
     test('AllModelsStatus construction and properties', () {
       const status = AllModelsStatus(
-        missingLanguages: [TranslateLanguage.japanese, TranslateLanguage.korean],
+        missingLanguages: [MangaLanguage.japanese, MangaLanguage.korean],
         downloadedLanguages: [
-          TranslateLanguage.indonesian,
-          TranslateLanguage.english,
-          TranslateLanguage.chinese,
+          MangaLanguage.indonesian,
+          MangaLanguage.english,
+          MangaLanguage.chinese,
         ],
         totalNeededMb: 60.0,
         isReady: false,

@@ -35,7 +35,7 @@ Phantek Gallery is a local-first gallery for photos, videos, PSD files, and mang
 
 - **Manga Reader with Natural Sort** : Continuous vertical reading with an edge-to-edge view and chapter progress pills. Albums and chapters sort naturally (`Chapter 1`, `1.1`, `2.1`, `10`, `25`).
 - **On-Device AI Translation** : Translate manga pages with a lightweight local LLM such as Qwen2.5 0.5B. Everything runs on your device, with no cloud APIs involved.
-- **Bring Your Own Model** : Models are not bundled with the app. Download the LLM you prefer and install or switch between models from Settings, so you can balance speed, memory use, and translation quality for your own device.
+- **Bring Your Own Model** : Models are not bundled with the app. Download the LLM you prefer and switch models from Settings, allowing you to choose the model size that best fits your device specs.
 
 ### Privacy and Safety
 
