@@ -65,6 +65,25 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: Setup Vulkan Shader Compiler (glslc)
+        run: |
+          echo "Setting up glslc shader compiler for llama.cpp Vulkan backend..."
+          NDK_GLSLC=$(find ${ANDROID_HOME:-/usr/local/lib/android/sdk}/ndk -name glslc -type f 2>/dev/null | head -n 1)
+          if [ -n "$NDK_GLSLC" ] && [ -x "$NDK_GLSLC" ]; then
+            echo "Found NDK glslc at: $NDK_GLSLC"
+            sudo ln -sf "$NDK_GLSLC" /usr/local/bin/glslc
+            echo "$(dirname "$NDK_GLSLC")" >> $GITHUB_PATH
+          fi
+
+          if ! command -v glslc &> /dev/null; then
+            echo "Installing glslc via apt..."
+            sudo apt-get update
+            sudo apt-get install -y glslc || true
+          fi
+
+          which glslc || echo "::warning::glslc not found in PATH"
+          glslc --version || true
+
       - name: Build 64-bit Release APK (Single ARM64 Binary)
         run: flutter build apk --release --target-platform android-arm64 --android-skip-build-dependency-validation
 
