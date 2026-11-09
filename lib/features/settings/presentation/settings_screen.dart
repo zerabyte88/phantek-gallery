@@ -660,8 +660,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   title: context.tr.mangaAiModel,
                   subtitle: settings.activeAiModelPath.isNotEmpty
                       ? p.basename(settings.activeAiModelPath)
-                      : context.tr.mangaAiModelSubtitle,
-                  onTap: () => _showAiModelManagerDialog(context, ref, settings),
+                      : '/storage/emulated/0/models/ (${context.tr.defaultAutoDetect})',
+                  onTap: () =>
+                      _showAiModelManagerDialog(context, ref, settings),
                 ),
               ],
             ),
@@ -1152,7 +1153,8 @@ Future<void> _showAiModelManagerDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
               side: BorderSide(
-                color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+                color:
+                    cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
                 width: 1,
               ),
             ),
@@ -1252,7 +1254,7 @@ Future<void> _showAiModelManagerDialog(
                         ),
                       ),
                       subtitle: Text(
-                        'models/ / assets/models/',
+                        '/storage/emulated/0/models/',
                         style: TextStyle(
                           fontSize: 12,
                           color: cs.onSurfaceVariant,
@@ -1302,9 +1304,8 @@ Future<void> _showAiModelManagerDialog(
                             isSelected
                                 ? Icons.radio_button_checked
                                 : Icons.radio_button_off,
-                            color: isSelected
-                                ? cs.primary
-                                : cs.onSurfaceVariant,
+                            color:
+                                isSelected ? cs.primary : cs.onSurfaceVariant,
                             size: 20,
                           ),
                           title: Text(
@@ -1328,7 +1329,8 @@ Future<void> _showAiModelManagerDialog(
                           ),
                           onTap: () async {
                             ref.read(settingsNotifierProvider.notifier).update(
-                                  (s) => s.copyWith(activeAiModelPath: model.path),
+                                  (s) =>
+                                      s.copyWith(activeAiModelPath: model.path),
                                 );
                             await OnnxLocalLlmEngine.instance.initializeSession(
                               modelPath: model.path,
@@ -1411,7 +1413,8 @@ Future<void> _showAiModelManagerDialog(
 
                         if (customPath != null && customPath.isNotEmpty) {
                           ref.read(settingsNotifierProvider.notifier).update(
-                                (s) => s.copyWith(activeAiModelPath: customPath),
+                                (s) =>
+                                    s.copyWith(activeAiModelPath: customPath),
                               );
                           await OnnxLocalLlmEngine.instance.initializeSession(
                             modelPath: customPath,

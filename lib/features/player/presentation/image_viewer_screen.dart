@@ -649,6 +649,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       _translationMode = mode;
     });
     if (mode != null && _mangaItems.isNotEmpty) {
+      final status = MlKitTranslationEngine.instance.lastStatusMessage;
+      if (status != null && !status.startsWith('Ready')) {
+        showFeedbackPill(
+          context,
+          message: status,
+          icon: Icons.info_outline_rounded,
+        );
+      }
       _onMangaScroll();
     } else {
       _translationCoordinator.cancelPending();
@@ -744,25 +752,28 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
                           // Section 3: AI Model Status Card
                           ValueListenableBuilder<TranslationDownloadProgress>(
-                            valueListenable:
-                                MlKitTranslationEngine.instance.downloadProgressNotifier,
+                            valueListenable: MlKitTranslationEngine
+                                .instance.downloadProgressNotifier,
                             builder: (context, downloadProgress, _) {
-                              final isDownloading = downloadProgress.isDownloading;
+                              final isDownloading =
+                                  downloadProgress.isDownloading;
                               final hasError = !isDownloading &&
                                   !pairStatus.isReady &&
                                   downloadProgress.errorMessage != null &&
                                   downloadProgress.errorMessage!.isNotEmpty;
-                              final isReady = pairStatus.isReady && !isDownloading;
+                              final isReady =
+                                  pairStatus.isReady && !isDownloading;
 
                               Color cardBg;
                               Color borderColor;
                               if (isReady) {
                                 cardBg = const Color(0xFF132A1C);
-                                borderColor = Colors.greenAccent.withValues(alpha: 0.3);
+                                borderColor =
+                                    Colors.greenAccent.withValues(alpha: 0.3);
                               } else if (isDownloading) {
                                 cardBg = const Color(0xFF131D2A);
-                                borderColor =
-                                    const Color(0xFF00E5FF).withValues(alpha: 0.35);
+                                borderColor = const Color(0xFF00E5FF)
+                                    .withValues(alpha: 0.35);
                               } else if (hasError) {
                                 cardBg = const Color(0xFF2C1517);
                                 borderColor =
@@ -779,7 +790,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 decoration: BoxDecoration(
                                   color: cardBg,
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: borderColor, width: 1),
+                                  border:
+                                      Border.all(color: borderColor, width: 1),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -792,8 +804,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                               : isDownloading
                                                   ? Icons.downloading_rounded
                                                   : hasError
-                                                      ? Icons.error_outline_rounded
-                                                      : Icons.cloud_download_rounded,
+                                                      ? Icons
+                                                          .error_outline_rounded
+                                                      : Icons
+                                                          .cloud_download_rounded,
                                           color: isReady
                                               ? Colors.greenAccent
                                               : isDownloading
@@ -815,16 +829,20 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                     : isDownloading
                                                         ? loc.downloadingModel
                                                         : hasError
-                                                            ? loc.modelDownloadFailed
-                                                            : loc.downloadModelPrompt,
+                                                            ? loc
+                                                                .modelDownloadFailed
+                                                            : loc
+                                                                .downloadModelPrompt,
                                                 style: TextStyle(
                                                   color: isReady
                                                       ? Colors.greenAccent
                                                       : isDownloading
-                                                          ? const Color(0xFF00E5FF)
+                                                          ? const Color(
+                                                              0xFF00E5FF)
                                                           : hasError
                                                               ? Colors.redAccent
-                                                              : Colors.orangeAccent,
+                                                              : Colors
+                                                                  .orangeAccent,
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w600,
                                                 ),
@@ -839,7 +857,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                             ? (downloadProgress
                                                                     .errorMessage ??
                                                                 '')
-                                                            : loc.modelDownloadRequired,
+                                                            : loc
+                                                                .modelDownloadRequired,
                                                 style: TextStyle(
                                                   color: Colors.white
                                                       .withValues(alpha: 0.65),
@@ -849,17 +868,24 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                             ],
                                           ),
                                         ),
-                                        if (!isReady && !isDownloading && !hasError) ...[
+                                        if (!isReady &&
+                                            !isDownloading &&
+                                            !hasError) ...[
                                           const SizedBox(width: 8),
                                           TextButton(
                                             style: TextButton.styleFrom(
-                                              backgroundColor: Colors.orangeAccent
+                                              backgroundColor: Colors
+                                                  .orangeAccent
                                                   .withValues(alpha: 0.2),
-                                              foregroundColor: Colors.orangeAccent,
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 12, vertical: 6),
+                                              foregroundColor:
+                                                  Colors.orangeAccent,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6),
                                               shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(8),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                               ),
                                             ),
                                             onPressed: isModelLoading
@@ -872,12 +898,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                       _translationLanguage,
                                                       _translationTargetLanguage,
                                                     );
-                                                    if (success && sheetContext.mounted) {
+                                                    if (success &&
+                                                        sheetContext.mounted) {
                                                       showFeedbackPill(
                                                         sheetContext,
-                                                        message:
-                                                            loc.modelDownloadSuccess,
-                                                        icon: Icons.check_circle_rounded,
+                                                        message: loc
+                                                            .modelDownloadSuccess,
+                                                        icon: Icons
+                                                            .check_circle_rounded,
                                                       );
                                                     }
                                                     setSheetState(() {});
@@ -897,24 +925,31 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                               backgroundColor: Colors.redAccent
                                                   .withValues(alpha: 0.2),
                                               foregroundColor: Colors.redAccent,
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 12, vertical: 6),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6),
                                               shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(8),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                               ),
                                             ),
                                             onPressed: () async {
                                               final success =
-                                                  await MlKitTranslationEngine.instance
+                                                  await MlKitTranslationEngine
+                                                      .instance
                                                       .downloadPairWithProgress(
                                                 _translationLanguage,
                                                 _translationTargetLanguage,
                                               );
-                                              if (success && sheetContext.mounted) {
+                                              if (success &&
+                                                  sheetContext.mounted) {
                                                 showFeedbackPill(
                                                   sheetContext,
-                                                  message: loc.modelDownloadSuccess,
-                                                  icon: Icons.check_circle_rounded,
+                                                  message:
+                                                      loc.modelDownloadSuccess,
+                                                  icon: Icons
+                                                      .check_circle_rounded,
                                                 );
                                               }
                                               setSheetState(() {});

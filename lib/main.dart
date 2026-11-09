@@ -16,6 +16,7 @@ import 'core/services/license_service.dart';
 import 'core/services/screen_keeper_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/services/thumbnail_service.dart';
+import 'core/services/translation/onnx_local_llm_engine.dart';
 import 'core/services/trash_service.dart';
 
 Future<void> main() async {
@@ -30,6 +31,7 @@ Future<void> main() async {
   LicenseService.registerLicenses();
   await SettingsService.init();
   await ThumbnailService.init();
+  await OnnxLocalLlmEngine.ensureModelsDirectoryExists();
 
   final initialCleanup =
       SettingsService.instance.settings.autoTrashCleanup.inDays;

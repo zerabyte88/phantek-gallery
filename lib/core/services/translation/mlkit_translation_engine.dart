@@ -108,6 +108,9 @@ class MlKitTranslationEngine {
   /// Underlying Local LLM Engine (ONNX / Gemma 3 Nano).
   OnnxLocalLlmEngine get onnxEngine => _onnxEngine;
 
+  /// High-level operational status message forwarded from the local ONNX engine.
+  String? get lastStatusMessage => _onnxEngine.lastStatusMessage;
+
   /// Description of the offline local model weights.
   static const String localLlmDescription =
       'Local LLM Engine (ONNX / Gemma 3 Nano)';
@@ -120,7 +123,8 @@ class MlKitTranslationEngine {
 
   /// Reactive notifier for model download progress and statuses.
   final ValueNotifier<TranslationDownloadProgress> downloadProgressNotifier =
-      ValueNotifier<TranslationDownloadProgress>(const TranslationDownloadProgress());
+      ValueNotifier<TranslationDownloadProgress>(
+          const TranslationDownloadProgress());
 
   static String _getSourceLangName(TranslationSourceLanguage source) {
     switch (source) {
@@ -256,7 +260,8 @@ class MlKitTranslationEngine {
     TranslationTargetLanguage target, {
     bool isWifiRequired = false,
   }) async {
-    return downloadPairWithProgress(source, target, isWifiRequired: isWifiRequired);
+    return downloadPairWithProgress(source, target,
+        isWifiRequired: isWifiRequired);
   }
 
   Future<bool> _downloadModelWithPolling({
@@ -278,7 +283,8 @@ class MlKitTranslationEngine {
     final completer = Completer<bool>();
     final stopwatch = Stopwatch()..start();
 
-    final progressTimer = Timer.periodic(const Duration(milliseconds: 250), (t) {
+    final progressTimer =
+        Timer.periodic(const Duration(milliseconds: 250), (t) {
       if (completer.isCompleted) {
         t.cancel();
         return;
@@ -322,15 +328,13 @@ class MlKitTranslationEngine {
       }
     });
 
-    downloadLanguage(lang, isWifiRequired: isWifiRequired)
-        .then((success) {
-          if (success && !completer.isCompleted) {
-            completer.complete(true);
-          }
-        })
-        .catchError((e) {
-          debugPrint('Primary downloadLanguage error for ${lang.name}: $e');
-        });
+    downloadLanguage(lang, isWifiRequired: isWifiRequired).then((success) {
+      if (success && !completer.isCompleted) {
+        completer.complete(true);
+      }
+    }).catchError((e) {
+      debugPrint('Primary downloadLanguage error for ${lang.name}: $e');
+    });
 
     final success = await completer.future;
     progressTimer.cancel();
@@ -580,7 +584,8 @@ class MlKitTranslationEngine {
         return translated;
       }
     } catch (e) {
-      debugPrint('Local LLM ONNX translation error ($effectiveSource -> $target): $e');
+      debugPrint(
+          'Local LLM ONNX translation error ($effectiveSource -> $target): $e');
     }
 
     return cleaned;

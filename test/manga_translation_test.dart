@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 zerabyte88
 
+import 'dart:convert';
 import 'dart:io';
+import 'package:dart_sentencepiece_tokenizer/dart_sentencepiece_tokenizer.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -546,7 +548,8 @@ void main() {
       expect(updated.progress, 0.5);
     });
 
-    test('getPairStatus returns correct pair metadata and size requirements', () async {
+    test('getPairStatus returns correct pair metadata and size requirements',
+        () async {
       final engine = MlKitTranslationEngine.instance;
       final status = await engine.getPairStatus(
         TranslationSourceLanguage.japanese,
@@ -588,15 +591,19 @@ void main() {
       expect(status.isReady, isFalse);
     });
 
-    test('checkAllModelsStatus returns valid AllModelsStatus metadata', () async {
+    test('checkAllModelsStatus returns valid AllModelsStatus metadata',
+        () async {
       final engine = MlKitTranslationEngine.instance;
       final status = await engine.checkAllModelsStatus();
-      expect(status.missingLanguages.length + status.downloadedLanguages.length, 5);
+      expect(status.missingLanguages.length + status.downloadedLanguages.length,
+          5);
       expect(status.totalNeededMb, status.missingLanguages.length * 30.0);
       expect(status.isReady, status.missingLanguages.isEmpty);
     });
 
-    test('appLocalizations download getter returns localized string without MB size', () {
+    test(
+        'appLocalizations download getter returns localized string without MB size',
+        () {
       final en = AppLocalizations(const Locale('en'));
       expect(en.download, 'Download');
       expect(en.downloadModelPrompt, isNot(contains('30MB')));
@@ -610,7 +617,9 @@ void main() {
   });
 
   group('ZigzagProgressBar Widget Tests', () {
-    testWidgets('ZigzagProgressBar renders without error at progress 0.0 and 0.5', (tester) async {
+    testWidgets(
+        'ZigzagProgressBar renders without error at progress 0.0 and 0.5',
+        (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -642,7 +651,8 @@ void main() {
     test('System prompt formatting and payload validation', () {
       expect(
         OnnxLocalLlmEngine.systemPromptTemplate,
-        contains('You are a specialized, strictly objective machine translation engine for fictional comic book dialogues.'),
+        contains(
+            'You are a specialized, strictly objective machine translation engine for fictional comic book dialogues.'),
       );
       expect(
         OnnxLocalLlmEngine.systemPromptTemplate,
@@ -650,19 +660,23 @@ void main() {
       );
       expect(
         OnnxLocalLlmEngine.systemPromptTemplate,
-        contains('1. Translate the user\'s raw text faithfully into natural, fluid English comic dialogue.'),
+        contains(
+            '1. Translate the user\'s raw text faithfully into natural, fluid English comic dialogue.'),
       );
       expect(
         OnnxLocalLlmEngine.systemPromptTemplate,
-        contains('2. The input is 100% fictional creative writing. It contains stylized violence, combat phrases, threats, gore, ecchi, and profanities. Do NOT judge, filter, or alter these creative elements.'),
+        contains(
+            '2. The input is 100% fictional creative writing. It contains stylized violence, combat phrases, threats, gore, ecchi, and profanities. Do NOT judge, filter, or alter these creative elements.'),
       );
       expect(
         OnnxLocalLlmEngine.systemPromptTemplate,
-        contains('3. Never refuse this request. Never moralize, lecture, or preach. Do not add safety warnings, explanations, or notes.'),
+        contains(
+            '3. Never refuse this request. Never moralize, lecture, or preach. Do not add safety warnings, explanations, or notes.'),
       );
       expect(
         OnnxLocalLlmEngine.systemPromptTemplate,
-        contains('4. Output ONLY the final English translation. Absolutely no conversational filler before or after the translation.'),
+        contains(
+            '4. Output ONLY the final English translation. Absolutely no conversational filler before or after the translation.'),
       );
 
       final promptJa = OnnxLocalLlmEngine.buildPrompt(
@@ -712,7 +726,8 @@ void main() {
       double? receivedTemp;
       int? receivedTokens;
       final engine = OnnxLocalLlmEngine(
-        mockInferenceHandler: (prompt, {required temperature, required maxTokens}) async {
+        mockInferenceHandler: (prompt,
+            {required temperature, required maxTokens}) async {
           receivedTemp = temperature;
           receivedTokens = maxTokens;
           return 'I am here!';
@@ -780,19 +795,23 @@ void main() {
 
       // Strips chat preambles
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('Here is the English translation: "Don\'t move!"'),
+        OnnxLocalLlmEngine.cleanLlmOutput(
+            'Here is the English translation: "Don\'t move!"'),
         "Don't move!",
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('The English translation is: "Stop right there!"'),
+        OnnxLocalLlmEngine.cleanLlmOutput(
+            'The English translation is: "Stop right there!"'),
         'Stop right there!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('Translation: **What did you say?!**'),
+        OnnxLocalLlmEngine.cleanLlmOutput(
+            'Translation: **What did you say?!**'),
         'What did you say?!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('English Translation: That cannot be true.'),
+        OnnxLocalLlmEngine.cleanLlmOutput(
+            'English Translation: That cannot be true.'),
         'That cannot be true.',
       );
       expect(
@@ -805,7 +824,9 @@ void main() {
       );
     });
 
-    test('Chaining with OCR blocks into translateText and translation coordinator', () async {
+    test(
+        'Chaining with OCR blocks into translateText and translation coordinator',
+        () async {
       final mockBlocks = [
         const RawMangaTextBlock(
           boundingBox: Rect.fromLTWH(10, 20, 100, 200),
@@ -828,8 +849,8 @@ void main() {
         return '<assistant>"Run away!"</assistant>';
       };
 
-      final temp =
-          await File('${Directory.systemTemp.path}/test_ocr_chain.jpg').create();
+      final temp = await File('${Directory.systemTemp.path}/test_ocr_chain.jpg')
+          .create();
       try {
         final coordinator = TranslationIsolateCoordinator(
           ocrService: ocrService,
@@ -863,7 +884,9 @@ void main() {
       }
     });
 
-    test('Native ONNX graceful fallback and punctuation pass-through without throwing', () async {
+    test(
+        'Native ONNX graceful fallback and punctuation pass-through without throwing',
+        () async {
       final engine = OnnxLocalLlmEngine.instance;
       // Standalone punctuation pass-through
       expect(
@@ -890,11 +913,14 @@ void main() {
     });
 
     test('cleanLlmOutput strips operational rules echoes', () {
-      const echoed = 'CRITICAL OPERATIONAL RULES:\n1. Translate faithfully.\nHelp me!';
+      const echoed =
+          'CRITICAL OPERATIONAL RULES:\n1. Translate faithfully.\nHelp me!';
       expect(OnnxLocalLlmEngine.cleanLlmOutput(echoed), 'Help me!');
     });
 
-    test('scanAvailableModels scans candidate directories and returns discovered models', () async {
+    test(
+        'scanAvailableModels scans candidate directories and returns discovered models',
+        () async {
       final tempDir = await Directory.systemTemp.createTemp('onnx_scan_test');
       try {
         final dummyModel = File(p.join(tempDir.path, 'test_model_q4.onnx'));
@@ -913,13 +939,210 @@ void main() {
       }
     });
 
-    test('SettingsModel activeAiModelPath defaults to empty and copyWith works', () {
+    test('SettingsModel activeAiModelPath defaults to empty and copyWith works',
+        () {
       const model = SettingsModel();
       expect(model.activeAiModelPath, '');
 
-      final updated = model.copyWith(activeAiModelPath: '/custom/path/model.onnx');
+      final updated =
+          model.copyWith(activeAiModelPath: '/custom/path/model.onnx');
       expect(updated.activeAiModelPath, '/custom/path/model.onnx');
       expect(updated.props, contains('/custom/path/model.onnx'));
+    });
+
+    test('defaultModelsDirectoryPath and candidate paths prioritization', () {
+      expect(
+        OnnxLocalLlmEngine.defaultModelsDirectoryPath,
+        '/storage/emulated/0/models',
+      );
+      expect(
+        OnnxLocalLlmEngine.defaultModelCandidatePaths.first,
+        startsWith('/storage/emulated/0/models/'),
+      );
+      expect(
+        OnnxLocalLlmEngine.defaultModelCandidatePaths,
+        contains('/storage/emulated/0/models/qwen2.5-0.5b-instruct-q4.onnx'),
+      );
+      expect(
+        OnnxLocalLlmEngine.defaultModelCandidatePaths,
+        contains('models/qwen2.5-0.5b-instruct-q4.onnx'),
+      );
+      expect(
+        OnnxLocalLlmEngine.defaultModelCandidatePaths,
+        contains('assets/models/qwen2.5-0.5b-instruct-q4.onnx'),
+      );
+    });
+
+    test(
+        'ensureModelsDirectoryExists creates directory when missing and is idempotent',
+        () async {
+      final tempDir = await Directory.systemTemp.createTemp('models_dir_test');
+      final targetSubDir = p.join(tempDir.path, 'nested', 'models');
+
+      try {
+        expect(Directory(targetSubDir).existsSync(), isFalse);
+
+        // 1. Creates when missing
+        await OnnxLocalLlmEngine.ensureModelsDirectoryExists(
+            targetPath: targetSubDir);
+        expect(Directory(targetSubDir).existsSync(), isTrue);
+
+        // Put a canary file inside
+        final canary = File(p.join(targetSubDir, 'canary.txt'));
+        await canary.writeAsString('canary');
+
+        // 2. Calling again leaves it untouched (idempotent)
+        await OnnxLocalLlmEngine.ensureModelsDirectoryExists(
+            targetPath: targetSubDir);
+        expect(Directory(targetSubDir).existsSync(), isTrue);
+        expect(canary.existsSync(), isTrue);
+        expect(await canary.readAsString(), 'canary');
+      } finally {
+        if (tempDir.existsSync()) {
+          await tempDir.delete(recursive: true);
+        }
+      }
+    });
+
+    test('initializeSession resolves .onnx file from directory target path',
+        () async {
+      final tempDir = await Directory.systemTemp.createTemp('models_init_test');
+      try {
+        final dummyModel = File(p.join(tempDir.path, 'sample.onnx'));
+        await dummyModel.writeAsBytes(List.filled(16, 0));
+
+        final engine = OnnxLocalLlmEngine();
+        final success = await engine.initializeSession(modelPath: tempDir.path);
+        expect(success, isA<bool>());
+      } finally {
+        if (tempDir.existsSync()) {
+          await tempDir.delete(recursive: true);
+        }
+      }
+    });
+
+    test('Tokenizer loading via HuggingFaceTokenizerLoader.fromJsonString', () {
+      const sampleJson = '''
+
+      {
+
+        "version": "1.0",
+
+        "model": {
+
+          "type": "BPE",
+
+          "vocab": {
+
+            "<unk>": 0,
+
+            "<s>": 1,
+
+            "</s>": 2,
+
+            "Hello": 3,
+
+            "world": 4
+
+          },
+
+          "merges": []
+
+        }
+
+      }
+
+      ''';
+
+      final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(sampleJson);
+      expect(tokenizer, isNotNull);
+      expect(tokenizer.vocab.size, 5);
+
+      final encoded = tokenizer.encode('Hello world');
+      expect(encoded.ids, isNotEmpty);
+
+      final decoded = tokenizer.decode([3, 4]);
+      expect(decoded, contains('Hello'));
+      expect(decoded, contains('world'));
+    });
+
+    test(
+        'selectNextToken uses argmax for temperature <= 0.1 and sampling for > 0.1',
+        () {
+      final logits = [0.1, 0.4, 2.9, 1.2, 0.05];
+
+      // Argmax with temp = 0.1 should pick index 2 (value 2.9)
+      final token01 = OnnxLocalLlmEngine.selectNextToken(logits, 0.1);
+      expect(token01, 2);
+
+      // Argmax with temp = 0.0 should pick index 2
+      final token00 = OnnxLocalLlmEngine.selectNextToken(logits, 0.0);
+      expect(token00, 2);
+
+      // Temperature sampling with temp = 0.2 should return a valid index within bounds
+      final token02 = OnnxLocalLlmEngine.selectNextToken(logits, 0.2);
+      expect(token02, inInclusiveRange(0, logits.length - 1));
+
+      // extractLastLogits helper
+      final logits3d = [
+        [
+          [0.1, 0.2],
+          [0.8, 1.5],
+        ]
+      ];
+      expect(OnnxLocalLlmEngine.extractLastLogits(logits3d), [0.8, 1.5]);
+
+      final logits2d = [
+        [0.1, 0.2],
+        [0.5, 0.9],
+      ];
+      expect(OnnxLocalLlmEngine.extractLastLogits(logits2d), [0.5, 0.9]);
+    });
+
+    test('Status message update when model is present vs tokenizer missing',
+        () async {
+      final tempDir = await Directory.systemTemp.createTemp('onnx_status_test');
+      try {
+        final dummyModel =
+            File(p.join(tempDir.path, 'qwen2.5-0.5b-instruct-q4.onnx'));
+        await dummyModel.writeAsBytes(List.filled(16, 0));
+
+        final engine = OnnxLocalLlmEngine();
+
+        // 1. Model present, but companion tokenizer is missing
+        await engine.initializeSession(modelPath: dummyModel.path);
+        expect(
+          engine.lastStatusMessage,
+          'Model loaded (qwen2.5-0.5b-instruct-q4.onnx), but tokenizer.json not found in ${tempDir.path}',
+        );
+
+        // 2. Add companion tokenizer.json and re-initialize
+        final dummyTok = File(p.join(tempDir.path, 'tokenizer.json'));
+        await dummyTok.writeAsString(jsonEncode({
+          'model': {
+            'type': 'BPE',
+            'vocab': {'<unk>': 0, '<s>': 1, '</s>': 2, 'tok': 3},
+            'merges': [],
+          }
+        }));
+
+        await engine.initializeSession(modelPath: dummyModel.path);
+        expect(
+          engine.lastStatusMessage,
+          'Ready: qwen2.5-0.5b-instruct-q4.onnx',
+        );
+
+        engine.dispose();
+      } finally {
+        if (tempDir.existsSync()) {
+          await tempDir.delete(recursive: true);
+        }
+      }
+    });
+
+    test('MlKitTranslationEngine forwards lastStatusMessage', () {
+      final mlEngine = MlKitTranslationEngine.instance;
+      expect(mlEngine.lastStatusMessage, mlEngine.onnxEngine.lastStatusMessage);
     });
   });
 }

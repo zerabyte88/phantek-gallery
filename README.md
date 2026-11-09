@@ -5,7 +5,7 @@
 
   **A fast, privacy-focused Android gallery with PSD layer support and on-device AI manga translation using a local LLM of your choice.**
 
-  [![Version](https://img.shields.io/badge/Version-v2.16.0-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.16.1-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20ExoPlayer-6366f1.svg?style=flat-square)](https://developer.android.com/media/media3)
@@ -51,13 +51,52 @@ Phantek Gallery is a local-first gallery for photos, videos, PSD files, and mang
 
 ## Translation Setup
 
-The translation model is not included in the APK. This keeps the app small and lets you choose the model that fits your device.
+Phantek Gallery translates comic dialogues completely offline on your device using local quantized LLM models. To keep the APK download small (< 50 MB) and give you full control over performance and RAM usage, models are not bundled inside the app.
 
-1. Download a compatible lightweight LLM, for example Qwen2.5 0.5B.
-2. Open **Settings** and add the model file in the translation section.
-3. Open a manga chapter and start translating.
+---
 
-> **Note :** Smaller models are faster and lighter on memory, but translation quality may vary. Larger models usually translate better but need more RAM and processing time. Try a few models to find the best balance for your device.
+### 1. Recommended Models
+
+For the best balance of speed, low memory footprint, and natural comic dialogue translation (Japanese/Korean/Chinese to English), we recommend **Qwen 2.5 Instruct ONNX**:
+
+| Model | Size | Recommended For | Hugging Face Download Link |
+| :--- | :---: | :--- | :--- |
+| **Qwen 2.5 0.5B Instruct (INT4)** *(Recommended)* | ~350 MB | Low-end & mid-range devices (~500 MB RAM). Fast, snappy bubble translations. | [onnx-community/Qwen2.5-0.5B-Instruct-ONNX](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct-ONNX) |
+| **Qwen 2.5 1.5B Instruct (INT4)** | ~950 MB | Mid-range to flagship devices (~1.5 GB RAM). Higher contextual dialogue accuracy. | [onnx-community/Qwen2.5-1.5B-Instruct-ONNX](https://huggingface.co/onnx-community/Qwen2.5-1.5B-Instruct-ONNX) |
+
+> [!TIP]
+> Each ONNX model requires its companion **`tokenizer.json`** to tokenize comic text. You can download the official Qwen tokenizer file directly from Hugging Face:
+> - **Tokenizer Download**: [Qwen/Qwen2.5-0.5B-Instruct tokenizer.json](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/resolve/main/tokenizer.json)
+
+---
+
+### 2. Step-by-Step Installation Guide
+
+#### Step 1: Launch App Once to Prepare Directory
+Open Phantek Gallery at least once. The app automatically creates the dedicated model folder on your internal storage:
+```text
+/storage/emulated/0/models/
+```
+*(Alternatively, you can manually create the `models` folder in your phone's internal storage root using any file manager).*
+
+#### Step 2: Download Model & Tokenizer
+1. Download the quantized ONNX model file (e.g. `qwen2.5-0.5b-instruct-q4.onnx` or `model_q4.onnx` from the link above).
+2. Download the companion [`tokenizer.json`](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/resolve/main/tokenizer.json).
+
+#### Step 3: Copy Files to the `models/` Directory
+Place both files together into `/storage/emulated/0/models/`:
+```text
+/storage/emulated/0/models/
+├── qwen2.5-0.5b-instruct-q4.onnx
+└── tokenizer.json
+```
+
+#### Step 4: Verify in Settings
+1. Open Phantek Gallery > **Settings** > scroll to **Manga AI Model**.
+2. Tap **Manga AI Model** to see discovered models. You can keep **Auto-detect (Default)** or tap the model name to select it explicitly.
+
+#### Step 5: Start Translating
+Open any manga or image page in the viewer, tap the **Translate icon (文A)** in the bottom bar, and choose **Translate Speech Bubbles** or **Translate Full Page**. The local LLM will translate speech bubbles offline in real-time.
 
 ---
 
