@@ -56,8 +56,12 @@ class MangaTranslationPainter extends CustomPainter {
       return;
     }
 
-    final double scaleX = size.width / original.width;
-    final double scaleY = size.height / original.height;
+    final FittedSizes fitted = applyBoxFit(BoxFit.contain, original, size);
+    final Rect destRect =
+        Alignment.center.inscribe(fitted.destination, Offset.zero & size);
+
+    final double scaleX = destRect.width / original.width;
+    final double scaleY = destRect.height / original.height;
 
     for (final block in result.blocks) {
       if (mode == TranslationRenderMode.speechBubblesOnly &&
@@ -66,10 +70,10 @@ class MangaTranslationPainter extends CustomPainter {
       }
 
       final mappedRect = Rect.fromLTRB(
-        block.boundingBox.left * scaleX,
-        block.boundingBox.top * scaleY,
-        block.boundingBox.right * scaleX,
-        block.boundingBox.bottom * scaleY,
+        destRect.left + block.boundingBox.left * scaleX,
+        destRect.top + block.boundingBox.top * scaleY,
+        destRect.left + block.boundingBox.right * scaleX,
+        destRect.top + block.boundingBox.bottom * scaleY,
       );
 
       if (block.isSpeechBubble) {
@@ -81,7 +85,21 @@ class MangaTranslationPainter extends CustomPainter {
   }
 
   void _drawSpeechBubbleBlock(Canvas canvas, Rect rect, String text) {
-    final paddedRect = rect.inflate(4.0);
+    Rect effectiveRect = rect;
+    if (effectiveRect.height > effectiveRect.width * 1.5) {
+      final double targetWidth = math.max(effectiveRect.width * 1.8, 50.0);
+      final double extraWidth = targetWidth - effectiveRect.width;
+      if (extraWidth > 0) {
+        effectiveRect = Rect.fromLTRB(
+          effectiveRect.left - extraWidth / 2.0,
+          effectiveRect.top,
+          effectiveRect.right + extraWidth / 2.0,
+          effectiveRect.bottom,
+        );
+      }
+    }
+
+    final paddedRect = effectiveRect.inflate(4.0);
     final rrect =
         RRect.fromRectAndRadius(paddedRect, const Radius.circular(8.0));
 
@@ -99,7 +117,7 @@ class MangaTranslationPainter extends CustomPainter {
     final double maxTextWidth = math.max(paddedRect.width - 6.0, 10.0);
     final double maxTextHeight = math.max(paddedRect.height - 6.0, 10.0);
 
-    double fontSize = (rect.height * 0.35).clamp(10.0, 18.0);
+    double fontSize = (effectiveRect.height * 0.35).clamp(10.0, 18.0);
     TextPainter painter = _buildTextPainter(
       text: text,
       style: TextStyle(
@@ -111,8 +129,8 @@ class MangaTranslationPainter extends CustomPainter {
       maxWidth: maxTextWidth,
     );
 
-    while (painter.height > maxTextHeight && fontSize > 9.0) {
-      fontSize -= 1.0;
+    while (painter.height > maxTextHeight && fontSize > 6.5) {
+      fontSize -= 0.5;
       painter = _buildTextPainter(
         text: text,
         style: TextStyle(
@@ -129,7 +147,11 @@ class MangaTranslationPainter extends CustomPainter {
         paddedRect.left + (paddedRect.width - painter.width) / 2.0;
     final double dy =
         paddedRect.top + (paddedRect.height - painter.height) / 2.0;
+
+    canvas.save();
+    canvas.clipRRect(rrect);
     painter.paint(canvas, Offset(dx, dy));
+    canvas.restore();
   }
 
   void _drawSfxBlock(Canvas canvas, Rect rect, String text) {
@@ -171,8 +193,26 @@ class MangaTranslationPainter extends CustomPainter {
     final double dy = rect.top + (rect.height - fillPainter.height) / 2.0;
     final offset = Offset(dx, dy);
 
+    final pillRect = Rect.fromLTWH(
+      dx - 4.0,
+      dy - 2.0,
+      fillPainter.width + 8.0,
+      fillPainter.height + 4.0,
+    );
+    final pillRRect =
+        RRect.fromRectAndRadius(pillRect, const Radius.circular(6.0));
+
+    canvas.save();
+    canvas.clipRect(rect.inflate(30.0));
+
+    final bgPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.65)
+      ..style = PaintingStyle.fill;
+    canvas.drawRRect(pillRRect, bgPaint);
+
     strokePainter.paint(canvas, offset);
     fillPainter.paint(canvas, offset);
+    canvas.restore();
   }
 
   TextPainter _buildTextPainter({
@@ -184,6 +224,8 @@ class MangaTranslationPainter extends CustomPainter {
       text: TextSpan(text: text, style: style),
       textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
+      maxLines: 10,
+      ellipsis: '…',
     );
     painter.layout(maxWidth: maxWidth);
     return painter;

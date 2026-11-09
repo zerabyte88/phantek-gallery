@@ -6,28 +6,49 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'manga_ocr_service.dart';
 import 'mlkit_translation_engine.dart';
+import 'onnx_local_llm_engine.dart';
 import 'translation_models.dart';
 
 Future<List<MangaTranslatedBlock>> _translateBlocks(
   List<RawMangaTextBlock> rawBlocks,
   Size imageSize,
   MlKitTranslationEngine engine, {
+  TranslationRenderMode mode = TranslationRenderMode.fullImageWithSfx,
   TranslationSourceLanguage language = TranslationSourceLanguage.auto,
   required TranslationTargetLanguage targetLanguage,
+  bool Function()? isCancelled,
 }) async {
   final List<MangaTranslatedBlock> results = [];
 
   for (final raw in rawBlocks) {
+    if (isCancelled != null && isCancelled()) break;
+
+    final trimmed = raw.text.trim();
+    if (trimmed.isEmpty ||
+        !OnnxLocalLlmEngine.hasCjkCharacters(trimmed) ||
+        raw.boundingBox.width < 8 ||
+        raw.boundingBox.height < 8) {
+      continue;
+    }
+
     final isBubble = MangaOcrService.classifyIsSpeechBubble(
       raw.boundingBox,
       raw.text,
       imageSize,
     );
-    final translated = await engine.translateText(
-      raw.text,
-      source: language,
-      target: targetLanguage,
-    );
+
+    final String translated;
+    if (mode == TranslationRenderMode.speechBubblesOnly && !isBubble) {
+      translated = '';
+    } else {
+      translated = await engine.translateText(
+        raw.text,
+        source: language,
+        target: targetLanguage,
+      );
+    }
+
+    if (isCancelled != null && isCancelled()) break;
 
     results.add(MangaTranslatedBlock(
       boundingBox: raw.boundingBox,
@@ -76,15 +97,19 @@ class TranslationIsolateCoordinator {
   Future<List<MangaTranslatedBlock>> translateBlocks(
     List<RawMangaTextBlock> rawBlocks,
     Size imageSize, {
+    TranslationRenderMode mode = TranslationRenderMode.fullImageWithSfx,
     TranslationSourceLanguage language = TranslationSourceLanguage.auto,
     required TranslationTargetLanguage targetLanguage,
+    bool Function()? isCancelled,
   }) async {
     return _translateBlocks(
       rawBlocks,
       imageSize,
       _translationEngine,
+      mode: mode,
       language: language,
       targetLanguage: targetLanguage,
+      isCancelled: isCancelled,
     );
   }
 
@@ -99,7 +124,8 @@ class TranslationIsolateCoordinator {
   }) {
     _debounceTimer?.cancel();
 
-    final cacheKey = '${imagePath}_${language.name}_${targetLanguage.name}';
+    final cacheKey =
+        '${imagePath}_${mode.name}_${language.name}_${targetLanguage.name}';
     final cached = _cache[cacheKey] ?? _cache[imagePath];
     if (cached != null) {
       getResultNotifier(imagePath).value = cached;
@@ -163,8 +189,10 @@ class TranslationIsolateCoordinator {
       final translatedBlocks = await translateBlocks(
         rawBlocks,
         actualSize,
+        mode: mode,
         language: language,
         targetLanguage: targetLanguage,
+        isCancelled: () => sequence != _activeSequence,
       );
 
       if (sequence != _activeSequence) return;
@@ -176,6 +204,9 @@ class TranslationIsolateCoordinator {
         isSuccess: true,
       );
 
+      final cacheKey =
+          '${imagePath}_${mode.name}_${language.name}_${targetLanguage.name}';
+      _cache[cacheKey] = result;
       _cache[imagePath] = result;
       resultNotifier.value = result;
     } catch (e, stack) {

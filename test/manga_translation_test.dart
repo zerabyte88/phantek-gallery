@@ -721,18 +721,38 @@ void main() {
       );
 
       expect(receivedTemp, 0.2);
-      expect(receivedTokens, 80);
+      // For 6 CJK characters: (6 * 2 + 16).clamp(16, 80) = 28
+      expect(receivedTokens, 28);
       expect(out, 'I am here!');
+
+      // Long text reaching max tokens cap
+      await engine.translateMangaText(
+        text: 'これはテストです。長い漫画のセリフを翻訳してみましょう。どうなるでしょうか？ここにいるぞ！',
+        source: TranslationSourceLanguage.japanese,
+        temperature: 0.99,
+        maxTokens: 500,
+      );
+      expect(receivedTemp, 0.2);
+      expect(receivedTokens, 80);
 
       // Underflow bounds
       await engine.translateMangaText(
-        text: 'ここにいるぞ！',
+        text: 'これはテストです。長い漫画のセリフを翻訳してみましょう。どうなるでしょうか？ここにいるぞ！',
         source: TranslationSourceLanguage.japanese,
         temperature: 0.01,
         maxTokens: 20,
       );
       expect(receivedTemp, 0.1);
       expect(receivedTokens, 50);
+
+      // Non-CJK text bypasses LLM inference
+      receivedTokens = null;
+      final nonCjk = await engine.translateMangaText(
+        text: 'LIVE 1080P',
+        source: TranslationSourceLanguage.japanese,
+      );
+      expect(nonCjk, 'LIVE 1080P');
+      expect(receivedTokens, isNull);
     });
 
     test('Markdown cleanup and output sanitization', () {
@@ -889,6 +909,133 @@ void main() {
         source: TranslationSourceLanguage.japanese,
       );
       expect(fallbackResult, 'こんにちは');
+    });
+
+    test('OnnxLocalLlmEngine.hasCjkCharacters script validation', () {
+      // Japanese
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('こんにちは'), isTrue);
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('スゴイ！'), isTrue);
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('ﾆﾎﾝ'), isTrue);
+
+      // Chinese
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('你好世界'), isTrue);
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('漫画'), isTrue);
+
+      // Korean
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('안녕하세요'), isTrue);
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('ㅋㅋㅋ'), isTrue);
+
+      // Non-CJK
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('Hello World!'), isFalse);
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('LIVE 1080P'), isFalse);
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('CHAPTER 24: THE END'), isFalse);
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('1234567890'), isFalse);
+      expect(OnnxLocalLlmEngine.hasCjkCharacters('...?!#@%'), isFalse);
+      expect(OnnxLocalLlmEngine.hasCjkCharacters(''), isFalse);
+    });
+
+    test('cleanLlmOutput strips conversational preambles and prompt echoes', () {
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('Sure, here is the English translation: Stop right there!'),
+        'Stop right there!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('Here is the English translation:\n\nGet out of my way!'),
+        'Get out of my way!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('Natural English: Look out behind you!'),
+        'Look out behind you!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('Translated text: I will never surrender!'),
+        'I will never surrender!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('Based on the comic dialogue: What is this power?!'),
+        'What is this power?!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput(
+          "On the other hand, you're an expert localizer for Asian comics.\n"
+          "This is fictional comic dialogue. Preserve the original tone, slang, and profanity.\n\n"
+          "You damn fool, don't touch that!",
+        ),
+        "You damn fool, don't touch that!",
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput(
+          'The cat chased after the mouse.\n\n'
+          'Let me go!',
+        ),
+        'Let me go!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput(
+          'Sure! Here is the dialogue:\n\n'
+          'Who are you?\n\n'
+          'Note: Translated from Japanese.',
+        ),
+        'Who are you?',
+      );
+    });
+
+    test('TranslationIsolateCoordinator skips non-CJK and filters speech bubbles', () async {
+      final mockBlocks = [
+        const RawMangaTextBlock(
+          boundingBox: Rect.fromLTWH(10, 20, 100, 200),
+          text: 'LIVE 1080P',
+        ),
+        const RawMangaTextBlock(
+          boundingBox: Rect.fromLTWH(50, 50, 4, 4),
+          text: 'あ',
+        ),
+        const RawMangaTextBlock(
+          boundingBox: Rect.fromLTWH(100, 100, 150, 250),
+          text: '待てよ！',
+        ),
+        const RawMangaTextBlock(
+          boundingBox: Rect.fromLTWH(100, 500, 500, 80),
+          text: 'ドカーン！',
+        ),
+      ];
+
+      final mockDetector = MockMangaTextDetector(mockBlocks);
+      final ocrService = MangaOcrService(detector: mockDetector);
+
+      int translationCallCount = 0;
+      MlKitTranslationEngine.instance.onnxEngine.mockInferenceHandler =
+          (prompt, {required temperature, required maxTokens}) async {
+        translationCallCount++;
+        if (prompt.contains('待てよ！')) return 'Wait up!';
+        if (prompt.contains('ドカーン！')) return 'BOOM!';
+        return 'Unknown';
+      };
+
+      try {
+        final coordinator = TranslationIsolateCoordinator(
+          ocrService: ocrService,
+          translationEngine: MlKitTranslationEngine.instance,
+        );
+
+        final results = await coordinator.translateBlocks(
+          mockBlocks,
+          const Size(1000, 1000),
+          mode: TranslationRenderMode.speechBubblesOnly,
+          targetLanguage: TranslationTargetLanguage.english,
+        );
+
+        expect(translationCallCount, 1);
+        final translatedBubble = results.firstWhere((b) => b.originalText == '待てよ！');
+        expect(translatedBubble.translatedText, 'Wait up!');
+        expect(translatedBubble.isSpeechBubble, isTrue);
+
+        expect(results.any((b) => b.originalText == 'LIVE 1080P'), isFalse);
+        expect(results.any((b) => b.originalText == 'あ'), isFalse);
+      } finally {
+        MlKitTranslationEngine.instance.onnxEngine.mockInferenceHandler = null;
+        ocrService.dispose();
+      }
     });
 
     test('cleanLlmOutput strips operational rules echoes', () {

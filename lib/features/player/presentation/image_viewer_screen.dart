@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
-import 'package:flutter/rendering.dart';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -179,9 +179,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   final Set<int> _activePointers = {};
   final ValueNotifier<bool> _isSwipingPage = ValueNotifier<bool>(false);
   late bool _isMangaMode;
-  late final ScrollController _mangaScrollController;
-  final GlobalKey _mangaListKey = GlobalKey();
-  RenderSliverMultiBoxAdaptor? _cachedMangaSliver;
+  late final PageController _mangaPageController;
+
+
   TranslationRenderMode? _translationMode;
   final TranslationSourceLanguage _translationLanguage =
       TranslationSourceLanguage.auto;
@@ -196,27 +196,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         .toList();
   }
 
-  RenderSliverMultiBoxAdaptor? _getMangaSliver() {
-    if (_cachedMangaSliver != null && _cachedMangaSliver!.attached) {
-      return _cachedMangaSliver;
-    }
-    final ro = _mangaListKey.currentContext?.findRenderObject();
-    if (ro == null) return null;
-    RenderSliverMultiBoxAdaptor? found;
-    void search(RenderObject obj) {
-      if (obj is RenderSliverMultiBoxAdaptor) {
-        found = obj;
-        return;
-      }
-      obj.visitChildren((child) {
-        if (found == null) search(child);
-      });
-    }
 
-    search(ro);
-    _cachedMangaSliver = found;
-    return found;
-  }
 
   late final TranslationIsolateCoordinator _translationCoordinator;
   Timer? _slideshowTimer;
@@ -437,8 +417,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             .clamp(0, _cachedMangaList.length - 1)
         : 0;
     _activeMangaPageNotifier = ValueNotifier<int>(initialActive);
-    _mangaScrollController = ScrollController();
-    _mangaScrollController.addListener(_onMangaScroll);
+    _mangaPageController = PageController(initialPage: initialActive);
     _translationCoordinator = TranslationIsolateCoordinator();
 
     if (_isMangaMode && widget.initialIndex > 0) {
@@ -530,8 +509,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   void dispose() {
     _activeMangaPageNotifier.dispose();
     _translationCoordinator.dispose();
-    _mangaScrollController.removeListener(_onMangaScroll);
-    _mangaScrollController.dispose();
+    _mangaPageController.dispose();
     _stopSlideshow();
     final notifier = _activeMediaNotifier;
     if (notifier != null) {
@@ -557,92 +535,31 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     super.dispose();
   }
 
-  void _onMangaScroll() {
+  void _triggerMangaTranslationForActivePage() {
+    _translationCoordinator.cancelPending();
+    if (_translationMode == null) return;
     final mangaList = _mangaItems;
-    if (!_mangaScrollController.hasClients || mangaList.isEmpty) return;
-    final position = _mangaScrollController.position;
-    final offset = position.pixels;
-    final maxScroll = position.maxScrollExtent;
-    final viewportHeight = position.viewportDimension;
+    final activeIdx = _activeMangaPageNotifier.value;
+    if (activeIdx < 0 || activeIdx >= mangaList.length) return;
 
-    int activeMangaIndex = 0;
+    final it = mangaList[activeIdx];
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final w = (it.width != null && it.width! > 0)
+        ? it.width!.toDouble()
+        : screenWidth;
+    final h = (it.height != null && it.height! > 0)
+        ? it.height!.toDouble()
+        : screenHeight;
 
-    if (maxScroll > 0 && offset >= maxScroll - 24.0) {
-      activeMangaIndex = mangaList.length - 1;
-    } else if (offset <= 24.0) {
-      activeMangaIndex = 0;
-    } else {
-      final sliver = _getMangaSliver();
-      int? foundIndex;
-      if (sliver != null && sliver.attached) {
-        final focalLine = offset + (viewportHeight * 0.35).clamp(60.0, 300.0);
-        int? fallbackIndex;
-
-        RenderBox? child = sliver.firstChild;
-        while (child != null) {
-          final parentData = child.parentData;
-          if (parentData is SliverMultiBoxAdaptorParentData &&
-              parentData.layoutOffset != null &&
-              parentData.index != null) {
-            final layoutOffset = parentData.layoutOffset!;
-            final childBottom = layoutOffset + child.size.height;
-            final idx = parentData.index!;
-
-            if (focalLine >= layoutOffset && focalLine < childBottom) {
-              foundIndex = idx;
-              break;
-            }
-
-            if (fallbackIndex == null &&
-                childBottom > offset &&
-                layoutOffset < offset + viewportHeight) {
-              fallbackIndex = idx;
-            }
-          }
-          child = sliver.childAfter(child);
-        }
-        foundIndex ??= fallbackIndex;
-      }
-
-      if (foundIndex != null &&
-          foundIndex >= 0 &&
-          foundIndex < mangaList.length) {
-        activeMangaIndex = foundIndex;
-      } else if (maxScroll > 0) {
-        activeMangaIndex = ((mangaList.length - 1) * (offset / maxScroll))
-            .round()
-            .clamp(0, mangaList.length - 1);
-      }
-    }
-
-    final activeItem = mangaList[activeMangaIndex];
-    final globalIndex = widget.items.indexOf(activeItem);
-
-    if (globalIndex != -1 && globalIndex != _current) {
-      _current = globalIndex;
-      _activeMediaNotifier?.state = activeItem.id;
-    }
-    if (_activeMangaPageNotifier.value != activeMangaIndex) {
-      _activeMangaPageNotifier.value = activeMangaIndex;
-    }
-
-    if (_isMangaMode && _translationMode != null) {
-      final it = mangaList[activeMangaIndex];
-      final screenWidth = MediaQuery.sizeOf(context).width;
-      final w = (it.width != null && it.width! > 0)
-          ? it.width!.toDouble()
-          : screenWidth;
-      final h = (it.height != null && it.height! > 0)
-          ? it.height!.toDouble()
-          : screenWidth;
-      _translationCoordinator.scheduleTranslation(
-        imagePath: it.path,
-        imageSize: Size(w, h),
-        mode: _translationMode!,
-        language: _translationLanguage,
-        targetLanguage: _translationTargetLanguage,
-      );
-    }
+    _translationCoordinator.scheduleTranslation(
+      imagePath: it.path,
+      imageSize: Size(w, h),
+      mode: _translationMode!,
+      language: _translationLanguage,
+      targetLanguage: _translationTargetLanguage,
+      debounceDuration: const Duration(milliseconds: 300),
+    );
   }
 
   Future<void> _setTranslationMode(TranslationRenderMode? mode) async {
@@ -669,7 +586,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           icon: Icons.info_outline_rounded,
         );
       }
-      _onMangaScroll();
+      _triggerMangaTranslationForActivePage();
     } else {
       _translationCoordinator.cancelPending();
     }
@@ -1364,31 +1281,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   void _scrollToCurrentInManga() {
     final mangaList = _mangaItems;
-    if (!_mangaScrollController.hasClients || mangaList.isEmpty) return;
+    if (!_mangaPageController.hasClients || mangaList.isEmpty) return;
     final currentItem = _currentItem;
     int mangaIdx = mangaList.indexOf(currentItem);
     if (mangaIdx < 0) mangaIdx = 0;
-    if (mangaIdx == 0) return;
-
-    final maxScroll = _mangaScrollController.position.maxScrollExtent;
-    if (mangaIdx == mangaList.length - 1 && maxScroll > 0) {
-      _mangaScrollController.jumpTo(maxScroll);
-      return;
-    }
-
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    double targetOffset = 0.0;
-    for (int i = 0; i < mangaIdx; i++) {
-      final it = mangaList[i];
-      final ar = (it.width != null &&
-              it.height != null &&
-              it.width! > 0 &&
-              it.height! > 0)
-          ? (it.width! / it.height!)
-          : 0.7; // Portrait manga fallback
-      targetOffset += screenWidth / ar;
-    }
-    _mangaScrollController.jumpTo(targetOffset.clamp(0.0, maxScroll));
+    _mangaPageController.jumpToPage(mangaIdx);
   }
 
   void _toggleMangaMode() {
@@ -1414,6 +1311,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToCurrentInManga();
+        _triggerMangaTranslationForActivePage();
       });
     }
   }
@@ -1423,19 +1321,26 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _toggleBars,
-      child: ListView.builder(
-        key: _mangaListKey,
-        controller: _mangaScrollController,
-        padding: EdgeInsets.zero,
-        scrollCacheExtent: const ScrollCacheExtent.pixels(2500.0),
+      child: PageView.builder(
+        controller: _mangaPageController,
         physics: const BouncingScrollPhysics(),
         itemCount: mangaList.length,
+        onPageChanged: (index) {
+          _activeMangaPageNotifier.value = index;
+          final globalIndex = widget.items.indexOf(mangaList[index]);
+          if (globalIndex != -1 && globalIndex != _current) {
+            _current = globalIndex;
+            _activeMediaNotifier?.state = mangaList[index].id;
+          }
+          _triggerMangaTranslationForActivePage();
+        },
         itemBuilder: (context, index) {
           final it = mangaList[index];
           Widget imageWidget = Image(
             image: screenDisplayImage(it.path),
-            fit: BoxFit.fitWidth,
+            fit: BoxFit.contain,
             width: double.infinity,
+            height: double.infinity,
             gaplessPlayback: true,
             filterQuality: FilterQuality.medium,
             frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
@@ -1451,21 +1356,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             ),
           );
 
-          if (it.width != null &&
-              it.height != null &&
-              it.width! > 0 &&
-              it.height! > 0) {
-            final ar = it.width! / it.height!;
-            if (ar > 0.1 && ar < 5.0) {
-              imageWidget = AspectRatio(
-                aspectRatio: ar,
-                child: imageWidget,
-              );
-            }
-          }
-
-          return RepaintBoundary(
+          return InteractiveViewer(
+            minScale: 1.0,
+            maxScale: 4.0,
             child: Stack(
+              fit: StackFit.expand,
               children: [
                 imageWidget,
                 if (_translationMode != null)

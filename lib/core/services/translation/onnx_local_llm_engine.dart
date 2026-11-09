@@ -306,6 +306,20 @@ class OnnxLocalLlmEngine {
         '</user>';
   }
 
+  static final RegExp _cjkRegex = RegExp(
+    r'[\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]',
+  );
+
+  /// Returns true if [text] contains CJK characters:
+  /// - Hiragana (\u3040-\u309F)
+  /// - Katakana (\u30A0-\u30FF, \uFF65-\uFF9F)
+  /// - CJK Unified / Compatibility Ideographs (\u3400-\u4DBF, \u4E00-\u9FFF, \uF900-\uFAFF)
+  /// - Hangul (\uAC00-\uD7AF, \u1100-\u11FF, \u3130-\u318F)
+  static bool hasCjkCharacters(String text) {
+    if (text.isEmpty) return false;
+    return _cjkRegex.hasMatch(text);
+  }
+
   static String resolveLanguageName(
     TranslationSourceLanguage source, [
     String? sampleText,
@@ -376,7 +390,21 @@ class OnnxLocalLlmEngine {
     );
     text = text.replaceAll(
       RegExp(
-        r'You are an expert localizer for Asian comics[^\n]*\n?',
+        r'(?:On the other hand,\s*)?You are an expert localizer for Asian comics[^\n]*\n?',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    text = text.replaceAll(
+      RegExp(
+        r'This is fictional comic dialogue[^\n]*\n?',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    text = text.replaceAll(
+      RegExp(
+        r'Preserve the original tone, slang, and profanity[^\n]*\n?',
         caseSensitive: false,
       ),
       '',
@@ -390,7 +418,21 @@ class OnnxLocalLlmEngine {
     );
     text = text.replaceAll(
       RegExp(
+        r'Fix OCR typos[^\n]*\n?',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    text = text.replaceAll(
+      RegExp(
         r'You are a specialized,\s*strictly objective machine translation engine[^\n]*\n?',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    text = text.replaceAll(
+      RegExp(
+        r'Translate the raw OCR text from[^\n]*\n?',
         caseSensitive: false,
       ),
       '',
@@ -401,6 +443,16 @@ class OnnxLocalLlmEngine {
         caseSensitive: false,
         multiLine: true,
       ),
+      '',
+    );
+
+    // Strip hallucinated storytelling filler (e.g. "The cat chased after the mouse...", "The Legend of the Dragon...")
+    text = text.replaceAll(
+      RegExp(r'The cat chased after the mouse[^\n]*\n?', caseSensitive: false),
+      '',
+    );
+    text = text.replaceAll(
+      RegExp(r'The Legend of the Dragon[^\n]*\n?', caseSensitive: false),
       '',
     );
 
@@ -424,20 +476,50 @@ class OnnxLocalLlmEngine {
     // 6. Strip common chat preambles and introductory phrases.
     text = text.replaceAll(
       RegExp(
-        r'^\s*(?:here\s+(?:is|are)\s+the\s+(?:final\s+)?(?:english\s+)?translation\s*(?:is)?\s*:|the\s+english\s+translation\s+is\s*:|english\s+translation\s*:|translation\s*to\s*english\s*:|translation\s*:|dialogue\s*:|output\s*:)\s*',
+        r'^\s*(?:sure(?: thing)?[!,.]?\s*)?(?:here\s+(?:is|are)\s+the\s+(?:final\s+)?(?:english\s+)?(?:comic\s+)?(?:dialogue|translation)\s*(?:is)?\s*:|the\s+english\s+translation\s+is\s*:|english\s+translation\s*:|translation\s*to\s*english\s*:|natural\s+english\s*:|translated\s+text\s*:|based\s+on\s+the\s+comic\s+dialogue\s*,?\s*:?|translation\s*:|dialogue\s*:|output\s*:)\s*',
         caseSensitive: false,
       ),
       '',
     );
     text = text.replaceAll(
       RegExp(
-        r'^\s*(?:here\s+(?:is|are)\s+the\s+(?:final\s+)?(?:english\s+)?translation\s*(?:is)?|the\s+english\s+translation\s+is|english\s+translation|translation\s*to\s*english|translation|dialogue|output)\s*:\s*\n+',
+        r'^\s*(?:sure(?: thing)?[!,.]?\s*)?(?:here\s+(?:is|are)\s+the\s+(?:final\s+)?(?:english\s+)?(?:comic\s+)?(?:dialogue|translation)\s*(?:is)?|the\s+english\s+translation\s+is|english\s+translation|translation\s*to\s*english|natural\s+english|translated\s+text|based\s+on\s+the\s+comic\s+dialogue|translation|dialogue|output)\s*:\s*\n+',
         caseSensitive: false,
       ),
       '',
     );
 
-    // 7. Strip surrounding quotation marks if entire line is quoted.
+    // 7. If output has multiple paragraphs (separated by \n\n), pick only the translated dialogue paragraph.
+    if (text.contains('\n\n')) {
+      final paragraphs = text
+          .split(RegExp(r'\n\s*\n+'))
+          .map((p) => p.trim())
+          .where((p) => p.isNotEmpty)
+          .toList();
+
+      final filtered = paragraphs.where((p) {
+        final lower = p.toLowerCase();
+        if (lower.startsWith('note:') ||
+            lower.startsWith('explanation:') ||
+            lower.startsWith('here is') ||
+            lower.startsWith('sure') ||
+            lower.startsWith('based on') ||
+            lower.contains('expert localizer') ||
+            lower.contains('comic dialogue') ||
+            lower.contains('ocr typos')) {
+          return false;
+        }
+        return true;
+      }).toList();
+
+      if (filtered.isNotEmpty) {
+        text = filtered.first;
+      } else if (paragraphs.isNotEmpty) {
+        text = paragraphs.first;
+      }
+    }
+
+    // 8. Strip surrounding quotation marks if entire line is quoted.
     text = text.trim();
     if ((text.startsWith('"') && text.endsWith('"') && text.length >= 2) ||
         (text.startsWith("'") && text.endsWith("'") && text.length >= 2) ||
@@ -794,8 +876,17 @@ class OnnxLocalLlmEngine {
       return cleaned;
     }
 
+    if (!hasCjkCharacters(cleaned)) {
+      return cleaned;
+    }
+
     final effectiveTemperature = constrainTemperature(temperature);
     final effectiveMaxTokens = constrainMaxTokens(maxTokens);
+    final cjkCount = cleaned.runes
+        .where((r) => hasCjkCharacters(String.fromCharCode(r)))
+        .length;
+    final int targetTokens =
+        (cjkCount * 2 + 16).clamp(16, effectiveMaxTokens);
     final languageName = resolveLanguageName(source, cleaned);
     final prompt = buildPrompt(
       language: languageName,
@@ -807,7 +898,7 @@ class OnnxLocalLlmEngine {
       final rawResult = await mockInferenceHandler!(
         prompt,
         temperature: effectiveTemperature,
-        maxTokens: effectiveMaxTokens,
+        maxTokens: targetTokens,
       );
       return cleanLlmOutput(rawResult);
     }
@@ -823,7 +914,7 @@ class OnnxLocalLlmEngine {
         final nativeOutput = await _runNativeInference(
           prompt: prompt,
           temperature: effectiveTemperature,
-          maxTokens: effectiveMaxTokens,
+          maxTokens: targetTokens,
         );
         if (nativeOutput.isNotEmpty) {
           return cleanLlmOutput(nativeOutput);
@@ -1042,6 +1133,7 @@ class OnnxLocalLlmEngine {
     required double temperature,
     required int maxTokens,
     required Set<int> eosTokenIds,
+    Set<int> newlineTokenIds = const <int>{198, 271},
   }) {
     // Ensure OrtEnv singleton in this isolate has its FFI bindings ready.
     // Note: Do not call OrtEnv.instance.init() if the native process already has an environment,
@@ -1245,6 +1337,29 @@ class OnnxLocalLlmEngine {
           break;
         }
 
+        // Early stop: newline after producing dialogue tokens
+        if (generatedTokenIds.length >= 2 &&
+            newlineTokenIds.contains(nextToken)) {
+          break;
+        }
+
+        // Early stop: repetitive single token (3 in a row)
+        if (generatedTokenIds.length >= 2 &&
+            generatedTokenIds.last == nextToken &&
+            generatedTokenIds[generatedTokenIds.length - 2] == nextToken) {
+          break;
+        }
+
+        // Early stop: repetitive 2-token cycle (e.g. A B A B)
+        if (generatedTokenIds.length >= 4 &&
+            generatedTokenIds[generatedTokenIds.length - 1] ==
+                generatedTokenIds[generatedTokenIds.length - 3] &&
+            generatedTokenIds[generatedTokenIds.length - 2] ==
+                generatedTokenIds[generatedTokenIds.length - 4] &&
+            nextToken == generatedTokenIds[generatedTokenIds.length - 2]) {
+          break;
+        }
+
         generatedTokenIds.add(nextToken);
       }
     } finally {
@@ -1291,6 +1406,13 @@ class OnnxLocalLlmEngine {
         _tokenizer!.eosTokenId,
       };
 
+      final Set<int> newlineTokenIds = <int>{
+        198, // Qwen \n
+        271, // Qwen \n\n
+        if (_tokenizer != null) ..._tokenizer!.encode('\n'),
+        if (_tokenizer != null) ..._tokenizer!.encode('\n\n'),
+      };
+
       final List<int> generatedTokenIds = await Isolate.run<List<int>>(
         () => _generateTokensInIsolate(
           sessionAddress: sessionAddress,
@@ -1298,6 +1420,7 @@ class OnnxLocalLlmEngine {
           temperature: temperature,
           maxTokens: effectiveMaxTokens,
           eosTokenIds: eosTokenIds,
+          newlineTokenIds: newlineTokenIds,
         ),
       );
 
