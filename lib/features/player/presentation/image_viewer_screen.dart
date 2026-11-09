@@ -692,14 +692,19 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return FutureBuilder<AllModelsStatus>(
-              future: MlKitTranslationEngine.instance.checkAllModelsStatus(),
+            return FutureBuilder<ModelPairStatus>(
+              future: MlKitTranslationEngine.instance.getPairStatus(
+                _translationLanguage,
+                _translationTargetLanguage,
+              ),
               builder: (context, snapshot) {
-                final allStatus = snapshot.data ??
-                    const AllModelsStatus(
-                      missingLanguages: [],
-                      downloadedLanguages: [],
-                      totalNeededMb: 150.0,
+                final pairStatus = snapshot.data ??
+                    const ModelPairStatus(
+                      sourceDownloaded: false,
+                      targetDownloaded: false,
+                      sourceLangName: '',
+                      targetLangName: '',
+                      totalNeededMb: 60.0,
                       isReady: false,
                     );
                 final isModelLoading =
@@ -779,9 +784,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   selected: _translationLanguage ==
                                       TranslationSourceLanguage.auto,
                                   onTap: () {
-                                    setSheetState(() {});
                                     _setTranslationLanguage(
                                         TranslationSourceLanguage.auto);
+                                    setSheetState(() {});
                                   },
                                 ),
                                 const SizedBox(width: 8),
@@ -790,9 +795,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   selected: _translationLanguage ==
                                       TranslationSourceLanguage.japanese,
                                   onTap: () {
-                                    setSheetState(() {});
                                     _setTranslationLanguage(
                                         TranslationSourceLanguage.japanese);
+                                    setSheetState(() {});
                                   },
                                 ),
                                 const SizedBox(width: 8),
@@ -801,9 +806,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   selected: _translationLanguage ==
                                       TranslationSourceLanguage.korean,
                                   onTap: () {
-                                    setSheetState(() {});
                                     _setTranslationLanguage(
                                         TranslationSourceLanguage.korean);
+                                    setSheetState(() {});
                                   },
                                 ),
                                 const SizedBox(width: 8),
@@ -812,9 +817,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   selected: _translationLanguage ==
                                       TranslationSourceLanguage.chinese,
                                   onTap: () {
-                                    setSheetState(() {});
                                     _setTranslationLanguage(
                                         TranslationSourceLanguage.chinese);
+                                    setSheetState(() {});
                                   },
                                 ),
                               ],
@@ -841,9 +846,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 selected: _translationTargetLanguage ==
                                     TranslationTargetLanguage.indonesian,
                                 onTap: () {
-                                  setSheetState(() {});
                                   _setTranslationTargetLanguage(
                                       TranslationTargetLanguage.indonesian);
+                                  setSheetState(() {});
                                 },
                               ),
                               const SizedBox(width: 8),
@@ -852,9 +857,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 selected: _translationTargetLanguage ==
                                     TranslationTargetLanguage.english,
                                 onTap: () {
-                                  setSheetState(() {});
                                   _setTranslationTargetLanguage(
                                       TranslationTargetLanguage.english);
+                                  setSheetState(() {});
                                 },
                               ),
                             ],
@@ -869,10 +874,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                             builder: (context, downloadProgress, _) {
                               final isDownloading = downloadProgress.isDownloading;
                               final hasError = !isDownloading &&
-                                  !allStatus.isReady &&
+                                  !pairStatus.isReady &&
                                   downloadProgress.errorMessage != null &&
                                   downloadProgress.errorMessage!.isNotEmpty;
-                              final isReady = allStatus.isReady && !isDownloading;
+                              final isReady = pairStatus.isReady && !isDownloading;
 
                               Color cardBg;
                               Color borderColor;
@@ -988,7 +993,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                     final success =
                                                         await MlKitTranslationEngine
                                                             .instance
-                                                            .downloadAllModelsWithProgress();
+                                                            .downloadPairWithProgress(
+                                                      _translationLanguage,
+                                                      _translationTargetLanguage,
+                                                    );
                                                     if (success && sheetContext.mounted) {
                                                       showFeedbackPill(
                                                         sheetContext,
@@ -1023,7 +1031,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                             onPressed: () async {
                                               final success =
                                                   await MlKitTranslationEngine.instance
-                                                      .downloadAllModelsWithProgress();
+                                                      .downloadPairWithProgress(
+                                                _translationLanguage,
+                                                _translationTargetLanguage,
+                                              );
                                               if (success && sheetContext.mounted) {
                                                 showFeedbackPill(
                                                   sheetContext,

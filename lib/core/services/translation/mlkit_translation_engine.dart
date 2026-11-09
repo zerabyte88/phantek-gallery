@@ -185,7 +185,7 @@ class MlKitTranslationEngine {
     }
   }
 
-  /// Downloads the on-device model for [lang] with a 90-second timeout.
+  /// Downloads the on-device model for [lang] with a 300-second (5 minutes) timeout.
   Future<bool> downloadLanguage(
     TranslateLanguage lang, {
     bool isWifiRequired = false,
@@ -196,7 +196,7 @@ class MlKitTranslationEngine {
             lang.bcpCode,
             isWifiRequired: isWifiRequired,
           )
-          .timeout(const Duration(seconds: 90));
+          .timeout(const Duration(seconds: 300));
     } catch (e) {
       debugPrint('Error downloading model for ${lang.name}: $e');
       return false;
@@ -282,11 +282,6 @@ class MlKitTranslationEngine {
     required String stepName,
     bool isWifiRequired = false,
   }) async {
-    // 0) Delete stale partial or corrupt model before downloading
-    try {
-      await _modelManager.deleteModel(lang.bcpCode);
-    } catch (_) {}
-
     downloadProgressNotifier.value = TranslationDownloadProgress(
       isDownloading: true,
       currentStep: stepName,
@@ -297,10 +292,9 @@ class MlKitTranslationEngine {
 
     final completer = Completer<bool>();
     final stopwatch = Stopwatch()..start();
-    OnDeviceTranslator? fallbackTranslator;
 
     // 1) Simulated progress timer: realistic increments over ~25s up to 95%,
-    // then smooth creep from 95% to 99% until 90s so UI never freezes at 28.5 MB.
+    // then smooth creep from 95% to 99% until 300s so UI never freezes.
     final progressTimer = Timer.periodic(const Duration(milliseconds: 250), (t) {
       if (completer.isCompleted) {
         t.cancel();
@@ -311,7 +305,7 @@ class MlKitTranslationEngine {
       if (elapsedMs <= 25000) {
         stepFraction = (elapsedMs / 25000.0) * 0.95;
       } else {
-        final creepProgress = ((elapsedMs - 25000) / 65000.0).clamp(0.0, 1.0);
+        final creepProgress = ((elapsedMs - 25000) / 275000.0).clamp(0.0, 1.0);
         stepFraction = 0.95 + (0.04 * creepProgress);
       }
       stepFraction = stepFraction.clamp(0.0, 0.99);
@@ -340,34 +334,14 @@ class MlKitTranslationEngine {
       } catch (_) {}
     });
 
-    // 3) Dual download trigger: at 5s, activate native downloadModelIfNeeded() via translateText('.')
-    final dualDownloadTimer = Timer(const Duration(seconds: 5), () {
-      if (completer.isCompleted) return;
-      try {
-        final pairTarget = (lang == TranslateLanguage.english)
-            ? TranslateLanguage.indonesian
-            : TranslateLanguage.english;
-        fallbackTranslator = OnDeviceTranslator(
-          sourceLanguage: lang,
-          targetLanguage: pairTarget,
-        );
-        unawaited(
-          fallbackTranslator!
-              .translateText('.')
-              .then((_) {})
-              .catchError((_) {}),
-        );
-      } catch (_) {}
-    });
-
-    // 4) Master 90s timeout guard
-    final timeoutTimer = Timer(const Duration(seconds: 90), () {
+    // 3) Master 300s (5-minute) timeout guard
+    final timeoutTimer = Timer(const Duration(seconds: 300), () {
       if (!completer.isCompleted) {
         completer.complete(false);
       }
     });
 
-    // 5) Primary download trigger via model manager
+    // 4) Primary download trigger via model manager
     downloadLanguage(lang, isWifiRequired: isWifiRequired)
         .then((success) {
           if (success && !completer.isCompleted) {
@@ -381,15 +355,8 @@ class MlKitTranslationEngine {
     final success = await completer.future;
     progressTimer.cancel();
     pollTimer.cancel();
-    dualDownloadTimer.cancel();
     timeoutTimer.cancel();
     stopwatch.stop();
-
-    if (fallbackTranslator != null) {
-      try {
-        await fallbackTranslator!.close();
-      } catch (_) {}
-    }
 
     if (success) {
       final completedMb = stepBaseMb + stepTotalMb;
