@@ -1,9 +1,9 @@
 <div align="center">
   <img src="assets/app_icon_readme.png" alt="Phantek Gallery" width="120" />
 
-  # Phantek - Gallery
+  # Phantek Gallery
 
-  **Fast, privacy-focused offline-first photo & video gallery for Android with PSD layer support and on-device AI manga translation.**
+  **A fast, privacy-focused Android gallery with PSD layer support and on-device AI manga translation.**
 
   [![Version](https://img.shields.io/badge/Version-v2.15.0-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
@@ -16,19 +16,35 @@
 
 ---
 
+## Overview
+
+Phantek Gallery is a local-first gallery for photos, videos, PSD files, and manga. Your media stays on your device: there is no tracking, no telemetry, and no cloud sync. The only network access is a one-time download of the translation language models (about 30 MB), which you start yourself. After that, everything works offline.
+
+---
+
 ## Features
 
-- **Ultra-Fast Media Grid** : Native hardware thumbnail acceleration via `MediaStore.loadThumbnail` (1–2ms), in-memory cache indexing, and isolate-backed decoding for smooth 120Hz scrolling.
-- **PSD Layer Viewer** : Full Adobe Photoshop (`.psd`) support with seekable embedded JPEG extraction (<1ms) and interactive layer visibility toggle sheet.
-- **Hardware Video Playback** : Powered by AndroidX Media3 / ExoPlayer with dual SurfaceView pipeline for smooth 2K & 4K playback, double-tap seek, smart zoom, gesture controls for brightness and volume, and playback position resume.
-- **Manga Reader & Natural Sort** : Continuous vertical reader mode with edge-to-edge view, chapter progress pills, and natural album/chapter sorting (`Chapter 1`, `1.1`, `2.1`, `10`, `25`).
-- **On-Device AI Manga Translation** : Real-time text detection & on-device machine translation for Japanese, Korean, and Chinese manga into Indonesian or English (US) via Google ML Kit. Models are downloaded on-demand once and executed locally on-device.
-- **Recycle Bin & Safe Deletion** : Staged `.trash` bin with configurable auto-purge (7, 14, 30 days or never) and batch restore/permanent delete.
-- **Privacy & Security** : Enforce Android `FLAG_SECURE` to block screenshots, screen recordings, and blur recent apps switcher previews.
-- **EXIF & Media Inspector** : Detailed technical metadata for photos (ISO, aperture, focal length, resolution) and videos (bitrate, fps, codec, channels).
-- **Custom Visual Themes** : 6 hand-crafted visual themes (*Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, *Sakura*) with dynamic artistic headers.
-- **Multilingual Support** : Complete localization across 22 languages with instant runtime switching without app restart.
-- **Offline-First & Privacy-Focused** : Zero user tracking, zero telemetry, and zero cloud sync. Media files never leave your device. Network access is strictly limited to downloading on-device translation language models (or developer avatar) upon explicit user request.
+### Gallery and Viewing
+
+- **Fast Media Grid**: Hardware-accelerated thumbnails through `MediaStore.loadThumbnail` (1–2 ms), in-memory cache indexing, and isolate-backed decoding for smooth scrolling up to 120 Hz.
+- **PSD Layer Viewer**: Open Adobe Photoshop (`.psd`) files with instant seekable embedded-JPEG previews (under 1 ms) and a sheet for toggling individual layers on and off.
+- **Hardware Video Playback**: Built on AndroidX Media3 / ExoPlayer with a dual SurfaceView pipeline for smooth 2K and 4K playback. Includes double-tap seek, smart zoom, brightness and volume gestures, and playback position resume.
+- **EXIF and Media Inspector**: Technical details for photos (ISO, aperture, focal length, resolution) and videos (bitrate, fps, codec, channels).
+
+### Manga
+
+- **Manga Reader with Natural Sort**: Continuous vertical reading with an edge-to-edge view and chapter progress pills. Albums and chapters sort naturally (`Chapter 1`, `1.1`, `2.1`, `10`, `25`).
+- **On-Device AI Translation**: Detects text in Japanese, Korean, and Chinese manga and translates it into Indonesian or English (US) using Google ML Kit. Language models are downloaded once on demand, then run entirely on your device.
+
+### Privacy and Safety
+
+- **Local-First and Private**: No tracking, no telemetry, no cloud sync. Media files never leave your device. Network access is limited to downloading translation models (or the developer avatar) when you request it.
+- **Screen Protection**: Uses Android `FLAG_SECURE` to block screenshots and screen recordings, and to blur the recent apps preview.
+- **Recycle Bin**: A staged `.trash` folder with configurable auto-purge (7, 14, or 30 days, or never) and batch restore or permanent delete.
+
+### Personalization
+
+- **Visual Themes**: Six hand-crafted themes (*Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, *Sakura*) with dynamic artistic headers.
 
 ---
 
@@ -36,11 +52,11 @@
 
 <div align="center">
 
-| Type | Container / Extension | Codec / Details | Notes |
+| Type | Extension | Codec / Details | Notes |
 | :---: | :---: | :---: | :---: |
-| **Photos** | `.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, `.bmp` | Standard image decoders | EXIF metadata extraction and downsampled caching |
-| **Animation** | `.gif` | Multi-frame decoder | Frame-by-frame animation playback |
-| **Design** | `.psd` | Adobe Photoshop Document | Seekable embedded JPEG preview + per-layer toggle |
+| **Photos** | `.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, `.bmp` | Standard image decoders | EXIF extraction and downsampled caching |
+| **Animation** | `.gif` | Multi-frame decoder | Frame-by-frame playback |
+| **Design** | `.psd` | Adobe Photoshop Document | Embedded JPEG preview and per-layer toggle |
 | **Videos** | `.mp4`, `.mkv`, `.mov`, `.webm` | H.264, H.265 (HEVC), VP9, AV1 | Hardware accelerated via AndroidX Media3 / ExoPlayer |
 
 </div>
@@ -54,12 +70,12 @@
 | Layer | Package / Tool | Role |
 | :---: | :---: | :---: |
 | **Framework** | Flutter (Dart SDK `^3.5`) | UI rendering, animations, gestures, and localization |
-| **State Management** | `flutter_riverpod` (`^2.5.1`) | Reactive state management and dependency injection |
-| **Video Engine** | `video_player` (`^2.9.2`) | AndroidX Media3 / ExoPlayer hardware video playback |
-| **On-Device ML** | `google_mlkit_text_recognition`, `google_mlkit_translation` | Manga OCR detection & on-device neural machine translation |
+| **State Management** | `flutter_riverpod` (`^2.5.1`) | Reactive state and dependency injection |
+| **Video Engine** | `video_player` (`^2.9.2`) | Hardware video playback via AndroidX Media3 / ExoPlayer |
+| **On-Device ML** | `google_mlkit_text_recognition`, `google_mlkit_translation` | Manga text detection and on-device neural translation |
 | **Media Scanning** | `photo_manager`, `permission_handler` | Scoped storage media queries and permission handling |
-| **Native Bridge** | Kotlin MethodChannels | Android `FLAG_SECURE`, MediaStore thumbnail loader, FileProvider |
-| **Storage & Caching** | `shared_preferences`, `path_provider` | Key-value settings persistence and thumbnail disk caching |
+| **Native Bridge** | Kotlin MethodChannels | `FLAG_SECURE`, MediaStore thumbnail loader, FileProvider |
+| **Storage and Caching** | `shared_preferences`, `path_provider` | Settings persistence and thumbnail disk cache |
 
 </div>
 
@@ -72,11 +88,11 @@
 | Permission | Purpose |
 | :--- | :--- |
 | `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` | Access photos and videos on Android 13+ (API 33+) |
-| `READ_MEDIA_VISUAL_USER_SELECTED` | User-selected partial media access on Android 14+ (API 34+) |
+| `READ_MEDIA_VISUAL_USER_SELECTED` | Partial, user-selected media access on Android 14+ (API 34+) |
 | `READ_EXTERNAL_STORAGE` / `WRITE_EXTERNAL_STORAGE` | Storage access on Android 12 and below |
-| `MANAGE_EXTERNAL_STORAGE` | Direct file manipulation for `.trash` recycle bin management |
-| `ACCESS_MEDIA_LOCATION` | Read geographic and EXIF location metadata from camera photos |
-| `INTERNET` | One-time model download for on-device ML Kit translation and loading developer avatar |
+| `MANAGE_EXTERNAL_STORAGE` | Direct file handling for the `.trash` recycle bin |
+| `ACCESS_MEDIA_LOCATION` | Read location metadata from camera photos |
+| `INTERNET` | One-time download of ML Kit translation models and the developer avatar |
 
 </div>
 
@@ -87,23 +103,23 @@
 ### Prerequisites
 
 - Flutter SDK `^3.5`
-- Android SDK & Java 17+
+- Android SDK and Java 17+
 
 ### Steps
 
 ```bash
-# Clone repository
+# Clone the repository
 git clone https://github.com/zerabyte88/phantek-gallery.git
 cd phantek-gallery
 
 # Install dependencies
 flutter pub get
 
-# Build 64-bit release APK
+# Build a 64-bit release APK
 flutter build apk --release --target-platform android-arm64
 ```
 
-Compiled binary (64-bit ARM) : `build/app/outputs/flutter-apk/app-release.apk`
+The compiled APK (arm64-v8a) is created at `build/app/outputs/flutter-apk/app-release.apk`.
 
 ---
 
@@ -111,4 +127,4 @@ Compiled binary (64-bit ARM) : `build/app/outputs/flutter-apk/app-release.apk`
 
 This project is open-source software licensed under the **[MIT License](LICENSE)**.
 
-Third-party components (AndroidX Media3, Flutter, and bundled plugins) are subject to their respective open-source licenses (Apache 2.0, BSD, MIT) and can be inspected in-app under **Settings > About > License**.
+Third-party components (AndroidX Media3, Flutter, and bundled plugins) are subject to their own open-source licenses (Apache 2.0, BSD, MIT), which can be viewed in the app under **Settings > About > License**.
