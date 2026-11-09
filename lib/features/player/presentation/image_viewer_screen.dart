@@ -29,7 +29,7 @@ import '../../../core/services/translation/mlkit_translation_engine.dart';
 import '../../../core/services/translation/translation_isolate_coordinator.dart';
 import 'widgets/manga_translation_overlay.dart';
 import '../../../core/services/settings_service.dart';
-import '../../../core/services/translation/onnx_local_llm_engine.dart';
+import '../../../core/services/translation/gguf_local_llm_engine.dart';
 
 // 4096px cap fits imageCache while staying sharp up to 3x zoom.
 ImageProvider displayImage(String path, {int maxDimension = 4096}) =>
@@ -568,12 +568,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     });
     if (mode != null && _mangaItems.isNotEmpty) {
       if (!MlKitTranslationEngine.instance.isLocalLlmReady) {
-        await MlKitTranslationEngine.instance.onnxEngine.initializeSession();
+        await MlKitTranslationEngine.instance.ggufEngine.initializeSession();
         if (!MlKitTranslationEngine.instance.isLocalLlmReady && mounted) {
           showFeedbackPill(
             context,
             message: MlKitTranslationEngine.instance.lastStatusMessage ??
-                'No AI model found. Place .onnx in /storage/emulated/0/models/',
+                'No AI model found. Place .gguf in /storage/emulated/0/models/',
             icon: Icons.info_outline_rounded,
           );
         }
@@ -608,9 +608,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         return StatefulBuilder(
           builder: (context, setSheetState) {
             if (!MlKitTranslationEngine.instance.isLocalLlmReady &&
-                !OnnxLocalLlmEngine.instance.isInitializing &&
+                !GgufLocalLlmEngine.instance.isInitializing &&
                 MlKitTranslationEngine.instance.lastStatusMessage == null) {
-              OnnxLocalLlmEngine.instance.initializeSession().then((_) {
+              GgufLocalLlmEngine.instance.initializeSession().then((_) {
                 if (sheetContext.mounted) {
                   setSheetState(() {});
                 }
@@ -672,13 +672,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
                           // Section 3: Offline Model Status Card
                           FutureBuilder<bool>(
-                            future: OnnxLocalLlmEngine.isStoragePermissionGranted(),
+                            future: GgufLocalLlmEngine.isStoragePermissionGranted(),
                             builder: (context, permSnapshot) {
                               final hasStoragePerm = permSnapshot.data ?? true;
                               final isReady =
                                   MlKitTranslationEngine.instance.isLocalLlmReady;
                               final isInitializing =
-                                  OnnxLocalLlmEngine.instance.isInitializing;
+                                  GgufLocalLlmEngine.instance.isInitializing;
                               final lastStatus =
                                   MlKitTranslationEngine.instance.lastStatusMessage;
 
@@ -738,9 +738,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                               Text(
                                                 isReady
                                                     ? (lastStatus ??
-                                                        'qwen2.5-0.5b-instruct-abliterated-q4.onnx')
+                                                        'qwen2.5-0.5b-instruct-abliterated.q4_k_m.gguf')
                                                     : (lastStatus ??
-                                                        'Letakkan file .onnx di /storage/emulated/0/models/'),
+                                                        'Letakkan file .gguf di /storage/emulated/0/models/'),
                                                 style: TextStyle(
                                                   color: Colors.white
                                                       .withValues(alpha: 0.65),
@@ -814,11 +814,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                               ),
                                               onPressed: () async {
                                                 final granted =
-                                                    await OnnxLocalLlmEngine
+                                                    await GgufLocalLlmEngine
                                                         .requestStoragePermission();
                                                 if (granted) {
                                                   await MlKitTranslationEngine
-                                                      .instance.onnxEngine
+                                                      .instance.ggufEngine
                                                       .initializeSession();
                                                   if (sheetContext.mounted) {
                                                     showFeedbackPill(
@@ -1060,7 +1060,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                     ),
                     const SizedBox(height: 14),
                     FutureBuilder<List<DiscoveredAiModel>>(
-                      future: OnnxLocalLlmEngine.scanAvailableModels(),
+                      future: GgufLocalLlmEngine.scanAvailableModels(),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
                           return const Padding(
@@ -1090,7 +1090,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Unduh model (.onnx) ke folder /storage/emulated/0/models/.',
+                                    'Unduh model (.gguf) ke folder /storage/emulated/0/models/.',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: Colors.white.withValues(alpha: 0.6),
@@ -1124,7 +1124,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   await SettingsService.instance.setActiveAiModelPath(
                                     model.path,
                                   );
-                                  await MlKitTranslationEngine.instance.onnxEngine.initializeSession(
+                                  await MlKitTranslationEngine.instance.ggufEngine.initializeSession(
                                     modelPath: model.path,
                                   );
                                   if (dialogContext.mounted) {

@@ -112,7 +112,7 @@ class SettingsModel extends Equatable {
   /// Prevent screenshots and hide app previews in recent tasks (FLAG_SECURE).
   final bool secureScreen;
 
-  /// Active offline ONNX LLM model file path for manga translation (empty for default auto-detect).
+  /// Active offline GGUF LLM model file path for manga translation (empty for default auto-detect).
   final String activeAiModelPath;
 
   SettingsModel copyWith({

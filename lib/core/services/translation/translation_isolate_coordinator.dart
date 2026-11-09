@@ -6,7 +6,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'manga_ocr_service.dart';
 import 'mlkit_translation_engine.dart';
-import 'onnx_local_llm_engine.dart';
+import 'gguf_local_llm_engine.dart';
 import 'translation_models.dart';
 
 Future<List<MangaTranslatedBlock>> _translateBlocks(
@@ -25,7 +25,7 @@ Future<List<MangaTranslatedBlock>> _translateBlocks(
 
     final trimmed = raw.text.trim();
     if (trimmed.isEmpty ||
-        !OnnxLocalLlmEngine.hasCjkCharacters(trimmed) ||
+        !GgufLocalLlmEngine.hasCjkCharacters(trimmed) ||
         raw.boundingBox.width < 8 ||
         raw.boundingBox.height < 8) {
       continue;

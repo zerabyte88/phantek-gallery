@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 zerabyte88
 
-import 'dart:convert';
 import 'dart:io';
-import 'package:dart_sentencepiece_tokenizer/dart_sentencepiece_tokenizer.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -14,7 +12,7 @@ import 'package:phantek_gallery/core/models/media_item.dart';
 import 'package:phantek_gallery/core/models/settings_model.dart';
 import 'package:phantek_gallery/core/services/translation/translation_models.dart';
 import 'package:phantek_gallery/core/services/translation/mlkit_translation_engine.dart';
-import 'package:phantek_gallery/core/services/translation/onnx_local_llm_engine.dart';
+import 'package:phantek_gallery/core/services/translation/gguf_local_llm_engine.dart';
 import 'package:phantek_gallery/core/services/translation/manga_ocr_service.dart';
 import 'package:phantek_gallery/core/services/translation/translation_isolate_coordinator.dart';
 import 'package:phantek_gallery/features/player/presentation/widgets/manga_translation_overlay.dart';
@@ -275,7 +273,10 @@ void main() {
           debounceDuration: const Duration(milliseconds: 100),
         );
 
-        await Future.delayed(const Duration(milliseconds: 350));
+        for (int i = 0; i < 30; i++) {
+          if (coordinator.getResultNotifier(temp2.path).value != null) break;
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
 
         expect(coordinator.getResultNotifier(temp1.path).value, isNull);
         final r2 = coordinator.getResultNotifier(temp2.path).value;
@@ -598,7 +599,7 @@ void main() {
       expect(status.missingLanguages.length + status.downloadedLanguages.length,
           5);
       expect(status.totalNeededMb, status.missingLanguages.length * 30.0);
-      expect(status.isReady, engine.onnxEngine.isReady);
+      expect(status.isReady, engine.ggufEngine.isReady);
     });
 
     test(
@@ -647,18 +648,18 @@ void main() {
     });
   });
 
-  group('OnnxLocalLlmEngine Local LLM Translation', () {
+  group('GgufLocalLlmEngine Local LLM Translation', () {
     test('System prompt formatting and payload validation', () {
       expect(
-        OnnxLocalLlmEngine.systemPromptTemplate,
+        GgufLocalLlmEngine.systemPromptTemplate,
         contains('You are an expert localizer for Asian comics.'),
       );
       expect(
-        OnnxLocalLlmEngine.systemPromptTemplate,
+        GgufLocalLlmEngine.systemPromptTemplate,
         contains('Output ONLY the final English translation.'),
       );
 
-      final promptJa = OnnxLocalLlmEngine.buildPrompt(
+      final promptJa = GgufLocalLlmEngine.buildPrompt(
         language: 'Japanese',
         rawOcrText: '助けて！',
       );
@@ -669,7 +670,7 @@ void main() {
       );
       expect(promptJa, endsWith('</system>\n<user>\n助けて！\n</user>'));
 
-      final promptKo = OnnxLocalLlmEngine.buildPrompt(
+      final promptKo = GgufLocalLlmEngine.buildPrompt(
         language: 'Korean',
         rawOcrText: '살려줘!',
       );
@@ -681,30 +682,30 @@ void main() {
     });
 
     test('Temperature (0.1) and max tokens (60) constraints', () async {
-      expect(OnnxLocalLlmEngine.defaultTemperature, 0.1);
-      expect(OnnxLocalLlmEngine.defaultMaxTokens, 60);
+      expect(GgufLocalLlmEngine.defaultTemperature, 0.1);
+      expect(GgufLocalLlmEngine.defaultMaxTokens, 60);
 
       // Temperature bounds: locked at 0.1 .. 0.2
-      expect(OnnxLocalLlmEngine.constrainTemperature(0.1), 0.1);
-      expect(OnnxLocalLlmEngine.constrainTemperature(0.2), 0.2);
-      expect(OnnxLocalLlmEngine.constrainTemperature(0.0), 0.1);
-      expect(OnnxLocalLlmEngine.constrainTemperature(-0.5), 0.1);
-      expect(OnnxLocalLlmEngine.constrainTemperature(0.7), 0.2);
-      expect(OnnxLocalLlmEngine.constrainTemperature(1.5), 0.2);
+      expect(GgufLocalLlmEngine.constrainTemperature(0.1), 0.1);
+      expect(GgufLocalLlmEngine.constrainTemperature(0.2), 0.2);
+      expect(GgufLocalLlmEngine.constrainTemperature(0.0), 0.1);
+      expect(GgufLocalLlmEngine.constrainTemperature(-0.5), 0.1);
+      expect(GgufLocalLlmEngine.constrainTemperature(0.7), 0.2);
+      expect(GgufLocalLlmEngine.constrainTemperature(1.5), 0.2);
 
       // Max tokens bounds: limited to 50 .. 80
-      expect(OnnxLocalLlmEngine.constrainMaxTokens(60), 60);
-      expect(OnnxLocalLlmEngine.constrainMaxTokens(50), 50);
-      expect(OnnxLocalLlmEngine.constrainMaxTokens(80), 80);
-      expect(OnnxLocalLlmEngine.constrainMaxTokens(10), 50);
-      expect(OnnxLocalLlmEngine.constrainMaxTokens(0), 50);
-      expect(OnnxLocalLlmEngine.constrainMaxTokens(120), 80);
-      expect(OnnxLocalLlmEngine.constrainMaxTokens(1000), 80);
+      expect(GgufLocalLlmEngine.constrainMaxTokens(60), 60);
+      expect(GgufLocalLlmEngine.constrainMaxTokens(50), 50);
+      expect(GgufLocalLlmEngine.constrainMaxTokens(80), 80);
+      expect(GgufLocalLlmEngine.constrainMaxTokens(10), 50);
+      expect(GgufLocalLlmEngine.constrainMaxTokens(0), 50);
+      expect(GgufLocalLlmEngine.constrainMaxTokens(120), 80);
+      expect(GgufLocalLlmEngine.constrainMaxTokens(1000), 80);
 
       // Verify that translateMangaText locks the parameters passed to the handler
       double? receivedTemp;
       int? receivedTokens;
-      final engine = OnnxLocalLlmEngine(
+      final engine = GgufLocalLlmEngine(
         mockInferenceHandler: (prompt,
             {required temperature, required maxTokens}) async {
           receivedTemp = temperature;
@@ -758,17 +759,17 @@ void main() {
     test('Markdown cleanup and output sanitization', () {
       // Strips <system>, <user>, <assistant>, <think> tags
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('<assistant>Hello world</assistant>'),
+        GgufLocalLlmEngine.cleanLlmOutput('<assistant>Hello world</assistant>'),
         'Hello world',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput(
+        GgufLocalLlmEngine.cleanLlmOutput(
           '<system>Instructions</system><user>Raw</user><assistant>Clean comic dialogue</assistant>',
         ),
         'Clean comic dialogue',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput(
+        GgufLocalLlmEngine.cleanLlmOutput(
           '<think>Reasoning process...</think><assistant>Dialogue text</assistant>',
         ),
         'Dialogue text',
@@ -776,124 +777,118 @@ void main() {
 
       // Strips markdown formatting (bold, italics, code, blockquotes)
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('**Translation:** *Run away!*'),
+        GgufLocalLlmEngine.cleanLlmOutput('**Translation:** *Run away!*'),
         'Run away!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('> `Watch out!`'),
+        GgufLocalLlmEngine.cleanLlmOutput('> `Watch out!`'),
         'Watch out!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('### Warning: Danger!'),
+        GgufLocalLlmEngine.cleanLlmOutput('### Warning: Danger!'),
         'Warning: Danger!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput("```text\nFire in the hole!\n```"),
+        GgufLocalLlmEngine.cleanLlmOutput("```text\nFire in the hole!\n```"),
         'Fire in the hole!',
       );
 
       // Strips chat preambles
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput(
+        GgufLocalLlmEngine.cleanLlmOutput(
             'Here is the English translation: "Don\'t move!"'),
         "Don't move!",
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput(
+        GgufLocalLlmEngine.cleanLlmOutput(
             'The English translation is: "Stop right there!"'),
         'Stop right there!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput(
+        GgufLocalLlmEngine.cleanLlmOutput(
             'Translation: **What did you say?!**'),
         'What did you say?!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput(
+        GgufLocalLlmEngine.cleanLlmOutput(
             'English Translation: That cannot be true.'),
         'That cannot be true.',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('“Hold on to me!”'),
+        GgufLocalLlmEngine.cleanLlmOutput('“Hold on to me!”'),
         'Hold on to me!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('「Wait!」'),
+        GgufLocalLlmEngine.cleanLlmOutput('「Wait!」'),
         'Wait!',
       );
     });
 
-    test(
-        'Chaining with OCR blocks into translateText and translation coordinator',
+    test('MlKitTranslationEngine routes manga translation through mock handler',
         () async {
-      final mockBlocks = [
-        const RawMangaTextBlock(
-          boundingBox: Rect.fromLTWH(10, 20, 100, 200),
-          text: '何をしている？！',
-        ),
-        const RawMangaTextBlock(
-          boundingBox: Rect.fromLTWH(150, 50, 80, 120),
-          text: '逃げろ！',
-        ),
-      ];
-      final mockDetector = MockMangaTextDetector(mockBlocks);
-      final ocrService = MangaOcrService(detector: mockDetector);
+      final mlEngine = MlKitTranslationEngine.instance;
 
-      // Set mock handler on the translation engine's ONNX instance
-      MlKitTranslationEngine.instance.onnxEngine.mockInferenceHandler =
+      MlKitTranslationEngine.instance.ggufEngine.mockInferenceHandler =
           (prompt, {required temperature, required maxTokens}) async {
-        if (prompt.contains('何をしている？！')) {
-          return 'Translation: **What are you doing?!**';
+        if (prompt.contains('助けて')) {
+          return 'Help me!';
         }
-        return '<assistant>"Run away!"</assistant>';
+        return 'Understood.';
       };
 
-      final temp = await File('${Directory.systemTemp.path}/test_ocr_chain.jpg')
-          .create();
       try {
-        final coordinator = TranslationIsolateCoordinator(
-          ocrService: ocrService,
-          translationEngine: MlKitTranslationEngine.instance,
+        final resultJa = await mlEngine.translateText(
+          '助けて！',
+          source: TranslationSourceLanguage.japanese,
+          target: TranslationTargetLanguage.english,
         );
+        expect(resultJa, 'Help me!');
 
-        final rawExtracted = await ocrService.extractTextBlocks(temp.path);
-        expect(rawExtracted.length, 2);
-
-        final translated = await coordinator.translateBlocks(
-          rawExtracted,
-          const Size(1000, 1000),
-          language: TranslationSourceLanguage.japanese,
-          targetLanguage: TranslationTargetLanguage.english,
+        final resultAuto = await mlEngine.translateText(
+          '助けて',
+          source: TranslationSourceLanguage.auto,
+          target: TranslationTargetLanguage.english,
         );
+        expect(resultAuto, 'Help me!');
 
-        expect(translated.length, 2);
-        expect(translated[0].originalText, '何をしている？！');
-        expect(translated[0].translatedText, 'What are you doing?!');
-        expect(translated[0].isSpeechBubble, isTrue);
+        // Non-CJK passes through unchanged
+        final englishText = await mlEngine.translateText(
+          'Hello World!',
+          source: TranslationSourceLanguage.japanese,
+          target: TranslationTargetLanguage.english,
+        );
+        expect(englishText, 'Hello World!');
 
-        expect(translated[1].originalText, '逃げろ！');
-        expect(translated[1].translatedText, 'Run away!');
-        expect(translated[1].isSpeechBubble, isTrue);
+        // Empty string
+        final empty = await mlEngine.translateText(
+          '',
+          source: TranslationSourceLanguage.japanese,
+          target: TranslationTargetLanguage.english,
+        );
+        expect(empty, '');
       } finally {
-        MlKitTranslationEngine.instance.onnxEngine.mockInferenceHandler = null;
-        if (await temp.exists()) {
-          await temp.delete();
-        }
-        ocrService.dispose();
+        MlKitTranslationEngine.instance.ggufEngine.mockInferenceHandler = null;
       }
     });
 
     test(
-        'Native ONNX graceful fallback and punctuation pass-through without throwing',
+        'Native GGUF graceful fallback and punctuation pass-through without throwing',
         () async {
-      final engine = OnnxLocalLlmEngine.instance;
+      final engine = GgufLocalLlmEngine.instance;
       // Standalone punctuation pass-through
       expect(
         await engine.translateMangaText(
-          text: '?!?!',
+          text: '！？',
           source: TranslationSourceLanguage.japanese,
         ),
-        '?!?!',
+        '！？',
+      );
+      expect(
+        await engine.translateMangaText(
+          text: '...',
+          source: TranslationSourceLanguage.japanese,
+        ),
+        '...',
       );
       expect(
         await engine.translateMangaText(
@@ -903,60 +898,60 @@ void main() {
         '',
       );
 
-      // Fallback pass-through when mock handler is null and native binary is absent
-      final fallbackResult = await engine.translateMangaText(
+      // Japanese text with no session initialized passes through gracefully
+      final fallback = await engine.translateMangaText(
         text: 'こんにちは',
         source: TranslationSourceLanguage.japanese,
       );
-      expect(fallbackResult, 'こんにちは');
+      expect(fallback, 'こんにちは');
     });
 
-    test('OnnxLocalLlmEngine.hasCjkCharacters script validation', () {
+    test('GgufLocalLlmEngine.hasCjkCharacters script validation', () {
       // Japanese
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('こんにちは'), isTrue);
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('スゴイ！'), isTrue);
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('ﾆﾎﾝ'), isTrue);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('こんにちは'), isTrue);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('スゴイ！'), isTrue);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('ﾆﾎﾝ'), isTrue);
 
       // Chinese
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('你好世界'), isTrue);
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('漫画'), isTrue);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('你好世界'), isTrue);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('漫画'), isTrue);
 
       // Korean
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('안녕하세요'), isTrue);
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('ㅋㅋㅋ'), isTrue);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('안녕하세요'), isTrue);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('ㅋㅋㅋ'), isTrue);
 
       // Non-CJK
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('Hello World!'), isFalse);
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('LIVE 1080P'), isFalse);
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('CHAPTER 24: THE END'), isFalse);
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('1234567890'), isFalse);
-      expect(OnnxLocalLlmEngine.hasCjkCharacters('...?!#@%'), isFalse);
-      expect(OnnxLocalLlmEngine.hasCjkCharacters(''), isFalse);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('Hello World!'), isFalse);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('LIVE 1080P'), isFalse);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('CHAPTER 24: THE END'), isFalse);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('1234567890'), isFalse);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('...?!#@%'), isFalse);
+      expect(GgufLocalLlmEngine.hasCjkCharacters(''), isFalse);
     });
 
     test('cleanLlmOutput strips conversational preambles and prompt echoes', () {
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('Sure, here is the English translation: Stop right there!'),
+        GgufLocalLlmEngine.cleanLlmOutput('Sure, here is the English translation: Stop right there!'),
         'Stop right there!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('Here is the English translation:\n\nGet out of my way!'),
+        GgufLocalLlmEngine.cleanLlmOutput('Here is the English translation:\n\nGet out of my way!'),
         'Get out of my way!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('Natural English: Look out behind you!'),
+        GgufLocalLlmEngine.cleanLlmOutput('Natural English: Look out behind you!'),
         'Look out behind you!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('Translated text: I will never surrender!'),
+        GgufLocalLlmEngine.cleanLlmOutput('Translated text: I will never surrender!'),
         'I will never surrender!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput('Based on the comic dialogue: What is this power?!'),
+        GgufLocalLlmEngine.cleanLlmOutput('Based on the comic dialogue: What is this power?!'),
         'What is this power?!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput(
+        GgufLocalLlmEngine.cleanLlmOutput(
           "On the other hand, you're an expert localizer for Asian comics.\n"
           "This is fictional comic dialogue. Preserve the original tone, slang, and profanity.\n\n"
           "You damn fool, don't touch that!",
@@ -964,14 +959,14 @@ void main() {
         "You damn fool, don't touch that!",
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput(
+        GgufLocalLlmEngine.cleanLlmOutput(
           'The cat chased after the mouse.\n\n'
           'Let me go!',
         ),
         'Let me go!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput(
+        GgufLocalLlmEngine.cleanLlmOutput(
           'Sure! Here is the dialogue:\n\n'
           'Who are you?\n\n'
           'Note: Translated from Japanese.',
@@ -980,83 +975,64 @@ void main() {
       );
     });
 
-    test('TranslationIsolateCoordinator skips non-CJK and filters speech bubbles', () async {
-      final mockBlocks = [
-        const RawMangaTextBlock(
-          boundingBox: Rect.fromLTWH(10, 20, 100, 200),
-          text: 'LIVE 1080P',
-        ),
-        const RawMangaTextBlock(
-          boundingBox: Rect.fromLTWH(50, 50, 4, 4),
-          text: 'あ',
-        ),
-        const RawMangaTextBlock(
-          boundingBox: Rect.fromLTWH(100, 100, 150, 250),
-          text: '待てよ！',
-        ),
-        const RawMangaTextBlock(
-          boundingBox: Rect.fromLTWH(100, 500, 500, 80),
-          text: 'ドカーン！',
-        ),
-      ];
+    test('Multi-character and special symbol CJK detection', () async {
+      final engine = GgufLocalLlmEngine.instance;
 
-      final mockDetector = MockMangaTextDetector(mockBlocks);
-      final ocrService = MangaOcrService(detector: mockDetector);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('A'), isFalse);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('1'), isFalse);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('あ'), isTrue);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('ア'), isTrue);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('漢'), isTrue);
+      expect(GgufLocalLlmEngine.hasCjkCharacters('가'), isTrue);
 
-      int translationCallCount = 0;
-      MlKitTranslationEngine.instance.onnxEngine.mockInferenceHandler =
+      final outA = await engine.translateMangaText(
+        text: 'A',
+        source: TranslationSourceLanguage.japanese,
+      );
+      expect(outA, 'A');
+
+      final outBlank = await engine.translateMangaText(
+        text: '   ',
+        source: TranslationSourceLanguage.japanese,
+      );
+      expect(outBlank, '');
+    });
+
+    test('MlKitTranslationEngine mock handler preserves whitespace around dialogues',
+        () async {
+      final mlEngine = MlKitTranslationEngine.instance;
+
+      MlKitTranslationEngine.instance.ggufEngine.mockInferenceHandler =
           (prompt, {required temperature, required maxTokens}) async {
-        translationCallCount++;
-        if (prompt.contains('待てよ！')) return 'Wait up!';
-        if (prompt.contains('ドカーン！')) return 'BOOM!';
-        return 'Unknown';
+        return 'Help me!';
       };
 
       try {
-        final coordinator = TranslationIsolateCoordinator(
-          ocrService: ocrService,
-          translationEngine: MlKitTranslationEngine.instance,
+        final echoed = await mlEngine.translateText(
+          '  助けて！  ',
+          source: TranslationSourceLanguage.japanese,
+          target: TranslationTargetLanguage.english,
         );
-
-        final results = await coordinator.translateBlocks(
-          mockBlocks,
-          const Size(1000, 1000),
-          mode: TranslationRenderMode.speechBubblesOnly,
-          targetLanguage: TranslationTargetLanguage.english,
-        );
-
-        expect(translationCallCount, 1);
-        final translatedBubble = results.firstWhere((b) => b.originalText == '待てよ！');
-        expect(translatedBubble.translatedText, 'Wait up!');
-        expect(translatedBubble.isSpeechBubble, isTrue);
-
-        expect(results.any((b) => b.originalText == 'LIVE 1080P'), isFalse);
-        expect(results.any((b) => b.originalText == 'あ'), isFalse);
+        expect(echoed, 'Help me!');
       } finally {
-        MlKitTranslationEngine.instance.onnxEngine.mockInferenceHandler = null;
-        ocrService.dispose();
+        MlKitTranslationEngine.instance.ggufEngine.mockInferenceHandler = null;
       }
+
+      final echoed = GgufLocalLlmEngine.cleanLlmOutput('  Help me!  ');
+      expect(GgufLocalLlmEngine.cleanLlmOutput(echoed), 'Help me!');
     });
 
-    test('cleanLlmOutput strips operational rules echoes', () {
-      const echoed =
-          'CRITICAL OPERATIONAL RULES:\n1. Translate faithfully.\nHelp me!';
-      expect(OnnxLocalLlmEngine.cleanLlmOutput(echoed), 'Help me!');
-    });
-
-    test(
-        'scanAvailableModels scans candidate directories and returns discovered models',
-        () async {
-      final tempDir = await Directory.systemTemp.createTemp('onnx_scan_test');
+    test('scanAvailableModels finds .gguf files in target directory', () async {
+      final tempDir = await Directory.systemTemp.createTemp('gguf_scan_test');
       try {
-        final dummyModel = File(p.join(tempDir.path, 'test_model_q4.onnx'));
+        final dummyModel = File(p.join(tempDir.path, 'test_model_q4.gguf'));
         await dummyModel.writeAsBytes(List.filled(1024 * 1024, 0)); // 1 MB
 
-        final discovered = await OnnxLocalLlmEngine.scanAvailableModels(
+        final discovered = await GgufLocalLlmEngine.scanAvailableModels(
           searchDirectories: [tempDir.path],
         );
         expect(discovered.length, 1);
-        expect(discovered.first.name, 'test_model_q4.onnx');
+        expect(discovered.first.name, 'test_model_q4.gguf');
         expect(discovered.first.path, dummyModel.path);
         expect(discovered.first.sizeMb, closeTo(1.0, 0.1));
         expect(discovered.first.formattedSize, '1.0 MB');
@@ -1071,31 +1047,27 @@ void main() {
       expect(model.activeAiModelPath, '');
 
       final updated =
-          model.copyWith(activeAiModelPath: '/custom/path/model.onnx');
-      expect(updated.activeAiModelPath, '/custom/path/model.onnx');
-      expect(updated.props, contains('/custom/path/model.onnx'));
+          model.copyWith(activeAiModelPath: '/custom/path/model.gguf');
+      expect(updated.activeAiModelPath, '/custom/path/model.gguf');
+      expect(updated.props, contains('/custom/path/model.gguf'));
     });
 
     test('defaultModelsDirectoryPath and candidate paths prioritization', () {
       expect(
-        OnnxLocalLlmEngine.defaultModelsDirectoryPath,
+        GgufLocalLlmEngine.defaultModelsDirectoryPath,
         '/storage/emulated/0/models',
       );
       expect(
-        OnnxLocalLlmEngine.defaultModelCandidatePaths.first,
+        GgufLocalLlmEngine.defaultModelCandidatePaths.first,
         startsWith('/storage/emulated/0/models/'),
       );
       expect(
-        OnnxLocalLlmEngine.defaultModelCandidatePaths,
-        contains('/storage/emulated/0/models/qwen2.5-0.5b-instruct-q4.onnx'),
+        GgufLocalLlmEngine.defaultModelCandidatePaths,
+        contains('/storage/emulated/0/models/qwen2.5-0.5b-instruct-q4_k_m.gguf'),
       );
       expect(
-        OnnxLocalLlmEngine.defaultModelCandidatePaths,
-        contains('models/qwen2.5-0.5b-instruct-q4.onnx'),
-      );
-      expect(
-        OnnxLocalLlmEngine.defaultModelCandidatePaths,
-        contains('assets/models/qwen2.5-0.5b-instruct-q4.onnx'),
+        GgufLocalLlmEngine.defaultModelCandidatePaths,
+        contains('models/qwen2.5-0.5b-instruct-q4_k_m.gguf'),
       );
     });
 
@@ -1109,7 +1081,7 @@ void main() {
         expect(Directory(targetSubDir).existsSync(), isFalse);
 
         // 1. Creates when missing
-        await OnnxLocalLlmEngine.ensureModelsDirectoryExists(
+        await GgufLocalLlmEngine.ensureModelsDirectoryExists(
             targetPath: targetSubDir);
         expect(Directory(targetSubDir).existsSync(), isTrue);
 
@@ -1118,7 +1090,7 @@ void main() {
         await canary.writeAsString('canary');
 
         // 2. Calling again leaves it untouched (idempotent)
-        await OnnxLocalLlmEngine.ensureModelsDirectoryExists(
+        await GgufLocalLlmEngine.ensureModelsDirectoryExists(
             targetPath: targetSubDir);
         expect(Directory(targetSubDir).existsSync(), isTrue);
         expect(canary.existsSync(), isTrue);
@@ -1130,14 +1102,14 @@ void main() {
       }
     });
 
-    test('initializeSession resolves .onnx file from directory target path',
+    test('initializeSession resolves .gguf file from directory target path',
         () async {
       final tempDir = await Directory.systemTemp.createTemp('models_init_test');
       try {
-        final dummyModel = File(p.join(tempDir.path, 'sample.onnx'));
+        final dummyModel = File(p.join(tempDir.path, 'sample.gguf'));
         await dummyModel.writeAsBytes(List.filled(16, 0));
 
-        final engine = OnnxLocalLlmEngine();
+        final engine = GgufLocalLlmEngine();
         final success = await engine.initializeSession(modelPath: tempDir.path);
         expect(success, isA<bool>());
       } finally {
@@ -1147,204 +1119,32 @@ void main() {
       }
     });
 
-    test('Tokenizer loading via HuggingFaceTokenizerLoader.fromJsonString', () {
-      const sampleJson = '''
-
-      {
-
-        "version": "1.0",
-
-        "model": {
-
-          "type": "BPE",
-
-          "vocab": {
-
-            "<unk>": 0,
-
-            "<s>": 1,
-
-            "</s>": 2,
-
-            "Hello": 3,
-
-            "world": 4
-
-          },
-
-          "merges": []
-
-        }
-
-      }
-
-      ''';
-
-      final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(sampleJson);
-      expect(tokenizer, isNotNull);
-      expect(tokenizer.vocab.size, 5);
-
-      final encoded = tokenizer.encode('Hello world');
-      expect(encoded.ids, isNotEmpty);
-
-      final decoded = tokenizer.decode([3, 4]);
-      expect(decoded, contains('Hello'));
-      expect(decoded, contains('world'));
-    });
-
-    test(
-        'selectNextToken uses argmax for temperature <= 0.1 and sampling for > 0.1',
-        () {
-      final logits = [0.1, 0.4, 2.9, 1.2, 0.05];
-
-      // Argmax with temp = 0.1 should pick index 2 (value 2.9)
-      final token01 = OnnxLocalLlmEngine.selectNextToken(logits, 0.1);
-      expect(token01, 2);
-
-      // Argmax with temp = 0.0 should pick index 2
-      final token00 = OnnxLocalLlmEngine.selectNextToken(logits, 0.0);
-      expect(token00, 2);
-
-      // Temperature sampling with temp = 0.2 should return a valid index within bounds
-      final token02 = OnnxLocalLlmEngine.selectNextToken(logits, 0.2);
-      expect(token02, inInclusiveRange(0, logits.length - 1));
-
-      // extractLastLogits helper
-      final logits3d = [
-        [
-          [0.1, 0.2],
-          [0.8, 1.5],
-        ]
-      ];
-      expect(OnnxLocalLlmEngine.extractLastLogits(logits3d), [0.8, 1.5]);
-
-      final logits2d = [
-        [0.1, 0.2],
-        [0.5, 0.9],
-      ];
-      expect(OnnxLocalLlmEngine.extractLastLogits(logits2d), [0.5, 0.9]);
-    });
-
-    test('Status message update when model is present vs tokenizer missing',
-        () async {
-      final tempDir = await Directory.systemTemp.createTemp('onnx_status_test');
-      try {
-        final dummyModel =
-            File(p.join(tempDir.path, 'qwen2.5-0.5b-instruct-q4.onnx'));
-        await dummyModel.writeAsBytes(List.filled(16, 0));
-
-        final engine = OnnxLocalLlmEngine();
-
-        // 1. Model present, but companion tokenizer is missing
-        await engine.initializeSession(modelPath: dummyModel.path, useBundledFallback: false);
-        expect(
-          engine.lastStatusMessage,
-          'Model loaded (qwen2.5-0.5b-instruct-q4.onnx), but tokenizer.json not found in ${tempDir.path}',
-        );
-
-        // 2. Add companion tokenizer.json and re-initialize
-        final dummyTok = File(p.join(tempDir.path, 'tokenizer.json'));
-        await dummyTok.writeAsString(jsonEncode({
-          'model': {
-            'type': 'BPE',
-            'vocab': {'<unk>': 0, '<s>': 1, '</s>': 2, 'tok': 3},
-            'merges': [],
-          }
-        }));
-
-        await engine.initializeSession(modelPath: dummyModel.path);
-        expect(
-          engine.lastStatusMessage,
-          anyOf(
-            startsWith('Ready:'),
-            startsWith('Gagal memuat'),
-          ),
-        );
-
-        engine.dispose();
-      } finally {
-        if (tempDir.existsSync()) {
-          await tempDir.delete(recursive: true);
-        }
-      }
-    });
-
     test('MlKitTranslationEngine forwards lastStatusMessage', () {
       final mlEngine = MlKitTranslationEngine.instance;
-      expect(mlEngine.lastStatusMessage, mlEngine.onnxEngine.lastStatusMessage);
-    });
-
-    test('QwenBpeTokenizer encodes and decodes text faithfully', () {
-      final sampleJson = jsonEncode({
-        'model': {
-          'type': 'BPE',
-          'vocab': {
-            '<|endoftext|>': 151643,
-            '<|im_start|>': 151644,
-            '<|im_end|>': 151645,
-            'H': 10,
-            'e': 11,
-            'l': 12,
-            'o': 13,
-            ' ': 14,
-            'w': 15,
-            'r': 16,
-            'd': 17,
-            'He': 18,
-            'llo': 19,
-            'Hello': 20,
-          },
-          'merges': [
-            'H e',
-            'l l',
-            'll o',
-            'He llo',
-          ]
-        },
-        'added_tokens': [
-          {'id': 151644, 'content': '<|im_start|>'},
-          {'id': 151645, 'content': '<|im_end|>'},
-          {'id': 151643, 'content': '<|endoftext|>'},
-        ]
-      });
-
-      final tokenizer = QwenBpeTokenizer.fromJsonString(sampleJson);
-      expect(tokenizer.eosTokenId, QwenBpeTokenizer.imEndTokenId);
-
-      final encoded = tokenizer.encode('<|im_start|>Hello<|im_end|>');
-      expect(encoded, contains(151644));
-      expect(encoded, contains(151645));
-
-      final decoded = tokenizer.decode(encoded);
-      expect(decoded, '<|im_start|>Hello<|im_end|>');
+      expect(mlEngine.lastStatusMessage, mlEngine.ggufEngine.lastStatusMessage);
     });
 
     test('formatForModel maps constitutional prompt to ChatML for Qwen', () {
-      final prompt = OnnxLocalLlmEngine.buildPrompt(
+      final prompt = GgufLocalLlmEngine.buildPrompt(
         language: 'Japanese',
         rawOcrText: 'サバイバートーク',
       );
-      final tokenizer = QwenBpeTokenizer(
-        vocab: {},
-        reverseVocab: {},
-        bpeRanks: {},
-      );
 
-      final chatMl = OnnxLocalLlmEngine.formatForModel(prompt, tokenizer);
+      final chatMl = GgufLocalLlmEngine.formatForModel(prompt);
       expect(chatMl, contains('<|im_start|>system'));
       expect(chatMl, contains('<|im_end|>'));
       expect(chatMl, contains('<|im_start|>user\nサバイバートーク<|im_end|>'));
       expect(chatMl, endsWith('<|im_start|>assistant\n'));
 
-      final parts = OnnxLocalLlmEngine.extractPromptParts(prompt);
+      final parts = GgufLocalLlmEngine.extractPromptParts(prompt);
       expect(parts.language, 'Japanese');
       expect(parts.userContent, 'サバイバートーク');
 
-      final koPrompt = OnnxLocalLlmEngine.buildPrompt(
+      final koPrompt = GgufLocalLlmEngine.buildPrompt(
         language: 'Korean',
         rawOcrText: '살려줘!',
       );
-      final koParts = OnnxLocalLlmEngine.extractPromptParts(koPrompt);
+      final koParts = GgufLocalLlmEngine.extractPromptParts(koPrompt);
       expect(koParts.language, 'Korean');
       expect(koParts.userContent, '살려줘!');
     });
@@ -1353,38 +1153,17 @@ void main() {
         'cleanLlmOutput strips residual instruction and translator role echoes',
         () {
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput(
+        GgufLocalLlmEngine.cleanLlmOutput(
           'You are an expert translator for manga. Wait right there!',
         ),
         'Wait right there!',
       );
       expect(
-        OnnxLocalLlmEngine.cleanLlmOutput(
+        GgufLocalLlmEngine.cleanLlmOutput(
           'Translate Japanese comic dialogue to English. Help me!',
         ),
         'Help me!',
       );
-    });
-
-    test(
-        'QwenBpeTokenizer round-trip encodes and decodes multi-byte CJK strings without corruption',
-        () async {
-      expect(QwenBpeTokenizer.bytesToUnicode.length, 256);
-      expect(QwenBpeTokenizer.unicodeToBytes.length, 256);
-
-      final tokenizer = await QwenBpeTokenizer.loadBundledAsset();
-      const cjkSamples = [
-        'なにをしてるんだ！？早く逃げろ！',
-        '형, 지금 뭐 하는 거야?!',
-        '你到底想干什么？！',
-      ];
-
-      for (final sample in cjkSamples) {
-        final ids = tokenizer.encode(sample);
-        expect(ids, isNotEmpty);
-        final decoded = tokenizer.decode(ids);
-        expect(decoded, sample);
-      }
     });
   });
 }

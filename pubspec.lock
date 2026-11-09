@@ -81,14 +81,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.2"
-  dart_sentencepiece_tokenizer:
-    dependency: "direct main"
-    description:
-      name: dart_sentencepiece_tokenizer
-      sha256: "23fd14a3a7a736e0a85c329ab0227f8eaf9626ef83b1d98b6f37fbc284fca8c8"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.4.1"
   equatable:
     dependency: "direct main"
     description:
@@ -134,6 +126,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.0"
+  flutter_llama:
+    dependency: "direct main"
+    description:
+      name: flutter_llama
+      sha256: cbdda3aaee0179a99a5339925ef1aa91c37c0aafaa5703e4e5fda96f1a37d6d5
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.1"
   flutter_localizations:
     dependency: "direct main"
     description: flutter
@@ -317,14 +317,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "9.5.0"
-  onnxruntime:
-    dependency: "direct main"
-    description:
-      name: onnxruntime
-      sha256: e77ec05acafc135cc5fe7bcdf11b101b39f06513c9d5e9fa02cb1929f6bac72a
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.4.1"
   package_config:
     dependency: transitive
     description:

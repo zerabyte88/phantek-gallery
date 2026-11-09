@@ -72,14 +72,13 @@ class LicenseService {
         _mlkitLicenseText,
       );
 
-      // 7. Microsoft ONNX Runtime (MIT)
+      // 7. llama.cpp & flutter_llama (MIT)
       yield const LicenseEntryWithLineBreaks(
         <String>[
-          'onnxruntime',
-          'com.microsoft.onnxruntime',
-          'ONNX Runtime',
+          'llama.cpp',
+          'flutter_llama',
         ],
-        _onnxRuntimeLicenseText,
+        _llamaCppLicenseText,
       );
     });
   }
@@ -385,9 +384,11 @@ See the License for the specific language governing permissions and
 limitations under the License.''';
 
 
-  static const String _onnxRuntimeLicenseText = '''
-ONNX Runtime
-Copyright (c) Microsoft Corporation. All rights reserved.
+    static const String _llamaCppLicenseText = '''
+llama.cpp & flutter_llama
+MIT License
+
+Copyright (c) 2023-2026 Georgi Gerganov and contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -635,7 +635,8 @@ void main() {
       expect(allPackages.contains('kotlinx.coroutines'), isTrue);
       expect(allPackages.contains('glide'), isTrue);
       expect(allPackages.contains('image'), isTrue);
-      expect(allPackages.contains('onnxruntime'), isTrue);
+      expect(allPackages.contains('llama.cpp'), isTrue);
+      expect(allPackages.contains('flutter_llama'), isTrue);
     });
 
     test('PsdService.isPsd extension case-insensitive detection', () {

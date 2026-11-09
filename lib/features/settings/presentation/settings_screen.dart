@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import '../../../core/services/translation/onnx_local_llm_engine.dart';
+import '../../../core/services/translation/gguf_local_llm_engine.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/settings_model.dart';
@@ -1115,7 +1115,7 @@ Future<void> _showAiModelManagerDialog(
   WidgetRef ref,
   SettingsModel settings,
 ) async {
-  await OnnxLocalLlmEngine.ensureModelsDirectoryExists();
+  await GgufLocalLlmEngine.ensureModelsDirectoryExists();
 
   if (!context.mounted) return;
 
@@ -1133,7 +1133,7 @@ Future<void> _showAiModelManagerDialog(
         builder: (ctx, setSt) {
           void refreshModels() {
             setSt(() => isLoading = true);
-            OnnxLocalLlmEngine.scanAvailableModels().then((result) {
+            GgufLocalLlmEngine.scanAvailableModels().then((result) {
               if (ctx.mounted) {
                 setSt(() {
                   models = result;
@@ -1264,7 +1264,7 @@ Future<void> _showAiModelManagerDialog(
                         ref.read(settingsNotifierProvider.notifier).update(
                               (s) => s.copyWith(activeAiModelPath: ''),
                             );
-                        await OnnxLocalLlmEngine.instance.initializeSession(
+                        await GgufLocalLlmEngine.instance.initializeSession(
                           modelPath: null,
                         );
                         if (ctx.mounted) Navigator.pop(ctx);
@@ -1332,7 +1332,7 @@ Future<void> _showAiModelManagerDialog(
                                   (s) =>
                                       s.copyWith(activeAiModelPath: model.path),
                                 );
-                            await OnnxLocalLlmEngine.instance.initializeSession(
+                            await GgufLocalLlmEngine.instance.initializeSession(
                               modelPath: model.path,
                             );
                             if (ctx.mounted) Navigator.pop(ctx);
@@ -1393,7 +1393,7 @@ Future<void> _showAiModelManagerDialog(
                               controller: controller,
                               autofocus: true,
                               decoration: const InputDecoration(
-                                hintText: '/path/to/model.onnx',
+                                hintText: '/path/to/model.gguf',
                                 isDense: true,
                               ),
                             ),
@@ -1416,7 +1416,7 @@ Future<void> _showAiModelManagerDialog(
                                 (s) =>
                                     s.copyWith(activeAiModelPath: customPath),
                               );
-                          await OnnxLocalLlmEngine.instance.initializeSession(
+                          await GgufLocalLlmEngine.instance.initializeSession(
                             modelPath: customPath,
                           );
                           if (ctx.mounted) Navigator.pop(ctx);

@@ -3,7 +3,7 @@
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'onnx_local_llm_engine.dart';
+import 'gguf_local_llm_engine.dart';
 import 'translation_models.dart';
 
 /// Supported manga translation languages.
@@ -36,7 +36,7 @@ class ModelPairStatus {
     required this.targetLangName,
     required this.totalNeededMb,
     required this.isReady,
-    this.modelDescription = 'Local LLM Engine (ONNX / Gemma 3 Nano)',
+    this.modelDescription = 'Local LLM Engine (GGUF / llama.cpp)',
   });
 }
 
@@ -53,7 +53,7 @@ class AllModelsStatus {
     required this.downloadedLanguages,
     required this.totalNeededMb,
     required this.isReady,
-    this.modelDescription = 'Local LLM Engine (ONNX / Gemma 3 Nano)',
+    this.modelDescription = 'Local LLM Engine (GGUF / llama.cpp)',
   });
 }
 
@@ -98,25 +98,25 @@ class TranslationDownloadProgress {
   }
 }
 
-/// On-device neural translation engine using offline-native models and ONNX LLM.
+/// On-device neural translation engine using offline-native models and GGUF LLM.
 class MlKitTranslationEngine {
   MlKitTranslationEngine._();
   static final MlKitTranslationEngine instance = MlKitTranslationEngine._();
 
-  final OnnxLocalLlmEngine _onnxEngine = OnnxLocalLlmEngine.instance;
+  final GgufLocalLlmEngine _ggufEngine = GgufLocalLlmEngine.instance;
 
-  /// Underlying Local LLM Engine (ONNX / Gemma 3 Nano).
-  OnnxLocalLlmEngine get onnxEngine => _onnxEngine;
+  /// Underlying Local LLM Engine (GGUF / llama.cpp).
+  GgufLocalLlmEngine get ggufEngine => _ggufEngine;
 
-  /// High-level operational status message forwarded from the local ONNX engine.
-  String? get lastStatusMessage => _onnxEngine.lastStatusMessage;
+  /// High-level operational status message forwarded from the local GGUF engine.
+  String? get lastStatusMessage => _ggufEngine.lastStatusMessage;
 
   /// Description of the offline local model weights.
   static const String localLlmDescription =
-      'Local LLM Engine (ONNX / Gemma 3 Nano)';
+      'Local LLM Engine (GGUF / llama.cpp)';
 
-  /// Checks if the local LLM ONNX model or mock inference is ready.
-  bool get isLocalLlmReady => _onnxEngine.isReady;
+  /// Checks if the local LLM GGUF model or mock inference is ready.
+  bool get isLocalLlmReady => _ggufEngine.isReady;
 
   /// The 5 manga translation languages required for all source and target pairs.
   static const List<MangaLanguage> allMangaLanguages = MangaLanguage.values;
@@ -214,19 +214,19 @@ class MlKitTranslationEngine {
   }
 
   /// Checks status for all 5 manga translation languages.
-  /// Reflects whether the local ONNX engine is actually initialized and ready.
+  /// Reflects whether the local GGUF engine is actually initialized and ready.
   Future<AllModelsStatus> checkAllModelsStatus() async {
     return AllModelsStatus(
       missingLanguages: const [],
       downloadedLanguages: allMangaLanguages,
       totalNeededMb: 0.0,
-      isReady: _onnxEngine.isReady,
+      isReady: _ggufEngine.isReady,
       modelDescription: localLlmDescription,
     );
   }
 
   /// Gets the pair download status.
-  /// Reflects whether the local ONNX engine is actually initialized and ready.
+  /// Reflects whether the local GGUF engine is actually initialized and ready.
   Future<ModelPairStatus> getPairStatus(
     TranslationSourceLanguage source,
     TranslationTargetLanguage target,
@@ -241,7 +241,7 @@ class MlKitTranslationEngine {
       sourceLangName: _getSourceLangName(effectiveSource),
       targetLangName: _getTargetLangName(target),
       totalNeededMb: 0.0,
-      isReady: _onnxEngine.isReady,
+      isReady: _ggufEngine.isReady,
       modelDescription: localLlmDescription,
     );
   }
@@ -268,7 +268,7 @@ class MlKitTranslationEngine {
   Future<bool> downloadAllModelsWithProgress({
     bool isWifiRequired = false,
   }) async {
-    if (_onnxEngine.isReady) {
+    if (_ggufEngine.isReady) {
       downloadProgressNotifier.value = const TranslationDownloadProgress(
         isDownloading: false,
         currentStep: 'Ready',
@@ -280,9 +280,9 @@ class MlKitTranslationEngine {
       return true;
     }
 
-    await _onnxEngine.initializeSession();
+    await _ggufEngine.initializeSession();
 
-    if (_onnxEngine.isReady) {
+    if (_ggufEngine.isReady) {
       downloadProgressNotifier.value = const TranslationDownloadProgress(
         isDownloading: false,
         currentStep: 'Ready',
@@ -294,7 +294,7 @@ class MlKitTranslationEngine {
       return true;
     }
 
-    final errorMsg = _onnxEngine.lastStatusMessage ?? 'No .onnx model loaded';
+    final errorMsg = _ggufEngine.lastStatusMessage ?? 'No .gguf model loaded';
     downloadProgressNotifier.value = TranslationDownloadProgress(
       isDownloading: false,
       currentStep: 'Failed',
@@ -313,7 +313,7 @@ class MlKitTranslationEngine {
     TranslationTargetLanguage target, {
     bool isWifiRequired = false,
   }) async {
-    if (_onnxEngine.isReady) {
+    if (_ggufEngine.isReady) {
       downloadProgressNotifier.value = const TranslationDownloadProgress(
         isDownloading: false,
         currentStep: 'Ready',
@@ -325,9 +325,9 @@ class MlKitTranslationEngine {
       return true;
     }
 
-    await _onnxEngine.initializeSession();
+    await _ggufEngine.initializeSession();
 
-    if (_onnxEngine.isReady) {
+    if (_ggufEngine.isReady) {
       downloadProgressNotifier.value = const TranslationDownloadProgress(
         isDownloading: false,
         currentStep: 'Ready',
@@ -339,7 +339,7 @@ class MlKitTranslationEngine {
       return true;
     }
 
-    final errorMsg = _onnxEngine.lastStatusMessage ?? 'No .onnx model loaded';
+    final errorMsg = _ggufEngine.lastStatusMessage ?? 'No .gguf model loaded';
     downloadProgressNotifier.value = TranslationDownloadProgress(
       isDownloading: false,
       currentStep: 'Failed',
@@ -353,7 +353,7 @@ class MlKitTranslationEngine {
   }
 
   /// Translates [text] from [source] language to [target] language using
-  /// the underlying Local LLM Engine (ONNX / Gemma 3 Nano).
+  /// the underlying Local LLM Engine (GGUF / llama.cpp).
   Future<String> translateText(
     String text, {
     required TranslationSourceLanguage source,
@@ -371,7 +371,7 @@ class MlKitTranslationEngine {
         : source;
 
     try {
-      final translated = await _onnxEngine.translateMangaText(
+      final translated = await _ggufEngine.translateMangaText(
         text: cleaned,
         source: effectiveSource,
         target: target,
@@ -381,14 +381,14 @@ class MlKitTranslationEngine {
       }
     } catch (e) {
       debugPrint(
-          'Local LLM ONNX translation error ($effectiveSource -> $target): $e');
+          'Local LLM GGUF translation error ($effectiveSource -> $target): $e');
     }
 
     return cleaned;
   }
 
-  /// Closes active [OnnxLocalLlmEngine] instance.
+  /// Closes active [GgufLocalLlmEngine] instance.
   Future<void> dispose() async {
-    _onnxEngine.dispose();
+    await _ggufEngine.dispose();
   }
 }
