@@ -5,7 +5,7 @@
 
   **A fast, privacy-focused Android gallery with PSD layer support and on-device AI manga translation.**
 
-  [![Version](https://img.shields.io/badge/Version-v2.15.4-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.16.0-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20ExoPlayer-6366f1.svg?style=flat-square)](https://developer.android.com/media/media3)
@@ -34,11 +34,11 @@ Phantek Gallery is a local-first gallery for photos, videos, PSD files, and mang
 ### Manga
 
 - **Manga Reader with Natural Sort**: Continuous vertical reading with an edge-to-edge view and chapter progress pills. Albums and chapters sort naturally (`Chapter 1`, `1.1`, `2.1`, `10`, `25`).
-- **On-Device AI Translation**: Detects text in Japanese, Korean, and Chinese manga and translates it into Indonesian or English (US) using Google ML Kit. Language models are downloaded once on demand, then run entirely on your device.
+- **On-Device AI Translation**: Detects text in Japanese, Korean, and Chinese manga with Google ML Kit multi-script OCR and translates it into natural English comic dialogue using an offline Local LLM engine (Gemma 3 Nano / ONNX Runtime). Runs 100% offline on-device without cloud APIs.
 
 ### Privacy and Safety
 
-- **Local-First and Private**: No tracking, no telemetry, no cloud sync. Media files never leave your device. Network access is limited to downloading translation models (or the developer avatar) when you request it.
+- **Local-First and Private**: No tracking, no telemetry, no cloud sync. Media files never leave your device. Network access is strictly limited to downloading ML Kit on-device translation models on demand. The developer card and avatar are bundled 100% offline.
 - **Screen Protection**: Uses Android `FLAG_SECURE` to block screenshots and screen recordings, and to blur the recent apps preview.
 - **Recycle Bin**: A staged `.trash` folder with configurable auto-purge (7, 14, or 30 days, or never) and batch restore or permanent delete.
 
@@ -92,7 +92,7 @@ Phantek Gallery is a local-first gallery for photos, videos, PSD files, and mang
 | `READ_EXTERNAL_STORAGE` / `WRITE_EXTERNAL_STORAGE` | Storage access on Android 12 and below |
 | `MANAGE_EXTERNAL_STORAGE` | Direct file handling for the `.trash` recycle bin |
 | `ACCESS_MEDIA_LOCATION` | Read location metadata from camera photos |
-| `INTERNET` | One-time download of ML Kit translation models and the developer avatar |
+| `INTERNET` | One-time download of ML Kit translation models |
 | `ACCESS_NETWORK_STATE` | Verify network connectivity for ML Kit translation model downloads |
 
 </div>

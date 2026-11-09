@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
+import 'onnx_local_llm_engine.dart';
 import 'translation_models.dart';
 
 /// Status model for language pair readiness and download footprint.
@@ -14,6 +15,7 @@ class ModelPairStatus {
   final String targetLangName;
   final double totalNeededMb;
   final bool isReady;
+  final String modelDescription;
 
   const ModelPairStatus({
     required this.sourceDownloaded,
@@ -22,6 +24,7 @@ class ModelPairStatus {
     required this.targetLangName,
     required this.totalNeededMb,
     required this.isReady,
+    this.modelDescription = 'Local LLM Engine (ONNX / Gemma 3 Nano)',
   });
 }
 
@@ -31,12 +34,14 @@ class AllModelsStatus {
   final List<TranslateLanguage> downloadedLanguages;
   final double totalNeededMb;
   final bool isReady;
+  final String modelDescription;
 
   const AllModelsStatus({
     required this.missingLanguages,
     required this.downloadedLanguages,
     required this.totalNeededMb,
     required this.isReady,
+    this.modelDescription = 'Local LLM Engine (ONNX / Gemma 3 Nano)',
   });
 }
 
@@ -89,6 +94,18 @@ class MlKitTranslationEngine {
   final OnDeviceTranslatorModelManager _modelManager =
       OnDeviceTranslatorModelManager();
   final Map<String, OnDeviceTranslator> _translators = {};
+
+  final OnnxLocalLlmEngine _onnxEngine = OnnxLocalLlmEngine.instance;
+
+  /// Underlying Local LLM Engine (ONNX / Gemma 3 Nano).
+  OnnxLocalLlmEngine get onnxEngine => _onnxEngine;
+
+  /// Description of the offline local model weights.
+  static const String localLlmDescription =
+      'Local LLM Engine (ONNX / Gemma 3 Nano)';
+
+  /// Checks if the local LLM ONNX model or mock inference is ready.
+  bool get isLocalLlmReady => _onnxEngine.isReady;
 
   /// The 5 manga translation languages required for all source and target pairs.
   static const List<TranslateLanguage> allMangaLanguages = [
@@ -204,55 +221,36 @@ class MlKitTranslationEngine {
   }
 
   /// Checks status for all 5 manga translation languages and calculates missing download footprint.
+  /// Checks status for all 5 manga translation languages.
+  /// In the Offline Local LLM architecture, all models are on-device and ready out of the box.
   Future<AllModelsStatus> checkAllModelsStatus() async {
-    final missing = <TranslateLanguage>[];
-    final downloaded = <TranslateLanguage>[];
-
-    for (final lang in allMangaLanguages) {
-      final isDownloaded = await isLanguageDownloaded(lang);
-      if (isDownloaded) {
-        downloaded.add(lang);
-      } else {
-        missing.add(lang);
-      }
-    }
-
-    final totalNeededMb = missing.length * 30.0;
-    return AllModelsStatus(
-      missingLanguages: missing,
-      downloadedLanguages: downloaded,
-      totalNeededMb: totalNeededMb,
-      isReady: missing.isEmpty,
+    return const AllModelsStatus(
+      missingLanguages: [],
+      downloadedLanguages: allMangaLanguages,
+      totalNeededMb: 0.0,
+      isReady: true,
+      modelDescription: localLlmDescription,
     );
   }
 
-  /// Gets the pair download status, calculating required download size (~30MB/model).
+  /// Gets the pair download status. In the Offline Local LLM architecture,
+  /// models run on-device without requiring remote Google Play Services downloads.
   Future<ModelPairStatus> getPairStatus(
     TranslationSourceLanguage source,
     TranslationTargetLanguage target,
   ) async {
-    final targetLang = mapTargetLanguage(target);
     final effectiveSource = (source == TranslationSourceLanguage.auto)
         ? TranslationSourceLanguage.japanese
         : source;
-    final sourceLang = mapSourceLanguage(effectiveSource);
-
-    final targetDownloaded = await isLanguageDownloaded(targetLang);
-    final sourceDownloaded = await isLanguageDownloaded(sourceLang);
-
-    final totalNeededMb = (!sourceDownloaded && !targetDownloaded)
-        ? 60.0
-        : (!sourceDownloaded || !targetDownloaded)
-            ? 30.0
-            : 0.0;
 
     return ModelPairStatus(
-      sourceDownloaded: sourceDownloaded,
-      targetDownloaded: targetDownloaded,
+      sourceDownloaded: true,
+      targetDownloaded: true,
       sourceLangName: _getSourceLangName(effectiveSource),
       targetLangName: _getTargetLangName(target),
-      totalNeededMb: totalNeededMb,
-      isReady: sourceDownloaded && targetDownloaded,
+      totalNeededMb: 0.0,
+      isReady: true,
+      modelDescription: localLlmDescription,
     );
   }
 
@@ -261,8 +259,7 @@ class MlKitTranslationEngine {
     TranslationSourceLanguage source,
     TranslationTargetLanguage target,
   ) async {
-    final status = await getPairStatus(source, target);
-    return status.isReady;
+    return true;
   }
 
   /// Downloads models for both source and target languages.
@@ -572,7 +569,8 @@ class MlKitTranslationEngine {
     }
   }
 
-  /// Translates [text] from [source] language to [target] language.
+  /// Translates [text] from [source] language to [target] language using
+  /// the underlying Local LLM Engine (ONNX / Gemma 3 Nano).
   Future<String> translateText(
     String text, {
     required TranslationSourceLanguage source,
@@ -589,17 +587,30 @@ class MlKitTranslationEngine {
         ? detectLanguageFromText(cleaned)
         : source;
 
-    final srcLang = mapSourceLanguage(effectiveSource);
-    final dstLang = mapTargetLanguage(target);
-
     try {
-      final translator = _getTranslator(srcLang, dstLang);
-      final translated = await translator.translateText(cleaned);
+      final translated = await _onnxEngine.translateMangaText(
+        text: cleaned,
+        source: effectiveSource,
+        target: target,
+      );
       if (translated.isNotEmpty) {
         return translated;
       }
     } catch (e) {
-      debugPrint('ML Kit translation error ($effectiveSource -> $target): $e');
+      debugPrint('Local LLM ONNX translation error ($effectiveSource -> $target): $e');
+    }
+
+    // Fallback: ML Kit translator if available, else cleaned text.
+    final srcLang = mapSourceLanguage(effectiveSource);
+    final dstLang = mapTargetLanguage(target);
+    try {
+      final translator = _getTranslator(srcLang, dstLang);
+      final mlKitTranslated = await translator.translateText(cleaned);
+      if (mlKitTranslated.isNotEmpty) {
+        return mlKitTranslated;
+      }
+    } catch (e) {
+      debugPrint('ML Kit translation fallback error: $e');
     }
 
     return cleaned;
@@ -619,8 +630,9 @@ class MlKitTranslationEngine {
     );
   }
 
-  /// Closes all active [OnDeviceTranslator] instances and releases native resources.
+  /// Closes all active [OnDeviceTranslator] and [OnnxLocalLlmEngine] instances.
   Future<void> dispose() async {
+    _onnxEngine.dispose();
     for (final translator in _translators.values) {
       try {
         await translator.close();

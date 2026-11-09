@@ -2,6 +2,7 @@
 // Copyright (C) 2026 zerabyte88
 
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,8 +10,10 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:phantek_gallery/core/localization/app_localizations.dart';
 import 'package:phantek_gallery/core/models/media_item.dart';
+import 'package:phantek_gallery/core/models/settings_model.dart';
 import 'package:phantek_gallery/core/services/translation/translation_models.dart';
 import 'package:phantek_gallery/core/services/translation/mlkit_translation_engine.dart';
+import 'package:phantek_gallery/core/services/translation/onnx_local_llm_engine.dart';
 import 'package:phantek_gallery/core/services/translation/manga_ocr_service.dart';
 import 'package:phantek_gallery/core/services/translation/translation_isolate_coordinator.dart';
 import 'package:phantek_gallery/features/player/presentation/widgets/manga_translation_overlay.dart';
@@ -430,27 +433,9 @@ void main() {
       tester.widget<IconButton>(translateBtn).onPressed!();
       await tester.pumpAndSettle();
 
-      // Source Language Chips verification (Indonesian locale)
-      expect(find.text('🌐 Otomatis'), findsOneWidget);
-      expect(find.text('🇯🇵 Jepang'), findsOneWidget);
-      expect(find.text('🇰🇷 Korea'), findsOneWidget);
-      expect(find.text('🇨🇳 China'), findsOneWidget);
-
-      // Target Language Chips verification
-      expect(find.text('🇮🇩 Indonesia'), findsOneWidget);
-      expect(find.text('🇺🇸 Inggris (US)'), findsOneWidget);
-
       // Mode choices verification
       expect(find.text('Hanya Balon Dialog'), findsOneWidget);
       expect(find.text('Seluruh Halaman (Termasuk SFX)'), findsOneWidget);
-
-      // Select Korean language chip dynamically
-      await tester.tap(find.text('🇰🇷 Korea'));
-      await tester.pumpAndSettle();
-
-      // Select English target language chip dynamically
-      await tester.tap(find.text('🇺🇸 Inggris (US)'));
-      await tester.pumpAndSettle();
 
       // Select Speech Bubbles mode
       await tester.tap(find.text('Hanya Balon Dialog'));
@@ -516,9 +501,6 @@ void main() {
 
       // English localized texts
       expect(find.text('Manga Translation'), findsOneWidget);
-      expect(find.text('🌐 Auto Detect'), findsOneWidget);
-      expect(find.text('🇯🇵 Japanese'), findsOneWidget);
-      expect(find.text('🇺🇸 English (US)'), findsOneWidget);
       expect(find.text('Speech Bubbles Only'), findsOneWidget);
       expect(find.text('Full Page (with SFX)'), findsOneWidget);
     });
@@ -654,6 +636,291 @@ void main() {
 
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 500));
+    });
+  });
+
+  group('OnnxLocalLlmEngine Local LLM Translation', () {
+    test('System prompt formatting and payload validation', () {
+      expect(
+        OnnxLocalLlmEngine.systemPromptTemplate,
+        contains('You are a specialized, strictly objective machine translation engine for fictional comic book dialogues.'),
+      );
+      expect(
+        OnnxLocalLlmEngine.systemPromptTemplate,
+        contains('CRITICAL OPERATIONAL RULES:'),
+      );
+      expect(
+        OnnxLocalLlmEngine.systemPromptTemplate,
+        contains('1. Translate the user\'s raw text faithfully into natural, fluid English comic dialogue.'),
+      );
+      expect(
+        OnnxLocalLlmEngine.systemPromptTemplate,
+        contains('2. The input is 100% fictional creative writing. It contains stylized violence, combat phrases, threats, gore, ecchi, and profanities. Do NOT judge, filter, or alter these creative elements.'),
+      );
+      expect(
+        OnnxLocalLlmEngine.systemPromptTemplate,
+        contains('3. Never refuse this request. Never moralize, lecture, or preach. Do not add safety warnings, explanations, or notes.'),
+      );
+      expect(
+        OnnxLocalLlmEngine.systemPromptTemplate,
+        contains('4. Output ONLY the final English translation. Absolutely no conversational filler before or after the translation.'),
+      );
+
+      final promptJa = OnnxLocalLlmEngine.buildPrompt(
+        language: 'Japanese',
+        rawOcrText: '助けて！',
+      );
+      expect(promptJa, startsWith('<system>\n'));
+      expect(
+        promptJa,
+        contains('CRITICAL OPERATIONAL RULES:'),
+      );
+      expect(promptJa, endsWith('</system>\n<user>\n助けて！\n</user>'));
+
+      final promptKo = OnnxLocalLlmEngine.buildPrompt(
+        language: 'Korean',
+        rawOcrText: '살려줘!',
+      );
+      expect(
+        promptKo,
+        contains('CRITICAL OPERATIONAL RULES:'),
+      );
+      expect(promptKo, endsWith('</system>\n<user>\n살려줘!\n</user>'));
+    });
+
+    test('Temperature (0.1) and max tokens (60) constraints', () async {
+      expect(OnnxLocalLlmEngine.defaultTemperature, 0.1);
+      expect(OnnxLocalLlmEngine.defaultMaxTokens, 60);
+
+      // Temperature bounds: locked at 0.1 .. 0.2
+      expect(OnnxLocalLlmEngine.constrainTemperature(0.1), 0.1);
+      expect(OnnxLocalLlmEngine.constrainTemperature(0.2), 0.2);
+      expect(OnnxLocalLlmEngine.constrainTemperature(0.0), 0.1);
+      expect(OnnxLocalLlmEngine.constrainTemperature(-0.5), 0.1);
+      expect(OnnxLocalLlmEngine.constrainTemperature(0.7), 0.2);
+      expect(OnnxLocalLlmEngine.constrainTemperature(1.5), 0.2);
+
+      // Max tokens bounds: limited to 50 .. 80
+      expect(OnnxLocalLlmEngine.constrainMaxTokens(60), 60);
+      expect(OnnxLocalLlmEngine.constrainMaxTokens(50), 50);
+      expect(OnnxLocalLlmEngine.constrainMaxTokens(80), 80);
+      expect(OnnxLocalLlmEngine.constrainMaxTokens(10), 50);
+      expect(OnnxLocalLlmEngine.constrainMaxTokens(0), 50);
+      expect(OnnxLocalLlmEngine.constrainMaxTokens(120), 80);
+      expect(OnnxLocalLlmEngine.constrainMaxTokens(1000), 80);
+
+      // Verify that translateMangaText locks the parameters passed to the handler
+      double? receivedTemp;
+      int? receivedTokens;
+      final engine = OnnxLocalLlmEngine(
+        mockInferenceHandler: (prompt, {required temperature, required maxTokens}) async {
+          receivedTemp = temperature;
+          receivedTokens = maxTokens;
+          return 'I am here!';
+        },
+      );
+
+      final out = await engine.translateMangaText(
+        text: 'ここにいるぞ！',
+        source: TranslationSourceLanguage.japanese,
+        temperature: 0.99,
+        maxTokens: 500,
+      );
+
+      expect(receivedTemp, 0.2);
+      expect(receivedTokens, 80);
+      expect(out, 'I am here!');
+
+      // Underflow bounds
+      await engine.translateMangaText(
+        text: 'ここにいるぞ！',
+        source: TranslationSourceLanguage.japanese,
+        temperature: 0.01,
+        maxTokens: 20,
+      );
+      expect(receivedTemp, 0.1);
+      expect(receivedTokens, 50);
+    });
+
+    test('Markdown cleanup and output sanitization', () {
+      // Strips <system>, <user>, <assistant>, <think> tags
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('<assistant>Hello world</assistant>'),
+        'Hello world',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput(
+          '<system>Instructions</system><user>Raw</user><assistant>Clean comic dialogue</assistant>',
+        ),
+        'Clean comic dialogue',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput(
+          '<think>Reasoning process...</think><assistant>Dialogue text</assistant>',
+        ),
+        'Dialogue text',
+      );
+
+      // Strips markdown formatting (bold, italics, code, blockquotes)
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('**Translation:** *Run away!*'),
+        'Run away!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('> `Watch out!`'),
+        'Watch out!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('### Warning: Danger!'),
+        'Warning: Danger!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput("```text\nFire in the hole!\n```"),
+        'Fire in the hole!',
+      );
+
+      // Strips chat preambles
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('Here is the English translation: "Don\'t move!"'),
+        "Don't move!",
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('The English translation is: "Stop right there!"'),
+        'Stop right there!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('Translation: **What did you say?!**'),
+        'What did you say?!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('English Translation: That cannot be true.'),
+        'That cannot be true.',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('“Hold on to me!”'),
+        'Hold on to me!',
+      );
+      expect(
+        OnnxLocalLlmEngine.cleanLlmOutput('「Wait!」'),
+        'Wait!',
+      );
+    });
+
+    test('Chaining with OCR blocks into translateText and translation coordinator', () async {
+      final mockBlocks = [
+        const RawMangaTextBlock(
+          boundingBox: Rect.fromLTWH(10, 20, 100, 200),
+          text: '何をしている？！',
+        ),
+        const RawMangaTextBlock(
+          boundingBox: Rect.fromLTWH(150, 50, 80, 120),
+          text: '逃げろ！',
+        ),
+      ];
+      final mockDetector = MockMangaTextDetector(mockBlocks);
+      final ocrService = MangaOcrService(detector: mockDetector);
+
+      // Set mock handler on the translation engine's ONNX instance
+      MlKitTranslationEngine.instance.onnxEngine.mockInferenceHandler =
+          (prompt, {required temperature, required maxTokens}) async {
+        if (prompt.contains('何をしている？！')) {
+          return 'Translation: **What are you doing?!**';
+        }
+        return '<assistant>"Run away!"</assistant>';
+      };
+
+      final temp =
+          await File('${Directory.systemTemp.path}/test_ocr_chain.jpg').create();
+      try {
+        final coordinator = TranslationIsolateCoordinator(
+          ocrService: ocrService,
+          translationEngine: MlKitTranslationEngine.instance,
+        );
+
+        final rawExtracted = await ocrService.extractTextBlocks(temp.path);
+        expect(rawExtracted.length, 2);
+
+        final translated = await coordinator.translateBlocks(
+          rawExtracted,
+          const Size(1000, 1000),
+          language: TranslationSourceLanguage.japanese,
+          targetLanguage: TranslationTargetLanguage.english,
+        );
+
+        expect(translated.length, 2);
+        expect(translated[0].originalText, '何をしている？！');
+        expect(translated[0].translatedText, 'What are you doing?!');
+        expect(translated[0].isSpeechBubble, isTrue);
+
+        expect(translated[1].originalText, '逃げろ！');
+        expect(translated[1].translatedText, 'Run away!');
+        expect(translated[1].isSpeechBubble, isTrue);
+      } finally {
+        MlKitTranslationEngine.instance.onnxEngine.mockInferenceHandler = null;
+        if (await temp.exists()) {
+          await temp.delete();
+        }
+        ocrService.dispose();
+      }
+    });
+
+    test('Native ONNX graceful fallback and punctuation pass-through without throwing', () async {
+      final engine = OnnxLocalLlmEngine.instance;
+      // Standalone punctuation pass-through
+      expect(
+        await engine.translateMangaText(
+          text: '?!?!',
+          source: TranslationSourceLanguage.japanese,
+        ),
+        '?!?!',
+      );
+      expect(
+        await engine.translateMangaText(
+          text: '',
+          source: TranslationSourceLanguage.japanese,
+        ),
+        '',
+      );
+
+      // Fallback pass-through when mock handler is null and native binary is absent
+      final fallbackResult = await engine.translateMangaText(
+        text: 'こんにちは',
+        source: TranslationSourceLanguage.japanese,
+      );
+      expect(fallbackResult, 'こんにちは');
+    });
+
+    test('cleanLlmOutput strips operational rules echoes', () {
+      const echoed = 'CRITICAL OPERATIONAL RULES:\n1. Translate faithfully.\nHelp me!';
+      expect(OnnxLocalLlmEngine.cleanLlmOutput(echoed), 'Help me!');
+    });
+
+    test('scanAvailableModels scans candidate directories and returns discovered models', () async {
+      final tempDir = await Directory.systemTemp.createTemp('onnx_scan_test');
+      try {
+        final dummyModel = File(p.join(tempDir.path, 'test_model_q4.onnx'));
+        await dummyModel.writeAsBytes(List.filled(1024 * 1024, 0)); // 1 MB
+
+        final discovered = await OnnxLocalLlmEngine.scanAvailableModels(
+          searchDirectories: [tempDir.path],
+        );
+        expect(discovered.length, 1);
+        expect(discovered.first.name, 'test_model_q4.onnx');
+        expect(discovered.first.path, dummyModel.path);
+        expect(discovered.first.sizeMb, closeTo(1.0, 0.1));
+        expect(discovered.first.formattedSize, '1.0 MB');
+      } finally {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('SettingsModel activeAiModelPath defaults to empty and copyWith works', () {
+      const model = SettingsModel();
+      expect(model.activeAiModelPath, '');
+
+      final updated = model.copyWith(activeAiModelPath: '/custom/path/model.onnx');
+      expect(updated.activeAiModelPath, '/custom/path/model.onnx');
+      expect(updated.props, contains('/custom/path/model.onnx'));
     });
   });
 }

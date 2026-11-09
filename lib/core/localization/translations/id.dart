@@ -258,4 +258,11 @@ const Map<String, String> idTranslations = {
   'downloadSize': 'Ukuran Unduhan',
   'modelInstalled': 'Terpasang',
   'download': 'Unduh',
+  'mangaAiModel': 'Model AI Terjemahan Manga',
+  'mangaAiModelSubtitle': 'Pilih atau kelola model LLM lokal (.onnx)',
+  'noModelsFound': 'Tidak ada model .onnx ditemukan',
+  'modelsDirectoryNotice': 'Letakkan file .onnx di /storage/emulated/0/models/',
+  'rescanModels': 'Pindai Ulang',
+  'defaultAutoDetect': 'Bawaan (Otomatis)',
+  'customModelPath': 'Jalur Model Kustom',
 };

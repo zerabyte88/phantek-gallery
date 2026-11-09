@@ -72,6 +72,22 @@ class TranslationIsolateCoordinator {
     );
   }
 
+  /// Chains [MangaOcrService] extracted blocks directly into [translateText].
+  Future<List<MangaTranslatedBlock>> translateBlocks(
+    List<RawMangaTextBlock> rawBlocks,
+    Size imageSize, {
+    TranslationSourceLanguage language = TranslationSourceLanguage.auto,
+    required TranslationTargetLanguage targetLanguage,
+  }) async {
+    return _translateBlocks(
+      rawBlocks,
+      imageSize,
+      _translationEngine,
+      language: language,
+      targetLanguage: targetLanguage,
+    );
+  }
+
   /// Schedules translation with debouncing for [imagePath].
   void scheduleTranslation({
     required String imagePath,
@@ -144,10 +160,9 @@ class TranslationIsolateCoordinator {
         return;
       }
 
-      final translatedBlocks = await _translateBlocks(
+      final translatedBlocks = await translateBlocks(
         rawBlocks,
         actualSize,
-        _translationEngine,
         language: language,
         targetLanguage: targetLanguage,
       );

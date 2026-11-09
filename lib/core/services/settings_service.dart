@@ -38,6 +38,7 @@ class _K {
   static const filterSmallImages = 'filterSmallImages';
   static const showHiddenFiles = 'showHiddenFiles';
   static const secureScreen = 'secureScreen';
+  static const activeAiModelPath = 'activeAiModelPath';
 }
 
 /// Thin wrapper around SharedPreferences for typed settings access.
@@ -103,6 +104,7 @@ class SettingsService {
       filterSmallImages: _prefs.getBool(_K.filterSmallImages) ?? false,
       showHiddenFiles: _prefs.getBool(_K.showHiddenFiles) ?? false,
       secureScreen: _prefs.getBool(_K.secureScreen) ?? false,
+      activeAiModelPath: _prefs.getString(_K.activeAiModelPath) ?? '',
     );
   }
 
@@ -137,10 +139,15 @@ class SettingsService {
       _prefs.setBool(_K.filterSmallImages, model.filterSmallImages),
       _prefs.setBool(_K.showHiddenFiles, model.showHiddenFiles),
       _prefs.setBool(_K.secureScreen, model.secureScreen),
+      _prefs.setString(_K.activeAiModelPath, model.activeAiModelPath),
     ]);
   }
 
   Future<void> reset() => save(const SettingsModel());
+
+  Future<void> setActiveAiModelPath(String path) async {
+    await _prefs.setString(_K.activeAiModelPath, path);
+  }
 
   // ── Video Resume Position ──────────────────────────────────────────────────
 

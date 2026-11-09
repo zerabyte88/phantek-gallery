@@ -258,4 +258,11 @@ const Map<String, String> enTranslations = {
   'downloadSize': 'Download Size',
   'modelInstalled': 'Installed',
   'download': 'Download',
+  'mangaAiModel': 'Manga AI Translation Model',
+  'mangaAiModelSubtitle': 'Manage or select offline LLM (.onnx)',
+  'noModelsFound': 'No .onnx models found',
+  'modelsDirectoryNotice': 'Place .onnx models in /storage/emulated/0/models/',
+  'rescanModels': 'Rescan',
+  'defaultAutoDetect': 'Default (Auto-Detect)',
+  'customModelPath': 'Custom Model Path',
 };

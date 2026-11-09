@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
+import '../../../core/services/translation/onnx_local_llm_engine.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/settings_model.dart';
@@ -653,6 +654,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     }
                   },
                 ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.psychology_outlined,
+                  title: context.tr.mangaAiModel,
+                  subtitle: settings.activeAiModelPath.isNotEmpty
+                      ? p.basename(settings.activeAiModelPath)
+                      : context.tr.mangaAiModelSubtitle,
+                  onTap: () => _showAiModelManagerDialog(context, ref, settings),
+                ),
               ],
             ),
             _SectionHeader(title: context.tr.privacyAndSecurity),
@@ -1097,6 +1107,343 @@ class _CardDivider extends StatelessWidget {
       color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
     );
   }
+}
+
+Future<void> _showAiModelManagerDialog(
+  BuildContext context,
+  WidgetRef ref,
+  SettingsModel settings,
+) async {
+  await OnnxLocalLlmEngine.ensureModelsDirectoryExists();
+
+  if (!context.mounted) return;
+
+  final dTheme = Theme.of(context);
+  final cs = dTheme.colorScheme;
+  final isDark = dTheme.brightness == Brightness.dark;
+
+  List<DiscoveredAiModel> models = [];
+  bool isLoading = true;
+
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) {
+      return StatefulBuilder(
+        builder: (ctx, setSt) {
+          void refreshModels() {
+            setSt(() => isLoading = true);
+            OnnxLocalLlmEngine.scanAvailableModels().then((result) {
+              if (ctx.mounted) {
+                setSt(() {
+                  models = result;
+                  isLoading = false;
+                });
+              }
+            });
+          }
+
+          if (isLoading && models.isEmpty) {
+            refreshModels();
+          }
+
+          final currentPath = settings.activeAiModelPath;
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+                width: 1,
+              ),
+            ),
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+            title: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    Icons.psychology_outlined,
+                    color: cs.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    context.tr.mangaAiModel,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: context.tr.rescanModels,
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  onPressed: refreshModels,
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest
+                            .withValues(alpha: isDark ? 0.4 : 0.5),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            size: 16,
+                            color: cs.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              context.tr.modelsDirectoryNotice,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.onSurfaceVariant,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      leading: Icon(
+                        currentPath.isEmpty
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                        color: currentPath.isEmpty
+                            ? cs.primary
+                            : cs.onSurfaceVariant,
+                        size: 20,
+                      ),
+                      title: Text(
+                        context.tr.defaultAutoDetect,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: currentPath.isEmpty
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'models/ / assets/models/',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      onTap: () async {
+                        ref.read(settingsNotifierProvider.notifier).update(
+                              (s) => s.copyWith(activeAiModelPath: ''),
+                            );
+                        await OnnxLocalLlmEngine.instance.initializeSession(
+                          modelPath: null,
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                    ),
+                    const Divider(height: 16),
+                    if (isLoading) ...[
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        ),
+                      ),
+                    ] else if (models.isEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: Text(
+                            context.tr.noModelsFound,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      ...models.map((model) {
+                        final isSelected = currentPath == model.path;
+                        return ListTile(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 8),
+                          leading: Icon(
+                            isSelected
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_off,
+                            color: isSelected
+                                ? cs.primary
+                                : cs.onSurfaceVariant,
+                            size: 20,
+                          ),
+                          title: Text(
+                            model.name,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              color: cs.onSurface,
+                            ),
+                          ),
+                          subtitle: Text(
+                            ' • ',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          onTap: () async {
+                            ref.read(settingsNotifierProvider.notifier).update(
+                                  (s) => s.copyWith(activeAiModelPath: model.path),
+                                );
+                            await OnnxLocalLlmEngine.instance.initializeSession(
+                              modelPath: model.path,
+                            );
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          },
+                        );
+                      }),
+                    ],
+                    const Divider(height: 16),
+                    ListTile(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      leading: Icon(
+                        Icons.edit_road_outlined,
+                        color: cs.primary,
+                        size: 20,
+                      ),
+                      title: Text(
+                        context.tr.customModelPath,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      subtitle: currentPath.isNotEmpty &&
+                              !models.any((m) => m.path == currentPath)
+                          ? Text(
+                              currentPath,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: cs.primary,
+                              ),
+                            )
+                          : null,
+                      trailing:
+                          const Icon(Icons.chevron_right_rounded, size: 20),
+                      onTap: () async {
+                        final controller =
+                            TextEditingController(text: currentPath);
+                        final customPath = await showDialog<String>(
+                          context: ctx,
+                          builder: (subCtx) => AlertDialog(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            title: Text(
+                              context.tr.customModelPath,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            content: TextField(
+                              controller: controller,
+                              autofocus: true,
+                              decoration: const InputDecoration(
+                                hintText: '/path/to/model.onnx',
+                                isDense: true,
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(subCtx),
+                                child: Text(context.tr.cancel),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(
+                                    subCtx, controller.text.trim()),
+                                child: Text(context.tr.ok),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (customPath != null && customPath.isNotEmpty) {
+                          ref.read(settingsNotifierProvider.notifier).update(
+                                (s) => s.copyWith(activeAiModelPath: customPath),
+                              );
+                          await OnnxLocalLlmEngine.instance.initializeSession(
+                            modelPath: customPath,
+                          );
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actionsPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            actions: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(context.tr.cancel),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
 }
 
 Future<void> _showExcludedFoldersDialog(

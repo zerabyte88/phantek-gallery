@@ -63,3 +63,17 @@ keystore_base64.txt
 
 # Design mockups
 assets/mockups/
+
+# Large AI & LLM Model Weights
+*.onnx
+*.gguf
+*.tflite
+tokenizer.json
+tokenizer_config.json
+vocab.json
+download_qwen.py
+/models/
+/local_models/
+
+
+

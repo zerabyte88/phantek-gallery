@@ -182,10 +182,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   final GlobalKey _mangaListKey = GlobalKey();
   RenderSliverMultiBoxAdaptor? _cachedMangaSliver;
   TranslationRenderMode? _translationMode;
-  TranslationSourceLanguage _translationLanguage =
+  final TranslationSourceLanguage _translationLanguage =
       TranslationSourceLanguage.auto;
-  TranslationTargetLanguage _translationTargetLanguage =
-      TranslationTargetLanguage.indonesian;
+  final TranslationTargetLanguage _translationTargetLanguage =
+      TranslationTargetLanguage.english;
   late List<MediaItem> _cachedMangaList;
   late final ValueNotifier<int> _activeMangaPageNotifier;
 
@@ -644,28 +644,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
   }
 
-  void _setTranslationLanguage(TranslationSourceLanguage lang) {
-    if (_translationLanguage == lang) return;
-    setState(() {
-      _translationLanguage = lang;
-    });
-    _translationCoordinator.clearCache();
-    if (_translationMode != null && _mangaItems.isNotEmpty) {
-      _onMangaScroll();
-    }
-  }
-
-  void _setTranslationTargetLanguage(TranslationTargetLanguage lang) {
-    if (_translationTargetLanguage == lang) return;
-    setState(() {
-      _translationTargetLanguage = lang;
-    });
-    _translationCoordinator.clearCache();
-    if (_translationMode != null && _mangaItems.isNotEmpty) {
-      _onMangaScroll();
-    }
-  }
-
   void _setTranslationMode(TranslationRenderMode? mode) {
     setState(() {
       _translationMode = mode;
@@ -764,110 +742,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
                           const SizedBox(height: 16),
 
-                          // Section 1: Source Language
-                          Text(
-                            loc.sourceLanguage.toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                _buildLanguageChip(
-                                  label: '🌐 ${loc.autoDetect}',
-                                  selected: _translationLanguage ==
-                                      TranslationSourceLanguage.auto,
-                                  onTap: () {
-                                    _setTranslationLanguage(
-                                        TranslationSourceLanguage.auto);
-                                    setSheetState(() {});
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                _buildLanguageChip(
-                                  label: '🇯🇵 ${loc.langJapanese}',
-                                  selected: _translationLanguage ==
-                                      TranslationSourceLanguage.japanese,
-                                  onTap: () {
-                                    _setTranslationLanguage(
-                                        TranslationSourceLanguage.japanese);
-                                    setSheetState(() {});
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                _buildLanguageChip(
-                                  label: '🇰🇷 ${loc.langKorean}',
-                                  selected: _translationLanguage ==
-                                      TranslationSourceLanguage.korean,
-                                  onTap: () {
-                                    _setTranslationLanguage(
-                                        TranslationSourceLanguage.korean);
-                                    setSheetState(() {});
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                _buildLanguageChip(
-                                  label: '🇨🇳 ${loc.langChinese}',
-                                  selected: _translationLanguage ==
-                                      TranslationSourceLanguage.chinese,
-                                  onTap: () {
-                                    _setTranslationLanguage(
-                                        TranslationSourceLanguage.chinese);
-                                    setSheetState(() {});
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // Section 2: Target Language
-                          Text(
-                            loc.targetLanguage.toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              _buildLanguageChip(
-                                label: '🇮🇩 ${loc.langIndonesian}',
-                                selected: _translationTargetLanguage ==
-                                    TranslationTargetLanguage.indonesian,
-                                onTap: () {
-                                  _setTranslationTargetLanguage(
-                                      TranslationTargetLanguage.indonesian);
-                                  setSheetState(() {});
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              _buildLanguageChip(
-                                label: '🇺🇸 ${loc.langEnglish}',
-                                selected: _translationTargetLanguage ==
-                                    TranslationTargetLanguage.english,
-                                onTap: () {
-                                  _setTranslationTargetLanguage(
-                                      TranslationTargetLanguage.english);
-                                  setSheetState(() {});
-                                },
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 16),
-
-                                                    // Section 3: AI Model Status Card
+                          // Section 3: AI Model Status Card
                           ValueListenableBuilder<TranslationDownloadProgress>(
                             valueListenable:
                                 MlKitTranslationEngine.instance.downloadProgressNotifier,
@@ -957,7 +832,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                               const SizedBox(height: 2),
                                               Text(
                                                 isReady
-                                                    ? 'Google Neural MT (100% On-Device Offline)'
+                                                    ? 'Local LLM Engine (ONNX / Gemma 3 Nano)'
                                                     : isDownloading
                                                         ? '${downloadProgress.downloadedMb.toStringAsFixed(1)} MB / ${downloadProgress.totalMb.toStringAsFixed(1)} MB (${(downloadProgress.progress * 100).toInt()}%)'
                                                         : hasError
@@ -1225,40 +1100,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             if (selected)
               Icon(Icons.check_circle_rounded, color: primary, size: 20),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLanguageChip({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    final primary = theme.colorScheme.primary;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? primary.withValues(alpha: 0.25) : Colors.white10,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? primary : Colors.white24,
-            width: selected ? 1.5 : 1.0,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : Colors.white70,
-            fontSize: 13,
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-          ),
         ),
       ),
     );

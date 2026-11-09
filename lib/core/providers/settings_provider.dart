@@ -18,6 +18,8 @@ class SettingsNotifier extends Notifier<SettingsModel> {
     await ref.read(settingsServiceProvider).save(next);
   }
 
+  Future<void> patch(SettingsModel Function(SettingsModel) fn) => update(fn);
+
   Future<void> reset() async {
     await ref.read(settingsServiceProvider).reset();
     state = const SettingsModel();

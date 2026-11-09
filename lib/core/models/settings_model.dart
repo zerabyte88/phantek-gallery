@@ -37,6 +37,7 @@ class SettingsModel extends Equatable {
     this.filterSmallImages = false,
     this.showHiddenFiles = false,
     this.secureScreen = false,
+    this.activeAiModelPath = '',
   });
 
   final AppThemeMode themeMode;
@@ -111,6 +112,9 @@ class SettingsModel extends Equatable {
   /// Prevent screenshots and hide app previews in recent tasks (FLAG_SECURE).
   final bool secureScreen;
 
+  /// Active offline ONNX LLM model file path for manga translation (empty for default auto-detect).
+  final String activeAiModelPath;
+
   SettingsModel copyWith({
     AppThemeMode? themeMode,
     AppLanguage? language,
@@ -138,6 +142,7 @@ class SettingsModel extends Equatable {
     bool? filterSmallImages,
     bool? showHiddenFiles,
     bool? secureScreen,
+    String? activeAiModelPath,
   }) {
     return SettingsModel(
       themeMode: themeMode ?? this.themeMode,
@@ -167,6 +172,7 @@ class SettingsModel extends Equatable {
       filterSmallImages: filterSmallImages ?? this.filterSmallImages,
       showHiddenFiles: showHiddenFiles ?? this.showHiddenFiles,
       secureScreen: secureScreen ?? this.secureScreen,
+      activeAiModelPath: activeAiModelPath ?? this.activeAiModelPath,
     );
   }
 
@@ -198,6 +204,7 @@ class SettingsModel extends Equatable {
         filterSmallImages,
         showHiddenFiles,
         secureScreen,
+        activeAiModelPath,
       ];
 }
 

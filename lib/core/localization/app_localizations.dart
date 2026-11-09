@@ -260,6 +260,13 @@ class AppLocalizations {
   String get cacheCleared => _t('cacheCleared');
   String get privacyAndSecurity => _t('privacyAndSecurity');
   String get secureScreen => _t('secureScreen');
+  String get mangaAiModel => _t('mangaAiModel');
+  String get mangaAiModelSubtitle => _t('mangaAiModelSubtitle');
+  String get noModelsFound => _t('noModelsFound');
+  String get modelsDirectoryNotice => _t('modelsDirectoryNotice');
+  String get rescanModels => _t('rescanModels');
+  String get defaultAutoDetect => _t('defaultAutoDetect');
+  String get customModelPath => _t('customModelPath');
   String get secureScreenDesc => _t('secureScreenDesc');
   String get today => _t('today');
   String get yesterday => _t('yesterday');
