@@ -282,6 +282,11 @@ class MlKitTranslationEngine {
     required String stepName,
     bool isWifiRequired = false,
   }) async {
+    // 0) Delete stale partial or corrupt model before downloading
+    try {
+      await _modelManager.deleteModel(lang.bcpCode);
+    } catch (_) {}
+
     downloadProgressNotifier.value = TranslationDownloadProgress(
       isDownloading: true,
       currentStep: stepName,
@@ -292,15 +297,25 @@ class MlKitTranslationEngine {
 
     final completer = Completer<bool>();
     final stopwatch = Stopwatch()..start();
+    OnDeviceTranslator? fallbackTranslator;
 
-    // 1) Simulated progress timer: realistic increments over ~25s up to 95% of this step
+    // 1) Simulated progress timer: realistic increments over ~25s up to 95%,
+    // then smooth creep from 95% to 99% until 90s so UI never freezes at 28.5 MB.
     final progressTimer = Timer.periodic(const Duration(milliseconds: 250), (t) {
       if (completer.isCompleted) {
         t.cancel();
         return;
       }
       final elapsedMs = stopwatch.elapsedMilliseconds;
-      final stepFraction = (elapsedMs / 25000.0).clamp(0.0, 0.95);
+      double stepFraction;
+      if (elapsedMs <= 25000) {
+        stepFraction = (elapsedMs / 25000.0) * 0.95;
+      } else {
+        final creepProgress = ((elapsedMs - 25000) / 65000.0).clamp(0.0, 1.0);
+        stepFraction = 0.95 + (0.04 * creepProgress);
+      }
+      stepFraction = stepFraction.clamp(0.0, 0.99);
+
       final currentMb = stepBaseMb + (stepTotalMb * stepFraction);
       downloadProgressNotifier.value = TranslationDownloadProgress(
         isDownloading: true,
@@ -311,8 +326,8 @@ class MlKitTranslationEngine {
       );
     });
 
-    // 2) Polling timer: check isLanguageDownloaded every 1.5s
-    final pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (t) async {
+    // 2) Polling timer: check isLanguageDownloaded every 1.0s
+    final pollTimer = Timer.periodic(const Duration(seconds: 1), (t) async {
       if (completer.isCompleted) {
         t.cancel();
         return;
@@ -325,24 +340,56 @@ class MlKitTranslationEngine {
       } catch (_) {}
     });
 
-    // 3) Trigger download with 90s timeout
+    // 3) Dual download trigger: at 5s, activate native downloadModelIfNeeded() via translateText('.')
+    final dualDownloadTimer = Timer(const Duration(seconds: 5), () {
+      if (completer.isCompleted) return;
+      try {
+        final pairTarget = (lang == TranslateLanguage.english)
+            ? TranslateLanguage.indonesian
+            : TranslateLanguage.english;
+        fallbackTranslator = OnDeviceTranslator(
+          sourceLanguage: lang,
+          targetLanguage: pairTarget,
+        );
+        unawaited(
+          fallbackTranslator!
+              .translateText('.')
+              .then((_) {})
+              .catchError((_) {}),
+        );
+      } catch (_) {}
+    });
+
+    // 4) Master 90s timeout guard
+    final timeoutTimer = Timer(const Duration(seconds: 90), () {
+      if (!completer.isCompleted) {
+        completer.complete(false);
+      }
+    });
+
+    // 5) Primary download trigger via model manager
     downloadLanguage(lang, isWifiRequired: isWifiRequired)
-        .timeout(const Duration(seconds: 90))
         .then((success) {
-          if (!completer.isCompleted) {
-            completer.complete(success);
+          if (success && !completer.isCompleted) {
+            completer.complete(true);
           }
         })
         .catchError((e) {
-          if (!completer.isCompleted) {
-            completer.complete(false);
-          }
+          debugPrint('Primary downloadLanguage error for ${lang.name}: $e');
         });
 
     final success = await completer.future;
     progressTimer.cancel();
     pollTimer.cancel();
+    dualDownloadTimer.cancel();
+    timeoutTimer.cancel();
     stopwatch.stop();
+
+    if (fallbackTranslator != null) {
+      try {
+        await fallbackTranslator!.close();
+      } catch (_) {}
+    }
 
     if (success) {
       final completedMb = stepBaseMb + stepTotalMb;

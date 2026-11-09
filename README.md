@@ -5,7 +5,7 @@
 
   **A fast, privacy-focused Android gallery with PSD layer support and on-device AI manga translation.**
 
-  [![Version](https://img.shields.io/badge/Version-v2.15.1-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.15.2-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20ExoPlayer-6366f1.svg?style=flat-square)](https://developer.android.com/media/media3)
@@ -93,6 +93,7 @@ Phantek Gallery is a local-first gallery for photos, videos, PSD files, and mang
 | `MANAGE_EXTERNAL_STORAGE` | Direct file handling for the `.trash` recycle bin |
 | `ACCESS_MEDIA_LOCATION` | Read location metadata from camera photos |
 | `INTERNET` | One-time download of ML Kit translation models and the developer avatar |
+| `ACCESS_NETWORK_STATE` | Verify network connectivity for ML Kit translation model downloads |
 
 </div>
 
