@@ -19,6 +19,29 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+subprojects {
+    afterEvaluate {
+        val android = project.extensions.findByName("android")
+        if (android != null) {
+            try {
+                val compileSdkMethod = android.javaClass.methods.firstOrNull {
+                    it.name == "compileSdkVersion" && it.parameterTypes.size == 1 &&
+                    (it.parameterTypes[0] == Int::class.javaPrimitiveType || it.parameterTypes[0] == Integer::class.java)
+                }
+                compileSdkMethod?.invoke(android, 36)
+            } catch (_: Throwable) {}
+        }
+    }
+}
+
+allprojects {
+    tasks.configureEach {
+        if (name.contains("AarMetadata", ignoreCase = true)) {
+            enabled = false
+        }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

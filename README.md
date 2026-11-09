@@ -3,7 +3,7 @@
 
   # Phantek Gallery
 
-  **A fast, privacy-focused Android gallery with PSD layer support and on-device AI manga translation.**
+  **A fast, privacy-focused Android gallery with PSD layer support and on-device AI manga translation using a local LLM of your choice.**
 
   [![Version](https://img.shields.io/badge/Version-v2.16.0-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
@@ -11,14 +11,14 @@
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20ExoPlayer-6366f1.svg?style=flat-square)](https://developer.android.com/media/media3)
   [![License](https://img.shields.io/badge/License-MIT-f59e0b.svg?style=flat-square&logo=open-source-initiative&logoColor=white)](LICENSE)
 
-  [Download APK](https://github.com/zerabyte88/phantek-gallery/releases/latest) • [Features](#features) • [Supported Formats](#supported-formats) • [Tech Stack](#tech-stack) • [Permissions](#permissions) • [Build](#build-from-source) • [License](#license)
+  [Download APK](https://github.com/zerabyte88/phantek-gallery/releases/latest) • [Features](#features) • [Translation Setup](#translation-setup) • [Supported Formats](#supported-formats) • [Tech Stack](#tech-stack) • [Permissions](#permissions) • [Build](#build-from-source) • [License](#license)
 </div>
 
 ---
 
 ## Overview
 
-Phantek Gallery is a local-first gallery for photos, videos, PSD files, and manga. Your media stays on your device: there is no tracking, no telemetry, and no cloud sync. The only network access is a one-time download of the translation language models, which you start yourself. After that, everything works offline.
+Phantek Gallery is a local-first gallery for photos, videos, PSD files, and manga. Your media stays on your device, there is no tracking, no telemetry, and no cloud sync. Manga translation runs on a lightweight local LLM that you download and install yourself, so your pages are never sent to a cloud API.
 
 ---
 
@@ -26,25 +26,38 @@ Phantek Gallery is a local-first gallery for photos, videos, PSD files, and mang
 
 ### Gallery and Viewing
 
-- **Fast Media Grid**: Hardware-accelerated thumbnails through `MediaStore.loadThumbnail` (1–2 ms), in-memory cache indexing, and isolate-backed decoding for smooth scrolling up to 120 Hz.
-- **PSD Layer Viewer**: Open Adobe Photoshop (`.psd`) files with instant seekable embedded-JPEG previews (under 1 ms) and a sheet for toggling individual layers on and off.
-- **Hardware Video Playback**: Built on AndroidX Media3 / ExoPlayer with a dual SurfaceView pipeline for smooth 2K and 4K playback. Includes double-tap seek, smart zoom, brightness and volume gestures, and playback position resume.
-- **EXIF and Media Inspector**: Technical details for photos (ISO, aperture, focal length, resolution) and videos (bitrate, fps, codec, channels).
+- **Fast Media Grid** : Hardware-accelerated thumbnails through `MediaStore.loadThumbnail` (1–2 ms), in-memory cache indexing, and isolate-backed decoding for smooth scrolling up to 120 Hz.
+- **PSD Layer Viewer** : Open Adobe Photoshop (`.psd`) files with instant seekable embedded-JPEG previews (under 1 ms) and a sheet for toggling individual layers on and off.
+- **Hardware Video Playback** : Built on AndroidX Media3 / ExoPlayer with a dual SurfaceView pipeline for smooth 2K and 4K playback. Includes double-tap seek, smart zoom, brightness and volume gestures, and playback position resume.
+- **EXIF and Media Inspector** : Technical details for photos (ISO, aperture, focal length, resolution) and videos (bitrate, fps, codec, channels).
 
 ### Manga
 
-- **Manga Reader with Natural Sort**: Continuous vertical reading with an edge-to-edge view and chapter progress pills. Albums and chapters sort naturally (`Chapter 1`, `1.1`, `2.1`, `10`, `25`).
-- **On-Device AI Translation**: Detects text in Japanese, Korean, and Chinese manga with Google ML Kit multi-script OCR and translates it into natural English comic dialogue using an offline Local LLM engine (Gemma 3 Nano / ONNX Runtime). Runs 100% offline on-device without cloud APIs.
+- **Manga Reader with Natural Sort** : Continuous vertical reading with an edge-to-edge view and chapter progress pills. Albums and chapters sort naturally (`Chapter 1`, `1.1`, `2.1`, `10`, `25`).
+- **On-Device AI Translation** : Translate manga pages with a lightweight local LLM such as Qwen2.5 0.5B. Everything runs on your device, with no cloud APIs involved.
+- **Bring Your Own Model** : Models are not bundled with the app. Download the LLM you prefer and install or switch between models from Settings, so you can balance speed, memory use, and translation quality for your own device.
 
 ### Privacy and Safety
 
-- **Local-First and Private**: No tracking, no telemetry, no cloud sync. Media files never leave your device. Network access is strictly limited to downloading ML Kit on-device translation models on demand. The developer card and avatar are bundled 100% offline.
-- **Screen Protection**: Uses Android `FLAG_SECURE` to block screenshots and screen recordings, and to blur the recent apps preview.
-- **Recycle Bin**: A staged `.trash` folder with configurable auto-purge (7, 14, or 30 days, or never) and batch restore or permanent delete.
+- **Local-First and Private** : No tracking, no telemetry, no cloud sync. Media files never leave your device, and translation runs fully on-device with a model you provide.
+- **Screen Protection** : Uses Android `FLAG_SECURE` to block screenshots and screen recordings, and to blur the recent apps preview.
+- **Recycle Bin** : A staged `.trash` folder with configurable auto-purge (7, 14, or 30 days, or never) and batch restore or permanent delete.
 
 ### Personalization
 
-- **Visual Themes**: Six hand-crafted themes (*Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, *Sakura*) with dynamic artistic headers.
+- **Visual Themes** : Six hand-crafted themes (*Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, *Sakura*) with dynamic artistic headers.
+
+---
+
+## Translation Setup
+
+The translation model is not included in the APK. This keeps the app small and lets you choose the model that fits your device.
+
+1. Download a compatible lightweight LLM, for example Qwen2.5 0.5B.
+2. Open **Settings** and add the model file in the translation section.
+3. Open a manga chapter and start translating.
+
+> **Note:** Small models are fast and light on memory, but translation quality can vary. Larger models usually translate better and need more RAM and time.
 
 ---
 
@@ -72,7 +85,7 @@ Phantek Gallery is a local-first gallery for photos, videos, PSD files, and mang
 | **Framework** | Flutter (Dart SDK `^3.5`) | UI rendering, animations, gestures, and localization |
 | **State Management** | `flutter_riverpod` (`^2.5.1`) | Reactive state and dependency injection |
 | **Video Engine** | `video_player` (`^2.9.2`) | Hardware video playback via AndroidX Media3 / ExoPlayer |
-| **On-Device ML** | `google_mlkit_text_recognition`, `google_mlkit_translation` | Manga text detection and on-device neural translation |
+| **On-Device LLM** | Local LLM runtime | Manga translation with a user-provided model (e.g. Qwen2.5 0.5B) |
 | **Media Scanning** | `photo_manager`, `permission_handler` | Scoped storage media queries and permission handling |
 | **Native Bridge** | Kotlin MethodChannels | `FLAG_SECURE`, MediaStore thumbnail loader, FileProvider |
 | **Storage and Caching** | `shared_preferences`, `path_provider` | Settings persistence and thumbnail disk cache |
@@ -92,8 +105,6 @@ Phantek Gallery is a local-first gallery for photos, videos, PSD files, and mang
 | `READ_EXTERNAL_STORAGE` / `WRITE_EXTERNAL_STORAGE` | Storage access on Android 12 and below |
 | `MANAGE_EXTERNAL_STORAGE` | Direct file handling for the `.trash` recycle bin |
 | `ACCESS_MEDIA_LOCATION` | Read location metadata from camera photos |
-| `INTERNET` | One-time download of ML Kit translation models |
-| `ACCESS_NETWORK_STATE` | Verify network connectivity for ML Kit translation model downloads |
 
 </div>
 
