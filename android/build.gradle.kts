@@ -44,14 +44,6 @@ subprojects {
     }
 }
 
-allprojects {
-    tasks.configureEach {
-        if (name.contains("AarMetadata", ignoreCase = true)) {
-            enabled = false
-        }
-    }
-}
-
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
