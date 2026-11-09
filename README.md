@@ -65,7 +65,7 @@ GGUF models store both the model weights and tokenizer in a single `.gguf` file.
 | **Qwen 2.5 1.5B abliterated (Q4_K_M)** | GGUF | ~986 MB | Higher translation nuance and grammar accuracy for mid-to-high-end devices (4 GB+ RAM). | [Download Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf](https://huggingface.co/failspy/Qwen2.5-1.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf?download=true) |
 
 > [!TIP]
-> **Vulkan GPU Acceleration**: On supported modern Android devices (Snapdragon Adreno 6xx+, Mali-G71+, Samsung Exynos), `llama.cpp` automatically utilizes Vulkan compute shaders for 4–8x faster translation. On other devices, an optimized ARM NEON CPU backend is used as fallback.
+> **Optimized ARM NEON Engine**: Offline translation runs natively on-device using multi-threaded ARM NEON SIMD vector instructions for ultra-fast, energy-efficient dialogue translation without GPU driver compatibility issues.
 
 > [!NOTE]
 > Unlike older ONNX setups, **GGUF does not require a separate `tokenizer.json`**. The tokenizer vocabulary is embedded directly inside the `.gguf` file.
@@ -124,7 +124,7 @@ Open any manga or image page in the viewer, tap the **Translate icon (文A)** in
 | **Framework** | Flutter (Dart SDK `^3.5`) | UI rendering, animations, gestures, and localization |
 | **State Management** | `flutter_riverpod` (`^2.5.1`) | Reactive state and dependency injection |
 | **Video Engine** | `video_player` (`^2.9.2`) | Hardware video playback via AndroidX Media3 / ExoPlayer |
-| **On-Device LLM** | `flutter_llama` (`^1.2.1`) | Offline manga translation via llama.cpp with Vulkan GPU & ARM NEON |
+| **On-Device LLM** | `flutter_llama` (`^1.2.1`) | Offline manga translation via llama.cpp with optimized ARM NEON CPU engine |
 | **On-Device OCR** | Google ML Kit (Text Recognition v2) | Offline script recognition (Japanese, Chinese, Korean, Latin) |
 | **Media Scanning** | `photo_manager`, `permission_handler` | Scoped storage media queries and permission handling |
 | **Native Bridge** | Kotlin MethodChannels | `FLAG_SECURE`, MediaStore thumbnail loader, FileProvider |

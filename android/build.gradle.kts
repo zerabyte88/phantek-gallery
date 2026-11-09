@@ -20,25 +20,27 @@ subprojects {
 }
 
 subprojects {
-    if (project.name == "onnxruntime") {
-        fun updateCompileSdk() {
+    if (project.name == "flutter_llama") {
+        fun configureFlutterLlama() {
             val android = project.extensions.findByName("android")
             if (android != null) {
                 try {
-                    val compileSdkMethod = android.javaClass.methods.firstOrNull {
-                        it.name == "compileSdkVersion" && it.parameterTypes.size == 1 &&
-                        (it.parameterTypes[0] == Int::class.javaPrimitiveType || it.parameterTypes[0] == Integer::class.java)
+                    val defaultConfig = android.javaClass.getMethod("getDefaultConfig").invoke(android)
+                    val externalNativeBuild = defaultConfig?.javaClass?.getMethod("getExternalNativeBuild")?.invoke(defaultConfig)
+                    val cmake = externalNativeBuild?.javaClass?.getMethod("getCmake")?.invoke(externalNativeBuild)
+                    val argumentsMethod = cmake?.javaClass?.methods?.firstOrNull {
+                        it.name == "arguments" && it.parameterTypes.size == 1
                     }
-                    compileSdkMethod?.invoke(android, 37)
+                    argumentsMethod?.invoke(cmake, arrayOf("-DFLUTTER_LLAMA_ANDROID_VULKAN=OFF"))
                 } catch (_: Throwable) {}
             }
         }
 
         if (project.state.executed) {
-            updateCompileSdk()
+            configureFlutterLlama()
         } else {
             project.afterEvaluate {
-                updateCompileSdk()
+                configureFlutterLlama()
             }
         }
     }
