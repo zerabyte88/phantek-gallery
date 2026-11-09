@@ -1319,7 +1319,7 @@ Future<void> _showAiModelManagerDialog(
                             ),
                           ),
                           subtitle: Text(
-                            ' • ',
+                            '${model.formattedSize} • ${model.path}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

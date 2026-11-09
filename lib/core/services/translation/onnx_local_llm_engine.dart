@@ -104,16 +104,23 @@ class OnnxLocalLlmEngine {
 
   /// Default model file candidate names to search for in workspace/app paths.
   static const List<String> defaultModelCandidatePaths = [
+    '/storage/emulated/0/models/model_quantized.onnx',
+    '/storage/emulated/0/models/model_int8.onnx',
+    '/storage/emulated/0/models/qwen2.5-0.5b-instruct-abliterated-int8.onnx',
     '/storage/emulated/0/models/qwen2.5-0.5b-instruct-abliterated-q4.onnx',
     '/storage/emulated/0/models/qwen2.5-0.5b-instruct-q4.onnx',
     '/storage/emulated/0/models/model_q4.onnx',
     '/storage/emulated/0/models/model_q4f16.onnx',
     '/storage/emulated/0/models/model.onnx',
+    'models/model_quantized.onnx',
+    'models/model_int8.onnx',
+    'models/qwen2.5-0.5b-instruct-abliterated-int8.onnx',
     'models/qwen2.5-0.5b-instruct-abliterated-q4.onnx',
     'models/qwen2.5-0.5b-instruct-q4.onnx',
     'models/model_q4.onnx',
     'models/model_q4f16.onnx',
     'models/model.onnx',
+    'assets/models/model_quantized.onnx',
     'assets/models/qwen2.5-0.5b-instruct-abliterated-q4.onnx',
     'assets/models/qwen2.5-0.5b-instruct-q4.onnx',
   ];
@@ -617,17 +624,6 @@ class OnnxLocalLlmEngine {
       }
 
       if (resolvedPath != null && File(resolvedPath).existsSync()) {
-        if (_tokenizer != null) {
-          if (isBundledFallbackUsed) {
-            lastStatusMessage = 'Ready: ${p.basename(resolvedPath)} (built-in tokenizer)';
-          } else {
-            lastStatusMessage = 'Ready: ${p.basename(resolvedPath)}';
-          }
-        } else {
-          lastStatusMessage =
-              'Model loaded (${p.basename(resolvedPath)}), but tokenizer.json not found in ${p.dirname(resolvedPath)}';
-        }
-
         try {
           _session?.release();
         } catch (_) {}
@@ -635,20 +631,37 @@ class OnnxLocalLlmEngine {
         try {
           _session = OrtSession.fromFile(File(resolvedPath), _sessionOptions!);
           _isNativeAvailable = true;
+
+          if (_tokenizer != null) {
+            if (isBundledFallbackUsed) {
+              lastStatusMessage =
+                  'Ready: ${p.basename(resolvedPath)} (built-in tokenizer)';
+            } else {
+              lastStatusMessage = 'Ready: ${p.basename(resolvedPath)}';
+            }
+          } else {
+            lastStatusMessage =
+                'Model loaded (${p.basename(resolvedPath)}), but tokenizer.json not found in ${p.dirname(resolvedPath)}';
+          }
           return true;
         } catch (e) {
+          final errorStr = e.toString();
+          if (errorStr.contains('MatMulNBits') ||
+              errorStr.contains('NOT_IMPLEMENTED')) {
+            lastStatusMessage =
+                'Model 4-bit (MatMulNBits) tidak didukung runtime. Gunakan model_quantized.onnx (INT8, 472MB)';
+          } else if (_tokenizer == null) {
+            lastStatusMessage =
+                'Model loaded (${p.basename(resolvedPath)}), but tokenizer.json not found in ${p.dirname(resolvedPath)}';
+          } else {
+            lastStatusMessage = 'Gagal memuat ${p.basename(resolvedPath)}: $e';
+          }
           debugPrint('ONNX Native runtime initialization error: $e');
           _isNativeAvailable = false;
           _session = null;
           return false;
         }
       } else if (modelBytes != null) {
-        if (_tokenizer != null) {
-          lastStatusMessage = 'Ready: in-memory model';
-        } else {
-          lastStatusMessage = 'Model loaded (in-memory), but tokenizer.json not found';
-        }
-
         try {
           _session?.release();
         } catch (_) {}
@@ -656,8 +669,16 @@ class OnnxLocalLlmEngine {
         try {
           _session = OrtSession.fromBuffer(modelBytes, _sessionOptions!);
           _isNativeAvailable = true;
+
+          if (_tokenizer != null) {
+            lastStatusMessage = 'Ready: in-memory model';
+          } else {
+            lastStatusMessage =
+                'Model loaded (in-memory), but tokenizer.json not found';
+          }
           return true;
         } catch (e) {
+          lastStatusMessage = 'Gagal memuat in-memory model: $e';
           debugPrint('ONNX Native runtime buffer initialization error: $e');
           _isNativeAvailable = false;
           _session = null;

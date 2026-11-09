@@ -61,7 +61,10 @@ For the best balance of speed, low memory footprint, and natural comic dialogue 
 
 | Model | Size | Recommended For | Hugging Face Download Link |
 | :--- | :---: | :--- | :--- |
-| **Qwen 2.5 0.5B Instruct abliterated (Q4)** *(Recommended)* | ~734 MB | Low-end & mid-range devices. Fast, snappy bubble translations. | [onnx-community/Qwen2.5-0.5B-Instruct-abliterated-ONNX](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct-abliterated-ONNX/resolve/main/onnx/model_q4.onnx?download=true) |
+| **Qwen 2.5 0.5B abliterated (INT8)** *(Recommended)* | ~472 MB | 100% compatible with Android ONNX runtime, lightweight, fast, and high quality. | [onnx-community/Qwen2.5-0.5B-Instruct-abliterated-ONNX](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct-abliterated-ONNX/resolve/main/onnx/model_quantized.onnx?download=true) |
+
+> [!NOTE]
+> Gunakan file **model_quantized.onnx** (~472 MB). Jangan gunakan varian 4-bit (model_q4.onnx) karena varian 4-bit memerlukan operator MatMulNBits yang tidak didukung runtime ONNX Android.
 
 > [!TIP]
 > Each ONNX model requires its companion **`tokenizer.json`** to tokenize comic text. You can download the official Qwen tokenizer file directly from Hugging Face :
@@ -82,14 +85,14 @@ Open Phantek Gallery at least once. The app automatically creates the dedicated 
 *(Alternatively, you can manually create the `models` folder in your phone's internal storage root using any file manager).*
 
 #### Step 2 : Download Model & Tokenizer
-1. Download the quantized ONNX model file (e.g. `qwen2.5-0.5b-instruct-abliterated-q4.onnx` or `model_q4.onnx` from the link above).
+1. Download the quantized ONNX model file ([`model_quantized.onnx`](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct-abliterated-ONNX/resolve/main/onnx/model_quantized.onnx?download=true) from the link above).
 2. Download the companion [`tokenizer.json`](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct-abliterated-ONNX/resolve/main/tokenizer.json?download=true).
 
 #### Step 3 : Copy Files to the `models/` Directory
 Place both files together into `/storage/emulated/0/models/`:
 ```text
 /storage/emulated/0/models/
-├── qwen2.5-0.5b-instruct-abliterated-q4.onnx
+├── model_quantized.onnx
 └── tokenizer.json
 ```
 

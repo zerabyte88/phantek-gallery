@@ -1246,7 +1246,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              ' • ',
+                                              '${model.formattedSize} • ${model.path}',
                                               style: TextStyle(
                                                 color: Colors.white.withValues(alpha: 0.55),
                                                 fontSize: 10.5,
