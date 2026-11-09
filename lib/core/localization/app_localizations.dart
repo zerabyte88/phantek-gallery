@@ -120,6 +120,7 @@ class AppLocalizations {
   String get modelReady => _t('modelReady');
   String get downloadModelPrompt => _t('downloadModelPrompt');
   String get downloadingModel => _t('downloadingModel');
+  String get download => _t('download');
   String get modelDownloadRequired => _t('modelDownloadRequired');
   String get modelDownloadSuccess => _t('modelDownloadSuccess');
   String get modelDownloadFailed => _t('modelDownloadFailed');

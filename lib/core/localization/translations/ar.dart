@@ -246,7 +246,7 @@ const Map<String, String> arTranslations = {
   'translateFullPageSubtitle': 'ترجمة الحوار والرواية والمؤثرات الصوتية',
   'disableTranslation': 'إيقاف الترجمة',
   'modelReady': 'نموذج الذكاء الاصطناعي جاهز (دون اتصال)',
-  'downloadModelPrompt': 'تنزيل نموذج الذكاء الاصطناعي (~30 ميغابايت)',
+  'downloadModelPrompt': 'تنزيل نماذج الذكاء الاصطناعي',
   'downloadingModel': 'جارٍ تنزيل نموذج الترجمة...',
   'modelDownloadRequired': 'يلزم تنزيل النموذج للترجمة دون اتصال',
   'modelDownloadSuccess': 'تم تنزيل نماذج الترجمة بالذكاء الاصطناعي! جاهز للاستخدام دون اتصال.',
@@ -254,4 +254,5 @@ const Map<String, String> arTranslations = {
   'retry': 'إعادة المحاولة',
   'downloadSize': 'حجم التنزيل',
   'modelInstalled': 'مثبت',
+  'download': 'تنزيل',
 };

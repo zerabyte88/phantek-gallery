@@ -18,7 +18,7 @@
 
 ## Overview
 
-Phantek Gallery is a local-first gallery for photos, videos, PSD files, and manga. Your media stays on your device: there is no tracking, no telemetry, and no cloud sync. The only network access is a one-time download of the translation language models (about 30 MB), which you start yourself. After that, everything works offline.
+Phantek Gallery is a local-first gallery for photos, videos, PSD files, and manga. Your media stays on your device: there is no tracking, no telemetry, and no cloud sync. The only network access is a one-time download of the translation language models, which you start yourself. After that, everything works offline.
 
 ---
 

@@ -252,7 +252,7 @@ const Map<String, String> frTranslations = {
       'Traduire dialogues, narration et effets sonores',
   'disableTranslation': 'Désactiver la traduction',
   'modelReady': 'Modèle IA prêt (hors ligne)',
-  'downloadModelPrompt': 'Télécharger le modèle IA (~30 Mo)',
+  'downloadModelPrompt': 'Télécharger les modèles IA',
   'downloadingModel': 'Téléchargement du modèle de traduction...',
   'modelDownloadRequired':
       'Téléchargement du modèle requis pour la traduction hors ligne',
@@ -261,4 +261,5 @@ const Map<String, String> frTranslations = {
   'retry': 'Réessayer',
   'downloadSize': 'Taille du téléchargement',
   'modelInstalled': 'Installé',
+  'download': 'Télécharger',
 };

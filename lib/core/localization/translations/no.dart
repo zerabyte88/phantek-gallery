@@ -248,7 +248,7 @@ const Map<String, String> noTranslations = {
   'translateFullPageSubtitle': 'Oversett dialog, fortelling og lydeffekter',
   'disableTranslation': 'Slå av oversettelse',
   'modelReady': 'AI-modell klar (frakoblet)',
-  'downloadModelPrompt': 'Last ned AI-modell (~30 MB)',
+  'downloadModelPrompt': 'Last ned AI-modeller',
   'downloadingModel': 'Laster ned oversettelsesmodell...',
   'modelDownloadRequired':
       'Nedlasting av modell kreves for frakoblet oversettelse',
@@ -257,4 +257,5 @@ const Map<String, String> noTranslations = {
   'retry': 'Prøv igjen',
   'downloadSize': 'Nedlastingsstørrelse',
   'modelInstalled': 'Installert',
+  'download': 'Last ned',
 };

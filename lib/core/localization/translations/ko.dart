@@ -242,7 +242,7 @@ const Map<String, String> koTranslations = {
   'translateFullPageSubtitle': '대사, 내레이션, 효과음을 번역합니다',
   'disableTranslation': '번역 끄기',
   'modelReady': 'AI 모델 준비됨 (오프라인)',
-  'downloadModelPrompt': 'AI 모델 다운로드 (~30MB)',
+  'downloadModelPrompt': 'AI 모델 다운로드',
   'downloadingModel': '번역 모델 다운로드 중...',
   'modelDownloadRequired': '오프라인 번역을 위해 모델 다운로드가 필요합니다',
   'modelDownloadSuccess': 'AI 번역 모델 다운로드 완료! 오프라인에서 사용할 수 있습니다.',
@@ -250,4 +250,5 @@ const Map<String, String> koTranslations = {
   'retry': '다시 시도',
   'downloadSize': '다운로드 크기',
   'modelInstalled': '설치됨',
+  'download': '다운로드',
 };

@@ -251,7 +251,7 @@ const Map<String, String> hiTranslations = {
   'translateFullPageSubtitle': 'संवाद, वर्णन और ध्वनि प्रभावों का अनुवाद करें',
   'disableTranslation': 'अनुवाद बंद करें',
   'modelReady': 'AI मॉडल तैयार है (ऑफ़लाइन)',
-  'downloadModelPrompt': 'AI मॉडल डाउनलोड करें (~30MB)',
+  'downloadModelPrompt': 'AI मॉडल डाउनलोड करें',
   'downloadingModel': 'अनुवाद मॉडल डाउनलोड हो रहा है...',
   'modelDownloadRequired': 'ऑफ़लाइन अनुवाद के लिए मॉडल डाउनलोड आवश्यक है',
   'modelDownloadSuccess': 'AI अनुवाद मॉडल डाउनलोड हो गए! ऑफ़लाइन उपयोग के लिए तैयार।',
@@ -259,4 +259,5 @@ const Map<String, String> hiTranslations = {
   'retry': 'पुनः प्रयास करें',
   'downloadSize': 'डाउनलोड आकार',
   'modelInstalled': 'स्थापित',
+  'download': 'डाउनलोड',
 };

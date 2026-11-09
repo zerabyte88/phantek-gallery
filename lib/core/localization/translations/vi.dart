@@ -250,7 +250,7 @@ const Map<String, String> viTranslations = {
   'translateFullPageSubtitle': 'Dịch lời thoại, lời dẫn và hiệu ứng âm thanh',
   'disableTranslation': 'Tắt bản dịch',
   'modelReady': 'Mô hình AI sẵn sàng (ngoại tuyến)',
-  'downloadModelPrompt': 'Tải mô hình AI (~30MB)',
+  'downloadModelPrompt': 'Tải mô hình AI',
   'downloadingModel': 'Đang tải mô hình dịch...',
   'modelDownloadRequired': 'Cần tải mô hình để dịch ngoại tuyến',
   'modelDownloadSuccess': 'Đã tải xuống mô hình dịch AI! Sẵn sàng sử dụng ngoại tuyến.',
@@ -258,4 +258,5 @@ const Map<String, String> viTranslations = {
   'retry': 'Thử lại',
   'downloadSize': 'Kích thước tải xuống',
   'modelInstalled': 'Đã cài đặt',
+  'download': 'Tải xuống',
 };

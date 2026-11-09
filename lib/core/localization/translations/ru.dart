@@ -253,7 +253,7 @@ const Map<String, String> ruTranslations = {
       'Переводить диалоги, повествование и звуковые эффекты',
   'disableTranslation': 'Отключить перевод',
   'modelReady': 'ИИ-модель готова (офлайн)',
-  'downloadModelPrompt': 'Скачать ИИ-модель (~30 МБ)',
+  'downloadModelPrompt': 'Скачать ИИ-модели',
   'downloadingModel': 'Загрузка модели перевода...',
   'modelDownloadRequired': 'Для офлайн-перевода требуется загрузить модель',
   'modelDownloadSuccess': 'Модели ИИ-перевода загружены! Готовы к офлайн-использованию.',
@@ -261,4 +261,5 @@ const Map<String, String> ruTranslations = {
   'retry': 'Повторить',
   'downloadSize': 'Размер загрузки',
   'modelInstalled': 'Установлено',
+  'download': 'Скачать',
 };

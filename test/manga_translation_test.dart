@@ -553,13 +553,13 @@ void main() {
 
       final updated = progress.copyWith(
         isDownloading: true,
-        currentStep: 'Downloading Japanese Model...',
+        currentStep: 'Downloading model...',
         downloadedMb: 15.0,
         totalMb: 30.0,
         progress: 0.5,
       );
       expect(updated.isDownloading, isTrue);
-      expect(updated.currentStep, 'Downloading Japanese Model...');
+      expect(updated.currentStep, 'Downloading model...');
       expect(updated.downloadedMb, 15.0);
       expect(updated.totalMb, 30.0);
       expect(updated.progress, 0.5);
@@ -574,6 +574,57 @@ void main() {
       expect(status.sourceLangName, 'Japanese');
       expect(status.targetLangName, 'Indonesian');
       expect(status.totalNeededMb, anyOf(0.0, 30.0, 60.0));
+    });
+
+    test('allMangaLanguages defines all 5 required manga languages', () {
+      expect(
+        MlKitTranslationEngine.allMangaLanguages,
+        containsAllInOrder([
+          TranslateLanguage.indonesian,
+          TranslateLanguage.english,
+          TranslateLanguage.japanese,
+          TranslateLanguage.korean,
+          TranslateLanguage.chinese,
+        ]),
+      );
+      expect(MlKitTranslationEngine.allMangaLanguages.length, 5);
+    });
+
+    test('AllModelsStatus construction and properties', () {
+      const status = AllModelsStatus(
+        missingLanguages: [TranslateLanguage.japanese, TranslateLanguage.korean],
+        downloadedLanguages: [
+          TranslateLanguage.indonesian,
+          TranslateLanguage.english,
+          TranslateLanguage.chinese,
+        ],
+        totalNeededMb: 60.0,
+        isReady: false,
+      );
+      expect(status.missingLanguages.length, 2);
+      expect(status.downloadedLanguages.length, 3);
+      expect(status.totalNeededMb, 60.0);
+      expect(status.isReady, isFalse);
+    });
+
+    test('checkAllModelsStatus returns valid AllModelsStatus metadata', () async {
+      final engine = MlKitTranslationEngine.instance;
+      final status = await engine.checkAllModelsStatus();
+      expect(status.missingLanguages.length + status.downloadedLanguages.length, 5);
+      expect(status.totalNeededMb, status.missingLanguages.length * 30.0);
+      expect(status.isReady, status.missingLanguages.isEmpty);
+    });
+
+    test('appLocalizations download getter returns localized string without MB size', () {
+      final en = AppLocalizations(const Locale('en'));
+      expect(en.download, 'Download');
+      expect(en.downloadModelPrompt, isNot(contains('30MB')));
+      expect(en.downloadModelPrompt, isNot(contains('30 MB')));
+
+      final id = AppLocalizations(const Locale('id'));
+      expect(id.download, 'Unduh');
+      expect(id.downloadModelPrompt, isNot(contains('30MB')));
+      expect(id.downloadModelPrompt, isNot(contains('30 MB')));
     });
   });
 

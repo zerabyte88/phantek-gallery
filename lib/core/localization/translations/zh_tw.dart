@@ -241,7 +241,7 @@ const Map<String, String> zhTwTranslations = {
   'translateFullPageSubtitle': '翻譯對話、旁白與擬聲特效詞',
   'disableTranslation': '關閉翻譯',
   'modelReady': 'AI 模型就緒（離線）',
-  'downloadModelPrompt': '下載 AI 模型（約 30MB）',
+  'downloadModelPrompt': '下載 AI 模型',
   'downloadingModel': '正在下載翻譯模型...',
   'modelDownloadRequired': '離線翻譯需要下載模型',
   'modelDownloadSuccess': 'AI 翻譯模型已下載！可離線使用。',
@@ -249,4 +249,5 @@ const Map<String, String> zhTwTranslations = {
   'retry': '重試',
   'downloadSize': '下載大小',
   'modelInstalled': '已安裝',
+  'download': '下載',
 };

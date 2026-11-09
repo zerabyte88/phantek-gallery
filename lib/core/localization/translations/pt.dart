@@ -254,7 +254,7 @@ const Map<String, String> ptTranslations = {
   'translateFullPageSubtitle': 'Traduzir diálogos, narrações e efeitos sonoros',
   'disableTranslation': 'Desativar Tradução',
   'modelReady': 'Modelo de IA Pronto (Offline)',
-  'downloadModelPrompt': 'Baixar Modelo de IA (~30 MB)',
+  'downloadModelPrompt': 'Baixar Modelos de IA',
   'downloadingModel': 'Baixando modelo de tradução...',
   'modelDownloadRequired':
       'Download do modelo necessário para tradução offline',
@@ -263,4 +263,5 @@ const Map<String, String> ptTranslations = {
   'retry': 'Tentar novamente',
   'downloadSize': 'Tamanho do download',
   'modelInstalled': 'Instalado',
+  'download': 'Baixar',
 };

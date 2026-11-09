@@ -257,7 +257,7 @@ const Map<String, String> esTranslations = {
       'Traducir diálogos, narración y efectos de sonido',
   'disableTranslation': 'Desactivar traducción',
   'modelReady': 'Modelo IA listo (sin conexión)',
-  'downloadModelPrompt': 'Descargar modelo IA (~30 MB)',
+  'downloadModelPrompt': 'Descargar modelos IA',
   'downloadingModel': 'Descargando modelo de traducción...',
   'modelDownloadRequired':
       'Se requiere descargar el modelo para traducir sin conexión',
@@ -266,4 +266,5 @@ const Map<String, String> esTranslations = {
   'retry': 'Reintentar',
   'downloadSize': 'Tamaño de descarga',
   'modelInstalled': 'Instalado',
+  'download': 'Descargar',
 };

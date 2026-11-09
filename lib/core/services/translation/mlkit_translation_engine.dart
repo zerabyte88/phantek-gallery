@@ -12,7 +12,7 @@ class ModelPairStatus {
   final bool targetDownloaded;
   final String sourceLangName;
   final String targetLangName;
-  final double totalNeededMb; // 0.0, 30.0, or 60.0
+  final double totalNeededMb;
   final bool isReady;
 
   const ModelPairStatus({
@@ -25,13 +25,28 @@ class ModelPairStatus {
   });
 }
 
+/// Status model for all 5 manga translation models readiness and download footprint.
+class AllModelsStatus {
+  final List<TranslateLanguage> missingLanguages;
+  final List<TranslateLanguage> downloadedLanguages;
+  final double totalNeededMb;
+  final bool isReady;
+
+  const AllModelsStatus({
+    required this.missingLanguages,
+    required this.downloadedLanguages,
+    required this.totalNeededMb,
+    required this.isReady,
+  });
+}
+
 /// Progress state model for live translation model downloads.
 class TranslationDownloadProgress {
   final bool isDownloading;
   final String currentStep;
   final double downloadedMb;
   final double totalMb;
-  final double progress; // 0.0 to 1.0
+  final double progress;
   final bool isSuccess;
   final String? errorMessage;
 
@@ -74,6 +89,15 @@ class MlKitTranslationEngine {
   final OnDeviceTranslatorModelManager _modelManager =
       OnDeviceTranslatorModelManager();
   final Map<String, OnDeviceTranslator> _translators = {};
+
+  /// The 5 manga translation languages required for all source and target pairs.
+  static const List<TranslateLanguage> allMangaLanguages = [
+    TranslateLanguage.indonesian,
+    TranslateLanguage.english,
+    TranslateLanguage.japanese,
+    TranslateLanguage.korean,
+    TranslateLanguage.chinese,
+  ];
 
   /// Reactive notifier for model download progress and statuses.
   final ValueNotifier<TranslationDownloadProgress> downloadProgressNotifier =
@@ -161,20 +185,45 @@ class MlKitTranslationEngine {
     }
   }
 
-  /// Downloads the on-device model for [lang].
+  /// Downloads the on-device model for [lang] with a 90-second timeout.
   Future<bool> downloadLanguage(
     TranslateLanguage lang, {
     bool isWifiRequired = false,
   }) async {
     try {
-      return await _modelManager.downloadModel(
-        lang.bcpCode,
-        isWifiRequired: isWifiRequired,
-      );
+      return await _modelManager
+          .downloadModel(
+            lang.bcpCode,
+            isWifiRequired: isWifiRequired,
+          )
+          .timeout(const Duration(seconds: 90));
     } catch (e) {
       debugPrint('Error downloading model for ${lang.name}: $e');
       return false;
     }
+  }
+
+  /// Checks status for all 5 manga translation languages and calculates missing download footprint.
+  Future<AllModelsStatus> checkAllModelsStatus() async {
+    final missing = <TranslateLanguage>[];
+    final downloaded = <TranslateLanguage>[];
+
+    for (final lang in allMangaLanguages) {
+      final isDownloaded = await isLanguageDownloaded(lang);
+      if (isDownloaded) {
+        downloaded.add(lang);
+      } else {
+        missing.add(lang);
+      }
+    }
+
+    final totalNeededMb = missing.length * 30.0;
+    return AllModelsStatus(
+      missingLanguages: missing,
+      downloadedLanguages: downloaded,
+      totalNeededMb: totalNeededMb,
+      isReady: missing.isEmpty,
+    );
   }
 
   /// Gets the pair download status, calculating required download size (~30MB/model).
@@ -225,6 +274,182 @@ class MlKitTranslationEngine {
     return downloadPairWithProgress(source, target, isWifiRequired: isWifiRequired);
   }
 
+  Future<bool> _downloadModelWithPolling({
+    required TranslateLanguage lang,
+    required double stepBaseMb,
+    required double stepTotalMb,
+    required double overallTotalMb,
+    required String stepName,
+    bool isWifiRequired = false,
+  }) async {
+    downloadProgressNotifier.value = TranslationDownloadProgress(
+      isDownloading: true,
+      currentStep: stepName,
+      downloadedMb: stepBaseMb,
+      totalMb: overallTotalMb,
+      progress: (stepBaseMb / overallTotalMb).clamp(0.0, 1.0),
+    );
+
+    final completer = Completer<bool>();
+    final stopwatch = Stopwatch()..start();
+
+    // 1) Simulated progress timer: realistic increments over ~25s up to 95% of this step
+    final progressTimer = Timer.periodic(const Duration(milliseconds: 250), (t) {
+      if (completer.isCompleted) {
+        t.cancel();
+        return;
+      }
+      final elapsedMs = stopwatch.elapsedMilliseconds;
+      final stepFraction = (elapsedMs / 25000.0).clamp(0.0, 0.95);
+      final currentMb = stepBaseMb + (stepTotalMb * stepFraction);
+      downloadProgressNotifier.value = TranslationDownloadProgress(
+        isDownloading: true,
+        currentStep: stepName,
+        downloadedMb: double.parse(currentMb.toStringAsFixed(1)),
+        totalMb: overallTotalMb,
+        progress: (currentMb / overallTotalMb).clamp(0.0, 1.0),
+      );
+    });
+
+    // 2) Polling timer: check isLanguageDownloaded every 1.5s
+    final pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (t) async {
+      if (completer.isCompleted) {
+        t.cancel();
+        return;
+      }
+      try {
+        final isDownloaded = await isLanguageDownloaded(lang);
+        if (isDownloaded && !completer.isCompleted) {
+          completer.complete(true);
+        }
+      } catch (_) {}
+    });
+
+    // 3) Trigger download with 90s timeout
+    downloadLanguage(lang, isWifiRequired: isWifiRequired)
+        .timeout(const Duration(seconds: 90))
+        .then((success) {
+          if (!completer.isCompleted) {
+            completer.complete(success);
+          }
+        })
+        .catchError((e) {
+          if (!completer.isCompleted) {
+            completer.complete(false);
+          }
+        });
+
+    final success = await completer.future;
+    progressTimer.cancel();
+    pollTimer.cancel();
+    stopwatch.stop();
+
+    if (success) {
+      final completedMb = stepBaseMb + stepTotalMb;
+      downloadProgressNotifier.value = TranslationDownloadProgress(
+        isDownloading: true,
+        currentStep: stepName,
+        downloadedMb: double.parse(completedMb.toStringAsFixed(1)),
+        totalMb: overallTotalMb,
+        progress: (completedMb / overallTotalMb).clamp(0.0, 1.0),
+      );
+      return true;
+    } else {
+      final finalCheck = await isLanguageDownloaded(lang);
+      if (finalCheck) {
+        final completedMb = stepBaseMb + stepTotalMb;
+        downloadProgressNotifier.value = TranslationDownloadProgress(
+          isDownloading: true,
+          currentStep: stepName,
+          downloadedMb: double.parse(completedMb.toStringAsFixed(1)),
+          totalMb: overallTotalMb,
+          progress: (completedMb / overallTotalMb).clamp(0.0, 1.0),
+        );
+        return true;
+      }
+      return false;
+    }
+  }
+
+  /// Downloads all missing manga translation models sequentially (id, en, ja, ko, zh).
+  Future<bool> downloadAllModelsWithProgress({
+    bool isWifiRequired = false,
+  }) async {
+    try {
+      final status = await checkAllModelsStatus();
+      if (status.isReady) {
+        downloadProgressNotifier.value = const TranslationDownloadProgress(
+          isDownloading: false,
+          currentStep: 'Ready',
+          downloadedMb: 0.0,
+          totalMb: 0.0,
+          progress: 1.0,
+          isSuccess: true,
+        );
+        return true;
+      }
+
+      final missing = status.missingLanguages;
+      final totalMb = status.totalNeededMb;
+      double currentDownloaded = 0.0;
+
+      downloadProgressNotifier.value = TranslationDownloadProgress(
+        isDownloading: true,
+        currentStep: 'Downloading model...',
+        downloadedMb: 0.0,
+        totalMb: totalMb,
+        progress: 0.0,
+      );
+
+      for (final lang in missing) {
+        final ok = await _downloadModelWithPolling(
+          lang: lang,
+          stepBaseMb: currentDownloaded,
+          stepTotalMb: 30.0,
+          overallTotalMb: totalMb,
+          stepName: 'Downloading model...',
+          isWifiRequired: isWifiRequired,
+        );
+
+        if (!ok) {
+          downloadProgressNotifier.value = TranslationDownloadProgress(
+            isDownloading: false,
+            currentStep: 'Failed',
+            downloadedMb: currentDownloaded,
+            totalMb: totalMb,
+            progress: (currentDownloaded / totalMb).clamp(0.0, 1.0),
+            isSuccess: false,
+            errorMessage: 'Failed to download ${lang.name} model',
+          );
+          return false;
+        }
+
+        currentDownloaded += 30.0;
+      }
+
+      downloadProgressNotifier.value = TranslationDownloadProgress(
+        isDownloading: false,
+        currentStep: 'Ready',
+        downloadedMb: totalMb,
+        totalMb: totalMb,
+        progress: 1.0,
+        isSuccess: true,
+      );
+      return true;
+    } catch (e) {
+      downloadProgressNotifier.value = TranslationDownloadProgress(
+        isDownloading: false,
+        currentStep: 'Error',
+        downloadedMb: 0.0,
+        totalMb: 0.0,
+        progress: 0.0,
+        isSuccess: false,
+        errorMessage: e.toString(),
+      );
+      return false;
+    }
+  }
+
   /// Downloads missing pair models with realistic smooth progress updates.
   Future<bool> downloadPairWithProgress(
     TranslationSourceLanguage source,
@@ -256,72 +481,20 @@ class MlKitTranslationEngine {
 
       downloadProgressNotifier.value = TranslationDownloadProgress(
         isDownloading: true,
-        currentStep: !status.targetDownloaded
-            ? 'Downloading ${status.targetLangName} Model...'
-            : 'Downloading ${status.sourceLangName} Model...',
+        currentStep: 'Downloading model...',
         downloadedMb: 0.0,
         totalMb: totalMb,
         progress: 0.0,
       );
 
-      Future<bool> runStep(
-        String stepName,
-        TranslateLanguage lang,
-        double stepBaseMb,
-        double stepTotalMb,
-      ) async {
-        downloadProgressNotifier.value = TranslationDownloadProgress(
-          isDownloading: true,
-          currentStep: stepName,
-          downloadedMb: stepBaseMb,
-          totalMb: totalMb,
-          progress: (stepBaseMb / totalMb).clamp(0.0, 1.0),
-        );
-
-        double stepFraction = 0.0;
-        final timer = Timer.periodic(const Duration(milliseconds: 100), (t) {
-          if (stepFraction < 0.90) {
-            stepFraction += 0.03;
-            if (stepFraction > 0.90) stepFraction = 0.90;
-            final currentMb = stepBaseMb + (stepTotalMb * stepFraction);
-            downloadProgressNotifier.value = TranslationDownloadProgress(
-              isDownloading: true,
-              currentStep: stepName,
-              downloadedMb: double.parse(currentMb.toStringAsFixed(1)),
-              totalMb: totalMb,
-              progress: (currentMb / totalMb).clamp(0.0, 1.0),
-            );
-          }
-        });
-
-        bool success = false;
-        try {
-          success = await downloadLanguage(lang, isWifiRequired: isWifiRequired);
-        } catch (e) {
-          success = false;
-        } finally {
-          timer.cancel();
-        }
-
-        if (success) {
-          final completedMb = stepBaseMb + stepTotalMb;
-          downloadProgressNotifier.value = TranslationDownloadProgress(
-            isDownloading: true,
-            currentStep: stepName,
-            downloadedMb: double.parse(completedMb.toStringAsFixed(1)),
-            totalMb: totalMb,
-            progress: (completedMb / totalMb).clamp(0.0, 1.0),
-          );
-        }
-        return success;
-      }
-
       if (!status.targetDownloaded) {
-        final ok = await runStep(
-          'Downloading ${status.targetLangName} Model...',
-          targetLang,
-          currentDownloaded,
-          30.0,
+        final ok = await _downloadModelWithPolling(
+          lang: targetLang,
+          stepBaseMb: currentDownloaded,
+          stepTotalMb: 30.0,
+          overallTotalMb: totalMb,
+          stepName: 'Downloading model...',
+          isWifiRequired: isWifiRequired,
         );
         if (!ok) {
           downloadProgressNotifier.value = TranslationDownloadProgress(
@@ -339,11 +512,13 @@ class MlKitTranslationEngine {
       }
 
       if (!status.sourceDownloaded) {
-        final ok = await runStep(
-          'Downloading ${status.sourceLangName} Model...',
-          sourceLang,
-          currentDownloaded,
-          30.0,
+        final ok = await _downloadModelWithPolling(
+          lang: sourceLang,
+          stepBaseMb: currentDownloaded,
+          stepTotalMb: 30.0,
+          overallTotalMb: totalMb,
+          stepName: 'Downloading model...',
+          isWifiRequired: isWifiRequired,
         );
         if (!ok) {
           downloadProgressNotifier.value = TranslationDownloadProgress(

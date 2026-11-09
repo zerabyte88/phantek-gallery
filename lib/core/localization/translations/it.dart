@@ -258,7 +258,7 @@ const Map<String, String> itTranslations = {
   'translateFullPageSubtitle': 'Traduci dialoghi, narrazione ed effetti sonori',
   'disableTranslation': 'Disattiva traduzione',
   'modelReady': 'Modello IA pronto (offline)',
-  'downloadModelPrompt': 'Scarica modello IA (~30 MB)',
+  'downloadModelPrompt': 'Scarica modelli IA',
   'downloadingModel': 'Download del modello di traduzione in corso...',
   'modelDownloadRequired':
       'Download del modello richiesto per la traduzione offline',
@@ -267,4 +267,5 @@ const Map<String, String> itTranslations = {
   'retry': 'Riprova',
   'downloadSize': 'Dimensione download',
   'modelInstalled': 'Installato',
+  'download': 'Scarica',
 };

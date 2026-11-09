@@ -249,7 +249,7 @@ const Map<String, String> idTranslations = {
   'translateFullPageSubtitle': 'Terjemahkan dialog, narasi, dan efek suara',
   'disableTranslation': 'Matikan Terjemahan',
   'modelReady': 'Model AI Siap (Offline)',
-  'downloadModelPrompt': 'Unduh Model AI (~30MB)',
+  'downloadModelPrompt': 'Unduh Model AI',
   'downloadingModel': 'Mengunduh model terjemahan...',
   'modelDownloadRequired': 'Perlu unduh model untuk terjemahan offline',
   'modelDownloadSuccess': 'Model terjemahan AI berhasil diunduh! Siap digunakan secara offline.',
@@ -257,4 +257,5 @@ const Map<String, String> idTranslations = {
   'retry': 'Coba Lagi',
   'downloadSize': 'Ukuran Unduhan',
   'modelInstalled': 'Terpasang',
+  'download': 'Unduh',
 };

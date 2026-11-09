@@ -252,7 +252,7 @@ const Map<String, String> nlTranslations = {
       'Dialogen, vertelling en geluidseffecten vertalen',
   'disableTranslation': 'Vertaling uitschakelen',
   'modelReady': 'AI-model gereed (offline)',
-  'downloadModelPrompt': 'AI-model downloaden (~30 MB)',
+  'downloadModelPrompt': 'AI-modellen downloaden',
   'downloadingModel': 'Vertalingsmodel downloaden...',
   'modelDownloadRequired': 'Modeldownload vereist voor offline vertalen',
   'modelDownloadSuccess': 'AI-vertaalmodellen gedownload! Klaar voor offline gebruik.',
@@ -260,4 +260,5 @@ const Map<String, String> nlTranslations = {
   'retry': 'Opnieuw proberen',
   'downloadSize': 'Downloadgrootte',
   'modelInstalled': 'Geïnstalleerd',
+  'download': 'Downloaden',
 };

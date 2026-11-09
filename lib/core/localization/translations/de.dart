@@ -253,7 +253,7 @@ const Map<String, String> deTranslations = {
       'Dialoge, Erzählungen und Soundeffekte übersetzen',
   'disableTranslation': 'Übersetzung deaktivieren',
   'modelReady': 'KI-Modell bereit (Offline)',
-  'downloadModelPrompt': 'KI-Modell herunterladen (~30 MB)',
+  'downloadModelPrompt': 'KI-Modelle herunterladen',
   'downloadingModel': 'Übersetzungsmodell wird heruntergeladen...',
   'modelDownloadRequired':
       'Für Offline-Übersetzung ist ein Modell-Download erforderlich',
@@ -262,4 +262,5 @@ const Map<String, String> deTranslations = {
   'retry': 'Wiederholen',
   'downloadSize': 'Download-Größe',
   'modelInstalled': 'Installiert',
+  'download': 'Herunterladen',
 };

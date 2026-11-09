@@ -254,7 +254,7 @@ const Map<String, String> msTranslations = {
   'translateFullPageSubtitle': 'Terjemah dialog, narasi dan kesan bunyi',
   'disableTranslation': 'Matikan Terjemahan',
   'modelReady': 'Model AI Sedia (Luar Talian)',
-  'downloadModelPrompt': 'Muat Turun Model AI (~30MB)',
+  'downloadModelPrompt': 'Muat Turun Model AI',
   'downloadingModel': 'Memuat turun model terjemahan...',
   'modelDownloadRequired':
       'Muat turun model diperlukan untuk terjemahan luar talian',
@@ -263,4 +263,5 @@ const Map<String, String> msTranslations = {
   'retry': 'Cuba Semula',
   'downloadSize': 'Saiz Muat Turun',
   'modelInstalled': 'Dipasang',
+  'download': 'Muat Turun',
 };

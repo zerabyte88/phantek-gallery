@@ -248,7 +248,7 @@ const Map<String, String> svTranslations = {
   'translateFullPageSubtitle': 'Översätt dialog, berättelse och ljudeffekter',
   'disableTranslation': 'Stäng av översättning',
   'modelReady': 'AI-modell redo (offline)',
-  'downloadModelPrompt': 'Ladda ner AI-modell (~30 MB)',
+  'downloadModelPrompt': 'Ladda ner AI-modeller',
   'downloadingModel': 'Laddar ner översättningsmodell...',
   'modelDownloadRequired':
       'Nedladdning av modell krävs för offlineöversättning',
@@ -257,4 +257,5 @@ const Map<String, String> svTranslations = {
   'retry': 'Försök igen',
   'downloadSize': 'Nedladdningsstorlek',
   'modelInstalled': 'Installerad',
+  'download': 'Ladda ner',
 };

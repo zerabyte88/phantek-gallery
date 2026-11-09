@@ -241,7 +241,7 @@ const Map<String, String> jaTranslations = {
   'translateFullPageSubtitle': 'セリフ、ナレーション、効果音を翻訳',
   'disableTranslation': '翻訳をオフにする',
   'modelReady': 'AIモデルの準備完了（オフライン）',
-  'downloadModelPrompt': 'AIモデルをダウンロード（約30MB）',
+  'downloadModelPrompt': 'AIモデルをダウンロード',
   'downloadingModel': '翻訳モデルをダウンロード中...',
   'modelDownloadRequired': 'オフライン翻訳にはモデルのダウンロードが必要です',
   'modelDownloadSuccess': 'AI翻訳モデルがダウンロードされました！オフラインで使用できます。',
@@ -249,4 +249,5 @@ const Map<String, String> jaTranslations = {
   'retry': '再試行',
   'downloadSize': 'ダウンロードサイズ',
   'modelInstalled': 'インストール済み',
+  'download': 'ダウンロード',
 };

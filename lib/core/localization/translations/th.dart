@@ -246,7 +246,7 @@ const Map<String, String> thTranslations = {
   'translateFullPageSubtitle': 'แปลบทสนทนา บทบรรยาย และเอฟเฟกต์เสียง',
   'disableTranslation': 'ปิดการแปล',
   'modelReady': 'โมเดล AI พร้อมใช้งาน (ออฟไลน์)',
-  'downloadModelPrompt': 'ดาวน์โหลดโมเดล AI (~30MB)',
+  'downloadModelPrompt': 'ดาวน์โหลดโมเดล AI',
   'downloadingModel': 'กำลังดาวน์โหลดโมเดลการแปล...',
   'modelDownloadRequired': 'จำเป็นต้องดาวน์โหลดโมเดลสำหรับการแปลแบบออฟไลน์',
   'modelDownloadSuccess': 'ดาวน์โหลดโมเดลการแปล AI แล้ว! พร้อมใช้งานแบบออฟไลน์',
@@ -254,4 +254,5 @@ const Map<String, String> thTranslations = {
   'retry': 'ลองอีกครั้ง',
   'downloadSize': 'ขนาดดาวน์โหลด',
   'modelInstalled': 'ติดตั้งแล้ว',
+  'download': 'ดาวน์โหลด',
 };

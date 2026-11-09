@@ -250,7 +250,7 @@ const Map<String, String> fiTranslations = {
   'translateFullPageSubtitle': 'Käännä vuoropuhelu, kerronta ja äänitehosteet',
   'disableTranslation': 'Poista käännös käytöstä',
   'modelReady': 'Tekoälymalli valmis (offline)',
-  'downloadModelPrompt': 'Lataa tekoälymalli (~30 Mt)',
+  'downloadModelPrompt': 'Lataa tekoälymallit',
   'downloadingModel': 'Ladataan käännösmallia...',
   'modelDownloadRequired': 'Mallin lataaminen vaaditaan offline-kääntämiseen',
   'modelDownloadSuccess': 'Tekoälykäännösmallit ladattu! Valmis offline-käyttöön.',
@@ -258,4 +258,5 @@ const Map<String, String> fiTranslations = {
   'retry': 'Yritä uudelleen',
   'downloadSize': 'Latauskoko',
   'modelInstalled': 'Asennettu',
+  'download': 'Lataa',
 };

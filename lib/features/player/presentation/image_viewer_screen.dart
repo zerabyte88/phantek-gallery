@@ -692,19 +692,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return FutureBuilder<ModelPairStatus>(
-              future: MlKitTranslationEngine.instance.getPairStatus(
-                _translationLanguage,
-                _translationTargetLanguage,
-              ),
+            return FutureBuilder<AllModelsStatus>(
+              future: MlKitTranslationEngine.instance.checkAllModelsStatus(),
               builder: (context, snapshot) {
-                final pairStatus = snapshot.data ??
-                    const ModelPairStatus(
-                      sourceDownloaded: false,
-                      targetDownloaded: false,
-                      sourceLangName: '',
-                      targetLangName: '',
-                      totalNeededMb: 60.0,
+                final allStatus = snapshot.data ??
+                    const AllModelsStatus(
+                      missingLanguages: [],
+                      downloadedLanguages: [],
+                      totalNeededMb: 150.0,
                       isReady: false,
                     );
                 final isModelLoading =
@@ -874,10 +869,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                             builder: (context, downloadProgress, _) {
                               final isDownloading = downloadProgress.isDownloading;
                               final hasError = !isDownloading &&
-                                  !pairStatus.isReady &&
+                                  !allStatus.isReady &&
                                   downloadProgress.errorMessage != null &&
                                   downloadProgress.errorMessage!.isNotEmpty;
-                              final isReady = pairStatus.isReady && !isDownloading;
+                              final isReady = allStatus.isReady && !isDownloading;
 
                               Color cardBg;
                               Color borderColor;
@@ -938,7 +933,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                 isReady
                                                     ? '✓ ${loc.modelReady}'
                                                     : isDownloading
-                                                        ? downloadProgress.currentStep
+                                                        ? loc.downloadingModel
                                                         : hasError
                                                             ? loc.modelDownloadFailed
                                                             : loc.downloadModelPrompt,
@@ -993,10 +988,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                     final success =
                                                         await MlKitTranslationEngine
                                                             .instance
-                                                            .downloadPairWithProgress(
-                                                      _translationLanguage,
-                                                      _translationTargetLanguage,
-                                                    );
+                                                            .downloadAllModelsWithProgress();
                                                     if (success && sheetContext.mounted) {
                                                       showFeedbackPill(
                                                         sheetContext,
@@ -1008,7 +1000,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                     setSheetState(() {});
                                                   },
                                             child: Text(
-                                              'Download (~${pairStatus.totalNeededMb.toInt()} MB)',
+                                              loc.download,
                                               style: const TextStyle(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.bold,
@@ -1031,10 +1023,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                             onPressed: () async {
                                               final success =
                                                   await MlKitTranslationEngine.instance
-                                                      .downloadPairWithProgress(
-                                                _translationLanguage,
-                                                _translationTargetLanguage,
-                                              );
+                                                      .downloadAllModelsWithProgress();
                                               if (success && sheetContext.mounted) {
                                                 showFeedbackPill(
                                                   sheetContext,

@@ -247,7 +247,7 @@ const Map<String, String> daTranslations = {
   'translateFullPageSubtitle': 'Oversæt dialog, fortælling og lydeffekter',
   'disableTranslation': 'Slå oversættelse fra',
   'modelReady': 'AI-model klar (offline)',
-  'downloadModelPrompt': 'Download AI-model (~30 MB)',
+  'downloadModelPrompt': 'Download AI-modeller',
   'downloadingModel': 'Downloader oversættelsesmodel...',
   'modelDownloadRequired': 'Modeldownload påkrævet til offline oversættelse',
   'modelDownloadSuccess': 'AI-oversættelsesmodeller downloadet! Klar til offline brug.',
@@ -255,4 +255,5 @@ const Map<String, String> daTranslations = {
   'retry': 'Prøv igen',
   'downloadSize': 'Downloadstørrelse',
   'modelInstalled': 'Installeret',
+  'download': 'Download',
 };
