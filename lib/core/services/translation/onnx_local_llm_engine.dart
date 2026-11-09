@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 zerabyte88
+// ignore_for_file: implementation_imports, depend_on_referenced_packages
 
 import 'dart:async';
+import 'dart:ffi' as ffi;
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'package:dart_sentencepiece_tokenizer/dart_sentencepiece_tokenizer.dart';
+import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:onnxruntime/onnxruntime.dart';
+import 'package:onnxruntime/src/bindings/onnxruntime_bindings_generated.dart'
+    as bg;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -252,6 +258,8 @@ class OnnxLocalLlmEngine {
   OrtSessionOptions? _sessionOptions;
   OrtSession? _session;
   bool _isNativeAvailable = false;
+  bool _isInitializing = false;
+  bool get isInitializing => _isInitializing;
 
   LlmTokenizer? _tokenizer;
   LlmTokenizer? get tokenizer => _tokenizer;
@@ -441,13 +449,33 @@ class OnnxLocalLlmEngine {
     return text;
   }
 
+  /// Creates an [OrtSession] from [path] in a background isolate and returns
+  /// its native pointer address.
+  static int _createSessionFromFileInIsolate(String path) {
+    OrtEnv.instance.init();
+    final options = OrtSessionOptions()
+      ..setIntraOpNumThreads(4)
+      ..setInterOpNumThreads(1)
+      ..setSessionGraphOptimizationLevel(GraphOptimizationLevel.ortEnableAll);
+    try {
+      final session = OrtSession.fromFile(File(path), options);
+      return session.address;
+    } finally {
+      options.release();
+    }
+  }
+
   /// Initializes the native ONNX session and tokenizer safely.
   Future<bool> initializeSession({
     String? modelPath,
     Uint8List? modelBytes,
     String? tokenizerPath,
     bool useBundledFallback = true,
+    bool? runInIsolate,
   }) async {
+    final bool useIsolate =
+        runInIsolate ?? !Platform.environment.containsKey('FLUTTER_TEST');
+    _isInitializing = true;
     try {
       if (Platform.isAndroid && !(await isStoragePermissionGranted())) {
         lastStatusMessage =
@@ -457,7 +485,10 @@ class OnnxLocalLlmEngine {
       await ensureModelsDirectoryExists();
 
       _env ??= OrtEnv.instance..init();
-      _sessionOptions ??= OrtSessionOptions();
+      _sessionOptions ??= OrtSessionOptions()
+        ..setIntraOpNumThreads(4)
+        ..setInterOpNumThreads(1)
+        ..setSessionGraphOptimizationLevel(GraphOptimizationLevel.ortEnableAll);
 
       String? resolvedPath = modelPath;
 
@@ -594,12 +625,19 @@ class OnnxLocalLlmEngine {
 
       bool isBundledFallbackUsed = false;
 
-      // Load companion tokenizer if found
-      if (resolvedTokPath != null && File(resolvedTokPath).existsSync()) {
+      // Load companion tokenizer eagerly only if small (< 1 MB); large tokenizers
+      // are loaded after session creation succeeds to avoid wasted work on failed loads.
+      if (resolvedTokPath != null &&
+          File(resolvedTokPath).existsSync() &&
+          File(resolvedTokPath).lengthSync() < 1024 * 1024) {
         try {
           if (resolvedTokPath.toLowerCase().endsWith('.json')) {
             final jsonStr = await File(resolvedTokPath).readAsString();
-            _tokenizer = QwenBpeTokenizer.fromJsonString(jsonStr);
+            _tokenizer = (useIsolate && jsonStr.length > 50000)
+                ? await Isolate.run(
+                    () => QwenBpeTokenizer.fromJsonString(jsonStr),
+                  )
+                : QwenBpeTokenizer.fromJsonString(jsonStr);
           } else if (resolvedTokPath.toLowerCase().endsWith('.model')) {
             final sp = await SentencePieceTokenizer.fromModelFile(resolvedTokPath);
             _tokenizer = SentencePieceLlmTokenizer(sp);
@@ -610,27 +648,63 @@ class OnnxLocalLlmEngine {
         }
       }
 
-      // If companion tokenizer was missing or failed, fall back to bundled asset
-      if (_tokenizer == null && useBundledFallback) {
-        try {
-          _tokenizer = await QwenBpeTokenizer.loadBundledAsset();
-          if (_tokenizer != null) {
-            isBundledFallbackUsed = true;
-          }
-        } catch (e) {
-          debugPrint('Failed to load bundled fallback tokenizer: $e');
-          _tokenizer = null;
-        }
-      }
-
       if (resolvedPath != null && File(resolvedPath).existsSync()) {
         try {
           _session?.release();
         } catch (_) {}
 
         try {
-          _session = OrtSession.fromFile(File(resolvedPath), _sessionOptions!);
+          final String targetModelPath = resolvedPath;
+          final File targetFile = File(targetModelPath);
+          if (useIsolate &&
+              !Platform.isWindows &&
+              targetFile.lengthSync() > 1024 * 1024) {
+            final int sessionAddress = await Isolate.run<int>(
+              () => _createSessionFromFileInIsolate(targetModelPath),
+            );
+            _session = OrtSession.fromAddress(sessionAddress);
+          } else {
+            _session = OrtSession.fromFile(targetFile, _sessionOptions!);
+          }
           _isNativeAvailable = true;
+
+          // Load large companion tokenizer (>= 1 MB) after session creation succeeds
+          if (_tokenizer == null &&
+              resolvedTokPath != null &&
+              File(resolvedTokPath).existsSync()) {
+            try {
+              if (resolvedTokPath.toLowerCase().endsWith('.json')) {
+                final jsonStr = await File(resolvedTokPath).readAsString();
+                _tokenizer = (useIsolate && jsonStr.length > 50000)
+                    ? await Isolate.run(
+                        () => QwenBpeTokenizer.fromJsonString(jsonStr),
+                      )
+                    : QwenBpeTokenizer.fromJsonString(jsonStr);
+              } else if (resolvedTokPath.toLowerCase().endsWith('.model')) {
+                final sp =
+                    await SentencePieceTokenizer.fromModelFile(resolvedTokPath);
+                _tokenizer = SentencePieceLlmTokenizer(sp);
+              }
+            } catch (e) {
+              debugPrint('Failed to load tokenizer from $resolvedTokPath: $e');
+              _tokenizer = null;
+            }
+          }
+
+          // Load bundled fallback tokenizer after session is created
+          if (_tokenizer == null && useBundledFallback) {
+            try {
+              _tokenizer = await QwenBpeTokenizer.loadBundledAsset(
+                runInIsolate: useIsolate,
+              );
+              if (_tokenizer != null) {
+                isBundledFallbackUsed = true;
+              }
+            } catch (e) {
+              debugPrint('Failed to load bundled fallback tokenizer: $e');
+              _tokenizer = null;
+            }
+          }
 
           if (_tokenizer != null) {
             if (isBundledFallbackUsed) {
@@ -670,6 +744,12 @@ class OnnxLocalLlmEngine {
           _session = OrtSession.fromBuffer(modelBytes, _sessionOptions!);
           _isNativeAvailable = true;
 
+          if (_tokenizer == null && useBundledFallback) {
+            try {
+              _tokenizer = await QwenBpeTokenizer.loadBundledAsset();
+            } catch (_) {}
+          }
+
           if (_tokenizer != null) {
             lastStatusMessage = 'Ready: in-memory model';
           } else {
@@ -690,6 +770,8 @@ class OnnxLocalLlmEngine {
       debugPrint('ONNX Native runtime initialization error: $e');
       _isNativeAvailable = false;
       _session = null;
+    } finally {
+      _isInitializing = false;
     }
 
     return false;
@@ -731,8 +813,8 @@ class OnnxLocalLlmEngine {
     }
 
     // Auto-initialize session if not loaded
-    if (_session == null) {
-      await initializeSession();
+    if (_session == null && lastStatusMessage == null && !_isInitializing) {
+      await initializeSession(runInIsolate: !Platform.isWindows);
     }
 
     // 2. Native ONNX Runtime Session Inference
@@ -838,6 +920,348 @@ class OnnxLocalLlmEngine {
     return prompt;
   }
 
+  /// Selects the next token directly from an [OrtValue] logits tensor without
+  /// boxing or copying the tensor into Dart heap lists (`outputVal.value`).
+  static int selectNextTokenFromOrtValue(
+    OrtValue logitsVal,
+    int stepSeqLen,
+    double temperature,
+    List<int> generatedTokenIds,
+  ) {
+    final ortApi = OrtEnv.instance.ortApiPtr.ref;
+
+    final infoPtrPtr = calloc<ffi.Pointer<bg.OrtTensorTypeAndShapeInfo>>();
+    final dataPtrPtr = calloc<ffi.Pointer<ffi.Float>>();
+    final countPtr = calloc<ffi.Size>();
+
+    try {
+      var statusPtr = ortApi.GetTensorTypeAndShape.asFunction<
+              bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtValue>,
+                  ffi.Pointer<ffi.Pointer<bg.OrtTensorTypeAndShapeInfo>>)>()(
+          logitsVal.ptr, infoPtrPtr);
+      OrtStatus.checkOrtStatus(statusPtr);
+
+      final infoPtr = infoPtrPtr.value;
+      try {
+        statusPtr = ortApi.GetTensorShapeElementCount.asFunction<
+            bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtTensorTypeAndShapeInfo>,
+                ffi.Pointer<ffi.Size>)>()(infoPtr, countPtr);
+        OrtStatus.checkOrtStatus(statusPtr);
+      } finally {
+        ortApi.ReleaseTensorTypeAndShapeInfo.asFunction<
+                void Function(ffi.Pointer<bg.OrtTensorTypeAndShapeInfo>)>()(
+            infoPtr);
+      }
+
+      final int totalElements = countPtr.value;
+      if (totalElements <= 0 || stepSeqLen <= 0) return -1;
+
+      final int vocabSize = totalElements ~/ stepSeqLen;
+      if (vocabSize <= 0) return -1;
+
+      statusPtr = ortApi.GetTensorMutableData.asFunction<
+              bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtValue>,
+                  ffi.Pointer<ffi.Pointer<ffi.Void>>)>()(
+          logitsVal.ptr, dataPtrPtr.cast());
+      OrtStatus.checkOrtStatus(statusPtr);
+
+      final ffi.Pointer<ffi.Float> floatPtr = dataPtrPtr.value;
+      if (floatPtr == ffi.nullptr) return -1;
+
+      final int offset = (stepSeqLen - 1) * vocabSize;
+      final Float32List rawLogits = floatPtr.asTypedList(totalElements);
+
+      final Set<int>? seenTokens =
+          generatedTokenIds.isEmpty ? null : generatedTokenIds.toSet();
+      const double repetitionPenalty = 1.15;
+
+      if (temperature <= 0.1) {
+        int maxIdx = 0;
+        double maxVal = double.negativeInfinity;
+        for (int i = 0; i < vocabSize; i++) {
+          double v = rawLogits[offset + i];
+          if (seenTokens != null && seenTokens.contains(i)) {
+            v = v < 0 ? v * repetitionPenalty : v / repetitionPenalty;
+          }
+          if (v > maxVal) {
+            maxVal = v;
+            maxIdx = i;
+          }
+        }
+        return maxIdx;
+      }
+
+      double maxLogit = double.negativeInfinity;
+      for (int i = 0; i < vocabSize; i++) {
+        double v = rawLogits[offset + i];
+        if (seenTokens != null && seenTokens.contains(i)) {
+          v = v < 0 ? v * repetitionPenalty : v / repetitionPenalty;
+        }
+        if (v > maxLogit) {
+          maxLogit = v;
+        }
+      }
+
+      final Float64List expProbs = Float64List(vocabSize);
+      double sumExp = 0.0;
+      for (int i = 0; i < vocabSize; i++) {
+        double v = rawLogits[offset + i];
+        if (seenTokens != null && seenTokens.contains(i)) {
+          v = v < 0 ? v * repetitionPenalty : v / repetitionPenalty;
+        }
+        final double p = math.exp((v - maxLogit) / temperature);
+        expProbs[i] = p;
+        sumExp += p;
+      }
+
+      if (sumExp <= 0.0 || sumExp.isNaN) {
+        return 0;
+      }
+
+      final double r = math.Random().nextDouble() * sumExp;
+      double cumulative = 0.0;
+      for (int i = 0; i < vocabSize; i++) {
+        cumulative += expProbs[i];
+        if (cumulative >= r) {
+          return i;
+        }
+      }
+      return vocabSize - 1;
+    } finally {
+      calloc.free(infoPtrPtr);
+      calloc.free(dataPtrPtr);
+      calloc.free(countPtr);
+    }
+  }
+
+  /// Autoregressive token generation loop executed in a background isolate
+  /// with KV-cache reuse and zero-copy FFI logits inspection.
+  static List<int> _generateTokensInIsolate({
+    required int sessionAddress,
+    required List<int> inputIds,
+    required double temperature,
+    required int maxTokens,
+    required Set<int> eosTokenIds,
+  }) {
+    // Ensure OrtEnv singleton in this isolate has its FFI bindings ready.
+    // Note: Do not call OrtEnv.instance.init() if the native process already has an environment,
+    // or guard it with try-catch.
+    final OrtSession session = OrtSession.fromAddress(sessionAddress);
+
+    final String inputIdsName = session.inputNames.isNotEmpty
+        ? session.inputNames.firstWhere(
+            (n) =>
+                n.toLowerCase().contains('input_ids') ||
+                n.toLowerCase().contains('input'),
+            orElse: () => session.inputNames[0],
+          )
+        : 'input_ids';
+
+    final String? attentionMaskName =
+        session.inputNames.cast<String?>().firstWhere(
+              (n) =>
+                  n != null &&
+                  (n.toLowerCase().contains('attention') ||
+                      n.toLowerCase().contains('mask')),
+              orElse: () => null,
+            );
+
+    final String? positionIdsName =
+        session.inputNames.cast<String?>().firstWhere(
+              (n) => n != null && n.toLowerCase().contains('position'),
+              orElse: () => null,
+            );
+
+    final String outputName = session.outputNames.firstWhere(
+      (n) => n.toLowerCase().contains('logits'),
+      orElse: () =>
+          session.outputNames.isNotEmpty ? session.outputNames.first : 'logits',
+    );
+
+    final List<String> pkvInputNames = session.inputNames
+        .where((n) => n.toLowerCase().contains('past_key_values'))
+        .toList();
+    final List<String> presentOutputNames = session.outputNames
+        .where((n) => n.toLowerCase().contains('present'))
+        .toList();
+    final bool canUseKvCache = pkvInputNames.isNotEmpty &&
+        pkvInputNames.length == presentOutputNames.length;
+
+    final List<String> requestedOutputs = <String>[
+      outputName,
+      if (canUseKvCache) ...presentOutputNames,
+    ];
+
+    final List<int> generatedTokenIds = <int>[];
+    Map<String, OrtValue> pastKv = <String, OrtValue>{};
+    final OrtRunOptions runOptions = OrtRunOptions();
+
+    try {
+      for (int step = 0; step < maxTokens; step++) {
+        final List<OrtValueTensor> stepAllocations = <OrtValueTensor>[];
+        final bool isFirstStep = step == 0;
+
+        final List<int> stepTokens;
+        final int stepSeqLen;
+        final int totalSeqLen;
+        final List<int> posList;
+
+        if (canUseKvCache) {
+          stepTokens = isFirstStep ? inputIds : <int>[generatedTokenIds.last];
+          stepSeqLen = stepTokens.length;
+          final int pastSeqLen =
+              isFirstStep ? 0 : (inputIds.length + step - 1);
+          totalSeqLen = pastSeqLen + stepSeqLen;
+          posList = isFirstStep
+              ? List<int>.generate(stepSeqLen, (i) => i)
+              : <int>[pastSeqLen];
+        } else {
+          stepTokens = <int>[...inputIds, ...generatedTokenIds];
+          stepSeqLen = stepTokens.length;
+          totalSeqLen = stepSeqLen;
+          posList = List<int>.generate(stepSeqLen, (i) => i);
+        }
+
+        final OrtValueTensor inputTensor =
+            OrtValueTensor.createTensorWithDataList(
+          stepTokens,
+          <int>[1, stepSeqLen],
+        );
+        stepAllocations.add(inputTensor);
+
+        final Map<String, OrtValue> inputs = <String, OrtValue>{
+          inputIdsName: inputTensor,
+        };
+
+        if (attentionMaskName != null && attentionMaskName.isNotEmpty) {
+          final OrtValueTensor maskTensor =
+              OrtValueTensor.createTensorWithDataList(
+            List<int>.filled(totalSeqLen, 1),
+            <int>[1, totalSeqLen],
+          );
+          stepAllocations.add(maskTensor);
+          inputs[attentionMaskName] = maskTensor;
+        }
+
+        if (positionIdsName != null && positionIdsName.isNotEmpty) {
+          final OrtValueTensor posTensor =
+              OrtValueTensor.createTensorWithDataList(
+            posList,
+            <int>[1, stepSeqLen],
+          );
+          stepAllocations.add(posTensor);
+          inputs[positionIdsName] = posTensor;
+        }
+
+        if (canUseKvCache) {
+          if (isFirstStep) {
+            final OrtValueTensor emptyKv =
+                OrtValueTensor.createTensorWithDataList(
+              Float32List(0),
+              const <int>[1, 2, 0, 64],
+            );
+            stepAllocations.add(emptyKv);
+            for (final String pkvName in pkvInputNames) {
+              inputs[pkvName] = emptyKv;
+            }
+          } else {
+            inputs.addAll(pastKv);
+          }
+        } else if (pkvInputNames.isNotEmpty) {
+          final OrtValueTensor emptyKv =
+              OrtValueTensor.createTensorWithDataList(
+            Float32List(0),
+            const <int>[1, 2, 0, 64],
+          );
+          stepAllocations.add(emptyKv);
+          for (final String pkvName in pkvInputNames) {
+            inputs[pkvName] = emptyKv;
+          }
+        }
+
+        List<OrtValue?> outputs;
+        try {
+          outputs = session.run(runOptions, inputs, requestedOutputs);
+        } finally {
+          for (final OrtValueTensor t in stepAllocations) {
+            try {
+              t.release();
+            } catch (_) {}
+          }
+        }
+
+        if (outputs.isEmpty || outputs.first == null) {
+          for (final OrtValue? out in outputs) {
+            try {
+              out?.release();
+            } catch (_) {}
+          }
+          break;
+        }
+
+        final OrtValue logitsVal = outputs.first!;
+        final int nextToken;
+        try {
+          nextToken = selectNextTokenFromOrtValue(
+            logitsVal,
+            stepSeqLen,
+            temperature,
+            generatedTokenIds,
+          );
+        } finally {
+          try {
+            logitsVal.release();
+          } catch (_) {}
+        }
+
+        for (final OrtValue oldKv in pastKv.values) {
+          try {
+            oldKv.release();
+          } catch (_) {}
+        }
+        pastKv.clear();
+
+        if (canUseKvCache &&
+            outputs.length == 1 + presentOutputNames.length) {
+          final Map<String, OrtValue> nextKv = <String, OrtValue>{};
+          for (int i = 0; i < presentOutputNames.length; i++) {
+            final OrtValue? presentVal = outputs[1 + i];
+            if (presentVal != null) {
+              final String pkvKey = presentOutputNames[i]
+                  .replaceFirst('present.', 'past_key_values.');
+              nextKv[pkvKey] = presentVal;
+            }
+          }
+          pastKv = nextKv;
+        } else {
+          for (int i = 1; i < outputs.length; i++) {
+            try {
+              outputs[i]?.release();
+            } catch (_) {}
+          }
+        }
+
+        if (nextToken == -1 || eosTokenIds.contains(nextToken)) {
+          break;
+        }
+
+        generatedTokenIds.add(nextToken);
+      }
+    } finally {
+      for (final OrtValue kv in pastKv.values) {
+        try {
+          kv.release();
+        } catch (_) {}
+      }
+      pastKv.clear();
+      try {
+        runOptions.release();
+      } catch (_) {}
+    }
+
+    return generatedTokenIds;
+  }
+
   /// Executes inference on the loaded native ONNX session.
   Future<String> _runNativeInference({
     required String prompt,
@@ -856,11 +1280,10 @@ class OnnxLocalLlmEngine {
       final List<int> inputIds = _tokenizer!.encode(effectivePrompt);
       if (inputIds.isEmpty) return '';
 
-      final List<int> currentInputIds = List<int>.from(inputIds);
-      final List<int> generatedTokenIds = <int>[];
       final int effectiveMaxTokens = constrainMaxTokens(maxTokens);
+      final int sessionAddress = _session!.address;
 
-      final Set<int> eosTokenIds = {
+      final Set<int> eosTokenIds = <int>{
         151645, // <|im_end|> (Qwen)
         151643, // <|endoftext|> (Qwen)
         1, // </s> (Gemma / Llama)
@@ -868,115 +1291,15 @@ class OnnxLocalLlmEngine {
         _tokenizer!.eosTokenId,
       };
 
-      final String inputIdsName = _session!.inputNames.isNotEmpty
-          ? _session!.inputNames.firstWhere(
-              (n) =>
-                  n.toLowerCase().contains('input_ids') ||
-                  n.toLowerCase().contains('input'),
-              orElse: () => _session!.inputNames[0],
-            )
-          : 'input_ids';
-
-      final String? attentionMaskName =
-          _session!.inputNames.cast<String?>().firstWhere(
-                (n) =>
-                    n != null &&
-                    (n.toLowerCase().contains('attention') ||
-                        n.toLowerCase().contains('mask')),
-                orElse: () => null,
-              );
-
-      final String? positionIdsName =
-          _session!.inputNames.cast<String?>().firstWhere(
-                (n) => n != null && n.toLowerCase().contains('position'),
-                orElse: () => null,
-              );
-
-      final String outputName = _session!.outputNames.firstWhere(
-        (n) => n.toLowerCase().contains('logits'),
-        orElse: () => _session!.outputNames.isNotEmpty
-            ? _session!.outputNames.first
-            : 'logits',
+      final List<int> generatedTokenIds = await Isolate.run<List<int>>(
+        () => _generateTokensInIsolate(
+          sessionAddress: sessionAddress,
+          inputIds: inputIds,
+          temperature: temperature,
+          maxTokens: effectiveMaxTokens,
+          eosTokenIds: eosTokenIds,
+        ),
       );
-
-      for (int step = 0; step < effectiveMaxTokens; step++) {
-        final OrtRunOptions runOptions = OrtRunOptions();
-        final List<OrtValueTensor> createdTensors = [];
-
-        final OrtValueTensor inputTensor =
-            OrtValueTensor.createTensorWithDataList(
-          Int64List.fromList(currentInputIds),
-          [1, currentInputIds.length],
-        );
-        createdTensors.add(inputTensor);
-
-        final Map<String, OrtValue> inputs = {
-          inputIdsName: inputTensor,
-        };
-
-        if (attentionMaskName != null && attentionMaskName.isNotEmpty) {
-          final maskTensor = OrtValueTensor.createTensorWithDataList(
-            Int64List.fromList(List<int>.filled(currentInputIds.length, 1)),
-            [1, currentInputIds.length],
-          );
-          createdTensors.add(maskTensor);
-          inputs[attentionMaskName] = maskTensor;
-        }
-
-        if (positionIdsName != null && positionIdsName.isNotEmpty) {
-          final posTensor = OrtValueTensor.createTensorWithDataList(
-            Int64List.fromList(List.generate(currentInputIds.length, (i) => i)),
-            [1, currentInputIds.length],
-          );
-          createdTensors.add(posTensor);
-          inputs[positionIdsName] = posTensor;
-        }
-
-        // Handle past_key_values dynamically if declared in inputNames
-        for (final inputName in _session!.inputNames) {
-          if (inputName.toLowerCase().contains('past_key_values') &&
-              !inputs.containsKey(inputName)) {
-            final emptyTensor = OrtValueTensor.createTensorWithDataList(
-              Float32List(0),
-              [1, 2, 0, 64],
-            );
-            createdTensors.add(emptyTensor);
-            inputs[inputName] = emptyTensor;
-          }
-        }
-
-        List<OrtValue?> outputs;
-        try {
-          outputs = _session!.run(runOptions, inputs, [outputName]);
-        } finally {
-          for (final t in createdTensors) {
-            try {
-              t.release();
-            } catch (_) {}
-          }
-          runOptions.release();
-        }
-
-        if (outputs.isEmpty || outputs.first == null) {
-          break;
-        }
-
-        final OrtValue outputVal = outputs.first!;
-        final List<double> logits = extractLastLogits(outputVal.value);
-        outputVal.release();
-
-        if (logits.isEmpty) {
-          break;
-        }
-
-        final int nextToken = selectNextToken(logits, temperature);
-        if (nextToken == -1 || eosTokenIds.contains(nextToken)) {
-          break;
-        }
-
-        generatedTokenIds.add(nextToken);
-        currentInputIds.add(nextToken);
-      }
 
       if (generatedTokenIds.isEmpty) return '';
 

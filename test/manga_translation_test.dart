@@ -1189,5 +1189,26 @@ void main() {
       expect(chatMl, contains('<|im_start|>user\nサバイバートーク<|im_end|>'));
       expect(chatMl, endsWith('<|im_start|>assistant\n'));
     });
+
+    test(
+        'QwenBpeTokenizer round-trip encodes and decodes multi-byte CJK strings without corruption',
+        () async {
+      expect(QwenBpeTokenizer.bytesToUnicode.length, 256);
+      expect(QwenBpeTokenizer.unicodeToBytes.length, 256);
+
+      final tokenizer = await QwenBpeTokenizer.loadBundledAsset();
+      const cjkSamples = [
+        'なにをしてるんだ！？早く逃げろ！',
+        '형, 지금 뭐 하는 거야?!',
+        '你到底想干什么？！',
+      ];
+
+      for (final sample in cjkSamples) {
+        final ids = tokenizer.encode(sample);
+        expect(ids, isNotEmpty);
+        final decoded = tokenizer.decode(ids);
+        expect(decoded, sample);
+      }
+    });
   });
 }

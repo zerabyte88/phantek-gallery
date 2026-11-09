@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
@@ -68,8 +69,8 @@ class QwenBpeTokenizer implements LlmTokenizer {
     for (int i = 161; i <= 172; i++) {
       bs.add(i);
     }
-    // '®' to '¿' (174..191)
-    for (int i = 174; i <= 191; i++) {
+    // '®' to 'ÿ' (174..255)
+    for (int i = 174; i <= 255; i++) {
       bs.add(i);
     }
 
@@ -166,16 +167,32 @@ class QwenBpeTokenizer implements LlmTokenizer {
     return QwenBpeTokenizer.fromJsonString(jsonStr);
   }
 
+  static QwenBpeTokenizer? _cachedBundledTokenizer;
+
   /// Static helper to load the bundled asset `'assets/tokenizers/qwen_tokenizer.json.gz'`.
   /// Gracefully falls back to inspecting local filesystem paths for headless tests.
   static Future<QwenBpeTokenizer> loadBundledAsset({
     String assetPath = 'assets/tokenizers/qwen_tokenizer.json.gz',
+    bool? runInIsolate,
   }) async {
+    final bool useIsolate =
+        runInIsolate ?? !Platform.environment.containsKey('FLUTTER_TEST');
+    if (_cachedBundledTokenizer != null &&
+        assetPath == 'assets/tokenizers/qwen_tokenizer.json.gz') {
+      return _cachedBundledTokenizer!;
+    }
     try {
       final byteData = await rootBundle.load(assetPath);
-      return QwenBpeTokenizer.fromGzipBytes(
+      final bytes = Uint8List.fromList(
         byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
       );
+      final tok = useIsolate
+          ? await Isolate.run(() => QwenBpeTokenizer.fromGzipBytes(bytes))
+          : QwenBpeTokenizer.fromGzipBytes(bytes);
+      if (assetPath == 'assets/tokenizers/qwen_tokenizer.json.gz') {
+        _cachedBundledTokenizer = tok;
+      }
+      return tok;
     } catch (_) {
       final candidates = [
         assetPath,
@@ -187,7 +204,13 @@ class QwenBpeTokenizer implements LlmTokenizer {
         final file = File(candidate);
         if (file.existsSync()) {
           final bytes = await file.readAsBytes();
-          return QwenBpeTokenizer.fromGzipBytes(bytes);
+          final tok = useIsolate
+              ? await Isolate.run(() => QwenBpeTokenizer.fromGzipBytes(bytes))
+              : QwenBpeTokenizer.fromGzipBytes(bytes);
+          if (assetPath == 'assets/tokenizers/qwen_tokenizer.json.gz') {
+            _cachedBundledTokenizer = tok;
+          }
+          return tok;
         }
       }
       rethrow;

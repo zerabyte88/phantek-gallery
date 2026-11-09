@@ -690,6 +690,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            if (!MlKitTranslationEngine.instance.isLocalLlmReady &&
+                !OnnxLocalLlmEngine.instance.isInitializing &&
+                MlKitTranslationEngine.instance.lastStatusMessage == null) {
+              OnnxLocalLlmEngine.instance.initializeSession().then((_) {
+                if (sheetContext.mounted) {
+                  setSheetState(() {});
+                }
+              });
+            }
             return SafeArea(
                   child: SingleChildScrollView(
                     child: Padding(
@@ -751,6 +760,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               final hasStoragePerm = permSnapshot.data ?? true;
                               final isReady =
                                   MlKitTranslationEngine.instance.isLocalLlmReady;
+                              final isInitializing =
+                                  OnnxLocalLlmEngine.instance.isInitializing;
                               final lastStatus =
                                   MlKitTranslationEngine.instance.lastStatusMessage;
 
@@ -795,7 +806,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                               Text(
                                                 isReady
                                                     ? '✓ '
-                                                    : 'Model AI Belum Terdeteksi',
+                                                    : (isInitializing
+                                                        ? 'Memuat Model AI...'
+                                                        : 'Model AI Belum Terdeteksi'),
                                                 style: TextStyle(
                                                   color: isReady
                                                       ? Colors.greenAccent
