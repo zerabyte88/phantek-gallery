@@ -3,12 +3,12 @@
 
   # Phantek Gallery
 
-  **A fast, privacy-focused Android gallery with PSD layer support and on-device AI manga translation using a local GGUF LLM of your choice.**
+  **A fast, privacy-focused Android gallery with PSD layer support and 100% offline on-device manga translation using Google ML Kit or local GGUF LLMs.**
 
-  [![Version](https://img.shields.io/badge/Version-v2.17.0-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.19.2-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
-  [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20llama.cpp-6366f1.svg?style=flat-square)](https://github.com/ggml-org/llama.cpp)
+  [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20llama.cpp%20%7C%20ML%20Kit-6366f1.svg?style=flat-square)](https://github.com/ggml-org/llama.cpp)
   [![License](https://img.shields.io/badge/License-MIT-f59e0b.svg?style=flat-square&logo=open-source-initiative&logoColor=white)](LICENSE)
 
   [Download APK](https://github.com/zerabyte88/phantek-gallery/releases/latest) • [Features](#features) • [Translation Setup](#translation-setup) • [Supported Formats](#supported-formats) • [Tech Stack](#tech-stack) • [Permissions](#permissions) • [Build](#build-from-source) • [License](#license)
@@ -18,7 +18,11 @@
 
 ## Overview
 
-Phantek Gallery is a local-first gallery for photos, videos, PSD files, and manga. Your media stays on your device, there is no tracking, no telemetry, and no cloud sync. Manga translation runs on a lightweight local LLM (GGUF format via llama.cpp) that you download and install yourself, so your pages are never sent to a cloud API.
+Phantek Gallery is an offline-first gallery for photos, videos, Adobe Photoshop (`.psd`) files, and manga. Your media remains strictly on your device—with zero tracking, no telemetry, and no cloud dependencies. 
+
+For comic and manga readers, Phantek Gallery features dual offline translation engines:
+1. **Google ML Kit On-Device Translation**: Instant, zero-config neural translation directly on your device.
+2. **Local GGUF LLM Engine**: Advanced comic dialogue localization powered by `llama.cpp` using your choice of quantized GGUF models.
 
 ---
 
@@ -26,77 +30,80 @@ Phantek Gallery is a local-first gallery for photos, videos, PSD files, and mang
 
 ### Gallery and Viewing
 
-- **Fast Media Grid** : Hardware-accelerated thumbnails through `MediaStore.loadThumbnail` (1–2 ms), in-memory cache indexing, and isolate-backed decoding for smooth scrolling up to 120 Hz.
-- **PSD Layer Viewer** : Open Adobe Photoshop (`.psd`) files with instant seekable embedded-JPEG previews (under 1 ms) and a sheet for toggling individual layers on and off.
-- **Hardware Video Playback** : Built on AndroidX Media3 / ExoPlayer with a dual SurfaceView pipeline for smooth 2K and 4K playback. Includes double-tap seek, smart zoom, brightness and volume gestures, and playback position resume.
-- **EXIF and Media Inspector** : Technical details for photos (ISO, aperture, focal length, resolution) and videos (bitrate, fps, codec, channels).
+- **Fast Media Grid**: Hardware-accelerated thumbnails via `MediaStore.loadThumbnail` (1–2 ms), memory cache indexing, and background isolate decoding for smooth scrolling up to 120 Hz.
+- **PSD Layer Viewer**: Open Adobe Photoshop (`.psd`) documents with instant embedded-JPEG previews and a dedicated sheet for toggling individual layer visibilities.
+- **Hardware Video Playback**: Built on AndroidX Media3 / ExoPlayer with dual SurfaceView pipelines for smooth 2K and 4K playback. Includes double-tap seek, gesture-based brightness and volume controls, and resume playback.
+- **EXIF and Technical Inspector**: Detailed photo metadata (ISO, aperture, shutter speed, focal length, resolution) and video properties (bitrate, fps, codec, channels).
 
-### Manga
+### Manga Reader & Offline Translation
 
-- **Manga Reader with Natural Sort** : Continuous vertical reading with an edge-to-edge view and chapter progress pills. Albums and chapters sort naturally (`Chapter 1`, `1.1`, `2.1`, `10`, `25`).
-- **On-Device AI Translation** : Translate manga pages offline with a quantized GGUF LLM (powered by `llama.cpp` with Vulkan GPU acceleration). Everything runs 100% on your device, with no cloud APIs or internet connection required.
-- **Bring Your Own Model** : Models are not bundled with the app to keep download size small (< 100 MB). Drop your preferred `.gguf` model into the `models/` directory and switch models anytime from Settings.
+- **Dual Offline Translation Engines**: Choose between Google ML Kit (fast, lightweight, zero-configuration) and Local LLM (nuanced comic dialogue localization via GGUF).
+- **Manual Target Language Selection**: Seamlessly choose your source language with dedicated buttons:
+  - **Japanese** (`JA → EN`)
+  - **Chinese** (`ZH → EN`)
+  - **Korean** (`KO → EN`)
+  - **Auto-Detect** (Script detection across Kanji/Kana, Hanzi, and Hangul)
+- **Adaptive Speech Bubble Typography**:
+  - **Horizontal Expansion**: Dynamically widens narrow Asian vertical text columns so English sentences flow naturally.
+  - **Auto-Fitting Geometry**: Background bubbles dynamically encompass translated dialogue and padding, eliminating text clipping and negative offsets.
+  - **Balanced Font Sizing**: Smart word-count tiers scale dialogue comfortably between `8.5sp` and `13.0sp`.
+- **Manga Reader with Natural Sort**: Continuous vertical reading mode with edge-to-edge layout, chapter progress indicators, and natural alphanumeric sorting (`Chapter 1`, `1.1`, `2.1`, `10`).
 
-### Privacy and Safety
+### Privacy and Security
 
-- **Local-First and Private** : No tracking, no telemetry, no cloud sync. Media files never leave your device, and translation runs fully on-device with a model you provide.
-- **Screen Protection** : Uses Android `FLAG_SECURE` to block screenshots and screen recordings, and to blur the recent apps preview.
-- **Recycle Bin** : A staged `.trash` folder with configurable auto-purge (7, 14, or 30 days, or never) and batch restore or permanent delete.
+- **100% Local-First**: No analytics, no tracking, no network calls during browsing or translation.
+- **Screen Protection**: Optional Android `FLAG_SECURE` integration to prevent screen captures, video recordings, and task switcher previews.
+- **Recycle Bin**: Staged `.trash` directory with configurable auto-purge intervals (7, 14, 30 days, or never) and batch restore.
 
 ### Personalization
 
-- **Visual Themes** : Six hand-crafted themes (*Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, *Sakura*) with dynamic artistic headers.
+- **Visual Themes**: Hand-crafted themes including *Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, and *Sakura* with dynamic theme headers.
 
 ---
 
 ## Translation Setup
 
-Phantek Gallery translates comic dialogues completely offline on your device using a local quantized LLM engine powered by **llama.cpp** (`flutter_llama`). To keep the APK download small (< 100 MB) and give you full control over performance and RAM usage, models are not bundled inside the app.
+Phantek Gallery offers two translation options to suit your preferences:
+
+### Option A: Google ML Kit (Recommended for Zero-Config Setup)
+
+Google ML Kit provides lightweight neural translation directly on your device with no external file setup needed.
+
+1. Open **Settings > Manga Translation**.
+2. Tap the download icon next to your desired language package:
+   - **Japanese** (`ja`)
+   - **Chinese** (`zh`)
+   - **Korean** (`ko`)
+   *(The English `en` package is automatically downloaded alongside your selection to complete the translation pair).*
+3. In the viewer, open any manga page, tap the **Translate** button in the bottom bar, select your language button (**Jepang**, **China**, or **Korea**), and start reading.
 
 ---
 
-### 1. Recommended Models
+### Option B: Local LLM Engine (GGUF / llama.cpp)
 
-GGUF models store both the model weights and tokenizer in a single `.gguf` file. For the best balance of speed, low memory footprint, and natural comic dialogue translation without refusal or censorship, we recommend **Qwen 2.5 0.5B Instruct abliterated (Q4_K_M)**:
+For higher dialogue nuance, slang preservation, and comic localization, you can run a local quantized LLM.
 
-| Model | Format | Size | Recommended For | Hugging Face Download Link |
+#### Recommended GGUF Models
+
+Models can be downloaded from Hugging Face and placed in the app's models directory:
+
+| Model | Format | Size | Recommended For | Hugging Face Download |
 | :--- | :---: | :---: | :--- | :--- |
-| **Qwen 2.5 0.5B abliterated (Q4_K_M)** *(Recommended)* | GGUF | ~380 MB | Ultra-fast on mobile, low RAM usage (~500 MB RAM), uncensored comic dialogue translation. | [Download Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf](https://huggingface.co/failspy/Qwen2.5-0.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf?download=true) |
-| **Qwen 2.5 1.5B abliterated (Q4_K_M)** | GGUF | ~986 MB | Higher translation nuance and grammar accuracy for mid-to-high-end devices (4 GB+ RAM). | [Download Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf](https://huggingface.co/failspy/Qwen2.5-1.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf?download=true) |
+| **Qwen 2.5 0.5B abliterated (Q4_K_M)** *(Recommended)* | GGUF | ~380 MB | Ultra-fast inference on mobile devices, low memory footprint (~500 MB RAM). | [Download Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf](https://huggingface.co/failspy/Qwen2.5-0.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf?download=true) |
+| **Qwen 2.5 1.5B abliterated (Q4_K_M)** | GGUF | ~986 MB | Higher translation nuance and grammar accuracy for devices with 4 GB+ RAM. | [Download Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf](https://huggingface.co/failspy/Qwen2.5-1.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf?download=true) |
 
-> [!TIP]
-> **Optimized ARM NEON Engine**: Offline translation runs natively on-device using multi-threaded ARM NEON SIMD vector instructions for ultra-fast, energy-efficient dialogue translation without GPU driver compatibility issues.
+#### Step-by-Step GGUF Installation
 
-> [!NOTE]
-> Unlike older ONNX setups, **GGUF does not require a separate `tokenizer.json`**. The tokenizer vocabulary is embedded directly inside the `.gguf` file.
-
----
-
-### 2. Step-by-Step Installation Guide
-
-#### Step 1 : Launch App Once to Prepare Directory
-Open Phantek Gallery at least once. The app automatically creates the dedicated model folder on your internal storage:
-```text
-/storage/emulated/0/models/
-```
-*(Alternatively, you can manually create the `models` folder in your phone's internal storage root using any file manager).*
-
-#### Step 2 : Download the GGUF Model
-Download your preferred `.gguf` file (for example, [`Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf`](https://huggingface.co/failspy/Qwen2.5-0.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf?download=true)).
-
-#### Step 3 : Copy the Model File to `models/`
-Move or copy the `.gguf` file into `/storage/emulated/0/models/`:
-```text
-/storage/emulated/0/models/
-└── Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf
-```
-
-#### Step 4 : Verify in Settings
-1. Open Phantek Gallery > **Settings** > scroll to **Manga AI Model**.
-2. Tap **Manga AI Model** to see discovered `.gguf` models. The app automatically detects models in `models/` and `Download/`. Select your downloaded model.
-
-#### Step 5 : Start Translating
-Open any manga or image page in the viewer, tap the **Translate icon (文A)** in the bottom bar, and choose **Translate Speech Bubbles** or **Translate Full Page**. The local LLM will detect text with on-device OCR (Japanese/Chinese/Korean) and translate dialogue completely offline in real-time.
+1. **Prepare Directory**: Open Phantek Gallery once. The app automatically creates the model folder:
+   ```text
+   /storage/emulated/0/models/
+   ```
+2. **Download Model**: Download your desired `.gguf` file (e.g. `Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf`).
+3. **Place Model**: Move the downloaded `.gguf` file into `/storage/emulated/0/models/`.
+4. **Select in Settings**:
+   - Go to **Settings > Manga Translation > Manga AI Model**.
+   - Tap your model file to activate it.
+5. **Switch Engine**: In the reader translation sheet, switch the engine toggle to **Local LLM**.
 
 ---
 
@@ -124,8 +131,9 @@ Open any manga or image page in the viewer, tap the **Translate icon (文A)** in
 | **Framework** | Flutter (Dart SDK `^3.5`) | UI rendering, animations, gestures, and localization |
 | **State Management** | `flutter_riverpod` (`^2.5.1`) | Reactive state and dependency injection |
 | **Video Engine** | `video_player` (`^2.9.2`) | Hardware video playback via AndroidX Media3 / ExoPlayer |
-| **On-Device LLM** | `flutter_llama` (`^1.2.1`) | Offline manga translation via llama.cpp with optimized ARM NEON CPU engine |
-| **On-Device OCR** | Google ML Kit (Text Recognition v2) | Offline script recognition (Japanese, Chinese, Korean, Latin) |
+| **On-Device LLM** | `flutter_llama` (`^1.2.1`) | Offline manga translation via llama.cpp engine |
+| **On-Device Translation** | `google_mlkit_translation` (`^0.11.0`) | On-device neural translation for Japanese, Chinese, Korean, English |
+| **On-Device OCR** | `google_mlkit_text_recognition` (`^0.13.0`) | Offline script recognition (Japanese, Chinese, Korean, Latin) |
 | **Media Scanning** | `photo_manager`, `permission_handler` | Scoped storage media queries and permission handling |
 | **Native Bridge** | Kotlin MethodChannels | `FLAG_SECURE`, MediaStore thumbnail loader, FileProvider |
 | **Storage and Caching** | `shared_preferences`, `path_provider` | Settings persistence and thumbnail disk cache |
@@ -143,7 +151,7 @@ Open any manga or image page in the viewer, tap the **Translate icon (文A)** in
 | `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` | Access photos and videos on Android 13+ (API 33+) |
 | `READ_MEDIA_VISUAL_USER_SELECTED` | Partial, user-selected media access on Android 14+ (API 34+) |
 | `READ_EXTERNAL_STORAGE` / `WRITE_EXTERNAL_STORAGE` | Storage access on Android 12 and below |
-| `MANAGE_EXTERNAL_STORAGE` | Direct file handling for the `.trash` recycle bin |
+| `MANAGE_EXTERNAL_STORAGE` | Direct file handling for the `.trash` recycle bin and model access |
 | `ACCESS_MEDIA_LOCATION` | Read location metadata from camera photos |
 
 </div>
@@ -171,7 +179,7 @@ flutter pub get
 flutter build apk --release --target-platform android-arm64
 ```
 
-The compiled APK (arm64-v8a) is created at `build/app/outputs/flutter-apk/app-release.apk`.
+The compiled APK (`arm64-v8a`) is output to `build/app/outputs/flutter-apk/app-release.apk`.
 
 ---
 
