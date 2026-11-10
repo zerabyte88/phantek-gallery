@@ -532,7 +532,7 @@ void main() {
     });
 
     testWidgets(
-        'MangaTranslationOverlay expands vertical speech bubbles horizontally for English text',
+        'MangaTranslationOverlay preserves vertical speech bubble bounding box without 2.2x ballooning width',
         (tester) async {
       // Narrow vertical box (width 25, height 120 - aspect ratio 4.8)
       final result = TranslationResult(
@@ -694,6 +694,69 @@ void main() {
       expect(rectWide.width, lessThanOrEqualTo(screenSize.width - 16.0));
       expect(rectWide.left, greaterThanOrEqualTo(8.0));
       expect(rectWide.right, lessThanOrEqualTo(screenSize.width - 8.0));
+    });
+
+    test(
+        'calculateBubbleRect preserves vertical speech bubble bounding box without 2.2x ballooning width',
+        () {
+      const originalRect = Rect.fromLTWH(100, 100, 30, 150);
+      final bubbleRect = MangaTranslationPainter.calculateBubbleRect(
+        rect: originalRect,
+        text: 'What on earth are you doing right now?!',
+        screenSize: const Size(400, 800),
+      );
+
+      // Original width 30 + 6 (inflate 3.0) = 36.
+      // Must not balloon to 30 * 2.2 = 66 or minWidthForLength (80-140).
+      expect(bubbleRect.width, equals(36.0));
+      expect(bubbleRect.height, equals(156.0));
+      expect(bubbleRect.width, lessThan(50.0));
+    });
+
+    test('calculateBubbleRect preserves horizontal speech bubble bounding box',
+        () {
+      const originalRect = Rect.fromLTWH(50, 100, 150, 80);
+      final bubbleRect = MangaTranslationPainter.calculateBubbleRect(
+        rect: originalRect,
+        text: 'This is a normal speech bubble.',
+        screenSize: const Size(400, 800),
+      );
+
+      // Original width 150, height 80 -> inflate(3.0) gives 156 x 86
+      expect(bubbleRect.width, equals(156.0));
+      expect(bubbleRect.height, equals(86.0));
+      expect(bubbleRect.left, equals(47.0));
+      expect(bubbleRect.top, equals(97.0));
+    });
+
+    test(
+        'MangaTranslationPainter paints vertical rotated speech bubble cleanly without exception',
+        () {
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      final painter = MangaTranslationPainter(
+        result: const TranslationResult(
+          imagePath: '/mock/vertical.jpg',
+          imageSize: Size(1000, 1500),
+          blocks: [
+            MangaTranslatedBlock(
+              boundingBox: Rect.fromLTWH(800, 150, 25, 160),
+              originalText: '何をしているんだ？',
+              translatedText: 'What on earth are you doing here right now?!',
+              isSpeechBubble: true,
+            ),
+          ],
+        ),
+        mode: TranslationRenderMode.speechBubblesOnly,
+      );
+
+      expect(
+        () => painter.paint(canvas, const Size(1000, 1500)),
+        returnsNormally,
+      );
+
+      final picture = recorder.endRecording();
+      picture.dispose();
     });
   });
 
@@ -1781,6 +1844,122 @@ void main() {
         SettingsService.instance.settings.translationSourceLanguage,
         TranslationSourceLanguage.korean,
       );
+    });
+  });
+
+  group('Manga Speech Bubble Clustering & Google Translate Visual Styling', () {
+    test('mergeAdjacentBlocks clusters multi-column vertical manga bubble into 1 block with RTL reading order', () {
+      final rightCol = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(300, 100, 25, 180),
+        text: '右のセリフ',
+      );
+      final midCol = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(265, 100, 25, 180),
+        text: '中央のセリフ',
+      );
+      final leftCol = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(230, 100, 25, 180),
+        text: '左のセリフ',
+      );
+
+      final merged = MangaOcrService.mergeAdjacentBlocks(
+        [leftCol, rightCol, midCol],
+        language: TranslationSourceLanguage.japanese,
+      );
+
+      expect(merged.length, 1);
+      expect(merged.first.boundingBox, const Rect.fromLTWH(230, 100, 95, 180));
+      expect(merged.first.text, '右のセリフ\n中央のセリフ\n左のセリフ');
+    });
+
+    test('mergeAdjacentBlocks keeps separate speech bubbles apart when distance exceeds threshold', () {
+      final bubbleTop = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(50, 50, 120, 100),
+        text: '上のフキダシ',
+      );
+      final bubbleBottom = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(500, 700, 140, 110),
+        text: '下のフキダシ',
+      );
+
+      final merged = MangaOcrService.mergeAdjacentBlocks(
+        [bubbleTop, bubbleBottom],
+        language: TranslationSourceLanguage.japanese,
+      );
+
+      expect(merged.length, 2);
+      expect(merged[0].text, '上のフキダシ');
+      expect(merged[1].text, '下のフキダシ');
+    });
+
+    test('mergeAdjacentBlocks clusters horizontal adjacent lines into Top-to-Bottom order', () {
+      final line1 = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(100, 100, 200, 25),
+        text: 'First line of dialogue',
+      );
+      final line2 = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(100, 130, 200, 25),
+        text: 'Second line of dialogue',
+      );
+
+      final merged = MangaOcrService.mergeAdjacentBlocks(
+        [line2, line1],
+        language: TranslationSourceLanguage.auto,
+      );
+
+      expect(merged.length, 1);
+      expect(merged.first.boundingBox, const Rect.fromLTWH(100, 100, 200, 55));
+      expect(merged.first.text, 'First line of dialogue\nSecond line of dialogue');
+    });
+
+    test('TranslationIsolateCoordinator merges adjacent blocks before translation', () async {
+      final rightCol = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(300, 100, 25, 180),
+        text: '右のセリフ',
+      );
+      final leftCol = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(265, 100, 25, 180),
+        text: '左のセリフ',
+      );
+
+      final coordinator = TranslationIsolateCoordinator();
+      final blocks = await coordinator.translateBlocks(
+        [rightCol, leftCol],
+        const Size(1000, 1500),
+        mode: TranslationRenderMode.speechBubblesOnly,
+        language: TranslationSourceLanguage.japanese,
+        targetLanguage: TranslationTargetLanguage.english,
+      );
+
+      // Translates exactly 1 merged block, not 2 separate blocks!
+      expect(blocks.length, 1);
+      expect(blocks.first.originalText, '右のセリフ\n左のセリフ');
+      expect(blocks.first.boundingBox, const Rect.fromLTWH(265, 100, 60, 180));
+    });
+
+    test('Google Translate visual typography constraints in calculateBubbleRect', () {
+      const screenSize = Size(400, 800);
+
+      final rectShort = MangaTranslationPainter.calculateBubbleRect(
+        rect: const Rect.fromLTWH(100, 100, 80, 40),
+        text: 'Wait for me!',
+        screenSize: screenSize,
+      );
+      expect(rectShort.width, greaterThan(0));
+
+      final rectMed = MangaTranslationPainter.calculateBubbleRect(
+        rect: const Rect.fromLTWH(100, 100, 120, 60),
+        text: 'Wait for me, I have something very important to tell you.',
+        screenSize: screenSize,
+      );
+      expect(rectMed.width, greaterThan(0));
+
+      final rectLong = MangaTranslationPainter.calculateBubbleRect(
+        rect: const Rect.fromLTWH(100, 100, 150, 80),
+        text: 'There is no way that someone like you could possibly understand the heavy burden I have been carrying all these years!',
+        screenSize: screenSize,
+      );
+      expect(rectLong.width, greaterThan(0));
     });
   });
 }

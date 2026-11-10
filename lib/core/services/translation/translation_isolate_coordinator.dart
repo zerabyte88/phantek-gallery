@@ -36,7 +36,13 @@ Future<List<MangaTranslatedBlock>> _translateBlocks(
     }
   }
 
-  for (final raw in rawBlocks) {
+  // Pre-merge adjacent blocks belonging to the same speech bubble
+  final mergedBlocks = MangaOcrService.mergeAdjacentBlocks(
+    rawBlocks,
+    language: effectiveLanguage,
+  );
+
+  for (final raw in mergedBlocks) {
     if (isCancelled != null && isCancelled()) break;
 
     final trimmed = raw.text.trim();
