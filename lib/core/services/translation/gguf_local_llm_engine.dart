@@ -307,6 +307,19 @@ class GgufLocalLlmEngine {
     return _cjkRegex.hasMatch(text);
   }
 
+  static final RegExp _translatableDialogueRegex = RegExp(
+    r'[\u4e00-\u9fff\u3400-\u4dbf\u3041-\u3096\u30a1-\u30fa\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]',
+  );
+
+  /// Returns true if [text] contains at least one real Asian dialogue character:
+  /// Kanji/Hanzi (`[\u4e00-\u9fff\u3400-\u4dbf]`), Hiragana (`[\u3041-\u3096]`),
+  /// Katakana (`[\u30a1-\u30fa]`), or Hangul (`[\uac00-\ud7af]`).
+  /// Excludes solitary punctuation, middle dots (・), and chōonpu dashes (ー).
+  static bool hasTranslatableDialogue(String text) {
+    if (text.isEmpty) return false;
+    return _translatableDialogueRegex.hasMatch(text);
+  }
+
   static String resolveLanguageName(
     TranslationSourceLanguage source, [
     String? sampleText,
@@ -503,6 +516,20 @@ class GgufLocalLlmEngine {
     // 9. Strip common chat preambles and introductory phrases.
     text = text.replaceAll(
       RegExp(
+        r'^\s*(?:I(?:\x27m| am)\s+(?:going\s+to\s+)?|I\s+will\s+|Let\s+me\s+)(?:translate|convert|localize)\s+[^\n.:]*[.:]\s*(?:(?:Here(?:\x27s| is)\s+(?:the\s+)?(?:English\s+)?(?:comic\s+)?(?:dialogue|translation)\s*:\s*)?)',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    text = text.replaceAll(
+      RegExp(
+        r'^\s*Here(?:\x27s| is)\s+(?:the\s+)?(?:English\s+)?(?:comic\s+)?(?:dialogue|translation)\s*:\s*',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    text = text.replaceAll(
+      RegExp(
         r'^\s*(?:sure(?: thing)?[!,.]?\s*)?(?:here\s+(?:is|are)\s+the\s+(?:final\s+)?(?:english\s+)?(?:comic\s+)?(?:dialogue|translation)\s*(?:is)?\s*:|the\s+english\s+translation\s+is\s*:|english\s+translation\s*:|translation\s*to\s*english\s*:|natural\s+english\s*:|translated\s+text\s*:|based\s+on\s+the\s+comic\s+dialogue\s*,?\s*:?|translation\s*:|dialogue\s*:|output\s*:)\s*',
         caseSensitive: false,
       ),
@@ -556,6 +583,24 @@ class GgufLocalLlmEngine {
         (text.startsWith('“') && text.endsWith('”') && text.length >= 2) ||
         (text.startsWith('「') && text.endsWith('」') && text.length >= 2)) {
       text = text.substring(1, text.length - 1).trim();
+    }
+
+    // 12. Reject readiness and waiting-for-input hallucination phrases.
+    final lowerCleaned = text.toLowerCase();
+    if (lowerCleaned.contains("i'm ready") ||
+        lowerCleaned.contains("i’m ready") ||
+        lowerCleaned.contains("i am ready") ||
+        lowerCleaned.contains("ready to translate") ||
+        lowerCleaned.contains("please send") ||
+        lowerCleaned.contains("please provide") ||
+        lowerCleaned.contains("send me the") ||
+        lowerCleaned.contains("send the ocr") ||
+        lowerCleaned.contains("send the text") ||
+        lowerCleaned.contains("give me the text") ||
+        lowerCleaned.contains("waiting for the") ||
+        lowerCleaned.contains("what is the text") ||
+        lowerCleaned.contains("ready for the ocr")) {
+      return '';
     }
 
     return text;
@@ -717,7 +762,7 @@ class GgufLocalLlmEngine {
       return cleaned;
     }
 
-    if (!hasCjkCharacters(cleaned)) {
+    if (!hasTranslatableDialogue(cleaned)) {
       return cleaned;
     }
 
@@ -741,7 +786,8 @@ class GgufLocalLlmEngine {
         temperature: effectiveTemperature,
         maxTokens: targetTokens,
       );
-      return cleanLlmOutput(rawResult);
+      final cleanedResult = cleanLlmOutput(rawResult);
+      return cleanedResult.isNotEmpty ? cleanedResult : cleaned;
     }
 
     // 2. Real FlutterLlama inference

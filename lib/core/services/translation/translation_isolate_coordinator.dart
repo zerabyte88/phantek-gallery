@@ -41,7 +41,7 @@ Future<List<MangaTranslatedBlock>> _translateBlocks(
 
     final trimmed = raw.text.trim();
     if (trimmed.isEmpty ||
-        !GgufLocalLlmEngine.hasCjkCharacters(trimmed) ||
+        !GgufLocalLlmEngine.hasTranslatableDialogue(trimmed) ||
         raw.boundingBox.width < 8 ||
         raw.boundingBox.height < 8) {
       continue;

@@ -194,20 +194,47 @@ class MlKitTranslationEngine {
     );
   }
 
+  /// Optional mock translator hook for unit tests.
+  @visibleForTesting
+  Future<String> Function(
+    String text,
+    TranslateLanguage source,
+    TranslateLanguage target,
+  )? mockMlKitTranslator;
+
   /// Translates text using Google ML Kit's on-device neural translator.
   Future<String> translateWithGoogleMlKit({
     required String text,
     required TranslationSourceLanguage source,
   }) async {
-    final sourceLang = switch (source) {
+    final cleaned = cleanMangaText(text);
+    if (cleaned.isEmpty) return '';
+    if (!GgufLocalLlmEngine.hasTranslatableDialogue(cleaned)) {
+      return cleaned;
+    }
+
+    final effectiveSource = (source == TranslationSourceLanguage.auto)
+        ? detectLanguageFromText(cleaned)
+        : source;
+
+    final sourceLang = switch (effectiveSource) {
       TranslationSourceLanguage.japanese => TranslateLanguage.japanese,
       TranslationSourceLanguage.korean => TranslateLanguage.korean,
       TranslationSourceLanguage.chinese => TranslateLanguage.chinese,
       TranslationSourceLanguage.auto => TranslateLanguage.japanese,
     };
+
+    if (mockMlKitTranslator != null) {
+      return await mockMlKitTranslator!(
+        cleaned,
+        sourceLang,
+        TranslateLanguage.english,
+      );
+    }
+
     try {
       final translator = _getTranslator(sourceLang, TranslateLanguage.english);
-      final translated = await translator.translateText(text);
+      final translated = await translator.translateText(cleaned);
       return translated;
     } catch (e) {
       debugPrint('[MlKitTranslationEngine] Google ML Kit error ($sourceLang -> en): $e');
@@ -291,14 +318,18 @@ class MlKitTranslationEngine {
     return TranslationSourceLanguage.japanese;
   }
 
-  /// Normalizes vertical line breaks and trims whitespace.
+  /// Normalizes vertical line breaks, trims whitespace, removes border artifacts,
+  /// and merges accidental intra-CJK whitespace.
   static String cleanMangaText(String text) {
-    final lines = text
+    final cleaned = text
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
+        .replaceAll(RegExp(r'(?:^|\n)\s*[|丨¦‖]\s*(?=\n|$)'), '\n');
+
+    final lines = cleaned
         .split('\n')
         .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
+        .where((s) => s.isNotEmpty && !RegExp(r'^[|丨¦‖]+$').hasMatch(s))
         .toList();
 
     if (lines.isEmpty) return '';
@@ -322,7 +353,20 @@ class MlKitTranslationEngine {
       }
     }
 
-    return buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+    var result = buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    // Remove accidental intra-CJK whitespace created by OCR character segmentation
+    final cjkSpacePattern = RegExp(
+      r'([\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff])\s+([\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff])',
+    );
+    while (cjkSpacePattern.hasMatch(result)) {
+      result = result.replaceAllMapped(
+        cjkSpacePattern,
+        (m) => '${m[1]}${m[2]}',
+      );
+    }
+
+    return result;
   }
 
   /// Checks if the model for [lang] is downloaded on-device.
@@ -490,6 +534,10 @@ class MlKitTranslationEngine {
     if (cleaned.isEmpty) return '';
 
     if (RegExp(r'^[!?！？\.\s…]+$').hasMatch(cleaned)) {
+      return cleaned;
+    }
+
+    if (!GgufLocalLlmEngine.hasTranslatableDialogue(cleaned)) {
       return cleaned;
     }
 

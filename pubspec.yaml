@@ -1,7 +1,7 @@
 name: phantek_gallery
 description: "Phantek Gallery - offline-first photo & video gallery for Android."
 publish_to: 'none'
-version: 2.19.2+762487
+version: 2.19.3+762488
 homepage: https://github.com/zerabyte88/phantek-gallery
 repository: https://github.com/zerabyte88/phantek-gallery
 issue_tracker: https://github.com/zerabyte88/phantek-gallery/issues

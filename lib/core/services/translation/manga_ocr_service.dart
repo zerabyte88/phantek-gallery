@@ -64,7 +64,7 @@ class MlKitMangaTextDetector implements MangaTextDetector {
       final inputImage = InputImage.fromFilePath(imagePath);
       final recognizer = _getRecognizer(targetScript);
       final recognized = await recognizer.processImage(inputImage);
-      final blocks = _mapBlocks(recognized);
+      final blocks = _mapBlocks(recognized, script: targetScript);
 
       // In auto mode, if initial script returns no blocks, try Korean and Chinese scripts
       if (language == TranslationSourceLanguage.auto && blocks.isEmpty) {
@@ -76,7 +76,7 @@ class MlKitMangaTextDetector implements MangaTextDetector {
           try {
             final altRec = _getRecognizer(altScript);
             final altRecognized = await altRec.processImage(inputImage);
-            final altBlocks = _mapBlocks(altRecognized);
+            final altBlocks = _mapBlocks(altRecognized, script: altScript);
             if (altBlocks.isNotEmpty) {
               return altBlocks;
             }
@@ -100,7 +100,7 @@ class MlKitMangaTextDetector implements MangaTextDetector {
         final fallbackRecognizer = _getRecognizer(TextRecognitionScript.latin);
         final fallbackRecognized =
             await fallbackRecognizer.processImage(inputImage);
-        return _mapBlocks(fallbackRecognized);
+        return _mapBlocks(fallbackRecognized, script: TextRecognitionScript.latin);
       } catch (fallbackError) {
         debugPrint(
             'ML Kit Latin fallback OCR error on $imagePath: $fallbackError');
@@ -109,21 +109,80 @@ class MlKitMangaTextDetector implements MangaTextDetector {
     }
   }
 
-  List<RawMangaTextBlock> _mapBlocks(RecognizedText recognized) {
+  static bool _hasCjkText(String text) {
+    return RegExp(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]').hasMatch(text);
+  }
+
+  static bool _isBorderArtifact(String text) {
+    final trimmed = text.trim();
+    return trimmed.isNotEmpty && RegExp(r'^[|丨¦‖]+$').hasMatch(trimmed);
+  }
+
+  @visibleForTesting
+  static List<RawMangaTextBlock> mapBlocks(
+    RecognizedText recognized, {
+    TextRecognitionScript? script,
+  }) {
     return recognized.blocks.map((block) {
       final box = block.boundingBox;
+      final blockRect = Rect.fromLTWH(
+        box.left.toDouble(),
+        box.top.toDouble(),
+        box.width.toDouble(),
+        box.height.toDouble(),
+      );
+
+      String processedText = block.text;
+
+      final isCjkScript = script == TextRecognitionScript.japanese ||
+          script == TextRecognitionScript.chinese ||
+          _hasCjkText(block.text);
+
+      if (block.lines.length > 1 && isCjkScript) {
+        var lines = block.lines;
+        final hasOtherCjkLines =
+            lines.any((l) => _hasCjkText(l.text) && !_isBorderArtifact(l.text));
+        if (hasOtherCjkLines) {
+          final filtered =
+              lines.where((l) => !_isBorderArtifact(l.text)).toList();
+          if (filtered.isNotEmpty) {
+            lines = filtered;
+          }
+        }
+
+        final isVertical = (blockRect.height >= blockRect.width * 1.05) ||
+            lines.any((l) => l.boundingBox.height > l.boundingBox.width * 1.2);
+
+        if (isVertical) {
+          final sortedLines = List<TextLine>.from(lines);
+          sortedLines.sort(
+            (a, b) => b.boundingBox.center.dx.compareTo(a.boundingBox.center.dx),
+          );
+          processedText = sortedLines
+              .map((l) => l.text.trim())
+              .where((t) => t.isNotEmpty)
+              .join('\n');
+        } else if (lines.length != block.lines.length) {
+          processedText = lines
+              .map((l) => l.text.trim())
+              .where((t) => t.isNotEmpty)
+              .join('\n');
+        }
+      }
+
       return RawMangaTextBlock(
-        boundingBox: Rect.fromLTWH(
-          box.left.toDouble(),
-          box.top.toDouble(),
-          box.width.toDouble(),
-          box.height.toDouble(),
-        ),
-        text: block.text,
+        boundingBox: blockRect,
+        text: processedText,
         recognizedLanguages: block.recognizedLanguages,
       );
     }).toList();
   }
+
+  List<RawMangaTextBlock> _mapBlocks(
+    RecognizedText recognized, {
+    TextRecognitionScript? script,
+  }) =>
+      mapBlocks(recognized, script: script);
 
   @override
   void dispose() {

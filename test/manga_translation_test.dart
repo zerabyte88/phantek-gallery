@@ -113,6 +113,154 @@ void main() {
       expect(MlKitTranslationEngine.cleanMangaText(noisyText), '助けて！ 誰か...');
     });
 
+    test('Intra-CJK space removal and border artifact pipe removal in cleanMangaText', () {
+      // Intra-CJK space removal (Japanese Hiragana/Katakana)
+      expect(
+        MlKitTranslationEngine.cleanMangaText('こ ん に ち は'),
+        'こんにちは',
+      );
+      // Intra-CJK space removal (Chinese Hanzi)
+      expect(
+        MlKitTranslationEngine.cleanMangaText('你 好 吗'),
+        '你好吗',
+      );
+      // Intra-CJK space removal across 3+ consecutive separated characters
+      expect(
+        MlKitTranslationEngine.cleanMangaText('一 二 三 四 五'),
+        '一二三四五',
+      );
+      // Preserves Korean word spacing
+      expect(
+        MlKitTranslationEngine.cleanMangaText('형, 지금 뭐 하는 거야?!'),
+        '형, 지금 뭐 하는 거야?!',
+      );
+      // Preserves mixed Latin-CJK and Korean-CJK spacing
+      expect(
+        MlKitTranslationEngine.cleanMangaText('Hello こんにちは'),
+        'Hello こんにちは',
+      );
+      expect(
+        MlKitTranslationEngine.cleanMangaText('안녕하세요 こんにちは'),
+        '안녕하세요 こんにちは',
+      );
+
+      // Border artifact pipe removal
+      expect(
+        MlKitTranslationEngine.cleanMangaText('|\nこんにちは\n|'),
+        'こんにちは',
+      );
+      expect(
+        MlKitTranslationEngine.cleanMangaText('丨\n你 好 吗\n‖'),
+        '你好吗',
+      );
+      expect(
+        MlKitTranslationEngine.cleanMangaText('|\n|\n¦\n‖'),
+        '',
+      );
+      expect(
+        MlKitTranslationEngine.cleanMangaText('待て\n|\n行くぞ'),
+        '待て行くぞ',
+      );
+    });
+
+    test('translateWithGoogleMlKit auto language resolution', () async {
+      final engine = MlKitTranslationEngine.instance;
+
+      TranslateLanguage? lastDetectedSource;
+      engine.mockMlKitTranslator = (text, source, target) async {
+        lastDetectedSource = source;
+        return 'Mock translation of $text';
+      };
+
+      try {
+        // Auto resolves Japanese
+        final resJa = await engine.translateWithGoogleMlKit(
+          text: 'こんにちは',
+          source: TranslationSourceLanguage.auto,
+        );
+        expect(resJa, 'Mock translation of こんにちは');
+        expect(lastDetectedSource, TranslateLanguage.japanese);
+
+        // Auto resolves Korean
+        final resKo = await engine.translateWithGoogleMlKit(
+          text: '안녕하세요',
+          source: TranslationSourceLanguage.auto,
+        );
+        expect(resKo, 'Mock translation of 안녕하세요');
+        expect(lastDetectedSource, TranslateLanguage.korean);
+
+        // Auto resolves Chinese
+        final resZh = await engine.translateWithGoogleMlKit(
+          text: '你好世界',
+          source: TranslationSourceLanguage.auto,
+        );
+        expect(resZh, 'Mock translation of 你好世界');
+        expect(lastDetectedSource, TranslateLanguage.chinese);
+
+        // Explicit source language overrides auto detection
+        final resExplicit = await engine.translateWithGoogleMlKit(
+          text: 'こんにちは',
+          source: TranslationSourceLanguage.korean,
+        );
+        expect(resExplicit, 'Mock translation of こんにちは');
+        expect(lastDetectedSource, TranslateLanguage.korean);
+      } finally {
+        engine.mockMlKitTranslator = null;
+      }
+    });
+
+    test('MlKitMangaTextDetector mapBlocks RTL reordering and artifact filtering', () {
+      final lineLeft = TextLine(
+        text: '左のセリフ',
+        elements: const [],
+        boundingBox: const Rect.fromLTWH(10, 0, 20, 100),
+        recognizedLanguages: const ['ja'],
+        cornerPoints: const [],
+        confidence: 1.0,
+        angle: 0.0,
+      );
+      final lineRight = TextLine(
+        text: '右のセリフ',
+        elements: const [],
+        boundingBox: const Rect.fromLTWH(80, 0, 20, 100),
+        recognizedLanguages: const ['ja'],
+        cornerPoints: const [],
+        confidence: 1.0,
+        angle: 0.0,
+      );
+      final artifactLine = TextLine(
+        text: '|',
+        elements: const [],
+        boundingBox: const Rect.fromLTWH(120, 0, 5, 100),
+        recognizedLanguages: const [],
+        cornerPoints: const [],
+        confidence: 0.5,
+        angle: 0.0,
+      );
+
+      final block = TextBlock(
+        text: '左のセリフ\n右のセリフ\n|',
+        lines: [lineLeft, lineRight, artifactLine],
+        boundingBox: const Rect.fromLTWH(0, 0, 130, 120),
+        recognizedLanguages: const ['ja'],
+        cornerPoints: const [],
+      );
+
+      final recognized = RecognizedText(
+        text: '左のセリフ\n右のセリフ\n|',
+        blocks: [block],
+      );
+
+      final mapped = MlKitMangaTextDetector.mapBlocks(
+        recognized,
+        script: TextRecognitionScript.japanese,
+      );
+
+      expect(mapped.length, 1);
+      // Right column (dx=90) must be ordered before Left column (dx=20), and artifact pipe '|' is filtered out
+      expect(mapped.first.text, '右のセリフ\n左のセリフ');
+    });
+
     test('Language auto-detection from character scripts', () {
       expect(
         MlKitTranslationEngine.detectLanguageFromText('お前、何をしているんだ？'),
@@ -510,6 +658,42 @@ void main() {
 
       final picture = recorder.endRecording();
       picture.dispose();
+    });
+
+    test('MangaTranslationPainter speech bubble clamping to screen viewport margins', () {
+      const screenSize = Size(400, 800);
+
+      // Bubble far off the left/top edge (x = -50, y = -100)
+      final rectLeftTop = MangaTranslationPainter.calculateBubbleRect(
+        rect: const Rect.fromLTWH(-50, -100, 100, 50),
+        text: 'Look out!',
+        screenSize: screenSize,
+      );
+      expect(rectLeftTop.left, greaterThanOrEqualTo(8.0));
+      expect(rectLeftTop.top, greaterThanOrEqualTo(8.0));
+      expect(rectLeftTop.right, lessThanOrEqualTo(screenSize.width - 8.0));
+      expect(rectLeftTop.bottom, lessThanOrEqualTo(screenSize.height - 8.0));
+
+      // Bubble far off the right/bottom edge (x = 1000, y = 1200)
+      final rectRightBottom = MangaTranslationPainter.calculateBubbleRect(
+        rect: const Rect.fromLTWH(1000, 1200, 120, 60),
+        text: 'Stop right there!',
+        screenSize: screenSize,
+      );
+      expect(rectRightBottom.left, greaterThanOrEqualTo(8.0));
+      expect(rectRightBottom.top, greaterThanOrEqualTo(8.0));
+      expect(rectRightBottom.right, lessThanOrEqualTo(screenSize.width - 8.0));
+      expect(rectRightBottom.bottom, lessThanOrEqualTo(screenSize.height - 8.0));
+
+      // Extreme width bubble capped within safeViewport
+      final rectWide = MangaTranslationPainter.calculateBubbleRect(
+        rect: const Rect.fromLTWH(0, 300, 600, 80),
+        text: 'This is a very long dialogue that spans across many words and sentences in manga.',
+        screenSize: screenSize,
+      );
+      expect(rectWide.width, lessThanOrEqualTo(screenSize.width - 16.0));
+      expect(rectWide.left, greaterThanOrEqualTo(8.0));
+      expect(rectWide.right, lessThanOrEqualTo(screenSize.width - 8.0));
     });
   });
 
@@ -1053,7 +1237,66 @@ void main() {
       expect(GgufLocalLlmEngine.hasCjkCharacters(''), isFalse);
     });
 
-    test('cleanLlmOutput strips conversational preambles and prompt echoes', () {
+    test('GgufLocalLlmEngine.hasTranslatableDialogue detects Asian dialogue characters and ignores non-letter symbols', () {
+      // True for real Asian dialogue characters
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('こんにちは'), isTrue);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('スゴイ'), isTrue);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('ラーメン'), isTrue);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('你好世界'), isTrue);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('漫画'), isTrue);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('안녕하세요'), isTrue);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('ㅋㅋㅋ'), isTrue);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('待て！'), isTrue);
+
+      // False for solitary dashes, dots, and non-dialogue artifacts
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('ー'), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('ーーー'), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('・'), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('・・・'), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('…'), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('|'), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('~'), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('！？'), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('!?'), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue(''), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('   '), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('12345'), isFalse);
+      expect(GgufLocalLlmEngine.hasTranslatableDialogue('---'), isFalse);
+    });
+
+    test('cleanLlmOutput strips conversational preambles, echoes, and readiness chatter', () {
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput("I'm ready, please send OCR text"),
+        '',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput("I am ready. Please provide the text to translate."),
+        '',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput("Ready to translate! Please send the OCR text."),
+        '',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput("Send me the OCR text you want translated."),
+        '',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput("Give me the text to translate."),
+        '',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput("Waiting for the OCR text..."),
+        '',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput("What is the text you'd like me to translate?"),
+        '',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput("Ready for the OCR text."),
+        '',
+      );
       expect(
         GgufLocalLlmEngine.cleanLlmOutput('Sure, here is the English translation: Stop right there!'),
         'Stop right there!',
@@ -1061,6 +1304,18 @@ void main() {
       expect(
         GgufLocalLlmEngine.cleanLlmOutput('Here is the English translation:\n\nGet out of my way!'),
         'Get out of my way!',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput(
+          "I'm going to translate this text into natural English dialogue. Here's the translation: What?",
+        ),
+        'What?',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput(
+          "I'm going to translate this text into natural English dialogue. Here's the translation:",
+        ),
+        '',
       );
       expect(
         GgufLocalLlmEngine.cleanLlmOutput('Natural English: Look out behind you!'),
