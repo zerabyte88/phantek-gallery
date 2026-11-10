@@ -10,7 +10,7 @@ const Map<String, String> enTranslations = {
   'albumsCountSingular': '1 album',
   'albumsGridColumns': 'Albums Grid Columns',
   'all': 'All',
-  'allFilesAccess': 'All Files Access (Android 11+)',
+  'allFilesAccess': 'All Files Access',
   'allFilesAccessSubtitle':
       'Enables complete trash and deletion across storage',
   'allFilesGranted': 'All Files Access granted',

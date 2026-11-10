@@ -216,11 +216,19 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                 e.immediateFolderName == widget.albumName)
             .toList();
 
-    final subfolderNames = albumItems
-        .map((e) => e.immediateFolderName)
-        .where((s) => s.isNotEmpty && s != widget.albumName)
-        .toSet()
-        .toList()
+    final Map<String, List<MediaItem>> subfolderItemsMap = {};
+    for (final item in albumItems) {
+      if (item.immediateFolderName.isNotEmpty &&
+          item.immediateFolderName != widget.albumName) {
+        subfolderItemsMap
+            .putIfAbsent(item.immediateFolderName, () => [])
+            .add(item);
+      }
+    }
+    for (final list in subfolderItemsMap.values) {
+      list.sort((a, b) => naturalCompare(a.name, b.name));
+    }
+    final subfolderNames = subfolderItemsMap.keys.toList()
       ..sort(naturalCompare);
     final hasSubfolders = subfolderNames.length > 1;
 
@@ -529,7 +537,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                         child: FilterChip(
                           selected: _selectedSubfolder == sub,
                           label: Text(
-                              '$sub (${albumItems.where((e) => e.immediateFolderName == sub).length})'),
+                              '$sub (${subfolderItemsMap[sub]?.length ?? 0})'),
                           onSelected: (selected) {
                             setState(() {
                               _selectedSubfolder = selected ? sub : null;
@@ -617,6 +625,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                           !_flattenSubfolders &&
                           _selectedSubfolder == null)
                       ? GridView.builder(
+                          cacheExtent: 800.0,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
                           gridDelegate:
@@ -629,11 +638,10 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                           itemCount: subfolderNames.length,
                           itemBuilder: (_, i) {
                             final sub = subfolderNames[i];
-                            final subItems = albumItems
-                                .where((e) => e.immediateFolderName == sub)
-                                .toList()
-                              ..sort((a, b) => naturalCompare(a.name, b.name));
-                            final cover = subItems.first;
+                            final subItems = subfolderItemsMap[sub] ?? const [];
+                            final cover =
+                                subItems.isNotEmpty ? subItems.first : null;
+                            if (cover == null) return const SizedBox.shrink();
                             final subAlbum = Album(
                               name: sub,
                               items: subItems,
@@ -658,6 +666,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                             )
                           : GridView.builder(
                               controller: _scrollController,
+                              cacheExtent: 800.0,
                               padding: const EdgeInsets.all(2),
                               gridDelegate:
                                   SliverGridDelegateWithFixedCrossAxisCount(

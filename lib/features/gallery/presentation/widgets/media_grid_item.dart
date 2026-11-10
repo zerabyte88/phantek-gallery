@@ -89,9 +89,11 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
     if (mem != null) {
       return Image.memory(
         mem,
+        cacheWidth: 320,
+        cacheHeight: 320,
         fit: fit,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
+        filterQuality: FilterQuality.low,
       );
     }
 
@@ -102,9 +104,11 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
     if (diskFile != null) {
       return Image.file(
         diskFile,
+        cacheWidth: 320,
+        cacheHeight: 320,
         fit: fit,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
+        filterQuality: FilterQuality.low,
         errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
       );
     }
@@ -122,9 +126,11 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
         if (snap.data != null && snap.data!.isNotEmpty) {
           return Image.memory(
             snap.data!,
+            cacheWidth: 320,
+            cacheHeight: 320,
             fit: fit,
             gaplessPlayback: true,
-            filterQuality: FilterQuality.medium,
+            filterQuality: FilterQuality.low,
           );
         }
         if (snap.connectionState == ConnectionState.done) {
@@ -133,9 +139,11 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
           if (currentMem != null) {
             return Image.memory(
               currentMem,
+              cacheWidth: 320,
+              cacheHeight: 320,
               fit: fit,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.medium,
+              filterQuality: FilterQuality.low,
             );
           }
           final currentDisk =
@@ -145,9 +153,11 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
           if (currentDisk != null) {
             return Image.file(
               currentDisk,
+              cacheWidth: 320,
+              cacheHeight: 320,
               fit: fit,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.medium,
+              filterQuality: FilterQuality.low,
               errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
             );
           }
@@ -157,10 +167,11 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
             if (file.existsSync()) {
               return Image.file(
                 file,
-                cacheWidth: 512,
+                cacheWidth: 320,
+                cacheHeight: 320,
                 fit: fit,
                 gaplessPlayback: true,
-                filterQuality: FilterQuality.medium,
+                filterQuality: FilterQuality.low,
                 errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
               );
             }

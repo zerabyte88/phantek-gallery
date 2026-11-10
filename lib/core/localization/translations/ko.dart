@@ -9,7 +9,7 @@ const Map<String, String> koTranslations = {
   'albumsCount': '{count}개 앨범',
   'albumsGridColumns': '앨범 열',
   'all': '전체',
-  'allFilesAccess': '모든 파일 액세스 (Android 11+)',
+  'allFilesAccess': '모든 파일 액세스',
   'allFilesAccessSubtitle': '전체 저장소에서 휴지통 및 삭제 활성화',
   'allFilesGranted': '모든 파일 액세스 허용됨',
   'allFilesNotGranted': '모든 파일 관리 권한이 부여되지 않았습니다',

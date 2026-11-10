@@ -9,7 +9,7 @@ const Map<String, String> idTranslations = {
   'albumsCount': '{count} album',
   'albumsGridColumns': 'Kolom Grid Album',
   'all': 'Semua',
-  'allFilesAccess': 'Akses Semua File (Android 11+)',
+  'allFilesAccess': 'Akses Semua File',
   'allFilesAccessSubtitle':
       'Mengaktifkan fitur sampah dan penghapusan di seluruh memori',
   'allFilesGranted': 'Akses Semua File telah diizinkan',

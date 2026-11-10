@@ -10,7 +10,7 @@ const Map<String, String> daTranslations = {
   'albumsCountSingular': '1 album',
   'albumsGridColumns': 'Album gitterkolonner',
   'all': 'Alle',
-  'allFilesAccess': 'Adgang til alle filer (Android 11+)',
+  'allFilesAccess': 'Adgang til alle filer',
   'allFilesAccessSubtitle':
       'Aktiverer fuld papirkurv og sletning på tværs af lageret',
   'allFilesGranted': 'Fuld adgang til filer givet',

@@ -1570,7 +1570,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                         ? SizedBox(
                             width: _controller!.value.size.width,
                             height: _controller!.value.size.height,
-                            child: VideoPlayer(_controller!),
+                            child: RepaintBoundary(
+                              child: VideoPlayer(_controller!),
+                            ),
                           )
                         : const SizedBox.shrink(),
                   ),

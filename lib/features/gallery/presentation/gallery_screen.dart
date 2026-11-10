@@ -1172,6 +1172,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           child: GridView.builder(
             key: PageStorageKey(storageKey),
             controller: controller,
+            cacheExtent: 800.0,
             padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: settings.gridColumns,
@@ -1180,6 +1181,14 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               childAspectRatio: aspectRatio,
             ),
             itemCount: items.length,
+            findChildIndexCallback: (Key key) {
+              if (key is ValueKey<String>) {
+                final id = key.value;
+                final idx = items.indexWhere((e) => e.id == id);
+                return idx >= 0 ? idx : null;
+              }
+              return null;
+            },
             itemBuilder: (_, i) => _buildMediaGridItem(items, i, tab, settings),
           ),
         ),
@@ -1214,6 +1223,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         child: CustomScrollView(
           key: PageStorageKey(storageKey),
           controller: controller,
+          cacheExtent: 800.0,
           slivers: [
             for (final entry in groups.entries) ...[
               SliverToBoxAdapter(
@@ -1247,6 +1257,15 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                       settings,
                     ),
                     childCount: entry.value.length,
+                    findChildIndexCallback: (Key key) {
+                      if (key is ValueKey<String>) {
+                        final id = key.value;
+                        final idx = entry.value.indexWhere(
+                            (itemIdx) => items[itemIdx].id == id);
+                        return idx >= 0 ? idx : null;
+                      }
+                      return null;
+                    },
                   ),
                 ),
               ),
@@ -1319,6 +1338,14 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           return;
         }
         if (tab == FilterOption.all) {
+          Navigator.of(context).openVideo(items, index);
+          return;
+        }
+        if (tab == FilterOption.photosOnly) {
+          Navigator.of(context).openImage(items, index);
+          return;
+        }
+        if (tab == FilterOption.videosOnly) {
           Navigator.of(context).openVideo(items, index);
           return;
         }

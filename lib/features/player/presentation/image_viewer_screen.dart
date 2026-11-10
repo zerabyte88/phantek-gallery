@@ -1916,8 +1916,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             ),
           );
 
-          return Stack(
-            fit: StackFit.expand,
+          return RepaintBoundary(
+            child: Stack(
+              fit: StackFit.expand,
             children: [
               InteractiveViewer(
                 minScale: 1.0,
@@ -2014,7 +2015,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   ),
                 ),
             ],
-          );
+          ),
+        );
         },
       ),
     );
@@ -2270,7 +2272,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           );
         }
 
-        return content;
+        return RepaintBoundary(child: content);
       } else if (_psdLoadError[it.path] == true) {
         return Center(
           child: Container(
@@ -2483,7 +2485,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       );
     }
 
-    return content;
+    return RepaintBoundary(child: content);
   }
 
   Future<void> _restoreCurrentItem() async {

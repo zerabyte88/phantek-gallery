@@ -9,7 +9,7 @@ const Map<String, String> hiTranslations = {
   'albumsCount': '{count} एल्बम',
   'albumsGridColumns': 'एल्बम ग्रिड कॉलम',
   'all': 'सभी',
-  'allFilesAccess': 'सभी फ़ाइलों तक पहुँच (Android 11+)',
+  'allFilesAccess': 'सभी फ़ाइलों तक पहुँच',
   'allFilesAccessSubtitle': 'पूरे स्टोरेज में ट्रैश और विलोपन सक्षम करें',
   'allFilesGranted': 'सभी फ़ाइलों तक पहुँच की अनुमति दी गई',
   'allFilesNotGranted': 'सभी फ़ाइलों के प्रबंधन की अनुमति नहीं दी गई',

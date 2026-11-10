@@ -10,7 +10,7 @@ const Map<String, String> noTranslations = {
   'albumsCountSingular': '1 album',
   'albumsGridColumns': 'Album rutenettkolonner',
   'all': 'Alle',
-  'allFilesAccess': 'Tilgang til alle filer (Android 11+)',
+  'allFilesAccess': 'Tilgang til alle filer',
   'allFilesAccessSubtitle':
       'Aktiverer papirkurv og full sletting på tvers av lagring',
   'allFilesGranted': 'Full filtilgang innvilget',

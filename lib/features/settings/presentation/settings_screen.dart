@@ -109,6 +109,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           hoverColor: Colors.transparent,
         ),
         child: ListView(
+          cacheExtent: 600.0,
           padding: const EdgeInsets.only(top: 4, bottom: 32),
           children: [
             _SectionHeader(title: context.tr.appearance),
@@ -700,13 +701,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   title: context.tr.engineGoogleMlKit,
                   subtitle: switch (settings.translationSourceLanguage) {
                     TranslationSourceLanguage.japanese =>
-                      '${context.tr.sourceLanguage}: ${context.tr.langJapanese}',
+                      context.tr.langJapanese,
                     TranslationSourceLanguage.chinese =>
-                      '${context.tr.sourceLanguage}: ${context.tr.langChinese}',
+                      context.tr.langChinese,
                     TranslationSourceLanguage.korean =>
-                      '${context.tr.sourceLanguage}: ${context.tr.langKorean}',
+                      context.tr.langKorean,
                     TranslationSourceLanguage.auto =>
-                      '${context.tr.sourceLanguage}: ${context.tr.autoDetect}',
+                      context.tr.autoDetect,
                   },
                   onTap: () {
                     Navigator.of(context).push(
@@ -1041,6 +1042,27 @@ class _ModernSwitchTile extends StatelessWidget {
               Switch(
                 value: value,
                 onChanged: onChanged,
+                trackColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return cs.primary;
+                  }
+                  return Colors.transparent;
+                }),
+                trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return Colors.transparent;
+                  }
+                  return cs.onSurfaceVariant
+                      .withValues(alpha: isDark ? 0.38 : 0.35);
+                }),
+                trackOutlineWidth: const WidgetStatePropertyAll(1.5),
+                thumbColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return isDark ? Colors.white : cs.onPrimary;
+                  }
+                  return cs.onSurfaceVariant
+                      .withValues(alpha: isDark ? 0.85 : 0.65);
+                }),
               ),
             ],
           ),
@@ -2775,6 +2797,7 @@ class GoogleMlKitSettingsScreen extends ConsumerWidget {
           hoverColor: Colors.transparent,
         ),
         child: ListView(
+          cacheExtent: 600.0,
           padding: const EdgeInsets.only(top: 4, bottom: 32),
           children: [
             _SectionHeader(title: context.tr.sourceLanguage),

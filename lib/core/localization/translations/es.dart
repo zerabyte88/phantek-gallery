@@ -10,7 +10,7 @@ const Map<String, String> esTranslations = {
   'albumsCountSingular': '1 álbum',
   'albumsGridColumns': 'Columnas de álbumes',
   'all': 'Todos',
-  'allFilesAccess': 'Acceso a todos los archivos (Android 11+)',
+  'allFilesAccess': 'Acceso a todos los archivos',
   'allFilesAccessSubtitle':
       'Permite papelera y eliminación en todo el almacenamiento',
   'allFilesGranted': 'Acceso a todos los archivos concedido',

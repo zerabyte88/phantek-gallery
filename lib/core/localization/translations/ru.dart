@@ -9,7 +9,7 @@ const Map<String, String> ruTranslations = {
   'albumsCount': '{count} альбом(ов)',
   'albumsGridColumns': 'Столбцы сетки альбомов',
   'all': 'Все',
-  'allFilesAccess': 'Доступ ко всем файлам (Android 11+)',
+  'allFilesAccess': 'Доступ ко всем файлам',
   'allFilesAccessSubtitle': 'Включает корзину и удаление по всему накопителю',
   'allFilesGranted': 'Доступ ко всем файлам предоставлен',
   'allFilesNotGranted': 'Разрешение на доступ ко всем файлам не предоставлено',

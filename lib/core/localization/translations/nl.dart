@@ -10,7 +10,7 @@ const Map<String, String> nlTranslations = {
   'albumsCountSingular': '1 album',
   'albumsGridColumns': 'Album rasterkolommen',
   'all': 'Alles',
-  'allFilesAccess': 'Toegang tot alle bestanden (Android 11+)',
+  'allFilesAccess': 'Toegang tot alle bestanden',
   'allFilesAccessSubtitle': 'Schakelt prullenbak en volledige verwijdering in',
   'allFilesGranted': 'Toegang tot alle bestanden verleend',
   'allFilesNotGranted': 'Toegang tot alle bestanden niet verleend',

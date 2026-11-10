@@ -10,7 +10,7 @@ const Map<String, String> deTranslations = {
   'albumsCountSingular': '1 Album',
   'albumsGridColumns': 'Album-Rasterspalten',
   'all': 'Alle',
-  'allFilesAccess': 'Vollständiger Dateizugriff (Android 11+)',
+  'allFilesAccess': 'Vollständiger Dateizugriff',
   'allFilesAccessSubtitle':
       'Ermöglicht Papierkorb und Löschen über den gesamten Speicher',
   'allFilesGranted': 'Vollständiger Dateizugriff gewährt',

@@ -9,7 +9,7 @@ const Map<String, String> thTranslations = {
   'albumsCount': '{count} อัลบั้ม',
   'albumsGridColumns': 'คอลัมน์ตารางอัลบั้ม',
   'all': 'ทั้งหมด',
-  'allFilesAccess': 'การเข้าถึงไฟล์ทั้งหมด (Android 11+)',
+  'allFilesAccess': 'การเข้าถึงไฟล์ทั้งหมด',
   'allFilesAccessSubtitle':
       'เปิดใช้งานถังขยะและการลบที่สมบูรณ์ทั่วทั้งพื้นที่จัดเก็บ',
   'allFilesGranted': 'ได้รับอนุญาตการเข้าถึงไฟล์ทั้งหมดแล้ว',

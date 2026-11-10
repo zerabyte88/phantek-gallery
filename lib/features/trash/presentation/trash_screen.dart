@@ -285,6 +285,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                       ? const _TrashEmptyState()
                       : GridView.builder(
                           controller: _scrollController,
+                          cacheExtent: 600.0,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           gridDelegate:
@@ -619,9 +620,11 @@ class _TrashThumbnail extends StatelessWidget {
     if (mem != null) {
       return Image.memory(
         mem,
+        cacheWidth: 320,
+        cacheHeight: 320,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
+        filterQuality: FilterQuality.low,
       );
     }
 
@@ -629,9 +632,11 @@ class _TrashThumbnail extends StatelessWidget {
     if (diskFile != null) {
       return Image.file(
         diskFile,
+        cacheWidth: 320,
+        cacheHeight: 320,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
+        filterQuality: FilterQuality.low,
         errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
       );
     }
@@ -648,9 +653,11 @@ class _TrashThumbnail extends StatelessWidget {
         if (snap.data != null) {
           return Image.memory(
             snap.data!,
+            cacheWidth: 320,
+            cacheHeight: 320,
             fit: BoxFit.cover,
             gaplessPlayback: true,
-            filterQuality: FilterQuality.medium,
+            filterQuality: FilterQuality.low,
           );
         }
         if (item.isVideo) {
@@ -658,10 +665,11 @@ class _TrashThumbnail extends StatelessWidget {
         }
         return Image.file(
           file,
-          cacheWidth: 256,
+          cacheWidth: 320,
+          cacheHeight: 320,
           fit: BoxFit.cover,
           gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
+          filterQuality: FilterQuality.low,
           errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
         );
       },

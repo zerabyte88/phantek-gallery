@@ -10,7 +10,7 @@ const Map<String, String> frTranslations = {
   'albumsCountSingular': '1 album',
   'albumsGridColumns': 'Colonnes des albums',
   'all': 'Tous',
-  'allFilesAccess': 'Accès à tous les fichiers (Android 11+)',
+  'allFilesAccess': 'Accès à tous les fichiers',
   'allFilesAccessSubtitle':
       'Active la corbeille et la suppression sur tout le stockage',
   'allFilesGranted': 'Accès à tous les fichiers accordé',

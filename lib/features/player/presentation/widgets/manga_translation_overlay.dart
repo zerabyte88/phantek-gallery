@@ -24,11 +24,13 @@ class MangaTranslationOverlay extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
         return CustomPaint(
-          size: Size(constraints.maxWidth, constraints.maxHeight),
+          size: size,
           painter: MangaTranslationPainter(
             result: result,
             mode: mode,
+            viewportSize: size,
           ),
         );
       },
@@ -62,22 +64,40 @@ class MangaSpeechBubbleCluster {
 class MangaTranslationPainter extends CustomPainter {
   final TranslationResult result;
   final TranslationRenderMode mode;
+  final Size? viewportSize;
+
+  List<MangaSpeechBubbleCluster>? _precomputedClusters;
+  List<({Rect rect, String text})>? _precomputedSfx;
+
+  static final Map<_ClusterCacheKey,
+          ({List<MangaSpeechBubbleCluster> bubbles, List<({Rect rect, String text})> sfx})>
+      _clusterCache = {};
+  static final Map<_FittedTextPainterCacheKey, TextPainter> _fittedPainterCache =
+      {};
 
   MangaTranslationPainter({
     required this.result,
     required this.mode,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final original = result.imageSize;
-    if (original.width <= 0 ||
-        original.height <= 0 ||
-        size.width <= 0 ||
-        size.height <= 0) {
-      return;
+    this.viewportSize,
+  }) {
+    if (viewportSize != null &&
+        viewportSize!.width > 0 &&
+        viewportSize!.height > 0 &&
+        result.imageSize.width > 0 &&
+        result.imageSize.height > 0) {
+      final cached = _getOrComputeClusters(viewportSize!);
+      _precomputedClusters = cached.bubbles;
+      _precomputedSfx = cached.sfx;
     }
+  }
 
+  ({List<MangaSpeechBubbleCluster> bubbles, List<({Rect rect, String text})> sfx})
+      _getOrComputeClusters(Size size) {
+    final key = _ClusterCacheKey(result, mode, size.width, size.height);
+    final existing = _clusterCache[key];
+    if (existing != null) return existing;
+
+    final original = result.imageSize;
     final FittedSizes fitted = applyBoxFit(BoxFit.contain, original, size);
     final Rect destRect =
         Alignment.center.inscribe(fitted.destination, Offset.zero & size);
@@ -86,6 +106,7 @@ class MangaTranslationPainter extends CustomPainter {
     final double scaleY = destRect.height / original.height;
 
     final List<MangaSpeechBubbleCluster> rawSpeechBubbles = [];
+    final List<({Rect rect, String text})> sfxBlocks = [];
 
     for (final block in result.blocks) {
       if (mode == TranslationRenderMode.speechBubblesOnly &&
@@ -113,12 +134,48 @@ class MangaTranslationPainter extends CustomPainter {
           ),
         );
       } else {
-        _drawSfxBlock(canvas, mappedRect, block.translatedText, size);
+        sfxBlocks.add((rect: mappedRect, text: block.translatedText));
       }
     }
 
     final clusteredBubbles = clusterSpeechBubbles(rawSpeechBubbles);
-    for (final bubble in clusteredBubbles) {
+    final resultPair = (bubbles: clusteredBubbles, sfx: sfxBlocks);
+
+    if (_clusterCache.length >= 60) {
+      _clusterCache.remove(_clusterCache.keys.first);
+    }
+    _clusterCache[key] = resultPair;
+    return resultPair;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final original = result.imageSize;
+    if (original.width <= 0 ||
+        original.height <= 0 ||
+        size.width <= 0 ||
+        size.height <= 0) {
+      return;
+    }
+
+    final FittedSizes fitted = applyBoxFit(BoxFit.contain, original, size);
+    final Rect destRect =
+        Alignment.center.inscribe(fitted.destination, Offset.zero & size);
+
+    final ({List<MangaSpeechBubbleCluster> bubbles, List<({Rect rect, String text})> sfx}) data;
+    if (_precomputedClusters != null &&
+        _precomputedSfx != null &&
+        size == viewportSize) {
+      data = (bubbles: _precomputedClusters!, sfx: _precomputedSfx!);
+    } else {
+      data = _getOrComputeClusters(size);
+    }
+
+    for (final sfx in data.sfx) {
+      _drawSfxBlock(canvas, sfx.rect, sfx.text, size);
+    }
+
+    for (final bubble in data.bubbles) {
       _drawSpeechBubbleBlock(
         canvas,
         bubble.rect,
@@ -324,42 +381,12 @@ class MangaTranslationPainter extends CustomPainter {
       targetMaxHeight = math.max(16.0, bubbleRect.height - 6.0);
     }
 
-    final double maxAllowedFontSize;
-    if (wordCount <= 4) {
-      maxAllowedFontSize = 11.5;
-    } else if (wordCount <= 12) {
-      maxAllowedFontSize = 10.5;
-    } else {
-      maxAllowedFontSize = 9.5;
-    }
-
-    double fontSize = maxAllowedFontSize;
-    TextPainter painter = _buildTextPainter(
-      text: trimmedText,
-      style: TextStyle(
-        color: const Color(0xFF202124),
-        fontSize: fontSize,
-        fontWeight: FontWeight.w500,
-        height: 1.22,
-      ),
-      maxWidth: maxTextWidth,
+    _getOrCreateFittedPainter(
+      trimmedText: trimmedText,
+      maxTextWidth: maxTextWidth,
+      targetMaxHeight: targetMaxHeight,
+      wordCount: wordCount,
     );
-
-    while ((painter.height > targetMaxHeight || painter.width > maxTextWidth) &&
-        fontSize > 7.0) {
-      fontSize = math.max(7.0, fontSize - 0.5);
-      painter = _buildTextPainter(
-        text: trimmedText,
-        style: TextStyle(
-          color: const Color(0xFF202124),
-          fontSize: fontSize,
-          fontWeight: FontWeight.w500,
-          height: 1.22,
-        ),
-        maxWidth: maxTextWidth,
-      );
-      if (fontSize <= 7.0) break;
-    }
 
     return bubbleRect;
   }
@@ -396,43 +423,12 @@ class MangaTranslationPainter extends CustomPainter {
     final int wordCount =
         trimmedText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
 
-    final double maxAllowedFontSize;
-    if (wordCount <= 4) {
-      maxAllowedFontSize = 11.5;
-    } else if (wordCount <= 12) {
-      maxAllowedFontSize = 10.5;
-    } else {
-      maxAllowedFontSize = 9.5;
-    }
-
-    double fontSize = maxAllowedFontSize;
-
-    TextPainter painter = _buildTextPainter(
-      text: trimmedText,
-      style: TextStyle(
-        color: const Color(0xFF202124),
-        fontSize: fontSize,
-        fontWeight: FontWeight.w500,
-        height: 1.22,
-      ),
-      maxWidth: maxTextWidth,
+    final painter = _getOrCreateFittedPainter(
+      trimmedText: trimmedText,
+      maxTextWidth: maxTextWidth,
+      targetMaxHeight: targetMaxHeight,
+      wordCount: wordCount,
     );
-
-    while ((painter.height > targetMaxHeight || painter.width > maxTextWidth) &&
-        fontSize > 7.0) {
-      fontSize = math.max(7.0, fontSize - 0.5);
-      painter = _buildTextPainter(
-        text: trimmedText,
-        style: TextStyle(
-          color: const Color(0xFF202124),
-          fontSize: fontSize,
-          fontWeight: FontWeight.w500,
-          height: 1.22,
-        ),
-        maxWidth: maxTextWidth,
-      );
-      if (fontSize <= 7.0) break;
-    }
 
     final rrect =
         RRect.fromRectAndRadius(bubbleRect, const Radius.circular(8.0));
@@ -594,6 +590,115 @@ class MangaTranslationPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant MangaTranslationPainter oldDelegate) {
-    return oldDelegate.result != result || oldDelegate.mode != mode;
+    return oldDelegate.result != result ||
+        oldDelegate.mode != mode ||
+        oldDelegate.viewportSize != viewportSize;
   }
+
+  static TextPainter _getOrCreateFittedPainter({
+    required String trimmedText,
+    required double maxTextWidth,
+    required double targetMaxHeight,
+    required int wordCount,
+  }) {
+    final key = _FittedTextPainterCacheKey(
+      text: trimmedText,
+      maxTextWidth: (maxTextWidth * 10).round() / 10,
+      targetMaxHeight: (targetMaxHeight * 10).round() / 10,
+    );
+
+    final cached = _fittedPainterCache[key];
+    if (cached != null) return cached;
+
+    final double maxAllowedFontSize;
+    if (wordCount <= 4) {
+      maxAllowedFontSize = 11.5;
+    } else if (wordCount <= 12) {
+      maxAllowedFontSize = 10.5;
+    } else {
+      maxAllowedFontSize = 9.5;
+    }
+
+    double fontSize = maxAllowedFontSize;
+    TextPainter painter = _buildTextPainter(
+      text: trimmedText,
+      style: TextStyle(
+        color: const Color(0xFF202124),
+        fontSize: fontSize,
+        fontWeight: FontWeight.w500,
+        height: 1.22,
+      ),
+      maxWidth: maxTextWidth,
+    );
+
+    while ((painter.height > targetMaxHeight || painter.width > maxTextWidth) &&
+        fontSize > 7.0) {
+      fontSize = math.max(7.0, fontSize - 0.5);
+      painter = _buildTextPainter(
+        text: trimmedText,
+        style: TextStyle(
+          color: const Color(0xFF202124),
+          fontSize: fontSize,
+          fontWeight: FontWeight.w500,
+          height: 1.22,
+        ),
+        maxWidth: maxTextWidth,
+      );
+      if (fontSize <= 7.0) break;
+    }
+
+    if (_fittedPainterCache.length >= 250) {
+      _fittedPainterCache.remove(_fittedPainterCache.keys.first);
+    }
+    _fittedPainterCache[key] = painter;
+    return painter;
+  }
+}
+
+class _FittedTextPainterCacheKey {
+  final String text;
+  final double maxTextWidth;
+  final double targetMaxHeight;
+
+  const _FittedTextPainterCacheKey({
+    required this.text,
+    required this.maxTextWidth,
+    required this.targetMaxHeight,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _FittedTextPainterCacheKey &&
+          runtimeType == other.runtimeType &&
+          text == other.text &&
+          maxTextWidth == other.maxTextWidth &&
+          targetMaxHeight == other.targetMaxHeight;
+
+  @override
+  int get hashCode => Object.hash(text, maxTextWidth, targetMaxHeight);
+}
+
+class _ClusterCacheKey {
+  final Object resultIdentity;
+  final TranslationRenderMode mode;
+  final double width;
+  final double height;
+
+  const _ClusterCacheKey(
+      this.resultIdentity, this.mode, this.width, this.height);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ClusterCacheKey &&
+          runtimeType == other.runtimeType &&
+          identical(resultIdentity, other.resultIdentity) &&
+          mode == other.mode &&
+          width == other.width &&
+          height == other.height;
+
+  @override
+  int get hashCode =>
+      Object.hash(identityHashCode(resultIdentity), mode, width, height);
 }

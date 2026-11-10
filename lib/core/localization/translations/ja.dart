@@ -9,7 +9,7 @@ const Map<String, String> jaTranslations = {
   'albumsCount': '{count} アルバム',
   'albumsGridColumns': 'アルバム列',
   'all': 'すべて',
-  'allFilesAccess': 'すべてのファイルへのアクセス (Android 11+)',
+  'allFilesAccess': 'すべてのファイルへのアクセス',
   'allFilesAccessSubtitle': 'ストレージ全体のゴミ箱と削除を有効化',
   'allFilesGranted': 'すべてのファイルへのアクセスが許可されました',
   'allFilesNotGranted': 'すべてのファイルへのアクセス権限が許可されていません',

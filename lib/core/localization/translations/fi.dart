@@ -10,7 +10,7 @@ const Map<String, String> fiTranslations = {
   'albumsCountSingular': '1 albumi',
   'albumsGridColumns': 'Albumiruudukon sarakkeet',
   'all': 'Kaikki',
-  'allFilesAccess': 'Kaikkien tiedostojen käyttöoikeus (Android 11+)',
+  'allFilesAccess': 'Kaikkien tiedostojen käyttöoikeus',
   'allFilesAccessSubtitle':
       'Mahdollistaa roskakorin ja tiedostojen poiston koko muistista',
   'allFilesGranted': 'Kaikkien tiedostojen käyttöoikeus myönnetty',

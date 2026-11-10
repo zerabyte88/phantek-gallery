@@ -9,7 +9,7 @@ const Map<String, String> arTranslations = {
   'albumsCount': '{count} ألبوم',
   'albumsGridColumns': 'أعمدة شبكة الألبومات',
   'all': 'الكل',
-  'allFilesAccess': 'الوصول إلى جميع الملفات (Android 11+)',
+  'allFilesAccess': 'الوصول إلى جميع الملفات',
   'allFilesAccessSubtitle': 'تمكين إدارة سلة المهملات والحذف عبر الذاكرة',
   'allFilesGranted': 'تم منح إذن الوصول إلى جميع الملفات',
   'allFilesNotGranted': 'لم يتم منح إذن إدارة جميع الملفات',

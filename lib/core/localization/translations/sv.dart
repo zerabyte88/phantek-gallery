@@ -10,7 +10,7 @@ const Map<String, String> svTranslations = {
   'albumsCountSingular': '1 album',
   'albumsGridColumns': 'Album rutnätskolumner',
   'all': 'Alla',
-  'allFilesAccess': 'Åtkomst till alla filer (Android 11+)',
+  'allFilesAccess': 'Åtkomst till alla filer',
   'allFilesAccessSubtitle':
       'Aktiverar papperskorg och fullständig radering i lagringen',
   'allFilesGranted': 'Åtkomst till alla filer beviljad',

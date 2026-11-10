@@ -9,7 +9,7 @@ const Map<String, String> msTranslations = {
   'albumsCount': '{count} album',
   'albumsGridColumns': 'Lajur Grid Album',
   'all': 'Semua',
-  'allFilesAccess': 'Akses Semua Fail (Android 11+)',
+  'allFilesAccess': 'Akses Semua Fail',
   'allFilesAccessSubtitle':
       'Membolehkan fungsi tong sampah dan pemadaman penuh di seluruh storan',
   'allFilesGranted': 'Akses Semua Fail telah dibenarkan',

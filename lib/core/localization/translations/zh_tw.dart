@@ -9,7 +9,7 @@ const Map<String, String> zhTwTranslations = {
   'albumsCount': '{count} 個相簿',
   'albumsGridColumns': '相簿網格欄數',
   'all': '全部',
-  'allFilesAccess': '所有檔案存取權 (Android 11+)',
+  'allFilesAccess': '所有檔案存取權',
   'allFilesAccessSubtitle': '在所有儲存空間啟用垃圾桶與刪除功能',
   'allFilesGranted': '已獲得所有檔案存取權限',
   'allFilesNotGranted': '尚未獲得管理所有檔案權限',

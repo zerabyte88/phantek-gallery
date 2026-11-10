@@ -2127,7 +2127,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Find Google ML Kit tile under Manga Translation
-      final mlKitTile = find.text('Source Language: Japanese');
+      final mlKitTile = find.text('Japanese');
       await tester.scrollUntilVisible(
         mlKitTile,
         200,
@@ -2173,7 +2173,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify SettingsScreen updated subtitle to Korean
-      expect(find.text('Source Language: Korean'), findsOneWidget);
+      expect(find.text('Korean'), findsOneWidget);
     });
 
     testWidgets(

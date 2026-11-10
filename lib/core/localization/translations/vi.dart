@@ -9,7 +9,7 @@ const Map<String, String> viTranslations = {
   'albumsCount': '{count} album',
   'albumsGridColumns': 'Số cột lưới album',
   'all': 'Tất cả',
-  'allFilesAccess': 'Quyền truy cập tất cả tệp (Android 11+)',
+  'allFilesAccess': 'Quyền truy cập tất cả tệp',
   'allFilesAccessSubtitle':
       'Cho phép sử dụng thùng rác và xóa tệp trên toàn bộ bộ nhớ',
   'allFilesGranted': 'Đã cấp quyền truy cập tất cả tệp',
