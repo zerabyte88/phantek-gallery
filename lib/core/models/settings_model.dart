@@ -40,6 +40,7 @@ class SettingsModel extends Equatable {
     this.secureScreen = false,
     this.activeAiModelPath = '',
     this.translationEngineType = TranslationEngineType.googleMlKit,
+    this.translationSourceLanguage = TranslationSourceLanguage.japanese,
   });
 
   final AppThemeMode themeMode;
@@ -120,6 +121,9 @@ class SettingsModel extends Equatable {
   /// Active offline translation engine (Google ML Kit or Local GGUF LLM).
   final TranslationEngineType translationEngineType;
 
+  /// Default source language for manga translation (Japanese, Chinese, Korean, Auto).
+  final TranslationSourceLanguage translationSourceLanguage;
+
   Map<String, dynamic> toMap() => {
         'themeMode': themeMode.name,
         'language': language.name,
@@ -149,7 +153,13 @@ class SettingsModel extends Equatable {
         'secureScreen': secureScreen,
         'activeAiModelPath': activeAiModelPath,
         'translationEngineType': translationEngineType.name,
+        'translationSourceLanguage': translationSourceLanguage.name,
       };
+
+  Map<String, dynamic> toJson() => toMap();
+
+  factory SettingsModel.fromJson(Map<String, dynamic> json) =>
+      SettingsModel.fromMap(json);
 
   factory SettingsModel.fromMap(Map<String, dynamic> map) {
     return SettingsModel(
@@ -212,6 +222,10 @@ class SettingsModel extends Equatable {
         (e) => e.name == map['translationEngineType'],
         orElse: () => TranslationEngineType.googleMlKit,
       ),
+      translationSourceLanguage: TranslationSourceLanguage.values.firstWhere(
+        (e) => e.name == map['translationSourceLanguage'],
+        orElse: () => TranslationSourceLanguage.japanese,
+      ),
     );
   }
 
@@ -244,6 +258,7 @@ class SettingsModel extends Equatable {
     bool? secureScreen,
     String? activeAiModelPath,
     TranslationEngineType? translationEngineType,
+    TranslationSourceLanguage? translationSourceLanguage,
   }) {
     return SettingsModel(
       themeMode: themeMode ?? this.themeMode,
@@ -276,6 +291,8 @@ class SettingsModel extends Equatable {
       activeAiModelPath: activeAiModelPath ?? this.activeAiModelPath,
       translationEngineType:
           translationEngineType ?? this.translationEngineType,
+      translationSourceLanguage:
+          translationSourceLanguage ?? this.translationSourceLanguage,
     );
   }
 
@@ -309,6 +326,7 @@ class SettingsModel extends Equatable {
         secureScreen,
         activeAiModelPath,
         translationEngineType,
+        translationSourceLanguage,
       ];
 }
 

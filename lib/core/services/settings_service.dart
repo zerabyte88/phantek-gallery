@@ -41,6 +41,7 @@ class _K {
   static const secureScreen = 'secureScreen';
   static const activeAiModelPath = 'activeAiModelPath';
   static const translationEngineType = 'translationEngineType';
+  static const translationSourceLanguage = 'translationSourceLanguage';
 }
 
 /// Thin wrapper around SharedPreferences for typed settings access.
@@ -113,6 +114,11 @@ class SettingsService {
         TranslationEngineType.values,
         TranslationEngineType.googleMlKit,
       ),
+      translationSourceLanguage: _readEnum(
+        _K.translationSourceLanguage,
+        TranslationSourceLanguage.values,
+        TranslationSourceLanguage.japanese,
+      ),
     );
   }
 
@@ -150,6 +156,8 @@ class SettingsService {
       _prefs.setString(_K.activeAiModelPath, model.activeAiModelPath),
       _prefs.setString(
           _K.translationEngineType, model.translationEngineType.name),
+      _prefs.setString(
+          _K.translationSourceLanguage, model.translationSourceLanguage.name),
     ]);
   }
 
@@ -161,6 +169,11 @@ class SettingsService {
 
   Future<void> setTranslationEngineType(TranslationEngineType type) async {
     await save(settings.copyWith(translationEngineType: type));
+  }
+
+  Future<void> setTranslationSourceLanguage(
+      TranslationSourceLanguage lang) async {
+    await save(settings.copyWith(translationSourceLanguage: lang));
   }
 
   // ── Video Resume Position ──────────────────────────────────────────────────

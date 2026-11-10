@@ -137,13 +137,29 @@ class MlKitTranslationEngine {
   }
 
   /// Downloads Google ML Kit on-device model for [bcpCode] with 1 hour timeout.
+  /// When downloading ja, zh, or ko, also verifies and automatically downloads en (English).
   Future<bool> downloadModel(String bcpCode, {bool isWifiRequired = false}) async {
     final lang = mapToTranslateLanguage(bcpCode);
     if (lang == null) return false;
     try {
-      return await _mlKitModelManager
+      final success = await _mlKitModelManager
           .downloadModel(lang.bcpCode, isWifiRequired: isWifiRequired)
           .timeout(const Duration(hours: 1));
+      if (!success) return false;
+
+      // Automatically download en model if not present, ensuring translation pair is complete
+      if (lang != TranslateLanguage.english) {
+        try {
+          final enDownloaded = await isModelDownloaded('en');
+          if (!enDownloaded) {
+            await _mlKitModelManager
+                .downloadModel(TranslateLanguage.english.bcpCode,
+                    isWifiRequired: isWifiRequired)
+                .timeout(const Duration(hours: 1));
+          }
+        } catch (_) {}
+      }
+      return true;
     } catch (e) {
       debugPrint('Error downloading ML Kit model ($bcpCode): $e');
       return false;
@@ -162,6 +178,22 @@ class MlKitTranslationEngine {
     }
   }
 
+  final Map<String, OnDeviceTranslator> _translators = {};
+
+  OnDeviceTranslator _getTranslator(
+    TranslateLanguage source,
+    TranslateLanguage target,
+  ) {
+    final key = '${source.bcpCode}_${target.bcpCode}';
+    return _translators.putIfAbsent(
+      key,
+      () => OnDeviceTranslator(
+        sourceLanguage: source,
+        targetLanguage: target,
+      ),
+    );
+  }
+
   /// Translates text using Google ML Kit's on-device neural translator.
   Future<String> translateWithGoogleMlKit({
     required String text,
@@ -173,15 +205,13 @@ class MlKitTranslationEngine {
       TranslationSourceLanguage.chinese => TranslateLanguage.chinese,
       TranslationSourceLanguage.auto => TranslateLanguage.japanese,
     };
-    final translator = OnDeviceTranslator(
-      sourceLanguage: sourceLang,
-      targetLanguage: TranslateLanguage.english,
-    );
     try {
+      final translator = _getTranslator(sourceLang, TranslateLanguage.english);
       final translated = await translator.translateText(text);
       return translated;
-    } finally {
-      await translator.close();
+    } catch (e) {
+      debugPrint('[MlKitTranslationEngine] Google ML Kit error ($sourceLang -> en): $e');
+      rethrow;
     }
   }
 
@@ -504,8 +534,16 @@ class MlKitTranslationEngine {
     return cleaned;
   }
 
-  /// Closes active [GgufLocalLlmEngine] instance.
+  /// Closes active [GgufLocalLlmEngine] instance and any cached translators.
   Future<void> dispose() async {
+    for (final translator in _translators.values) {
+      try {
+        await translator.close();
+      } catch (e) {
+        debugPrint('Error closing OnDeviceTranslator: $e');
+      }
+    }
+    _translators.clear();
     await _ggufEngine.dispose();
   }
 }

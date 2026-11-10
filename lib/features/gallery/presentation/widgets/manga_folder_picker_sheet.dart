@@ -353,7 +353,7 @@ class _MangaFolderPickerSheetState extends State<MangaFolderPickerSheet> {
                                       color: Color(0xFF64B5F6),
                                     ),
                                     title: Text(
-                                      '📖 Read All Chapters (${album.items.length} pages)',
+                                      'Read All Chapters (${album.items.length} pages)',
                                       style: const TextStyle(
                                         fontSize: 13.5,
                                         fontWeight: FontWeight.w600,

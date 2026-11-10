@@ -148,7 +148,7 @@ class MangaOcrService {
     TranslationSourceLanguage language = TranslationSourceLanguage.auto,
   }) async {
     final file = File(imagePath);
-    if (!await file.exists()) {
+    if (!file.existsSync()) {
       return [];
     }
     return _detector.detectText(imagePath, language: language);

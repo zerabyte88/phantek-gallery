@@ -181,10 +181,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   late bool _isMangaMode;
   late final PageController _mangaPageController;
 
-
   TranslationRenderMode? _translationMode;
-  final TranslationSourceLanguage _translationLanguage =
-      TranslationSourceLanguage.auto;
+  TranslationSourceLanguage _translationLanguage =
+      TranslationSourceLanguage.japanese;
   final TranslationTargetLanguage _translationTargetLanguage =
       TranslationTargetLanguage.english;
   late List<MediaItem> _cachedMangaList;
@@ -195,8 +194,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         .where((it) => !it.isVideo && !PsdService.isPsd(it.path))
         .toList();
   }
-
-
 
   late final TranslationIsolateCoordinator _translationCoordinator;
   Timer? _slideshowTimer;
@@ -419,6 +416,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _activeMangaPageNotifier = ValueNotifier<int>(initialActive);
     _mangaPageController = PageController(initialPage: initialActive);
     _translationCoordinator = TranslationIsolateCoordinator();
+    _translationLanguage =
+        SettingsService.instance.settings.translationSourceLanguage;
 
     if (_isMangaMode && widget.initialIndex > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -538,11 +537,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   void _triggerMangaTranslationForActivePage() {
     _translationCoordinator.cancelPending();
     if (_translationMode == null) return;
-    final mangaList = _mangaItems;
-    final activeIdx = _activeMangaPageNotifier.value;
-    if (activeIdx < 0 || activeIdx >= mangaList.length) return;
+    if (widget.items.isEmpty) return;
 
-    final it = mangaList[activeIdx];
+    final it = _isMangaMode &&
+            _activeMangaPageNotifier.value >= 0 &&
+            _activeMangaPageNotifier.value < _mangaItems.length
+        ? _mangaItems[_activeMangaPageNotifier.value]
+        : widget.items[_current.clamp(0, widget.items.length - 1)];
+
+    if (it.isVideo || PsdService.isPsd(it.path)) return;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final screenHeight = MediaQuery.sizeOf(context).height;
     final w = (it.width != null && it.width! > 0)
@@ -566,25 +569,29 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     setState(() {
       _translationMode = mode;
     });
-    if (mode != null && _mangaItems.isNotEmpty) {
-      if (!MlKitTranslationEngine.instance.isLocalLlmReady) {
-        await MlKitTranslationEngine.instance.ggufEngine.initializeSession();
-        if (!MlKitTranslationEngine.instance.isLocalLlmReady && mounted) {
+    if (mode != null && widget.items.isNotEmpty) {
+      final engineType =
+          SettingsService.instance.settings.translationEngineType;
+      if (engineType == TranslationEngineType.localLlm) {
+        if (!MlKitTranslationEngine.instance.isLocalLlmReady) {
+          await MlKitTranslationEngine.instance.ggufEngine.initializeSession();
+          if (!MlKitTranslationEngine.instance.isLocalLlmReady && mounted) {
+            showFeedbackPill(
+              context,
+              message: MlKitTranslationEngine.instance.lastStatusMessage ??
+                  'No AI model found. Place .gguf in /storage/emulated/0/models/',
+              icon: Icons.info_outline_rounded,
+            );
+          }
+        }
+        final status = MlKitTranslationEngine.instance.lastStatusMessage;
+        if (status != null && !status.startsWith('Ready') && mounted) {
           showFeedbackPill(
             context,
-            message: MlKitTranslationEngine.instance.lastStatusMessage ??
-                'No AI model found. Place .gguf in /storage/emulated/0/models/',
+            message: status,
             icon: Icons.info_outline_rounded,
           );
         }
-      }
-      final status = MlKitTranslationEngine.instance.lastStatusMessage;
-      if (status != null && !status.startsWith('Ready') && mounted) {
-        showFeedbackPill(
-          context,
-          message: status,
-          icon: Icons.info_outline_rounded,
-        );
       }
       _triggerMangaTranslationForActivePage();
     } else {
@@ -600,9 +607,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E1E22),
+      backgroundColor: const Color(0xFF161618),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) {
         return StatefulBuilder(
@@ -617,333 +624,715 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
               });
             }
             return SafeArea(
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Drag handle
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+
+                      // Header
+                      Row(
                         children: [
-                          // Drag handle
-                          Center(
-                            child: Container(
-                              width: 40,
-                              height: 4,
-                              margin: const EdgeInsets.only(bottom: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.white24,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                          ),
-
-                          // Header
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: primary.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(Icons.translate_rounded,
-                                    color: primary, size: 22),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  loc.mangaTranslation,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.close_rounded,
-                                    color: Colors.white70, size: 22),
-                                onPressed: () => Navigator.pop(sheetContext),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // Section: Dual-Engine Toggle Capsule
                           Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(4),
+                            padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(12),
+                              color: primary.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () async {
-                                      await SettingsService.instance
-                                          .setTranslationEngineType(
-                                              TranslationEngineType.googleMlKit);
-                                      setSheetState(() {});
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: SettingsService.instance.settings
-                                                    .translationEngineType ==
-                                                TranslationEngineType.googleMlKit
-                                            ? primary
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        '⚡ ${loc.engineGoogleMlKit}',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12.5,
-                                          fontWeight: SettingsService.instance.settings
-                                                      .translationEngineType ==
-                                                  TranslationEngineType.googleMlKit
-                                              ? FontWeight.bold
-                                              : FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () async {
-                                      await SettingsService.instance
-                                          .setTranslationEngineType(
-                                              TranslationEngineType.localLlm);
-                                      setSheetState(() {});
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: SettingsService.instance.settings
-                                                    .translationEngineType ==
-                                                TranslationEngineType.localLlm
-                                            ? primary
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        '🤖 ${loc.engineLocalLlm}',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12.5,
-                                          fontWeight: SettingsService.instance.settings
-                                                      .translationEngineType ==
-                                                  TranslationEngineType.localLlm
-                                              ? FontWeight.bold
-                                              : FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            child: Icon(Icons.translate_rounded,
+                                color: primary, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              loc.mangaTranslation,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.15,
+                              ),
                             ),
                           ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded,
+                                color: Colors.white70, size: 20),
+                            onPressed: () => Navigator.pop(sheetContext),
+                          ),
+                        ],
+                      ),
 
-                          // Section 3: Offline Model Status Card
-                          if (SettingsService.instance.settings.translationEngineType ==
-                              TranslationEngineType.googleMlKit)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF132A1C),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                    color: Colors.greenAccent
-                                        .withValues(alpha: 0.3),
-                                    width: 1),
+                      // Section: Source Language Selector Header & Otomatis Chip
+                      Padding(
+                        padding: const EdgeInsets.only(top: 14, bottom: 8),
+                        child: Row(
+                          children: [
+                            Text(
+                              loc.sourceLanguage,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.7),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w500,
                               ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.bolt_rounded,
-                                    color: Colors.greenAccent,
-                                    size: 22,
+                            ),
+                            const Spacer(),
+                            // Clean Otomatis / Auto-detect Chip
+                            InkWell(
+                              onTap: () async {
+                                setState(() {
+                                  _translationLanguage =
+                                      TranslationSourceLanguage.auto;
+                                });
+                                await SettingsService.instance
+                                    .setTranslationSourceLanguage(
+                                        TranslationSourceLanguage.auto);
+                                setSheetState(() {});
+                                if (_translationMode != null) {
+                                  _triggerMangaTranslationForActivePage();
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: _translationLanguage ==
+                                          TranslationSourceLanguage.auto
+                                      ? primary.withValues(alpha: 0.22)
+                                      : Colors.white.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: _translationLanguage ==
+                                            TranslationSourceLanguage.auto
+                                        ? primary.withValues(alpha: 0.6)
+                                        : Colors.white.withValues(alpha: 0.08),
+                                    width: 1,
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.auto_awesome_rounded,
+                                      size: 13,
+                                      color: _translationLanguage ==
+                                              TranslationSourceLanguage.auto
+                                          ? primary
+                                          : Colors.white70,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      loc.autoDetect,
+                                      style: TextStyle(
+                                        color: _translationLanguage ==
+                                                TranslationSourceLanguage.auto
+                                            ? Colors.white
+                                            : Colors.white70,
+                                        fontSize: 11.5,
+                                        fontWeight: _translationLanguage ==
+                                                TranslationSourceLanguage.auto
+                                            ? FontWeight.w600
+                                            : FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // 3 Dedicated Target Language Selection Buttons (Jepang, China, Korea -> English)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Row(
+                          children: [
+                            (
+                              lang: TranslationSourceLanguage.japanese,
+                              title: loc.langJapanese,
+                              subtext: 'JA → EN',
+                              bcpCode: 'ja',
+                            ),
+                            (
+                              lang: TranslationSourceLanguage.chinese,
+                              title: loc.langChinese,
+                              subtext: 'ZH → EN',
+                              bcpCode: 'zh',
+                            ),
+                            (
+                              lang: TranslationSourceLanguage.korean,
+                              title: loc.langKorean,
+                              subtext: 'KO → EN',
+                              bcpCode: 'ko',
+                            ),
+                          ].map((item) {
+                            final isSelected =
+                                _translationLanguage == item.lang;
+                            final isMlKit = SettingsService.instance.settings
+                                    .translationEngineType ==
+                                TranslationEngineType.googleMlKit;
+
+                            return Expanded(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 3),
+                                child: InkWell(
+                                  onTap: () async {
+                                    setState(() {
+                                      _translationLanguage = item.lang;
+                                    });
+                                    await SettingsService.instance
+                                        .setTranslationSourceLanguage(item.lang);
+                                    setSheetState(() {});
+                                    if (_translationMode != null) {
+                                      _triggerMangaTranslationForActivePage();
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 10, horizontal: 6),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? primary.withValues(alpha: 0.20)
+                                          : Colors.white.withValues(alpha: 0.04),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? primary.withValues(alpha: 0.7)
+                                            : Colors.white
+                                                .withValues(alpha: 0.08),
+                                        width: isSelected ? 1.5 : 1.0,
+                                      ),
+                                    ),
                                     child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          '✓ ${loc.engineGoogleMlKit} (${loc.modelActive})',
-                                          style: const TextStyle(
-                                            color: Colors.greenAccent,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          loc.offlineTranslationModelsSubtitle,
+                                          item.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.center,
                                           style: TextStyle(
-                                            color: Colors.white
-                                                .withValues(alpha: 0.65),
-                                            fontSize: 11,
+                                            color: isSelected
+                                                ? Colors.white
+                                                : Colors.white
+                                                    .withValues(alpha: 0.85),
+                                            fontSize: 12,
+                                            fontWeight: isSelected
+                                                ? FontWeight.w600
+                                                : FontWeight.w500,
                                           ),
                                         ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          item.subtext,
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: isSelected
+                                                ? primary.withValues(alpha: 0.95)
+                                                : Colors.white
+                                                    .withValues(alpha: 0.45),
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.3,
+                                          ),
+                                        ),
+                                        if (isMlKit) ...[
+                                          const SizedBox(height: 4),
+                                          FutureBuilder<bool>(
+                                            future: MlKitTranslationEngine
+                                                .instance
+                                                .isModelDownloaded(
+                                                    item.bcpCode),
+                                            builder: (context, snapshot) {
+                                              final isReady =
+                                                  snapshot.data == true;
+                                              return Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Container(
+                                                    width: 5,
+                                                    height: 5,
+                                                    decoration: BoxDecoration(
+                                                      shape: BoxShape.circle,
+                                                      color: isReady
+                                                          ? Colors.tealAccent
+                                                          : Colors.white24,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    isReady ? 'Ready' : 'Download',
+                                                    style: TextStyle(
+                                                      fontSize: 9,
+                                                      color: isReady
+                                                          ? Colors.tealAccent
+                                                              .withValues(
+                                                                  alpha: 0.9)
+                                                          : Colors.white38,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              );
+                                            },
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
-                                ],
-                              ),
-                            )
-                          else
-                          FutureBuilder<bool>(
-                            future: GgufLocalLlmEngine.isStoragePermissionGranted(),
-                            builder: (context, permSnapshot) {
-                              final hasStoragePerm = permSnapshot.data ?? true;
-                              final isReady =
-                                  MlKitTranslationEngine.instance.isLocalLlmReady;
-                              final isInitializing =
-                                  GgufLocalLlmEngine.instance.isInitializing;
-                              final lastStatus =
-                                  MlKitTranslationEngine.instance.lastStatusMessage;
-
-                              final cardBg = isReady
-                                  ? const Color(0xFF132A1C)
-                                  : const Color(0xFF261D13);
-                              final borderColor = isReady
-                                  ? Colors.greenAccent.withValues(alpha: 0.3)
-                                  : Colors.orangeAccent.withValues(alpha: 0.3);
-
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: cardBg,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border:
-                                      Border.all(color: borderColor, width: 1),
                                 ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+
+                      // Section: Dual-Engine Segmented Control (No Emojis)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () async {
+                                  await SettingsService.instance
+                                      .setTranslationEngineType(
+                                          TranslationEngineType.googleMlKit);
+                                  setSheetState(() {});
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 7),
+                                  decoration: BoxDecoration(
+                                    color: SettingsService.instance.settings
+                                                .translationEngineType ==
+                                            TranslationEngineType.googleMlKit
+                                        ? primary.withValues(alpha: 0.22)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: SettingsService.instance.settings
+                                                  .translationEngineType ==
+                                              TranslationEngineType.googleMlKit
+                                          ? primary.withValues(alpha: 0.5)
+                                          : Colors.transparent,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.translate_rounded,
+                                        size: 15,
+                                        color: SettingsService.instance.settings
+                                                    .translationEngineType ==
+                                                TranslationEngineType
+                                                    .googleMlKit
+                                            ? Colors.white
+                                            : Colors.white60,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        loc.engineGoogleMlKit,
+                                        style: TextStyle(
+                                          color: SettingsService
+                                                      .instance
+                                                      .settings
+                                                      .translationEngineType ==
+                                                  TranslationEngineType
+                                                      .googleMlKit
+                                              ? Colors.white
+                                              : Colors.white70,
+                                          fontSize: 12,
+                                          fontWeight: SettingsService
+                                                      .instance
+                                                      .settings
+                                                      .translationEngineType ==
+                                                  TranslationEngineType
+                                                      .googleMlKit
+                                              ? FontWeight.w600
+                                              : FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () async {
+                                  await SettingsService.instance
+                                      .setTranslationEngineType(
+                                          TranslationEngineType.localLlm);
+                                  setSheetState(() {});
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 7),
+                                  decoration: BoxDecoration(
+                                    color: SettingsService.instance.settings
+                                                .translationEngineType ==
+                                            TranslationEngineType.localLlm
+                                        ? primary.withValues(alpha: 0.22)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: SettingsService.instance.settings
+                                                  .translationEngineType ==
+                                              TranslationEngineType.localLlm
+                                          ? primary.withValues(alpha: 0.5)
+                                          : Colors.transparent,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.memory_rounded,
+                                        size: 15,
+                                        color: SettingsService.instance.settings
+                                                    .translationEngineType ==
+                                                TranslationEngineType.localLlm
+                                            ? Colors.white
+                                            : Colors.white60,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        loc.engineLocalLlm,
+                                        style: TextStyle(
+                                          color: SettingsService
+                                                      .instance
+                                                      .settings
+                                                      .translationEngineType ==
+                                                  TranslationEngineType.localLlm
+                                              ? Colors.white
+                                              : Colors.white70,
+                                          fontSize: 12,
+                                          fontWeight: SettingsService
+                                                      .instance
+                                                      .settings
+                                                      .translationEngineType ==
+                                                  TranslationEngineType.localLlm
+                                              ? FontWeight.w600
+                                              : FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Section 3: Engine Status Card (Minimalist & Professional)
+                      if (SettingsService
+                              .instance.settings.translationEngineType ==
+                          TranslationEngineType.googleMlKit)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.03),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.08),
+                                width: 1),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color:
+                                      Colors.tealAccent.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.check_circle_outline_rounded,
+                                  color: Colors.tealAccent,
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
                                       children: [
-                                        Icon(
-                                          isReady
-                                              ? Icons.check_circle_rounded
-                                              : Icons.smart_toy_outlined,
-                                          color: isReady
-                                              ? Colors.greenAccent
-                                              : Colors.orangeAccent,
-                                          size: 22,
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                isReady
-                                                    ? '✓ '
-                                                    : (isInitializing
-                                                        ? loc.loadingAiModel
-                                                        : loc.modelNotDetected),
-                                                style: TextStyle(
-                                                  color: isReady
-                                                      ? Colors.greenAccent
-                                                      : Colors.orangeAccent,
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                isReady
-                                                    ? (lastStatus ??
-                                                        'qwen2.5-0.5b-instruct-abliterated.q4_k_m.gguf')
-                                                    : (lastStatus ??
-                                                        'Letakkan file .gguf di /storage/emulated/0/models/'),
-                                                style: TextStyle(
-                                                  color: Colors.white
-                                                      .withValues(alpha: 0.65),
-                                                  fontSize: 11,
-                                                ),
-                                              ),
-                                            ],
+                                        Text(
+                                          loc.engineGoogleMlKit,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
-                                        if (isReady)
-                                          TextButton(
-                                            style: TextButton.styleFrom(
-                                              backgroundColor: Colors
-                                                  .greenAccent
-                                                  .withValues(alpha: 0.15),
-                                              foregroundColor:
-                                                  Colors.greenAccent,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                            ),
-                                            onPressed: () =>
-                                                _showMangaAiModelDialog(
-                                                    sheetContext, setSheetState),
-                                            child: Text(
-                                              loc.changeModel,
-                                              style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.tealAccent
+                                                .withValues(alpha: 0.15),
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            loc.modelActive,
+                                            style: const TextStyle(
+                                              color: Colors.tealAccent,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              letterSpacing: 0.2,
                                             ),
                                           ),
+                                        ),
                                       ],
                                     ),
-                                    if (!isReady) ...[
-                                      const SizedBox(height: 10),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: [
-                                          if (!hasStoragePerm)
-                                            TextButton.icon(
-                                              style: TextButton.styleFrom(
-                                                backgroundColor: Colors
-                                                    .orangeAccent
-                                                    .withValues(alpha: 0.2),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      loc.offlineTranslationModelsSubtitle,
+                                      style: TextStyle(
+                                        color:
+                                            Colors.white.withValues(alpha: 0.6),
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        FutureBuilder<bool>(
+                          future:
+                              GgufLocalLlmEngine.isStoragePermissionGranted(),
+                          builder: (context, permSnapshot) {
+                            final hasStoragePerm = permSnapshot.data ?? true;
+                            final isReady =
+                                MlKitTranslationEngine.instance.isLocalLlmReady;
+                            final isInitializing =
+                                GgufLocalLlmEngine.instance.isInitializing;
+                            final lastStatus = MlKitTranslationEngine
+                                .instance.lastStatusMessage;
+
+                            final borderColor = isReady
+                                ? Colors.tealAccent.withValues(alpha: 0.25)
+                                : Colors.orangeAccent.withValues(alpha: 0.25);
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.03),
+                                borderRadius: BorderRadius.circular(12),
+                                border:
+                                    Border.all(color: borderColor, width: 1),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(7),
+                                        decoration: BoxDecoration(
+                                          color: isReady
+                                              ? Colors.tealAccent
+                                                  .withValues(alpha: 0.12)
+                                              : Colors.orangeAccent
+                                                  .withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Icon(
+                                          isReady
+                                              ? Icons
+                                                  .check_circle_outline_rounded
+                                              : (isInitializing
+                                                  ? Icons.sync_rounded
+                                                  : Icons.info_outline_rounded),
+                                          color: isReady
+                                              ? Colors.tealAccent
+                                              : Colors.orangeAccent,
+                                          size: 18,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    isReady
+                                                        ? loc.engineLocalLlm
+                                                        : (isInitializing
+                                                            ? loc.loadingAiModel
+                                                            : loc
+                                                                .modelNotDetected),
+                                                    style: TextStyle(
+                                                      color: isReady
+                                                          ? Colors.white
+                                                          : Colors.orangeAccent,
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                if (isReady) ...[
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.tealAccent
+                                                          .withValues(
+                                                              alpha: 0.15),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              4),
+                                                    ),
+                                                    child: Text(
+                                                      loc.modelActive,
+                                                      style: const TextStyle(
+                                                        color:
+                                                            Colors.tealAccent,
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        letterSpacing: 0.2,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              isReady
+                                                  ? (lastStatus ?? 'GGUF')
+                                                  : (lastStatus ??
+                                                      loc.modelsDirectoryNotice),
+                                              style: TextStyle(
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.6),
+                                                fontSize: 11,
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (isReady)
+                                        TextButton(
+                                          style: TextButton.styleFrom(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            foregroundColor: primary,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 4),
+                                          ),
+                                          onPressed: () =>
+                                              _showMangaAiModelDialog(
+                                                  sheetContext, setSheetState),
+                                          child: Text(
+                                            loc.changeModel,
+                                            style: const TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  if (!isReady) ...[
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      children: [
+                                        if (!hasStoragePerm) ...[
+                                          Expanded(
+                                            child: OutlinedButton.icon(
+                                              style: OutlinedButton.styleFrom(
+                                                visualDensity:
+                                                    VisualDensity.compact,
                                                 foregroundColor:
                                                     Colors.orangeAccent,
+                                                side: BorderSide(
+                                                  color: Colors.orangeAccent
+                                                      .withValues(alpha: 0.4),
+                                                ),
                                                 padding:
                                                     const EdgeInsets.symmetric(
-                                                        horizontal: 10,
-                                                        vertical: 6),
+                                                        vertical: 8),
                                                 shape: RoundedRectangleBorder(
                                                   borderRadius:
                                                       BorderRadius.circular(8),
                                                 ),
                                               ),
                                               icon: const Icon(
-                                                  Icons.security_rounded,
-                                                  size: 16),
+                                                  Icons.folder_shared_outlined,
+                                                  size: 14),
                                               label: Text(
                                                 loc.grantStoragePermission,
-                                                style: TextStyle(
+                                                style: const TextStyle(
                                                     fontSize: 11,
                                                     fontWeight:
-                                                        FontWeight.bold),
+                                                        FontWeight.w600),
                                               ),
                                               onPressed: () async {
                                                 final granted =
@@ -966,126 +1355,135 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                 setSheetState(() {});
                                               },
                                             ),
-                                          TextButton.icon(
-                                            style: TextButton.styleFrom(
-                                              backgroundColor: Colors.white
-                                                  .withValues(alpha: 0.08),
-                                              foregroundColor: Colors.white,
+                                          ),
+                                          const SizedBox(width: 8),
+                                        ],
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            style: OutlinedButton.styleFrom(
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              foregroundColor: Colors.white70,
+                                              side: BorderSide(
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.15),
+                                              ),
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                      horizontal: 10,
-                                                      vertical: 6),
+                                                      vertical: 8),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(8),
                                               ),
                                             ),
                                             icon: const Icon(
-                                                Icons.folder_open_rounded,
-                                                size: 16),
+                                                Icons.folder_open_outlined,
+                                                size: 14),
                                             label: Text(
                                               loc.selectModel,
-                                              style: TextStyle(
+                                              style: const TextStyle(
                                                   fontSize: 11,
-                                                  fontWeight: FontWeight.bold),
+                                                  fontWeight: FontWeight.w600),
                                             ),
                                             onPressed: () =>
                                                 _showMangaAiModelDialog(
-                                                    sheetContext, setSheetState),
+                                                    sheetContext,
+                                                    setSheetState),
                                           ),
-                                        ],
-                                      ),
-                                    ],
+                                        ),
+                                      ],
+                                    ),
                                   ],
-                                ),
-                              );
-                            },
-                          ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
 
-                          const SizedBox(height: 16),
+                      const SizedBox(height: 14),
 
-// Section 4: Render Mode Option Cards
-                          _buildModeCard(
-                            title: loc.translateSpeechBubbles,
-                            subtitle: loc.translateSpeechBubblesSubtitle,
-                            icon: Icons.chat_bubble_outline_rounded,
-                            selected: _translationMode ==
-                                TranslationRenderMode.speechBubblesOnly,
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              _setTranslationMode(
-                                  TranslationRenderMode.speechBubblesOnly);
-                              showFeedbackPill(
-                                context,
-                                message: '${loc.mangaTranslation}...',
-                                icon: Icons.translate_rounded,
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          _buildModeCard(
-                            title: loc.translateFullPage,
-                            subtitle: loc.translateFullPageSubtitle,
-                            icon: Icons.auto_stories_outlined,
-                            selected: _translationMode ==
-                                TranslationRenderMode.fullImageWithSfx,
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              _setTranslationMode(
-                                  TranslationRenderMode.fullImageWithSfx);
-                              showFeedbackPill(
-                                context,
-                                message: '${loc.mangaTranslation}...',
-                                icon: Icons.translate_rounded,
-                              );
-                            },
-                          ),
+                      // Section 4: Render Mode Option Cards
+                      _buildModeCard(
+                        title: loc.translateSpeechBubbles,
+                        subtitle: loc.translateSpeechBubblesSubtitle,
+                        icon: Icons.chat_bubble_outline_rounded,
+                        selected: _translationMode ==
+                            TranslationRenderMode.speechBubblesOnly,
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          _setTranslationMode(
+                              TranslationRenderMode.speechBubblesOnly);
+                          showFeedbackPill(
+                            context,
+                            message: '${loc.mangaTranslation}...',
+                            icon: Icons.translate_rounded,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      _buildModeCard(
+                        title: loc.translateFullPage,
+                        subtitle: loc.translateFullPageSubtitle,
+                        icon: Icons.auto_stories_outlined,
+                        selected: _translationMode ==
+                            TranslationRenderMode.fullImageWithSfx,
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          _setTranslationMode(
+                              TranslationRenderMode.fullImageWithSfx);
+                          showFeedbackPill(
+                            context,
+                            message: '${loc.mangaTranslation}...',
+                            icon: Icons.translate_rounded,
+                          );
+                        },
+                      ),
 
-                          // Section 5: Turn off translation
-                          if (_translationMode != null) ...[
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.redAccent,
-                                  side: BorderSide(
-                                      color: Colors.redAccent
-                                          .withValues(alpha: 0.4)),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                icon: const Icon(
-                                    Icons.power_settings_new_rounded,
-                                    size: 18),
-                                label: Text(
-                                  loc.disableTranslation,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600),
-                                ),
-                                onPressed: () {
-                                  Navigator.pop(sheetContext);
-                                  _setTranslationMode(null);
-                                },
+                      // Section 5: Turn off translation
+                      if (_translationMode != null) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.redAccent.shade100,
+                              side: BorderSide(
+                                color: Colors.redAccent.withValues(alpha: 0.25),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
-                          ],
-                        ],
-                      ),
-                    ),
+                            icon: const Icon(Icons.power_settings_new_rounded,
+                                size: 16),
+                            label: Text(
+                              loc.disableTranslation,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(sheetContext);
+                              _setTranslationMode(null);
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                );
+                ),
+              ),
+            );
           },
         );
       },
     );
   }
 
-
-  void _showMangaAiModelDialog(BuildContext parentContext, [void Function(void Function())? parentSetState]) {
+  void _showMangaAiModelDialog(BuildContext parentContext,
+      [void Function(void Function())? parentSetState]) {
     final loc = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
@@ -1126,7 +1524,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                             color: primary.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Icon(Icons.memory_rounded, color: primary, size: 22),
+                          child: Icon(Icons.memory_rounded,
+                              color: primary, size: 22),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -1152,12 +1551,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 22),
+                          icon: const Icon(Icons.refresh_rounded,
+                              color: Colors.white70, size: 22),
                           tooltip: loc.rescanModels,
                           onPressed: () => setDialogState(() {}),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 22),
+                          icon: const Icon(Icons.close_rounded,
+                              color: Colors.white70, size: 22),
                           onPressed: () => Navigator.pop(dialogContext),
                         ),
                       ],
@@ -1176,7 +1577,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                         children: [
                           Text(
                             loc.modelsDirectoryNotice,
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 12),
                           ),
                           const SizedBox(height: 4),
                           const SelectableText(
@@ -1195,11 +1597,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                     FutureBuilder<List<DiscoveredAiModel>>(
                       future: GgufLocalLlmEngine.scanAvailableModels(),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 24),
                             child: Center(
-                              child: CircularProgressIndicator(strokeWidth: 2.5),
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2.5),
                             ),
                           );
                         }
@@ -1211,7 +1615,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               child: Column(
                                 children: [
                                   Icon(Icons.folder_off_outlined,
-                                      size: 40, color: Colors.white.withValues(alpha: 0.4)),
+                                      size: 40,
+                                      color:
+                                          Colors.white.withValues(alpha: 0.4)),
                                   const SizedBox(height: 8),
                                   Text(
                                     loc.noModelsFound,
@@ -1226,7 +1632,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                     'Unduh model (.gguf) ke folder /storage/emulated/0/models/.',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.6),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.6),
                                       fontSize: 11,
                                     ),
                                   ),
@@ -1236,7 +1643,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           );
                         }
 
-                        final activePath = SettingsService.instance.settings.activeAiModelPath;
+                        final activePath =
+                            SettingsService.instance.settings.activeAiModelPath;
 
                         return ConstrainedBox(
                           constraints: BoxConstraints(
@@ -1245,7 +1653,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           child: ListView.separated(
                             shrinkWrap: true,
                             itemCount: models.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
                             itemBuilder: (context, index) {
                               final model = models[index];
                               final isActive = activePath.isNotEmpty
@@ -1254,10 +1663,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
                               return InkWell(
                                 onTap: () async {
-                                  await SettingsService.instance.setActiveAiModelPath(
+                                  await SettingsService.instance
+                                      .setActiveAiModelPath(
                                     model.path,
                                   );
-                                  await MlKitTranslationEngine.instance.ggufEngine.initializeSession(
+                                  await MlKitTranslationEngine
+                                      .instance.ggufEngine
+                                      .initializeSession(
                                     modelPath: model.path,
                                   );
                                   _translationCoordinator.clearCache();
@@ -1265,7 +1677,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   if (dialogContext.mounted) {
                                     showFeedbackPill(
                                       dialogContext,
-                                      message: '${loc.modelActive}: ${model.name}',
+                                      message:
+                                          '${loc.modelActive}: ${model.name}',
                                       icon: Icons.check_circle_rounded,
                                     );
                                     Navigator.pop(dialogContext);
@@ -1276,14 +1689,16 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                 },
                                 borderRadius: BorderRadius.circular(12),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 12),
                                   decoration: BoxDecoration(
                                     color: isActive
                                         ? primary.withValues(alpha: 0.15)
                                         : Colors.white.withValues(alpha: 0.05),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: isActive ? primary : Colors.white12,
+                                      color:
+                                          isActive ? primary : Colors.white12,
                                     ),
                                   ),
                                   child: Row(
@@ -1292,28 +1707,32 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                         isActive
                                             ? Icons.check_circle_rounded
                                             : Icons.extension_rounded,
-                                        color: isActive ? primary : Colors.white60,
+                                        color:
+                                            isActive ? primary : Colors.white60,
                                         size: 22,
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               model.name,
                                               style: TextStyle(
                                                 color: Colors.white,
                                                 fontSize: 13,
-                                                fontWeight:
-                                                    isActive ? FontWeight.bold : FontWeight.w500,
+                                                fontWeight: isActive
+                                                    ? FontWeight.bold
+                                                    : FontWeight.w500,
                                               ),
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
                                               '${model.formattedSize} • ${model.path}',
                                               style: TextStyle(
-                                                color: Colors.white.withValues(alpha: 0.55),
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.55),
                                                 fontSize: 10.5,
                                               ),
                                               overflow: TextOverflow.ellipsis,
@@ -1352,17 +1771,19 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: selected
-              ? primary.withValues(alpha: 0.12)
-              : Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(14),
+              ? primary.withValues(alpha: 0.08)
+              : Colors.white.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? primary : Colors.white12,
-            width: selected ? 1.5 : 1.0,
+            color: selected
+                ? primary.withValues(alpha: 0.55)
+                : Colors.white.withValues(alpha: 0.08),
+            width: selected ? 1.2 : 1.0,
           ),
         ),
         child: Row(
@@ -1370,14 +1791,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color:
-                    selected ? primary.withValues(alpha: 0.2) : Colors.white10,
-                borderRadius: BorderRadius.circular(10),
+                color: selected
+                    ? primary.withValues(alpha: 0.18)
+                    : Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 icon,
                 color: selected ? primary : Colors.white70,
-                size: 20,
+                size: 18,
               ),
             ),
             const SizedBox(width: 12),
@@ -1388,26 +1810,29 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   Text(
                     title,
                     style: TextStyle(
-                      color: selected
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.9),
-                      fontSize: 14,
-                      fontWeight: selected ? FontWeight.bold : FontWeight.w600,
+                      color: Colors.white,
+                      fontSize: 13.5,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.55),
+                      color: Colors.white.withValues(alpha: 0.6),
                       fontSize: 11,
                     ),
                   ),
                 ],
               ),
             ),
-            if (selected)
-              Icon(Icons.check_circle_rounded, color: primary, size: 20),
+            Icon(
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: selected ? primary : Colors.white24,
+              size: 18,
+            ),
           ],
         ),
       ),
@@ -1504,8 +1929,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                     if (_translationMode != null)
                       Positioned.fill(
                         child: ValueListenableBuilder<TranslationResult?>(
-                          valueListenable:
-                              _translationCoordinator.getResultNotifier(it.path),
+                          valueListenable: _translationCoordinator
+                              .getResultNotifier(it.path),
                           builder: (context, result, _) {
                             if (result == null ||
                                 !result.isSuccess ||
@@ -1535,8 +1960,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                         child: Align(
                           alignment: Alignment.topCenter,
                           child: ValueListenableBuilder<bool>(
-                            valueListenable:
-                                _translationCoordinator.getLoadingNotifier(it.path),
+                            valueListenable: _translationCoordinator
+                                .getLoadingNotifier(it.path),
                             builder: (context, isLoading, _) {
                               if (!isLoading) return const SizedBox.shrink();
                               return Container(
@@ -1563,8 +1988,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       height: 14,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                            Colors.white),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                                Colors.white),
                                       ),
                                     ),
                                     SizedBox(width: 8),
@@ -2494,6 +2920,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                     i < widget.items.length) {
                                   _loadPsdDataIfNeeded(widget.items[i].path);
                                 }
+                                if (_translationMode != null) {
+                                  _triggerMangaTranslationForActivePage();
+                                }
                               },
                               physics: (_isCurrentlyZoomed ||
                                       _isPinching ||
@@ -2504,126 +2933,276 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               itemBuilder: (context, index) {
                                 final it = widget.items[index];
                                 final isCur = index == _current;
-                                return ListenableBuilder(
-                                  listenable: Listenable.merge(
-                                      [_isDraggingDown, _isDismissing]),
-                                  builder: (context, child) {
-                                    if ((_isDraggingDown.value ||
-                                            _isDismissing.value) &&
-                                        !isCur) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    return child!;
-                                  },
-                                  child: RepaintBoundary(
-                                    child: Center(
-                                      child: ClipRect(
-                                        child: isCur
-                                            ? InteractiveViewer(
-                                                key: ValueKey(
-                                                    'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
-                                                transformationController:
-                                                    _transformationController,
-                                                minScale: 1.0,
-                                                maxScale: 8.0,
-                                                panEnabled:
-                                                    _isCurrentlyZoomed &&
-                                                        (_psdLoadError[
-                                                                it.path] !=
-                                                            true),
-                                                scaleEnabled:
-                                                    (!PsdService.isPsd(
-                                                            it.path) ||
+                                return Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    ListenableBuilder(
+                                      listenable: Listenable.merge(
+                                          [_isDraggingDown, _isDismissing]),
+                                      builder: (context, child) {
+                                        if ((_isDraggingDown.value ||
+                                                _isDismissing.value) &&
+                                            !isCur) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return child!;
+                                      },
+                                      child: RepaintBoundary(
+                                        child: Center(
+                                          child: ClipRect(
+                                            child: isCur
+                                                ? InteractiveViewer(
+                                                    key: ValueKey(
+                                                        'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
+                                                    transformationController:
+                                                        _transformationController,
+                                                    minScale: 1.0,
+                                                    maxScale: 8.0,
+                                                    panEnabled:
+                                                        _isCurrentlyZoomed &&
+                                                            (_psdLoadError[
+                                                                    it.path] !=
+                                                                true),
+                                                    scaleEnabled: (!PsdService
+                                                            .isPsd(it.path) ||
                                                         (_psdRenderedBytes[
                                                                     it.path] !=
                                                                 null &&
                                                             _psdRenderedBytes[
                                                                     it.path]!
                                                                 .isNotEmpty)),
-                                                clipBehavior: Clip.hardEdge,
-                                                onInteractionStart: (details) {
-                                                  _zoomAnimController?.stop();
-                                                  if (details.pointerCount >=
-                                                      2) {
-                                                    _isPinching = true;
-                                                  }
-                                                },
-                                                onInteractionUpdate: (details) {
-                                                  final scale =
-                                                      _transformationController
-                                                          .value
-                                                          .getMaxScaleOnAxis();
-                                                  final isZoomed = scale > 1.05;
-                                                  if (isZoomed !=
-                                                      _isPhotoZoomed) {
-                                                    setState(() {
-                                                      _isPhotoZoomed = isZoomed;
-                                                    });
-                                                  }
-                                                },
-                                                onInteractionEnd: (details) {
-                                                  _isPinching = false;
-                                                  final scale =
-                                                      _transformationController
-                                                          .value
-                                                          .getMaxScaleOnAxis();
-                                                  if (scale <= 1.02) {
-                                                    _resetPhotoZoom();
-                                                  } else {
-                                                    final shouldDeepZoom =
-                                                        scale > 1.2;
-                                                    if ((!_isPhotoZoomed ||
-                                                            _isDeepZoomed !=
-                                                                shouldDeepZoom) &&
-                                                        mounted) {
-                                                      setState(() {
-                                                        _isPhotoZoomed = true;
-                                                        _isDeepZoomed =
-                                                            shouldDeepZoom;
-                                                      });
-                                                    }
-                                                  }
-                                                },
-                                                child: Center(
-                                                  child: Hero(
-                                                    tag: it.id,
-                                                    flightShuttleBuilder: (
-                                                      flightContext,
-                                                      animation,
-                                                      flightDirection,
-                                                      fromHeroContext,
-                                                      toHeroContext,
-                                                    ) =>
-                                                        _buildHeroShuttle(
-                                                      animation: animation,
-                                                      flightDirection:
-                                                          flightDirection,
-                                                      id: it.id,
-                                                      path: it.path,
-                                                      psdFallbackBytes:
-                                                          _psdRenderedBytes[
-                                                              it.path],
-                                                      fallbackChild:
-                                                          flightDirection ==
-                                                                  HeroFlightDirection
-                                                                      .push
-                                                              ? toHeroContext
-                                                                  .widget
-                                                              : fromHeroContext
-                                                                  .widget,
+                                                    clipBehavior: Clip.hardEdge,
+                                                    onInteractionStart:
+                                                        (details) {
+                                                      _zoomAnimController
+                                                          ?.stop();
+                                                      if (details
+                                                              .pointerCount >=
+                                                          2) {
+                                                        _isPinching = true;
+                                                      }
+                                                    },
+                                                    onInteractionUpdate:
+                                                        (details) {
+                                                      final scale =
+                                                          _transformationController
+                                                              .value
+                                                              .getMaxScaleOnAxis();
+                                                      final isZoomed =
+                                                          scale > 1.05;
+                                                      if (isZoomed !=
+                                                          _isPhotoZoomed) {
+                                                        setState(() {
+                                                          _isPhotoZoomed =
+                                                              isZoomed;
+                                                        });
+                                                      }
+                                                    },
+                                                    onInteractionEnd:
+                                                        (details) {
+                                                      _isPinching = false;
+                                                      final scale =
+                                                          _transformationController
+                                                              .value
+                                                              .getMaxScaleOnAxis();
+                                                      if (scale <= 1.02) {
+                                                        _resetPhotoZoom();
+                                                      } else {
+                                                        final shouldDeepZoom =
+                                                            scale > 1.2;
+                                                        if ((!_isPhotoZoomed ||
+                                                                _isDeepZoomed !=
+                                                                    shouldDeepZoom) &&
+                                                            mounted) {
+                                                          setState(() {
+                                                            _isPhotoZoomed =
+                                                                true;
+                                                            _isDeepZoomed =
+                                                                shouldDeepZoom;
+                                                          });
+                                                        }
+                                                      }
+                                                    },
+                                                    child: Stack(
+                                                      alignment:
+                                                          Alignment.center,
+                                                      children: [
+                                                        Center(
+                                                          child: Hero(
+                                                            tag: it.id,
+                                                            flightShuttleBuilder: (
+                                                              flightContext,
+                                                              animation,
+                                                              flightDirection,
+                                                              fromHeroContext,
+                                                              toHeroContext,
+                                                            ) =>
+                                                                _buildHeroShuttle(
+                                                              animation:
+                                                                  animation,
+                                                              flightDirection:
+                                                                  flightDirection,
+                                                              id: it.id,
+                                                              path: it.path,
+                                                              psdFallbackBytes:
+                                                                  _psdRenderedBytes[
+                                                                      it.path],
+                                                              fallbackChild: flightDirection ==
+                                                                      HeroFlightDirection
+                                                                          .push
+                                                                  ? toHeroContext
+                                                                      .widget
+                                                                  : fromHeroContext
+                                                                      .widget,
+                                                            ),
+                                                            child:
+                                                                _buildPhotoPage(
+                                                                    it,
+                                                                    isCurrent:
+                                                                        true),
+                                                          ),
+                                                        ),
+                                                        if (_translationMode !=
+                                                                null &&
+                                                            !it.isVideo &&
+                                                            !PsdService.isPsd(
+                                                                it.path))
+                                                          Positioned.fill(
+                                                            child: ValueListenableBuilder<
+                                                                TranslationResult?>(
+                                                              valueListenable:
+                                                                  _translationCoordinator
+                                                                      .getResultNotifier(
+                                                                          it.path),
+                                                              builder: (context,
+                                                                  result, _) {
+                                                                if (result ==
+                                                                        null ||
+                                                                    !result
+                                                                        .isSuccess ||
+                                                                    result
+                                                                        .blocks
+                                                                        .isEmpty) {
+                                                                  return const SizedBox
+                                                                      .shrink();
+                                                                }
+                                                                return MangaTranslationOverlay(
+                                                                  result:
+                                                                      result,
+                                                                  mode:
+                                                                      _translationMode!,
+                                                                );
+                                                              },
+                                                            ),
+                                                          ),
+                                                      ],
                                                     ),
+                                                  )
+                                                : Center(
                                                     child: _buildPhotoPage(it,
-                                                        isCurrent: true),
+                                                        isCurrent: false),
                                                   ),
-                                                ),
-                                              )
-                                            : Center(
-                                                child: _buildPhotoPage(it,
-                                                    isCurrent: false),
-                                              ),
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                    if (_translationMode != null && isCur)
+                                      Positioned(
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        child: IgnorePointer(
+                                          child: SafeArea(
+                                            child: AnimatedPadding(
+                                              duration: const Duration(
+                                                  milliseconds: 200),
+                                              padding: EdgeInsets.only(
+                                                  top: _barsVisible ? 80 : 20),
+                                              child: Align(
+                                                alignment: Alignment.topCenter,
+                                                child: ValueListenableBuilder<
+                                                    bool>(
+                                                  valueListenable:
+                                                      _translationCoordinator
+                                                          .getLoadingNotifier(
+                                                              it.path),
+                                                  builder:
+                                                      (context, isLoading, _) {
+                                                    if (!isLoading) {
+                                                      return const SizedBox
+                                                          .shrink();
+                                                    }
+                                                    return Container(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 14,
+                                                          vertical: 8),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.black
+                                                            .withValues(
+                                                                alpha: 0.75),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(20),
+                                                        border: Border.all(
+                                                            color:
+                                                                Colors.white24,
+                                                            width: 0.8),
+                                                        boxShadow: const [
+                                                          BoxShadow(
+                                                            color:
+                                                                Colors.black45,
+                                                            blurRadius: 8,
+                                                            offset:
+                                                                Offset(0, 2),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          const SizedBox(
+                                                            width: 14,
+                                                            height: 14,
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                              strokeWidth: 2,
+                                                              valueColor:
+                                                                  AlwaysStoppedAnimation<
+                                                                      Color>(
+                                                                Colors.white,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                              width: 8),
+                                                          Text(
+                                                            context.tr
+                                                                .translatingPage,
+                                                            style:
+                                                                const TextStyle(
+                                                              color:
+                                                                  Colors.white,
+                                                              fontSize: 12,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                              letterSpacing:
+                                                                  0.2,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 );
                               },
                             ),

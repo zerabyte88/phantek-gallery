@@ -20,6 +20,22 @@ Future<List<MangaTranslatedBlock>> _translateBlocks(
 }) async {
   final List<MangaTranslatedBlock> results = [];
 
+  // Page-level language detection when source is set to auto
+  TranslationSourceLanguage effectiveLanguage = language;
+  if (language == TranslationSourceLanguage.auto && rawBlocks.isNotEmpty) {
+    final combinedText = rawBlocks.map((b) => b.text).join('\n');
+    if (RegExp(r'[\u3040-\u309f\u30a0-\u30ff]').hasMatch(combinedText)) {
+      effectiveLanguage = TranslationSourceLanguage.japanese;
+    } else if (RegExp(r'[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]')
+        .hasMatch(combinedText)) {
+      effectiveLanguage = TranslationSourceLanguage.korean;
+    } else if (RegExp(r'[\u4e00-\u9fff]').hasMatch(combinedText)) {
+      effectiveLanguage = TranslationSourceLanguage.chinese;
+    } else {
+      effectiveLanguage = TranslationSourceLanguage.japanese;
+    }
+  }
+
   for (final raw in rawBlocks) {
     if (isCancelled != null && isCancelled()) break;
 
@@ -43,7 +59,7 @@ Future<List<MangaTranslatedBlock>> _translateBlocks(
     } else {
       translated = await engine.translateText(
         raw.text,
-        source: language,
+        source: effectiveLanguage,
         target: targetLanguage,
       );
     }

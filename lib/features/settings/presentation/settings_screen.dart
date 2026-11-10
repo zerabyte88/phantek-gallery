@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import '../../../core/services/translation/gguf_local_llm_engine.dart';
 import '../../../core/services/translation/mlkit_translation_engine.dart';
+import '../../../core/services/translation/translation_models.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/settings_model.dart';
@@ -655,6 +656,95 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     }
                   },
                 ),
+              ],
+            ),
+            _SectionHeader(title: context.tr.mangaTranslation),
+            _SettingsCard(
+              children: [
+                _ModernTile(
+                  icon: Icons.language_rounded,
+                  title: context.tr.sourceLanguage,
+                  subtitle: switch (settings.translationSourceLanguage) {
+                    TranslationSourceLanguage.japanese =>
+                      context.tr.langJapanese,
+                    TranslationSourceLanguage.chinese => context.tr.langChinese,
+                    TranslationSourceLanguage.korean => context.tr.langKorean,
+                    TranslationSourceLanguage.auto => context.tr.autoDetect,
+                  },
+                  onTap: () async {
+                    final chosen =
+                        await _showModernOptionDialog<TranslationSourceLanguage>(
+                      context,
+                      title: context.tr.sourceLanguage,
+                      subtitle: context.tr.mangaTranslation,
+                      headerIcon: Icons.language_rounded,
+                      currentValue: settings.translationSourceLanguage,
+                      options: [
+                        _OptionItem(
+                          value: TranslationSourceLanguage.japanese,
+                          title: context.tr.langJapanese,
+                          subtitle: 'JA → EN',
+                          icon: Icons.translate_rounded,
+                        ),
+                        _OptionItem(
+                          value: TranslationSourceLanguage.chinese,
+                          title: context.tr.langChinese,
+                          subtitle: 'ZH → EN',
+                          icon: Icons.translate_rounded,
+                        ),
+                        _OptionItem(
+                          value: TranslationSourceLanguage.korean,
+                          title: context.tr.langKorean,
+                          subtitle: 'KO → EN',
+                          icon: Icons.translate_rounded,
+                        ),
+                        _OptionItem(
+                          value: TranslationSourceLanguage.auto,
+                          title: context.tr.autoDetect,
+                          icon: Icons.auto_awesome_rounded,
+                        ),
+                      ],
+                    );
+                    if (chosen != null) {
+                      patch((s) =>
+                          s.copyWith(translationSourceLanguage: chosen));
+                    }
+                  },
+                ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.translate_rounded,
+                  title: context.tr.translationEngine,
+                  subtitle: settings.translationEngineType ==
+                          TranslationEngineType.googleMlKit
+                      ? context.tr.engineGoogleMlKit
+                      : context.tr.engineLocalLlm,
+                  onTap: () async {
+                    final chosen =
+                        await _showModernOptionDialog<TranslationEngineType>(
+                      context,
+                      title: context.tr.translationEngine,
+                      subtitle: context.tr.mangaTranslation,
+                      headerIcon: Icons.translate_rounded,
+                      currentValue: settings.translationEngineType,
+                      options: [
+                        _OptionItem(
+                          value: TranslationEngineType.googleMlKit,
+                          title: context.tr.engineGoogleMlKit,
+                          icon: Icons.bolt_rounded,
+                        ),
+                        _OptionItem(
+                          value: TranslationEngineType.localLlm,
+                          title: context.tr.engineLocalLlm,
+                          icon: Icons.smart_toy_outlined,
+                        ),
+                      ],
+                    );
+                    if (chosen != null) {
+                      patch((s) => s.copyWith(translationEngineType: chosen));
+                    }
+                  },
+                ),
                 const _CardDivider(),
                 _ModernTile(
                   icon: Icons.psychology_outlined,
@@ -665,11 +755,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   onTap: () =>
                       _showAiModelManagerDialog(context, ref, settings),
                 ),
-              ],
-            ),
-            _SectionHeader(title: context.tr.offlineTranslationModels),
-            _SettingsCard(
-              children: [
+                const _CardDivider(),
                 _GoogleMlKitModelTile(
                   bcpCode: 'ja',
                   languageName: context.tr.langJapanese,

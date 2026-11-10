@@ -680,8 +680,8 @@ class GgufLocalLlmEngine {
         modelPath: resolvedPath,
         contextSize: 2048,
         nThreads: 4,
-        nGpuLayers: -1,
-        useGpu: true,
+        nGpuLayers: 0,
+        useGpu: false,
       );
 
       final loaded = await FlutterLlama.instance.loadModel(config);

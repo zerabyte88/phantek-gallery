@@ -82,49 +82,86 @@ class MangaTranslationPainter extends CustomPainter {
       );
 
       if (block.isSpeechBubble) {
-        _drawSpeechBubbleBlock(canvas, mappedRect, block.translatedText);
+        _drawSpeechBubbleBlock(
+          canvas,
+          mappedRect,
+          block.translatedText,
+          destRect,
+        );
       } else {
         _drawSfxBlock(canvas, mappedRect, block.translatedText);
       }
     }
   }
 
-  void _drawSpeechBubbleBlock(Canvas canvas, Rect rect, String text) {
+  void _drawSpeechBubbleBlock(
+    Canvas canvas,
+    Rect rect,
+    String text, [
+    Rect? destRect,
+  ]) {
+    final trimmedText = text.trim();
+    final int charCount = trimmedText.length;
+    final int wordCount =
+        trimmedText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+
     Rect effectiveRect = rect;
-    if (effectiveRect.height > effectiveRect.width * 1.5) {
-      final double targetWidth = math.max(effectiveRect.width * 1.8, 50.0);
-      final double extraWidth = targetWidth - effectiveRect.width;
-      if (extraWidth > 0) {
-        effectiveRect = Rect.fromLTRB(
-          effectiveRect.left - extraWidth / 2.0,
-          effectiveRect.top,
-          effectiveRect.right + extraWidth / 2.0,
-          effectiveRect.bottom,
-        );
+
+    // 1. Vertical text box expansion for horizontal English text.
+    // Asian manga dialogue is often laid out vertically in narrow columns (20-30px wide).
+    // English needs comfortable horizontal line lengths to avoid pathological wrapping.
+    if (effectiveRect.height > effectiveRect.width * 1.1) {
+      double minWidthForLength = 80.0;
+      if (charCount > 60) {
+        minWidthForLength = 140.0;
+      } else if (charCount > 30) {
+        minWidthForLength = 110.0;
       }
+
+      double targetWidth = math.max(
+        effectiveRect.width * 2.2,
+        math.max(effectiveRect.height * 0.75, minWidthForLength),
+      );
+
+      if (destRect != null && destRect.width > 0) {
+        targetWidth = targetWidth.clamp(20.0, destRect.width * 0.85);
+      }
+
+      effectiveRect = Rect.fromCenter(
+        center: effectiveRect.center,
+        width: targetWidth,
+        height: effectiveRect.height,
+      );
     }
 
-    final paddedRect = effectiveRect.inflate(4.0);
-    final rrect =
-        RRect.fromRectAndRadius(paddedRect, const Radius.circular(8.0));
+    // 2. Compute max text width available inside the bubble
+    double maxTextWidth = math.max(effectiveRect.width - 8.0, 60.0);
+    if (destRect != null && destRect.width > 0) {
+      maxTextWidth = math.min(maxTextWidth, destRect.width * 0.85 - 16.0);
+    }
 
-    final patchPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    canvas.drawRRect(rrect, patchPaint);
+    // 3. Adaptive font size calculation based on dialogue length & bubble size.
+    // Manga dialogue in standard scanlations is typically 9.0 - 13.0sp (never oversized 18sp).
+    final double maxAllowedFontSize;
+    if (wordCount <= 4) {
+      maxAllowedFontSize = 13.0;
+    } else if (wordCount <= 12) {
+      maxAllowedFontSize = 11.5;
+    } else {
+      maxAllowedFontSize = 10.0;
+    }
 
-    final borderPaint = Paint()
-      ..color = Colors.black12
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawRRect(rrect, borderPaint);
+    // Adaptive starting font size bounded between 8.5sp and maxAllowedFontSize
+    double fontSize =
+        (effectiveRect.height * 0.25).clamp(8.5, maxAllowedFontSize);
+    if (fontSize < maxAllowedFontSize && effectiveRect.width > 80.0) {
+      fontSize = math.min(maxAllowedFontSize, math.max(fontSize, 10.0));
+    }
 
-    final double maxTextWidth = math.max(paddedRect.width - 6.0, 10.0);
-    final double maxTextHeight = math.max(paddedRect.height - 6.0, 10.0);
+    final double targetMaxHeight = math.max(effectiveRect.height, 40.0);
 
-    double fontSize = (effectiveRect.height * 0.35).clamp(10.0, 18.0);
     TextPainter painter = _buildTextPainter(
-      text: text,
+      text: trimmedText,
       style: TextStyle(
         color: Colors.black87,
         fontSize: fontSize,
@@ -134,10 +171,11 @@ class MangaTranslationPainter extends CustomPainter {
       maxWidth: maxTextWidth,
     );
 
-    while (painter.height > maxTextHeight && fontSize > 6.5) {
-      fontSize -= 0.5;
+    // Iteratively scale down font size until text fits or reaches minimum legible size 8.5sp
+    while (painter.height > targetMaxHeight && fontSize > 8.5) {
+      fontSize = math.max(8.5, fontSize - 0.5);
       painter = _buildTextPainter(
-        text: text,
+        text: trimmedText,
         style: TextStyle(
           color: Colors.black87,
           fontSize: fontSize,
@@ -146,12 +184,69 @@ class MangaTranslationPainter extends CustomPainter {
         ),
         maxWidth: maxTextWidth,
       );
+      if (fontSize <= 8.5) break;
     }
 
-    final double dx =
-        paddedRect.left + (paddedRect.width - painter.width) / 2.0;
-    final double dy =
-        paddedRect.top + (paddedRect.height - painter.height) / 2.0;
+    // 4. Auto-fitting geometry: Encompass the laid-out text with safe margins so text is NEVER clipped.
+    final double finalWidth =
+        math.max(effectiveRect.width + 12.0, painter.width + 16.0);
+    final double finalHeight =
+        math.max(effectiveRect.height + 8.0, painter.height + 12.0);
+
+    final Rect rawBubbleRect = Rect.fromCenter(
+      center: effectiveRect.center,
+      width: finalWidth,
+      height: finalHeight,
+    );
+
+    // Clamp bubble within destination bounds if destRect is provided
+    Rect bubbleRect = rawBubbleRect;
+    if (destRect != null && destRect.width > 0 && destRect.height > 0) {
+      double left = bubbleRect.left;
+      double top = bubbleRect.top;
+      double width = bubbleRect.width;
+      double height = bubbleRect.height;
+
+      if (width > destRect.width) {
+        width = destRect.width;
+        left = destRect.left;
+      } else if (left < destRect.left) {
+        left = destRect.left;
+      } else if (left + width > destRect.right) {
+        left = destRect.right - width;
+      }
+
+      if (height > destRect.height) {
+        height = destRect.height;
+        top = destRect.top;
+      } else if (top < destRect.top) {
+        top = destRect.top;
+      } else if (top + height > destRect.bottom) {
+        top = destRect.bottom - height;
+      }
+
+      bubbleRect = Rect.fromLTWH(left, top, width, height);
+    }
+
+    final rrect =
+        RRect.fromRectAndRadius(bubbleRect, const Radius.circular(8.0));
+
+    final patchPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawRRect(rrect, patchPaint);
+
+    final borderPaint = Paint()
+      ..color = Colors.black26
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawRRect(rrect, borderPaint);
+
+    // Centered coordinates guaranteed never to be negative or offscreen
+    final double dx = bubbleRect.left +
+        math.max(0.0, (bubbleRect.width - painter.width) / 2.0);
+    final double dy = bubbleRect.top +
+        math.max(0.0, (bubbleRect.height - painter.height) / 2.0);
 
     canvas.save();
     canvas.clipRRect(rrect);
@@ -160,7 +255,7 @@ class MangaTranslationPainter extends CustomPainter {
   }
 
   void _drawSfxBlock(Canvas canvas, Rect rect, String text) {
-    final double fontSize = (rect.height * 0.45).clamp(12.0, 24.0);
+    final double fontSize = (rect.height * 0.35).clamp(11.0, 16.0);
     final double maxTextWidth = math.max(rect.width * 1.4, 40.0);
 
     final strokePainter = _buildTextPainter(
@@ -224,13 +319,14 @@ class MangaTranslationPainter extends CustomPainter {
     required String text,
     required TextStyle style,
     required double maxWidth,
+    int? maxLines = 16,
   }) {
     final painter = TextPainter(
       text: TextSpan(text: text, style: style),
       textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
-      maxLines: 10,
-      ellipsis: '…',
+      maxLines: maxLines,
+      ellipsis: maxLines != null ? '…' : null,
     );
     painter.layout(maxWidth: maxWidth);
     return painter;

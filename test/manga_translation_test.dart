@@ -2,6 +2,7 @@
 // Copyright (C) 2026 zerabyte88
 
 import 'dart:io';
+import 'dart:ui';
 import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -380,6 +381,135 @@ void main() {
             (w) => w is CustomPaint && w.painter is MangaTranslationPainter),
         findsOneWidget,
       );
+    });
+
+    testWidgets(
+        'MangaTranslationOverlay expands vertical speech bubbles horizontally for English text',
+        (tester) async {
+      // Narrow vertical box (width 25, height 120 - aspect ratio 4.8)
+      final result = TranslationResult(
+        imagePath: '/mock/vertical.jpg',
+        imageSize: const Size(1000, 1500),
+        blocks: const [
+          MangaTranslatedBlock(
+            boundingBox: Rect.fromLTWH(800, 200, 25, 120),
+            originalText: '何をしているんだ？',
+            translatedText: 'What on earth are you doing right now?!',
+            isSpeechBubble: true,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 500,
+              height: 750,
+              child: MangaTranslationOverlay(
+                result: result,
+                mode: TranslationRenderMode.speechBubblesOnly,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(MangaTranslationOverlay), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.painter is MangaTranslationPainter),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets(
+        'MangaTranslationOverlay auto-fits speech bubble for long dialogue without negative offset or clipping',
+        (tester) async {
+      // Small box with long text (20 words)
+      final result = TranslationResult(
+        imagePath: '/mock/long_text.jpg',
+        imageSize: const Size(1000, 1500),
+        blocks: const [
+          MangaTranslatedBlock(
+            boundingBox: Rect.fromLTWH(200, 300, 60, 40),
+            originalText: '長いセリフ',
+            translatedText:
+                'Wait a minute! Did you really believe that would be enough to defeat me after everything we have endured together in this dungeon?',
+            isSpeechBubble: true,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 500,
+              height: 750,
+              child: MangaTranslationOverlay(
+                result: result,
+                mode: TranslationRenderMode.speechBubblesOnly,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(MangaTranslationOverlay), findsOneWidget);
+    });
+
+    test(
+        'MangaTranslationPainter direct canvas paint test verifying adaptive font sizing and bounding box containment',
+        () {
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      final painter = MangaTranslationPainter(
+        result: TranslationResult(
+          imagePath: '/mock/page.jpg',
+          imageSize: const Size(1000, 1500),
+          blocks: const [
+            // Vertical Asian column
+            MangaTranslatedBlock(
+              boundingBox: Rect.fromLTWH(800, 150, 25, 160),
+              originalText: 'お前、何をしているんだ？',
+              translatedText: 'What on earth are you doing here?!',
+              isSpeechBubble: true,
+            ),
+            // Short text
+            MangaTranslatedBlock(
+              boundingBox: Rect.fromLTWH(200, 100, 80, 50),
+              originalText: '行くぞ',
+              translatedText: "Let's go!",
+              isSpeechBubble: true,
+            ),
+            // Long dialogue in small container
+            MangaTranslatedBlock(
+              boundingBox: Rect.fromLTWH(300, 400, 70, 45),
+              originalText: 'そんなはずはない...',
+              translatedText:
+                  'There is no way that someone like you could possibly understand the burden I have been carrying all these years!',
+              isSpeechBubble: true,
+            ),
+            // SFX block with reduced font size
+            MangaTranslatedBlock(
+              boundingBox: Rect.fromLTWH(100, 600, 120, 50),
+              originalText: 'ドカーン',
+              translatedText: '*KABOOM*',
+              isSpeechBubble: false,
+            ),
+          ],
+        ),
+        mode: TranslationRenderMode.fullImageWithSfx,
+      );
+
+      expect(
+        () => painter.paint(canvas, const Size(1000, 1500)),
+        returnsNormally,
+      );
+
+      final picture = recorder.endRecording();
+      picture.dispose();
     });
   });
 
@@ -1307,6 +1437,94 @@ void main() {
       expect(
         MlKitTranslationEngine.mapToTranslateLanguage('unknown'),
         isNull,
+      );
+    });
+
+    test('TranslationSourceLanguage serialization and persistence in SettingsModel', () {
+      const defaultSettings = SettingsModel();
+      expect(
+        defaultSettings.translationSourceLanguage,
+        TranslationSourceLanguage.japanese,
+      );
+
+      final koreanSettings = defaultSettings.copyWith(
+        translationSourceLanguage: TranslationSourceLanguage.korean,
+      );
+      expect(
+        koreanSettings.translationSourceLanguage,
+        TranslationSourceLanguage.korean,
+      );
+      expect(koreanSettings.props, contains(TranslationSourceLanguage.korean));
+
+      final json = koreanSettings.toJson();
+      expect(json['translationSourceLanguage'], 'korean');
+
+      final revived = SettingsModel.fromJson(json);
+      expect(revived.translationSourceLanguage, TranslationSourceLanguage.korean);
+    });
+
+    testWidgets(
+        'ImageViewerScreen Translation Sheet renders 3 dedicated manual language buttons & Otomatis',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final item = MediaItem(
+        id: 'test_p1',
+        path: '/storage/emulated/0/Pictures/Manga/p1.jpg',
+        name: 'p1.jpg',
+        date: DateTime(2026, 1, 1),
+        size: 1024,
+        isVideo: false,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: ImageViewerScreen(
+              items: [item],
+              initialIndex: 0,
+              initialMangaMode: true,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      final translateBtn =
+          find.byKey(const ValueKey('manga_translation_button'));
+      expect(translateBtn, findsOneWidget);
+
+      tester.widget<IconButton>(translateBtn).onPressed!();
+      await tester.pumpAndSettle();
+
+      // Verify the 3 dedicated manual language buttons and their subtext
+      expect(find.text('Japanese'), findsOneWidget);
+      expect(find.text('JA → EN'), findsOneWidget);
+      expect(find.text('Chinese'), findsOneWidget);
+      expect(find.text('ZH → EN'), findsOneWidget);
+      expect(find.text('Korean'), findsOneWidget);
+      expect(find.text('KO → EN'), findsOneWidget);
+      expect(find.text('Auto Detect'), findsOneWidget);
+
+      // Tap Korean button
+      await tester.tap(find.text('Korean'));
+      await tester.pumpAndSettle();
+
+      // Verify settings updated and persisted
+      expect(
+        SettingsService.instance.settings.translationSourceLanguage,
+        TranslationSourceLanguage.korean,
       );
     });
   });
