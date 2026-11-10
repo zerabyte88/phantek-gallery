@@ -67,47 +67,11 @@ jobs:
 
       - name: Configure flutter_llama build options
         run: |
-          echo "Configuring flutter_llama to use optimized ARM NEON CPU backend..."
+          echo "Configuring flutter_llama build options..."
           CMAKE_FILE=$(find ~/.pub-cache/hosted/pub.dev -path "*/flutter_llama-*/android/src/main/cpp/CMakeLists.txt" 2>/dev/null | head -n 1)
           if [ -n "$CMAKE_FILE" ]; then
             sed -i 's/option(FLUTTER_LLAMA_ANDROID_VULKAN "Build the optional Vulkan backend module" ON)/option(FLUTTER_LLAMA_ANDROID_VULKAN "Build the optional Vulkan backend module" OFF)/g' "$CMAKE_FILE"
-            echo "Successfully configured $CMAKE_FILE with Vulkan OFF (using stable & fast ARM NEON CPU engine)."
-          else
-            echo "::warning::flutter_llama CMakeLists.txt not found in pub cache"
-          fi
-
-          BRIDGE_FILE=$(find ~/.pub-cache/hosted/pub.dev -path "*/flutter_llama-*/android/src/main/cpp/flutter_llama_bridge.cpp" 2>/dev/null | head -n 1)
-          if [ -n "$BRIDGE_FILE" ]; then
-            echo "Patching $BRIDGE_FILE for KV cache clearing and stop token handling..."
-            python3 -c "
-path = '$BRIDGE_FILE'
-with open(path, 'r', encoding='utf-8') as f:
-    c = f.read()
-if 'llama_kv_cache_clear(g_context);' not in c:
-    c = c.replace('llama_batch batch = llama_batch_get_one(prompt_tokens.data(), prompt_tokens.size());', 'llama_kv_cache_clear(g_context);\n    llama_batch batch = llama_batch_get_one(prompt_tokens.data(), prompt_tokens.size());')
-if '<|im_end|>' not in c:
-    stop_check = '''std::string piece(token_str);
-            if (piece.find(\"<|im_end|>\") != std::string::npos ||
-                piece.find(\"<|endoftext|>\") != std::string::npos ||
-                piece.find(\"<|im_start|>\") != std::string::npos ||
-                piece.find(\"<end_of_turn>\") != std::string::npos ||
-                piece.find(\"</s>\") != std::string::npos ||
-                piece.find(\"<eos>\") != std::string::npos) {
-                break;
-            }
-            result.append(token_str);
-            if (result.find(\"<|im_end|>\") != std::string::npos ||
-                result.find(\"<|im_start|>\") != std::string::npos ||
-                result.find(\"<end_of_turn>\") != std::string::npos) {
-                break;
-            }'''
-    c = c.replace('result.append(token_str);', stop_check, 1)
-with open(path, 'w', encoding='utf-8') as f:
-    f.write(c)
-print('flutter_llama_bridge.cpp successfully patched in CI')
-"
-          else
-            echo "::warning::flutter_llama_bridge.cpp not found in pub cache"
+            echo "Successfully configured $CMAKE_FILE with Vulkan OFF (ARM NEON CPU engine)."
           fi
 
       - name: Build 64-bit Release APK (Single ARM64 Binary)
