@@ -19,7 +19,6 @@ enum TranslationSourceLanguage {
 
 /// Target language selection for translation.
 enum TranslationTargetLanguage {
-  indonesian,
   english,
 }
 
@@ -99,7 +98,7 @@ class TranslationTask {
     required this.mode,
     required this.originalImageSize,
     this.language = TranslationSourceLanguage.auto,
-    this.targetLanguage = TranslationTargetLanguage.indonesian,
+    this.targetLanguage = TranslationTargetLanguage.english,
     this.sequence = 0,
   });
 

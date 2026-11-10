@@ -1127,6 +1127,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   await MlKitTranslationEngine.instance.ggufEngine.initializeSession(
                                     modelPath: model.path,
                                   );
+                                  _translationCoordinator.clearCache();
+                                  _triggerMangaTranslationForActivePage();
                                   if (dialogContext.mounted) {
                                     showFeedbackPill(
                                       dialogContext,
@@ -1356,33 +1358,103 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             ),
           );
 
-          return InteractiveViewer(
-            minScale: 1.0,
-            maxScale: 4.0,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                imageWidget,
-                if (_translationMode != null)
-                  Positioned.fill(
-                    child: ValueListenableBuilder<TranslationResult?>(
-                      valueListenable:
-                          _translationCoordinator.getResultNotifier(it.path),
-                      builder: (context, result, _) {
-                        if (result == null ||
-                            !result.isSuccess ||
-                            result.blocks.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-                        return MangaTranslationOverlay(
-                          result: result,
-                          mode: _translationMode!,
-                        );
-                      },
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              InteractiveViewer(
+                minScale: 1.0,
+                maxScale: 4.0,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    imageWidget,
+                    if (_translationMode != null)
+                      Positioned.fill(
+                        child: ValueListenableBuilder<TranslationResult?>(
+                          valueListenable:
+                              _translationCoordinator.getResultNotifier(it.path),
+                          builder: (context, result, _) {
+                            if (result == null ||
+                                !result.isSuccess ||
+                                result.blocks.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            return MangaTranslationOverlay(
+                              result: result,
+                              mode: _translationMode!,
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (_translationMode != null)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: SafeArea(
+                      child: AnimatedPadding(
+                        duration: const Duration(milliseconds: 200),
+                        padding: EdgeInsets.only(top: _barsVisible ? 80 : 20),
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable:
+                                _translationCoordinator.getLoadingNotifier(it.path),
+                            builder: (context, isLoading, _) {
+                              if (!isLoading) return const SizedBox.shrink();
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.75),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: Colors.white24, width: 0.8),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black45,
+                                      blurRadius: 8,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                            Colors.white),
+                                      ),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Menerjemahkan halaman...',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           );
         },
       ),

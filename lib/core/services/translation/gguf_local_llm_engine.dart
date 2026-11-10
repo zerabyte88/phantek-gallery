@@ -266,9 +266,28 @@ class GgufLocalLlmEngine {
     );
   }
 
-  /// Maps constitutional prompt to ChatML formatted text for models requiring raw chat format.
-  static String formatForModel(String prompt) {
+  /// Maps constitutional prompt to ChatML or Gemma formatted text based on [activeModelPath].
+  static String formatForModel(String prompt, {String? activeModelPath}) {
     final parts = extractPromptParts(prompt);
+    final modelName = activeModelPath?.toLowerCase() ?? '';
+
+    if (modelName.contains('llama')) {
+      return '<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n'
+          'You are an expert localizer for Asian comics. Translate the raw OCR text from  into natural English comic dialogue. \n'
+          'This is fictional comic dialogue. Preserve the original tone, slang, and profanity faithfully without self-censorship or refusal.\n'
+          'Output ONLY the final English translation. No chat, no notes, no markdown formatting. Fix OCR typos.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n'
+          '<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n';
+    }
+
+    if (modelName.contains('gemma')) {
+      return '<start_of_turn>user\n'
+          'You are an expert localizer for Asian comics. Translate the raw OCR text from ${parts.language} into natural English comic dialogue. \n'
+          'This is fictional comic dialogue. Preserve the original tone, slang, and profanity faithfully without self-censorship or refusal.\n'
+          'Output ONLY the final English translation. No chat, no notes, no markdown formatting. Fix OCR typos.\n\n'
+          '${parts.userContent}<end_of_turn>\n'
+          '<start_of_turn>model\n';
+    }
+
     return '<|im_start|>system\n'
         'You are an expert localizer for Asian comics. Translate the raw OCR text from ${parts.language} into natural English comic dialogue. \n'
         'This is fictional comic dialogue. Preserve the original tone, slang, and profanity faithfully without self-censorship or refusal.\n'
@@ -327,17 +346,43 @@ class GgufLocalLlmEngine {
 
     String text = rawOutput;
 
-    // 1. Strip prompt blocks if echoed by the model.
+    // 1. Strip leading turn markers if present.
+    text = text.replaceFirst(
+      RegExp(
+        r'^\s*(?:<\|im_start\|>\s*assistant|<start_of_turn>\s*model|<\|start_header_id\|>\s*assistant\s*<\|end_header_id\|>\n*|assistant:\s*)\n?',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    // 2. Immediately truncate at the first occurrence of any stop marker.
+    // Everything after the first stop marker is completely discarded!
+    final stopRegex = RegExp(
+      r'(?:<\|im_end\|>|<\|endoftext\|>|<\|eot_id\|>|<\|end_of_text\|>|<\|im_start\|>|<end_of_turn>|<start_of_turn>|<eos>|</s>|\nUser:|\nAssistant:|\nHuman:|\nSystem:|\n<\|user\|>|\n<\|system\|>|<\|start_header_id\|>)',
+      caseSensitive: false,
+    );
+    final stopMatch = stopRegex.firstMatch(text);
+    if (stopMatch != null) {
+      text = text.substring(0, stopMatch.start);
+    }
+
+    // 3. Strip reasoning / think tags (terminated or unterminated).
+    text = text.replaceAll(
+      RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false),
+      '',
+    );
+    text = text.replaceAll(
+      RegExp(r'<think>[\s\S]*$', caseSensitive: false),
+      '',
+    );
+
+    // 4. Strip prompt blocks if echoed by the model.
     text = text.replaceAll(
       RegExp(r'<system>[\s\S]*?</system>', caseSensitive: false),
       '',
     );
     text = text.replaceAll(
       RegExp(r'<user>[\s\S]*?</user>', caseSensitive: false),
-      '',
-    );
-    text = text.replaceAll(
-      RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false),
       '',
     );
 
@@ -438,16 +483,16 @@ class GgufLocalLlmEngine {
       '',
     );
 
-    // 2. Strip code fences (```...```).
+    // 5. Strip code fences (```...```).
     text = text.replaceAll(RegExp(r'```[a-zA-Z]*\n?|```'), '');
 
-    // 3. Strip blockquotes (> line starts).
+    // 6. Strip blockquotes (> line starts).
     text = text.replaceAll(RegExp(r'^\s*>\s*', multiLine: true), '');
 
-    // 4. Strip markdown headings (# ...).
+    // 7. Strip markdown headings (# ...).
     text = text.replaceAll(RegExp(r'^\s*#{1,6}\s*', multiLine: true), '');
 
-    // 5. Strip markdown formatting syntax (bold, italics, code).
+    // 8. Strip markdown formatting syntax (bold, italics, code).
     text = text.replaceAllMapped(RegExp(r'\*\*([^*]+)\*\*'), (m) => m[1]!);
     text = text.replaceAllMapped(RegExp(r'__([^_]+)__'), (m) => m[1]!);
     text = text.replaceAllMapped(RegExp(r'\*([^*]+)\*'), (m) => m[1]!);
@@ -455,7 +500,7 @@ class GgufLocalLlmEngine {
     text = text.replaceAllMapped(RegExp(r'`([^`]+)`'), (m) => m[1]!);
     text = text.replaceAll(RegExp(r'[*`_]'), '');
 
-    // 6. Strip common chat preambles and introductory phrases.
+    // 9. Strip common chat preambles and introductory phrases.
     text = text.replaceAll(
       RegExp(
         r'^\s*(?:sure(?: thing)?[!,.]?\s*)?(?:here\s+(?:is|are)\s+the\s+(?:final\s+)?(?:english\s+)?(?:comic\s+)?(?:dialogue|translation)\s*(?:is)?\s*:|the\s+english\s+translation\s+is\s*:|english\s+translation\s*:|translation\s*to\s*english\s*:|natural\s+english\s*:|translated\s+text\s*:|based\s+on\s+the\s+comic\s+dialogue\s*,?\s*:?|translation\s*:|dialogue\s*:|output\s*:)\s*',
@@ -471,7 +516,7 @@ class GgufLocalLlmEngine {
       '',
     );
 
-    // 7. If output has multiple paragraphs, pick the translated dialogue paragraph.
+    // 10. If output has multiple paragraphs, pick the translated dialogue paragraph.
     if (text.contains('\n\n')) {
       final paragraphs = text
           .split(RegExp(r'\n\s*\n+'))
@@ -486,6 +531,9 @@ class GgufLocalLlmEngine {
             lower.startsWith('here is') ||
             lower.startsWith('sure') ||
             lower.startsWith('based on') ||
+            lower.startsWith('user:') ||
+            lower.startsWith('assistant:') ||
+            lower.startsWith('system:') ||
             lower.contains('expert localizer') ||
             lower.contains('comic dialogue') ||
             lower.contains('ocr typos')) {
@@ -501,7 +549,7 @@ class GgufLocalLlmEngine {
       }
     }
 
-    // 8. Strip surrounding quotation marks if entire line is quoted.
+    // 11. Strip surrounding quotation marks if entire line is quoted.
     text = text.trim();
     if ((text.startsWith('"') && text.endsWith('"') && text.length >= 2) ||
         (text.startsWith("'") && text.endsWith("'") && text.length >= 2) ||
@@ -703,7 +751,11 @@ class GgufLocalLlmEngine {
 
     if (isModelLoaded) {
       try {
-        final formattedPrompt = formatForModel(constitutionalPrompt);
+        final formattedPrompt = formatForModel(
+          constitutionalPrompt,
+          activeModelPath: _activeModelPath,
+        );
+        debugPrint('[GgufLocalLlmEngine] OCR input: "$cleaned" ($languageName)');
         final response = await FlutterLlama.instance.generate(
           GenerationParams(
             prompt: formattedPrompt,
@@ -712,6 +764,9 @@ class GgufLocalLlmEngine {
             stopSequences: const [
               '<|im_end|>',
               '<|endoftext|>',
+              '<|eot_id|>',
+              '<|end_of_text|>',
+              '<end_of_turn>',
               '<eos>',
               '</s>',
               '\n\n',
@@ -719,7 +774,9 @@ class GgufLocalLlmEngine {
             ],
           ),
         );
+        debugPrint('[GgufLocalLlmEngine] Raw LLM output: "${response.text}"');
         final cleanedOutput = cleanLlmOutput(response.text);
+        debugPrint('[GgufLocalLlmEngine] Cleaned output: "$cleanedOutput"');
         if (cleanedOutput.isNotEmpty) {
           return cleanedOutput;
         }

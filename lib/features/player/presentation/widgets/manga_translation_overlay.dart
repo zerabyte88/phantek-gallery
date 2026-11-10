@@ -69,6 +69,11 @@ class MangaTranslationPainter extends CustomPainter {
         continue;
       }
 
+      if (block.translatedText.trim().isEmpty ||
+          block.translatedText.trim() == block.originalText.trim()) {
+        continue;
+      }
+
       final mappedRect = Rect.fromLTRB(
         destRect.left + block.boundingBox.left * scaleX,
         destRect.top + block.boundingBox.top * scaleY,

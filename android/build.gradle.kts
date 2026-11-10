@@ -34,6 +34,58 @@ subprojects {
                     argumentsMethod?.invoke(cmake, arrayOf("-DFLUTTER_LLAMA_ANDROID_VULKAN=OFF"))
                 } catch (_: Throwable) {}
             }
+
+            // Patch flutter_llama_bridge.cpp for KV cache clearing and stop sequences
+            val bridgeFile = project.projectDir.resolve("src/main/cpp/flutter_llama_bridge.cpp")
+            if (bridgeFile.exists()) {
+                try {
+                    var content = bridgeFile.readText()
+                    var modified = false
+
+                    if (!content.contains("llama_kv_cache_clear(g_context);")) {
+                        val target = "llama_batch batch = llama_batch_get_one(prompt_tokens.data(), prompt_tokens.size());"
+                        if (content.contains(target)) {
+                            content = content.replace(
+                                target,
+                                "llama_kv_cache_clear(g_context);\n    $target"
+                            )
+                            modified = true
+                        }
+                    }
+
+                    if (!content.contains("<|im_end|>")) {
+                        val target = "result.append(token_str);"
+                        if (content.contains(target)) {
+                            val stopCheck = """
+            std::string piece(token_str);
+            if (piece.find("<|im_end|>") != std::string::npos ||
+                piece.find("<|endoftext|>") != std::string::npos ||
+                piece.find("<|im_start|>") != std::string::npos ||
+                piece.find("<end_of_turn>") != std::string::npos ||
+                piece.find("</s>") != std::string::npos ||
+                piece.find("<eos>") != std::string::npos) {
+                break;
+            }
+            result.append(token_str);
+            if (result.find("<|im_end|>") != std::string::npos ||
+                result.find("<|im_start|>") != std::string::npos ||
+                result.find("<end_of_turn>") != std::string::npos) {
+                break;
+            }
+                            """.trimIndent()
+                            content = content.replaceFirst(target, stopCheck)
+                            modified = true
+                        }
+                    }
+
+                    if (modified) {
+                        bridgeFile.writeText(content)
+                        println("[flutter_llama] Successfully patched flutter_llama_bridge.cpp with KV cache clear and stop tokens.")
+                    }
+                } catch (e: Throwable) {
+                    println("[flutter_llama] Warning: Could not patch flutter_llama_bridge.cpp: ${'$'}e")
+                }
+            }
         }
 
         if (project.state.executed) {

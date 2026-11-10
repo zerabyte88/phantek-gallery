@@ -8,7 +8,6 @@ import 'translation_models.dart';
 
 /// Supported manga translation languages.
 enum MangaLanguage {
-  indonesian('id', 'Indonesian'),
   english('en', 'English'),
   japanese('ja', 'Japanese'),
   korean('ko', 'Korean'),
@@ -140,8 +139,6 @@ class MlKitTranslationEngine {
 
   static String _getTargetLangName(TranslationTargetLanguage target) {
     switch (target) {
-      case TranslationTargetLanguage.indonesian:
-        return 'Indonesian';
       case TranslationTargetLanguage.english:
         return 'English';
     }
@@ -164,8 +161,6 @@ class MlKitTranslationEngine {
   /// Maps [TranslationTargetLanguage] to [MangaLanguage].
   static MangaLanguage mapTargetLanguage(TranslationTargetLanguage target) {
     switch (target) {
-      case TranslationTargetLanguage.indonesian:
-        return MangaLanguage.indonesian;
       case TranslationTargetLanguage.english:
         return MangaLanguage.english;
     }
@@ -187,15 +182,36 @@ class MlKitTranslationEngine {
 
   /// Normalizes vertical line breaks and trims whitespace.
   static String cleanMangaText(String text) {
-    return text
+    final lines = text
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
         .split('\n')
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
-        .join(' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+        .toList();
+
+    if (lines.isEmpty) return '';
+
+    final buffer = StringBuffer(lines.first);
+    for (int i = 1; i < lines.length; i++) {
+      final prev = lines[i - 1];
+      final curr = lines[i];
+
+      final prevLastCodePoint = prev.runes.last;
+      final currFirstCodePoint = curr.runes.first;
+      final prevLastChar = String.fromCharCode(prevLastCodePoint);
+      final currFirstChar = String.fromCharCode(currFirstCodePoint);
+
+      if (GgufLocalLlmEngine.hasCjkCharacters(prevLastChar) &&
+          GgufLocalLlmEngine.hasCjkCharacters(currFirstChar)) {
+        buffer.write(curr);
+      } else {
+        buffer.write(' ');
+        buffer.write(curr);
+      }
+    }
+
+    return buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   /// Checks if the model for [lang] is downloaded on-device.

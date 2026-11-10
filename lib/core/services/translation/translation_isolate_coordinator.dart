@@ -79,10 +79,20 @@ class TranslationIsolateCoordinator {
   final Map<String, ValueNotifier<TranslationResult?>> _resultNotifiers = {};
   final Map<String, ValueNotifier<bool>> _loadingNotifiers = {};
 
+  String _buildCacheKey({
+    required String imagePath,
+    required TranslationRenderMode mode,
+    required TranslationSourceLanguage language,
+    required TranslationTargetLanguage targetLanguage,
+  }) {
+    final model = _translationEngine.ggufEngine.activeModelPath ?? 'default';
+    return '${imagePath}__${model}__${mode.name}__${language.name}__${targetLanguage.name}';
+  }
+
   ValueNotifier<TranslationResult?> getResultNotifier(String imagePath) {
     return _resultNotifiers.putIfAbsent(
       imagePath,
-      () => ValueNotifier<TranslationResult?>(_cache[imagePath]),
+      () => ValueNotifier<TranslationResult?>(null),
     );
   }
 
@@ -124,9 +134,13 @@ class TranslationIsolateCoordinator {
   }) {
     _debounceTimer?.cancel();
 
-    final cacheKey =
-        '${imagePath}_${mode.name}_${language.name}_${targetLanguage.name}';
-    final cached = _cache[cacheKey] ?? _cache[imagePath];
+    final cacheKey = _buildCacheKey(
+      imagePath: imagePath,
+      mode: mode,
+      language: language,
+      targetLanguage: targetLanguage,
+    );
+    final cached = _cache[cacheKey];
     if (cached != null) {
       getResultNotifier(imagePath).value = cached;
       getLoadingNotifier(imagePath).value = false;
@@ -181,7 +195,13 @@ class TranslationIsolateCoordinator {
           imageSize: actualSize,
           isSuccess: true,
         );
-        _cache[imagePath] = emptyResult;
+        final cacheKey = _buildCacheKey(
+          imagePath: imagePath,
+          mode: mode,
+          language: language,
+          targetLanguage: targetLanguage,
+        );
+        _cache[cacheKey] = emptyResult;
         resultNotifier.value = emptyResult;
         return;
       }
@@ -204,10 +224,13 @@ class TranslationIsolateCoordinator {
         isSuccess: true,
       );
 
-      final cacheKey =
-          '${imagePath}_${mode.name}_${language.name}_${targetLanguage.name}';
+      final cacheKey = _buildCacheKey(
+        imagePath: imagePath,
+        mode: mode,
+        language: language,
+        targetLanguage: targetLanguage,
+      );
       _cache[cacheKey] = result;
-      _cache[imagePath] = result;
       resultNotifier.value = result;
     } catch (e, stack) {
       debugPrint('Translation execution error on $imagePath: $e\n$stack');

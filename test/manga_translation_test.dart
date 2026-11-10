@@ -105,7 +105,7 @@ void main() {
   group('MlKitTranslationEngine Core & Script Detection', () {
     test('Vertical text cleaning & normalization', () {
       const verticalJa = 'こ\nん\nに\nち\nは';
-      expect(MlKitTranslationEngine.cleanMangaText(verticalJa), 'こ ん に ち は');
+      expect(MlKitTranslationEngine.cleanMangaText(verticalJa), 'こんにちは');
 
       const noisyText = '  助けて！ \r\n\r\n 誰か...  ';
       expect(MlKitTranslationEngine.cleanMangaText(noisyText), '助けて！ 誰か...');
@@ -144,11 +144,6 @@ void main() {
       );
       expect(
         MlKitTranslationEngine.mapTargetLanguage(
-            TranslationTargetLanguage.indonesian),
-        MangaLanguage.indonesian,
-      );
-      expect(
-        MlKitTranslationEngine.mapTargetLanguage(
             TranslationTargetLanguage.english),
         MangaLanguage.english,
       );
@@ -160,7 +155,7 @@ void main() {
         await engine.translateText(
           '?!?!',
           source: TranslationSourceLanguage.japanese,
-          target: TranslationTargetLanguage.indonesian,
+          target: TranslationTargetLanguage.english,
         ),
         '?!?!',
       );
@@ -168,7 +163,7 @@ void main() {
         await engine.translateText(
           '',
           source: TranslationSourceLanguage.japanese,
-          target: TranslationTargetLanguage.indonesian,
+          target: TranslationTargetLanguage.english,
         ),
         '',
       );
@@ -261,7 +256,7 @@ void main() {
           imagePath: temp1.path,
           imageSize: const Size(800, 1200),
           mode: TranslationRenderMode.speechBubblesOnly,
-          targetLanguage: TranslationTargetLanguage.indonesian,
+          targetLanguage: TranslationTargetLanguage.english,
           debounceDuration: const Duration(milliseconds: 100),
         );
 
@@ -269,7 +264,7 @@ void main() {
           imagePath: temp2.path,
           imageSize: const Size(800, 1200),
           mode: TranslationRenderMode.speechBubblesOnly,
-          targetLanguage: TranslationTargetLanguage.indonesian,
+          targetLanguage: TranslationTargetLanguage.english,
           debounceDuration: const Duration(milliseconds: 100),
         );
 
@@ -303,7 +298,7 @@ void main() {
           imagePath: temp.path,
           imageSize: const Size(800, 1200),
           mode: TranslationRenderMode.speechBubblesOnly,
-          targetLanguage: TranslationTargetLanguage.indonesian,
+          targetLanguage: TranslationTargetLanguage.english,
           debounceDuration: const Duration(milliseconds: 50),
         );
 
@@ -514,14 +509,14 @@ void main() {
         sourceDownloaded: true,
         targetDownloaded: false,
         sourceLangName: 'Japanese',
-        targetLangName: 'Indonesian',
+        targetLangName: 'English',
         totalNeededMb: 30.0,
         isReady: false,
       );
       expect(status.sourceDownloaded, isTrue);
       expect(status.targetDownloaded, isFalse);
       expect(status.sourceLangName, 'Japanese');
-      expect(status.targetLangName, 'Indonesian');
+      expect(status.targetLangName, 'English');
       expect(status.totalNeededMb, 30.0);
       expect(status.isReady, isFalse);
     });
@@ -554,32 +549,30 @@ void main() {
       final engine = MlKitTranslationEngine.instance;
       final status = await engine.getPairStatus(
         TranslationSourceLanguage.japanese,
-        TranslationTargetLanguage.indonesian,
+        TranslationTargetLanguage.english,
       );
       expect(status.sourceLangName, 'Japanese');
-      expect(status.targetLangName, 'Indonesian');
+      expect(status.targetLangName, 'English');
       expect(status.totalNeededMb, anyOf(0.0, 30.0, 60.0));
     });
 
-    test('allMangaLanguages defines all 5 required manga languages', () {
+    test('allMangaLanguages defines all 4 required manga languages', () {
       expect(
         MlKitTranslationEngine.allMangaLanguages,
         containsAllInOrder([
-          MangaLanguage.indonesian,
           MangaLanguage.english,
           MangaLanguage.japanese,
           MangaLanguage.korean,
           MangaLanguage.chinese,
         ]),
       );
-      expect(MlKitTranslationEngine.allMangaLanguages.length, 5);
+      expect(MlKitTranslationEngine.allMangaLanguages.length, 4);
     });
 
     test('AllModelsStatus construction and properties', () {
       const status = AllModelsStatus(
         missingLanguages: [MangaLanguage.japanese, MangaLanguage.korean],
         downloadedLanguages: [
-          MangaLanguage.indonesian,
           MangaLanguage.english,
           MangaLanguage.chinese,
         ],
@@ -587,7 +580,7 @@ void main() {
         isReady: false,
       );
       expect(status.missingLanguages.length, 2);
-      expect(status.downloadedLanguages.length, 3);
+      expect(status.downloadedLanguages.length, 2);
       expect(status.totalNeededMb, 60.0);
       expect(status.isReady, isFalse);
     });
@@ -597,7 +590,7 @@ void main() {
       final engine = MlKitTranslationEngine.instance;
       final status = await engine.checkAllModelsStatus();
       expect(status.missingLanguages.length + status.downloadedLanguages.length,
-          5);
+          4);
       expect(status.totalNeededMb, status.missingLanguages.length * 30.0);
       expect(status.isReady, engine.ggufEngine.isReady);
     });
@@ -1164,6 +1157,102 @@ void main() {
         ),
         'Help me!',
       );
+    });
+
+    test('cleanLlmOutput truncates at stop markers and discards trailing hallucinations', () {
+      // 1. Truncates at <|im_end|> followed by user turn hallucination
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput(
+          'Run away!<|im_end|>\n<|im_start|>user\nWhat about after full recovery of the patient?',
+        ),
+        'Run away!',
+      );
+
+      // 2. Truncates at <end_of_turn>
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput(
+          'Stop right there!<end_of_turn>\n<start_of_turn>user\nTell me another story.',
+        ),
+        'Stop right there!',
+      );
+
+      // 3. Truncates at </s>
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput(
+          'I got you!</s>\nHuman: Who are you?',
+        ),
+        'I got you!',
+      );
+
+      // 4. Truncates at <eos> and <|endoftext|>
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput('Look out!<eos>Extra random noise'),
+        'Look out!',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput("Don't move!<|endoftext|>\nAssistant: Sure thing!"),
+        "Don't move!",
+      );
+
+      // 5. Truncates at conversational role markers
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput('Take cover!\nUser: What was that explosion?'),
+        'Take cover!',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput('Over here!\nAssistant: Let me explain.'),
+        'Over here!',
+      );
+
+      // 6. Strips leading turn markers
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput('<|im_start|>assistant\nRun for your lives!'),
+        'Run for your lives!',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput('<start_of_turn>model\nGet out of the way!'),
+        'Get out of the way!',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput('assistant:\nWatch out!'),
+        'Watch out!',
+      );
+
+      // 7. Strips unterminated <think> blocks
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput('<think>This might mean danger, but I must translate it accurately...'),
+        '',
+      );
+      expect(
+        GgufLocalLlmEngine.cleanLlmOutput('<think>Reasoning...</think>Danger ahead!'),
+        'Danger ahead!',
+      );
+    });
+
+    test('formatForModel switches between ChatML and Gemma 2 formats based on activeModelPath', () {
+      final prompt = GgufLocalLlmEngine.buildPrompt(
+        language: 'Japanese',
+        rawOcrText: '助けて！',
+      );
+
+      // ChatML format for Qwen and general models
+      final qwenFormatted = GgufLocalLlmEngine.formatForModel(
+        prompt,
+        activeModelPath: '/models/qwen2.5-0.5b-instruct-q4_k_m.gguf',
+      );
+      expect(qwenFormatted, contains('<|im_start|>system'));
+      expect(qwenFormatted, contains('<|im_start|>user\n助けて！<|im_end|>'));
+      expect(qwenFormatted, endsWith('<|im_start|>assistant\n'));
+
+      // Gemma 2 format for Gemma models
+      final gemmaFormatted = GgufLocalLlmEngine.formatForModel(
+        prompt,
+        activeModelPath: '/models/gemma-2-2b-it-q4_k_m.gguf',
+      );
+      expect(gemmaFormatted, startsWith('<start_of_turn>user\n'));
+      expect(gemmaFormatted, contains('助けて！<end_of_turn>\n'));
+      expect(gemmaFormatted, endsWith('<start_of_turn>model\n'));
+      expect(gemmaFormatted, isNot(contains('<|im_start|>')));
     });
   });
 }
