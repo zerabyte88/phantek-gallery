@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:phantek_gallery/core/localization/app_localizations.dart';
 import 'package:phantek_gallery/core/models/media_item.dart';
 import 'package:phantek_gallery/core/models/settings_model.dart';
@@ -1253,6 +1254,60 @@ void main() {
       expect(gemmaFormatted, contains('助けて！<end_of_turn>\n'));
       expect(gemmaFormatted, endsWith('<start_of_turn>model\n'));
       expect(gemmaFormatted, isNot(contains('<|im_start|>')));
+    });
+
+    test('formatForModel formats Llama 3 with userContent and language', () {
+      final prompt = GgufLocalLlmEngine.buildPrompt(
+        language: 'Japanese',
+        rawOcrText: '待って！',
+      );
+      final llamaFormatted = GgufLocalLlmEngine.formatForModel(
+        prompt,
+        activeModelPath: '/models/Llama-3.2-1B-Instruct-Q4_K_M.gguf',
+      );
+      expect(llamaFormatted, contains('<|start_header_id|>system<|end_header_id|>'));
+      expect(llamaFormatted, contains('<|start_header_id|>user<|end_header_id|>\n\n待って！<|eot_id|>'));
+      expect(llamaFormatted, endsWith('<|start_header_id|>assistant<|end_header_id|>\n\n'));
+    });
+
+    test('TranslationEngineType serialization in SettingsModel', () {
+      const defaultSettings = SettingsModel();
+      expect(
+        defaultSettings.translationEngineType,
+        TranslationEngineType.googleMlKit,
+      );
+
+      final llmSettings = defaultSettings.copyWith(
+        translationEngineType: TranslationEngineType.localLlm,
+      );
+      expect(
+        llmSettings.translationEngineType,
+        TranslationEngineType.localLlm,
+      );
+      expect(llmSettings.props, contains(TranslationEngineType.localLlm));
+    });
+
+    test('MlKitTranslationEngine mapToTranslateLanguage mappings', () {
+      expect(
+        MlKitTranslationEngine.mapToTranslateLanguage('en'),
+        TranslateLanguage.english,
+      );
+      expect(
+        MlKitTranslationEngine.mapToTranslateLanguage('ja'),
+        TranslateLanguage.japanese,
+      );
+      expect(
+        MlKitTranslationEngine.mapToTranslateLanguage('zh'),
+        TranslateLanguage.chinese,
+      );
+      expect(
+        MlKitTranslationEngine.mapToTranslateLanguage('ko'),
+        TranslateLanguage.korean,
+      );
+      expect(
+        MlKitTranslationEngine.mapToTranslateLanguage('unknown'),
+        isNull,
+      );
     });
   });
 }

@@ -3,6 +3,8 @@
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:google_mlkit_translation/google_mlkit_translation.dart';
+import '../settings_service.dart';
 import 'gguf_local_llm_engine.dart';
 import 'translation_models.dart';
 
@@ -103,6 +105,85 @@ class MlKitTranslationEngine {
   static final MlKitTranslationEngine instance = MlKitTranslationEngine._();
 
   final GgufLocalLlmEngine _ggufEngine = GgufLocalLlmEngine.instance;
+  final OnDeviceTranslatorModelManager _mlKitModelManager =
+      OnDeviceTranslatorModelManager();
+
+  /// Maps BCP-47 language code strings to Google ML Kit's [TranslateLanguage].
+  static TranslateLanguage? mapToTranslateLanguage(String bcpCode) {
+    switch (bcpCode.toLowerCase()) {
+      case 'en':
+        return TranslateLanguage.english;
+      case 'ja':
+        return TranslateLanguage.japanese;
+      case 'zh':
+        return TranslateLanguage.chinese;
+      case 'ko':
+        return TranslateLanguage.korean;
+      default:
+        return null;
+    }
+  }
+
+  /// Checks if Google ML Kit on-device model for [bcpCode] is downloaded.
+  Future<bool> isModelDownloaded(String bcpCode) async {
+    final lang = mapToTranslateLanguage(bcpCode);
+    if (lang == null) return false;
+    try {
+      return await _mlKitModelManager.isModelDownloaded(lang.bcpCode);
+    } catch (e) {
+      debugPrint('Error checking ML Kit model download ($bcpCode): $e');
+      return false;
+    }
+  }
+
+  /// Downloads Google ML Kit on-device model for [bcpCode] with 1 hour timeout.
+  Future<bool> downloadModel(String bcpCode, {bool isWifiRequired = false}) async {
+    final lang = mapToTranslateLanguage(bcpCode);
+    if (lang == null) return false;
+    try {
+      return await _mlKitModelManager
+          .downloadModel(lang.bcpCode, isWifiRequired: isWifiRequired)
+          .timeout(const Duration(hours: 1));
+    } catch (e) {
+      debugPrint('Error downloading ML Kit model ($bcpCode): $e');
+      return false;
+    }
+  }
+
+  /// Deletes Google ML Kit on-device model for [bcpCode].
+  Future<bool> deleteModel(String bcpCode) async {
+    final lang = mapToTranslateLanguage(bcpCode);
+    if (lang == null) return false;
+    try {
+      return await _mlKitModelManager.deleteModel(lang.bcpCode);
+    } catch (e) {
+      debugPrint('Error deleting ML Kit model ($bcpCode): $e');
+      return false;
+    }
+  }
+
+  /// Translates text using Google ML Kit's on-device neural translator.
+  Future<String> translateWithGoogleMlKit({
+    required String text,
+    required TranslationSourceLanguage source,
+  }) async {
+    final sourceLang = switch (source) {
+      TranslationSourceLanguage.japanese => TranslateLanguage.japanese,
+      TranslationSourceLanguage.korean => TranslateLanguage.korean,
+      TranslationSourceLanguage.chinese => TranslateLanguage.chinese,
+      TranslationSourceLanguage.auto => TranslateLanguage.japanese,
+    };
+    final translator = OnDeviceTranslator(
+      sourceLanguage: sourceLang,
+      targetLanguage: TranslateLanguage.english,
+    );
+    try {
+      final translated = await translator.translateText(text);
+      return translated;
+    } finally {
+      await translator.close();
+    }
+  }
 
   /// Underlying Local LLM Engine (GGUF / llama.cpp).
   GgufLocalLlmEngine get ggufEngine => _ggufEngine;
@@ -385,6 +466,26 @@ class MlKitTranslationEngine {
     final effectiveSource = (source == TranslationSourceLanguage.auto)
         ? detectLanguageFromText(cleaned)
         : source;
+
+    final engineType = SettingsService.hasInstance
+        ? SettingsService.instance.settings.translationEngineType
+        : TranslationEngineType.localLlm;
+
+    if (engineType == TranslationEngineType.googleMlKit &&
+        _ggufEngine.mockInferenceHandler == null) {
+      try {
+        final mlKitResult = await translateWithGoogleMlKit(
+          text: cleaned,
+          source: effectiveSource,
+        );
+        if (mlKitResult.isNotEmpty) {
+          return mlKitResult;
+        }
+      } catch (e) {
+        debugPrint(
+            'Google ML Kit translation error ($effectiveSource -> $target): $e');
+      }
+    }
 
     try {
       final translated = await _ggufEngine.translateMangaText(

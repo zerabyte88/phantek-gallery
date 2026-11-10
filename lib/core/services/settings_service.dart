@@ -9,6 +9,7 @@ import '../enums/trash_cleanup_interval.dart';
 import '../enums/startup_screen.dart';
 import '../enums/video_double_tap_action.dart';
 import '../localization/app_language.dart';
+import 'translation/translation_models.dart';
 
 /// Keys used in SharedPreferences.
 class _K {
@@ -39,6 +40,7 @@ class _K {
   static const showHiddenFiles = 'showHiddenFiles';
   static const secureScreen = 'secureScreen';
   static const activeAiModelPath = 'activeAiModelPath';
+  static const translationEngineType = 'translationEngineType';
 }
 
 /// Thin wrapper around SharedPreferences for typed settings access.
@@ -48,6 +50,7 @@ class SettingsService {
   SettingsService._(this._prefs);
 
   static SettingsService? _instance;
+  static bool get hasInstance => _instance != null;
   static SettingsService get instance {
     assert(_instance != null, 'Call SettingsService.init() first');
     return _instance!;
@@ -105,6 +108,11 @@ class SettingsService {
       showHiddenFiles: _prefs.getBool(_K.showHiddenFiles) ?? false,
       secureScreen: _prefs.getBool(_K.secureScreen) ?? false,
       activeAiModelPath: _prefs.getString(_K.activeAiModelPath) ?? '',
+      translationEngineType: _readEnum(
+        _K.translationEngineType,
+        TranslationEngineType.values,
+        TranslationEngineType.googleMlKit,
+      ),
     );
   }
 
@@ -140,6 +148,8 @@ class SettingsService {
       _prefs.setBool(_K.showHiddenFiles, model.showHiddenFiles),
       _prefs.setBool(_K.secureScreen, model.secureScreen),
       _prefs.setString(_K.activeAiModelPath, model.activeAiModelPath),
+      _prefs.setString(
+          _K.translationEngineType, model.translationEngineType.name),
     ]);
   }
 
@@ -147,6 +157,10 @@ class SettingsService {
 
   Future<void> setActiveAiModelPath(String path) async {
     await _prefs.setString(_K.activeAiModelPath, path);
+  }
+
+  Future<void> setTranslationEngineType(TranslationEngineType type) async {
+    await save(settings.copyWith(translationEngineType: type));
   }
 
   // ── Video Resume Position ──────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import '../enums/trash_cleanup_interval.dart';
 import '../enums/startup_screen.dart';
 import '../enums/video_double_tap_action.dart';
 import '../localization/app_language.dart';
+import '../services/translation/translation_models.dart';
 
 /// Application-wide user preferences – stored locally via SettingsService.
 class SettingsModel extends Equatable {
@@ -38,6 +39,7 @@ class SettingsModel extends Equatable {
     this.showHiddenFiles = false,
     this.secureScreen = false,
     this.activeAiModelPath = '',
+    this.translationEngineType = TranslationEngineType.googleMlKit,
   });
 
   final AppThemeMode themeMode;
@@ -115,6 +117,104 @@ class SettingsModel extends Equatable {
   /// Active offline GGUF LLM model file path for manga translation (empty for default auto-detect).
   final String activeAiModelPath;
 
+  /// Active offline translation engine (Google ML Kit or Local GGUF LLM).
+  final TranslationEngineType translationEngineType;
+
+  Map<String, dynamic> toMap() => {
+        'themeMode': themeMode.name,
+        'language': language.name,
+        'gridColumns': gridColumns,
+        'albumGridColumns': albumGridColumns,
+        'showBadges': showBadges,
+        'keepScreenOn': keepScreenOn,
+        'enableTrash': enableTrash,
+        'hardwareAcceleration': hardwareAcceleration,
+        'autoPlayVideo': autoPlayVideo,
+        'excludedFolders': excludedFolders,
+        'defaultSort': defaultSort.name,
+        'defaultFilter': defaultFilter.name,
+        'favoriteIds': favoriteIds,
+        'thumbnailCropStyle': thumbnailCropStyle.name,
+        'timelineGrouping': timelineGrouping.name,
+        'startupScreen': startupScreen.name,
+        'autoTrashCleanup': autoTrashCleanup.name,
+        'maxBrightnessOnMedia': maxBrightnessOnMedia,
+        'slideshowInterval': slideshowInterval,
+        'startMuted': startMuted,
+        'doubleTapSeekInterval': doubleTapSeekInterval,
+        'videoDoubleTapAction': videoDoubleTapAction.name,
+        'resumeVideoPlayback': resumeVideoPlayback,
+        'filterSmallImages': filterSmallImages,
+        'showHiddenFiles': showHiddenFiles,
+        'secureScreen': secureScreen,
+        'activeAiModelPath': activeAiModelPath,
+        'translationEngineType': translationEngineType.name,
+      };
+
+  factory SettingsModel.fromMap(Map<String, dynamic> map) {
+    return SettingsModel(
+      themeMode: AppThemeMode.values.firstWhere(
+        (e) => e.name == map['themeMode'],
+        orElse: () => AppThemeMode.system,
+      ),
+      language: AppLanguage.values.firstWhere(
+        (e) => e.name == map['language'],
+        orElse: () => AppLanguage.en,
+      ),
+      gridColumns: map['gridColumns'] as int? ?? 3,
+      albumGridColumns: map['albumGridColumns'] as int? ?? 3,
+      showBadges: map['showBadges'] as bool? ?? true,
+      keepScreenOn: map['keepScreenOn'] as bool? ?? false,
+      enableTrash: map['enableTrash'] as bool? ?? true,
+      hardwareAcceleration: map['hardwareAcceleration'] as bool? ?? true,
+      autoPlayVideo: map['autoPlayVideo'] as bool? ?? false,
+      excludedFolders:
+          (map['excludedFolders'] as List?)?.cast<String>() ?? const [],
+      defaultSort: SortOption.values.firstWhere(
+        (e) => e.name == map['defaultSort'],
+        orElse: () => SortOption.newest,
+      ),
+      defaultFilter: FilterOption.values.firstWhere(
+        (e) => e.name == map['defaultFilter'],
+        orElse: () => FilterOption.all,
+      ),
+      favoriteIds: (map['favoriteIds'] as List?)?.cast<String>() ?? const [],
+      thumbnailCropStyle: ThumbnailCropStyle.values.firstWhere(
+        (e) => e.name == map['thumbnailCropStyle'],
+        orElse: () => ThumbnailCropStyle.square,
+      ),
+      timelineGrouping: TimelineGrouping.values.firstWhere(
+        (e) => e.name == map['timelineGrouping'],
+        orElse: () => TimelineGrouping.daily,
+      ),
+      startupScreen: StartupScreen.values.firstWhere(
+        (e) => e.name == map['startupScreen'],
+        orElse: () => StartupScreen.all,
+      ),
+      autoTrashCleanup: TrashCleanupInterval.values.firstWhere(
+        (e) => e.name == map['autoTrashCleanup'],
+        orElse: () => TrashCleanupInterval.never,
+      ),
+      maxBrightnessOnMedia: map['maxBrightnessOnMedia'] as bool? ?? false,
+      slideshowInterval: map['slideshowInterval'] as int? ?? 3,
+      startMuted: map['startMuted'] as bool? ?? false,
+      doubleTapSeekInterval: map['doubleTapSeekInterval'] as int? ?? 10,
+      videoDoubleTapAction: VideoDoubleTapAction.values.firstWhere(
+        (e) => e.name == map['videoDoubleTapAction'],
+        orElse: () => VideoDoubleTapAction.smart,
+      ),
+      resumeVideoPlayback: map['resumeVideoPlayback'] as bool? ?? false,
+      filterSmallImages: map['filterSmallImages'] as bool? ?? false,
+      showHiddenFiles: map['showHiddenFiles'] as bool? ?? false,
+      secureScreen: map['secureScreen'] as bool? ?? false,
+      activeAiModelPath: map['activeAiModelPath'] as String? ?? '',
+      translationEngineType: TranslationEngineType.values.firstWhere(
+        (e) => e.name == map['translationEngineType'],
+        orElse: () => TranslationEngineType.googleMlKit,
+      ),
+    );
+  }
+
   SettingsModel copyWith({
     AppThemeMode? themeMode,
     AppLanguage? language,
@@ -143,6 +243,7 @@ class SettingsModel extends Equatable {
     bool? showHiddenFiles,
     bool? secureScreen,
     String? activeAiModelPath,
+    TranslationEngineType? translationEngineType,
   }) {
     return SettingsModel(
       themeMode: themeMode ?? this.themeMode,
@@ -173,6 +274,8 @@ class SettingsModel extends Equatable {
       showHiddenFiles: showHiddenFiles ?? this.showHiddenFiles,
       secureScreen: secureScreen ?? this.secureScreen,
       activeAiModelPath: activeAiModelPath ?? this.activeAiModelPath,
+      translationEngineType:
+          translationEngineType ?? this.translationEngineType,
     );
   }
 
@@ -205,6 +308,7 @@ class SettingsModel extends Equatable {
         showHiddenFiles,
         secureScreen,
         activeAiModelPath,
+        translationEngineType,
       ];
 }
 

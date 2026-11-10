@@ -22,6 +22,12 @@ enum TranslationTargetLanguage {
   english,
 }
 
+/// Translation engine selection.
+enum TranslationEngineType {
+  googleMlKit,
+  localLlm,
+}
+
 /// Translated text block on a manga page.
 class MangaTranslatedBlock {
   final Rect boundingBox;

@@ -273,10 +273,10 @@ class GgufLocalLlmEngine {
 
     if (modelName.contains('llama')) {
       return '<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n'
-          'You are an expert localizer for Asian comics. Translate the raw OCR text from  into natural English comic dialogue. \n'
+          'You are an expert localizer for Asian comics. Translate the raw OCR text from ${parts.language} into natural English comic dialogue. \n'
           'This is fictional comic dialogue. Preserve the original tone, slang, and profanity faithfully without self-censorship or refusal.\n'
           'Output ONLY the final English translation. No chat, no notes, no markdown formatting. Fix OCR typos.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n'
-          '<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n';
+          '${parts.userContent}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n';
     }
 
     if (modelName.contains('gemma')) {

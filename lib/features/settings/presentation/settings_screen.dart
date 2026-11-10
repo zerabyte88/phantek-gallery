@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import '../../../core/services/translation/gguf_local_llm_engine.dart';
+import '../../../core/services/translation/mlkit_translation_engine.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/settings_model.dart';
@@ -663,6 +664,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       : '/storage/emulated/0/models/ (${context.tr.defaultAutoDetect})',
                   onTap: () =>
                       _showAiModelManagerDialog(context, ref, settings),
+                ),
+              ],
+            ),
+            _SectionHeader(title: context.tr.offlineTranslationModels),
+            _SettingsCard(
+              children: [
+                _GoogleMlKitModelTile(
+                  bcpCode: 'ja',
+                  languageName: context.tr.langJapanese,
+                ),
+                const _CardDivider(),
+                _GoogleMlKitModelTile(
+                  bcpCode: 'zh',
+                  languageName: context.tr.langChinese,
+                ),
+                const _CardDivider(),
+                _GoogleMlKitModelTile(
+                  bcpCode: 'ko',
+                  languageName: context.tr.langKorean,
+                ),
+                const _CardDivider(),
+                _GoogleMlKitModelTile(
+                  bcpCode: 'en',
+                  languageName: context.tr.langEnglish,
                 ),
               ],
             ),
@@ -2583,4 +2608,108 @@ Future<T?> _showModernOptionDialog<T>(
       ],
     ),
   );
+}
+
+
+class _GoogleMlKitModelTile extends StatefulWidget {
+  const _GoogleMlKitModelTile({
+    required this.bcpCode,
+    required this.languageName,
+  });
+
+  final String bcpCode;
+  final String languageName;
+
+  @override
+  State<_GoogleMlKitModelTile> createState() => _GoogleMlKitModelTileState();
+}
+
+class _GoogleMlKitModelTileState extends State<_GoogleMlKitModelTile> {
+  bool _isDownloaded = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatus();
+  }
+
+  Future<void> _checkStatus() async {
+    final downloaded =
+        await MlKitTranslationEngine.instance.isModelDownloaded(widget.bcpCode);
+    if (mounted) {
+      setState(() => _isDownloaded = downloaded);
+    }
+  }
+
+  Future<void> _download() async {
+    setState(() => _isLoading = true);
+    final ok =
+        await MlKitTranslationEngine.instance.downloadModel(widget.bcpCode);
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _isDownloaded = ok;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? '${widget.languageName}: ${context.tr.languagePackDownloaded}'
+                : '${widget.languageName}: Download failed',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _delete() async {
+    final ok =
+        await MlKitTranslationEngine.instance.deleteModel(widget.bcpCode);
+    if (mounted) {
+      setState(() => _isDownloaded = !ok ? _isDownloaded : false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? '${widget.languageName}: Deleted'
+                : '${widget.languageName}: Delete failed',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return _ModernTile(
+      icon: Icons.language_rounded,
+      title: widget.languageName,
+      subtitle: _isDownloaded
+          ? context.tr.languagePackDownloaded
+          : context.tr.languagePackNotDownloaded,
+      trailing: _isLoading
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : IconButton(
+              icon: Icon(
+                _isDownloaded
+                    ? Icons.delete_outline_rounded
+                    : Icons.download_rounded,
+                color: _isDownloaded ? cs.error : cs.primary,
+                size: 20,
+              ),
+              tooltip: _isDownloaded
+                  ? context.tr.deleteLanguagePack
+                  : context.tr.downloadLanguagePack,
+              onPressed: _isDownloaded ? _delete : _download,
+            ),
+    );
+  }
 }

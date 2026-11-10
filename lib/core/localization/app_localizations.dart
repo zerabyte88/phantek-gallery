@@ -127,6 +127,24 @@ class AppLocalizations {
   String get retry => _t('retry');
   String get downloadSize => _t('downloadSize');
   String get modelInstalled => _t('modelInstalled');
+  String get loadingAiModel => _t('loadingAiModel');
+  String get modelNotDetected => _t('modelNotDetected');
+  String get changeModel => _t('changeModel');
+  String get grantStoragePermission => _t('grantStoragePermission');
+  String get selectModel => _t('selectModel');
+  String get translatingPage => _t('translatingPage');
+  String get modelActive => _t('modelActive');
+  String get translationEngine => _t('translationEngine');
+  String get engineGoogleMlKit => _t('engineGoogleMlKit');
+  String get engineLocalLlm => _t('engineLocalLlm');
+  String get offlineTranslationModels => _t('offlineTranslationModels');
+  String get offlineTranslationModelsSubtitle =>
+      _t('offlineTranslationModelsSubtitle');
+  String get downloadLanguagePack => _t('downloadLanguagePack');
+  String get languagePackDownloaded => _t('languagePackDownloaded');
+  String get languagePackNotDownloaded => _t('languagePackNotDownloaded');
+  String get deleteLanguagePack => _t('deleteLanguagePack');
+  String get downloadingLanguagePack => _t('downloadingLanguagePack');
 
 
   String get flattenSubfolders => _t('flattenSubfolders');

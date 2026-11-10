@@ -670,7 +670,140 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
                           const SizedBox(height: 16),
 
+                          // Section: Dual-Engine Toggle Capsule
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () async {
+                                      await SettingsService.instance
+                                          .setTranslationEngineType(
+                                              TranslationEngineType.googleMlKit);
+                                      setSheetState(() {});
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: SettingsService.instance.settings
+                                                    .translationEngineType ==
+                                                TranslationEngineType.googleMlKit
+                                            ? primary
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '⚡ ${loc.engineGoogleMlKit}',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12.5,
+                                          fontWeight: SettingsService.instance.settings
+                                                      .translationEngineType ==
+                                                  TranslationEngineType.googleMlKit
+                                              ? FontWeight.bold
+                                              : FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () async {
+                                      await SettingsService.instance
+                                          .setTranslationEngineType(
+                                              TranslationEngineType.localLlm);
+                                      setSheetState(() {});
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: SettingsService.instance.settings
+                                                    .translationEngineType ==
+                                                TranslationEngineType.localLlm
+                                            ? primary
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '🤖 ${loc.engineLocalLlm}',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12.5,
+                                          fontWeight: SettingsService.instance.settings
+                                                      .translationEngineType ==
+                                                  TranslationEngineType.localLlm
+                                              ? FontWeight.bold
+                                              : FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
                           // Section 3: Offline Model Status Card
+                          if (SettingsService.instance.settings.translationEngineType ==
+                              TranslationEngineType.googleMlKit)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF132A1C),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                    color: Colors.greenAccent
+                                        .withValues(alpha: 0.3),
+                                    width: 1),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.bolt_rounded,
+                                    color: Colors.greenAccent,
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '✓ ${loc.engineGoogleMlKit} (${loc.modelActive})',
+                                          style: const TextStyle(
+                                            color: Colors.greenAccent,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          loc.offlineTranslationModelsSubtitle,
+                                          style: TextStyle(
+                                            color: Colors.white
+                                                .withValues(alpha: 0.65),
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
                           FutureBuilder<bool>(
                             future: GgufLocalLlmEngine.isStoragePermissionGranted(),
                             builder: (context, permSnapshot) {
@@ -724,8 +857,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                 isReady
                                                     ? '✓ '
                                                     : (isInitializing
-                                                        ? 'Memuat Model AI...'
-                                                        : 'Model AI Belum Terdeteksi'),
+                                                        ? loc.loadingAiModel
+                                                        : loc.modelNotDetected),
                                                 style: TextStyle(
                                                   color: isReady
                                                       ? Colors.greenAccent
@@ -770,8 +903,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                             onPressed: () =>
                                                 _showMangaAiModelDialog(
                                                     sheetContext, setSheetState),
-                                            child: const Text(
-                                              'Ganti',
+                                            child: Text(
+                                              loc.changeModel,
                                               style: TextStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.bold),
@@ -805,8 +938,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                               icon: const Icon(
                                                   Icons.security_rounded,
                                                   size: 16),
-                                              label: const Text(
-                                                'Izinkan Akses File',
+                                              label: Text(
+                                                loc.grantStoragePermission,
                                                 style: TextStyle(
                                                     fontSize: 11,
                                                     fontWeight:
@@ -824,7 +957,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                     showFeedbackPill(
                                                       sheetContext,
                                                       message:
-                                                          'Izin diberikan. Memuat model...',
+                                                          loc.loadingAiModel,
                                                       icon: Icons
                                                           .check_circle_rounded,
                                                     );
@@ -850,8 +983,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                             icon: const Icon(
                                                 Icons.folder_open_rounded,
                                                 size: 16),
-                                            label: const Text(
-                                              'Pilih Model',
+                                            label: Text(
+                                              loc.selectModel,
                                               style: TextStyle(
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.bold),
@@ -1132,7 +1265,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   if (dialogContext.mounted) {
                                     showFeedbackPill(
                                       dialogContext,
-                                      message: 'Model AI aktif: ${model.name}',
+                                      message: '${loc.modelActive}: ${model.name}',
                                       icon: Icons.check_circle_rounded,
                                     );
                                     Navigator.pop(dialogContext);
@@ -1422,7 +1555,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                     ),
                                   ],
                                 ),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     SizedBox(
@@ -1436,7 +1569,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                     ),
                                     SizedBox(width: 8),
                                     Text(
-                                      'Menerjemahkan halaman...',
+                                      context.tr.translatingPage,
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 12,
