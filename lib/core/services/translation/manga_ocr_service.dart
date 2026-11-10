@@ -233,57 +233,54 @@ class MangaOcrService {
         return true;
       }
 
-      // Check inflated bounding boxes with (dx: 16.0, dy: 12.0)
-      final inflated1 = Rect.fromLTRB(
-        b1.boundingBox.left - 16.0,
-        b1.boundingBox.top - 12.0,
-        b1.boundingBox.right + 16.0,
-        b1.boundingBox.bottom + 12.0,
-      );
-      final inflated2 = Rect.fromLTRB(
-        b2.boundingBox.left - 16.0,
-        b2.boundingBox.top - 12.0,
-        b2.boundingBox.right + 16.0,
-        b2.boundingBox.bottom + 12.0,
-      );
-
-      if (!inflated1.overlaps(inflated2)) {
-        return false;
-      }
-
-      // Vertical overlap >= 30% with horizontal gap <= 35px (adjacent vertical columns)
-      final vOverlap = math.max(
-        0.0,
-        math.min(b1.boundingBox.bottom, b2.boundingBox.bottom) -
-            math.max(b1.boundingBox.top, b2.boundingBox.top),
-      );
-      final minH = math.min(b1.boundingBox.height, b2.boundingBox.height);
-      final vRatio = minH > 0 ? (vOverlap / minH) : 0.0;
       final hGap = math.max(
         0.0,
         math.max(b1.boundingBox.left, b2.boundingBox.left) -
             math.min(b1.boundingBox.right, b2.boundingBox.right),
       );
-
-      if (vRatio >= 0.30 && hGap <= 35.0) {
-        return true;
-      }
-
-      // Horizontal overlap >= 30% with vertical gap <= 25px (adjacent horizontal lines)
-      final hOverlap = math.max(
-        0.0,
-        math.min(b1.boundingBox.right, b2.boundingBox.right) -
-            math.max(b1.boundingBox.left, b2.boundingBox.left),
-      );
-      final minW = math.min(b1.boundingBox.width, b2.boundingBox.width);
-      final hRatio = minW > 0 ? (hOverlap / minW) : 0.0;
       final vGap = math.max(
         0.0,
         math.max(b1.boundingBox.top, b2.boundingBox.top) -
             math.min(b1.boundingBox.bottom, b2.boundingBox.bottom),
       );
 
-      if (hRatio >= 0.30 && vGap <= 25.0) {
+      // Fast exit if separated too far
+      if (hGap > 90.0 || vGap > 90.0) {
+        return false;
+      }
+
+      final vOverlap = math.max(
+        0.0,
+        math.min(b1.boundingBox.bottom, b2.boundingBox.bottom) -
+            math.max(b1.boundingBox.top, b2.boundingBox.top),
+      );
+      final minH = math.min(b1.boundingBox.height, b2.boundingBox.height);
+
+      final hOverlap = math.max(
+        0.0,
+        math.min(b1.boundingBox.right, b2.boundingBox.right) -
+            math.max(b1.boundingBox.left, b2.boundingBox.left),
+      );
+      final minW = math.min(b1.boundingBox.width, b2.boundingBox.width);
+
+      // Vertical manga columns: merge if hGap <= 75.0 AND (vOverlap > 0 || (b1.boundingBox.top - b2.boundingBox.top).abs() <= minH * 0.8 || vGap <= 25.0)
+      if (hGap <= 75.0 &&
+          (vOverlap > 0 ||
+              (b1.boundingBox.top - b2.boundingBox.top).abs() <= minH * 0.8 ||
+              vGap <= 25.0)) {
+        return true;
+      }
+
+      // Horizontal lines: merge if vGap <= 55.0 AND (hOverlap > 0 || (b1.boundingBox.left - b2.boundingBox.left).abs() <= minW * 0.8 || hGap <= 25.0)
+      if (vGap <= 55.0 &&
+          (hOverlap > 0 ||
+              (b1.boundingBox.left - b2.boundingBox.left).abs() <= minW * 0.8 ||
+              hGap <= 25.0)) {
+        return true;
+      }
+
+      // Proximity inside a bubble
+      if (hGap <= 50.0 && vGap <= 35.0) {
         return true;
       }
 
@@ -323,7 +320,42 @@ class MangaOcrService {
 
     for (final cluster in clusters.values) {
       if (cluster.length == 1) {
-        mergedList.add(cluster.first);
+        final b = cluster.first;
+        final lines = b.text
+            .split('\n')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty);
+        final List<String> distinctLines = [];
+        for (final t in lines) {
+          int replaceIdx = -1;
+          bool isDuplicate = false;
+          for (int i = 0; i < distinctLines.length; i++) {
+            final existing = distinctLines[i];
+            if (existing == t) {
+              isDuplicate = true;
+              break;
+            }
+            final minLen = math.min(t.length, existing.length);
+            if (minLen >= 3 && (existing.contains(t) || t.contains(existing))) {
+              if (t.length > existing.length) {
+                replaceIdx = i;
+              } else {
+                isDuplicate = true;
+              }
+              break;
+            }
+          }
+          if (replaceIdx != -1) {
+            distinctLines[replaceIdx] = t;
+          } else if (!isDuplicate) {
+            distinctLines.add(t);
+          }
+        }
+        mergedList.add(RawMangaTextBlock(
+          boundingBox: b.boundingBox,
+          text: distinctLines.join('\n'),
+          recognizedLanguages: b.recognizedLanguages,
+        ));
         continue;
       }
 
@@ -365,10 +397,41 @@ class MangaOcrService {
         });
       }
 
-      final combinedText = sortedCluster
-          .map((b) => b.text.trim())
-          .where((t) => t.isNotEmpty)
-          .join('\n');
+      // Deduplicate identical or substring lines, keeping the longer line
+      final List<String> distinctLines = [];
+      for (final b in sortedCluster) {
+        final lines = b.text
+            .split('\n')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty);
+        for (final t in lines) {
+          int replaceIdx = -1;
+          bool isDuplicate = false;
+          for (int i = 0; i < distinctLines.length; i++) {
+            final existing = distinctLines[i];
+            if (existing == t) {
+              isDuplicate = true;
+              break;
+            }
+            final minLen = math.min(t.length, existing.length);
+            if (minLen >= 3 && (existing.contains(t) || t.contains(existing))) {
+              if (t.length > existing.length) {
+                replaceIdx = i;
+              } else {
+                isDuplicate = true;
+              }
+              break;
+            }
+          }
+          if (replaceIdx != -1) {
+            distinctLines[replaceIdx] = t;
+          } else if (!isDuplicate) {
+            distinctLines.add(t);
+          }
+        }
+      }
+
+      final combinedText = distinctLines.join('\n');
 
       final allLangs = sortedCluster
           .expand((b) => b.recognizedLanguages)

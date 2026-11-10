@@ -5,7 +5,7 @@
 
   **A fast, privacy-focused Android gallery with PSD layer support and 100% offline on-device manga translation using Google ML Kit or local GGUF LLMs.**
 
-  [![Version](https://img.shields.io/badge/Version-v2.19.2-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.19.5-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20llama.cpp%20%7C%20ML%20Kit-6366f1.svg?style=flat-square)](https://github.com/ggml-org/llama.cpp)
@@ -43,10 +43,11 @@ For comic and manga readers, Phantek Gallery features dual offline translation e
   - **Chinese** (`ZH → EN`)
   - **Korean** (`KO → EN`)
   - **Auto-Detect** (Script detection across Kanji/Kana, Hanzi, and Hangul)
-- **Adaptive Speech Bubble Typography**:
-  - **Horizontal Expansion**: Dynamically widens narrow Asian vertical text columns so English sentences flow naturally.
-  - **Auto-Fitting Geometry**: Background bubbles dynamically encompass translated dialogue and padding, eliminating text clipping and negative offsets.
-  - **Balanced Font Sizing**: Smart word-count tiers scale dialogue comfortably between `8.5sp` and `13.0sp`.
+- **Natural Comic Speech Bubble Geometry**:
+  - **Preserved Original Bubble Contours**: Speech bubbles retain their natural comic outline and original bounding dimensions, completely eliminating artificial ballooning or obscuring character artwork.
+  - **Vertical Dialogue Flow**: Automatically rotates English translations for tall, narrow Asian speech bubbles (90° clockwise with RTL column flow) so vertical dialogue fits cleanly and reads naturally without forced horizontal distortion.
+  - **Dual-Layer Bubble Clustering & Deduplication**: High-resolution OCR clustering (supporting up to 75px gaps between columns) coupled with painter-level fail-safe deduplication guarantees every multi-column bubble is unified into exactly 1 speech bubble with duplicate sentences removed.
+  - **Google Translate Lens Styling**: Renders a clean, semi-transparent background patch (`#F7F7F8`, 92% opacity) bounded by an ultra-subtle 0.5px hairline border.
 - **Manga Reader with Natural Sort**: Continuous vertical reading mode with edge-to-edge layout, chapter progress indicators, and natural alphanumeric sorting (`Chapter 1`, `1.1`, `2.1`, `10`).
 
 ### Privacy and Security
@@ -69,13 +70,14 @@ Phantek Gallery offers two translation options to suit your preferences:
 
 Google ML Kit provides lightweight neural translation directly on your device with no external file setup needed.
 
-1. Open **Settings > Manga Translation**.
-2. Tap the download icon next to your desired language package:
+1. Open **Settings > Google ML Kit**.
+2. Select your **Source Language** (**Auto-Detect**, **Japanese**, **Chinese**, or **Korean**).
+3. Tap the download icon next to your desired offline language model:
    - **Japanese** (`ja`)
    - **Chinese** (`zh`)
    - **Korean** (`ko`)
-   *(The English `en` package is automatically downloaded alongside your selection to complete the translation pair).*
-3. In the viewer, open any manga page, tap the **Translate** button in the bottom bar, select your language button (**Jepang**, **China**, or **Korea**), and start reading.
+   - **English** (`en`)
+4. In the viewer, open any manga page, tap the **Translate** button in the bottom bar, select your language button (**Jepang**, **China**, or **Korea**), and enjoy instant offline translation.
 
 ---
 

@@ -36,6 +36,28 @@ class MangaTranslationOverlay extends StatelessWidget {
   }
 }
 
+/// Represents a cluster of adjacent or overlapping speech bubbles to be rendered together.
+class MangaSpeechBubbleCluster {
+  final Rect rect;
+  final String text;
+
+  const MangaSpeechBubbleCluster({
+    required this.rect,
+    required this.text,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MangaSpeechBubbleCluster &&
+          runtimeType == other.runtimeType &&
+          rect == other.rect &&
+          text == other.text;
+
+  @override
+  int get hashCode => rect.hashCode ^ text.hashCode;
+}
+
 /// Painter for speech bubbles and SFX text overlays.
 class MangaTranslationPainter extends CustomPainter {
   final TranslationResult result;
@@ -63,6 +85,8 @@ class MangaTranslationPainter extends CustomPainter {
     final double scaleX = destRect.width / original.width;
     final double scaleY = destRect.height / original.height;
 
+    final List<MangaSpeechBubbleCluster> rawSpeechBubbles = [];
+
     for (final block in result.blocks) {
       if (mode == TranslationRenderMode.speechBubblesOnly &&
           !block.isSpeechBubble) {
@@ -82,17 +106,166 @@ class MangaTranslationPainter extends CustomPainter {
       );
 
       if (block.isSpeechBubble) {
-        _drawSpeechBubbleBlock(
-          canvas,
-          mappedRect,
-          block.translatedText,
-          destRect,
-          size,
+        rawSpeechBubbles.add(
+          MangaSpeechBubbleCluster(
+            rect: mappedRect,
+            text: block.translatedText.trim(),
+          ),
         );
       } else {
         _drawSfxBlock(canvas, mappedRect, block.translatedText, size);
       }
     }
+
+    final clusteredBubbles = clusterSpeechBubbles(rawSpeechBubbles);
+    for (final bubble in clusteredBubbles) {
+      _drawSpeechBubbleBlock(
+        canvas,
+        bubble.rect,
+        bubble.text,
+        destRect,
+        size,
+      );
+    }
+  }
+
+  /// Merges overlapping and closely adjacent speech bubble fragments into unified clusters.
+  /// Deduplicates identical or substring texts within each cluster.
+  static List<MangaSpeechBubbleCluster> clusterSpeechBubbles(
+    List<MangaSpeechBubbleCluster> bubbles,
+  ) {
+    if (bubbles.length <= 1) {
+      return bubbles;
+    }
+
+    bool shouldMerge(MangaSpeechBubbleCluster b1, MangaSpeechBubbleCluster b2) {
+      if (b1.rect.overlaps(b2.rect)) {
+        return true;
+      }
+
+      if (b1.rect.inflate(16.0).overlaps(b2.rect.inflate(16.0))) {
+        return true;
+      }
+
+      final hGap = math.max(
+        0.0,
+        math.max(b1.rect.left, b2.rect.left) -
+            math.min(b1.rect.right, b2.rect.right),
+      );
+      final vGap = math.max(
+        0.0,
+        math.max(b1.rect.top, b2.rect.top) -
+            math.min(b1.rect.bottom, b2.rect.bottom),
+      );
+
+      if ((hGap <= 40.0 && vGap <= 20.0) || (vGap <= 30.0 && hGap <= 20.0)) {
+        return true;
+      }
+
+      return false;
+    }
+
+    final parent = List<int>.generate(bubbles.length, (i) => i);
+    int find(int i) {
+      if (parent[i] == i) return i;
+      return parent[i] = find(parent[i]);
+    }
+
+    void union(int i, int j) {
+      final rootI = find(i);
+      final rootJ = find(j);
+      if (rootI != rootJ) {
+        parent[rootI] = rootJ;
+      }
+    }
+
+    for (int i = 0; i < bubbles.length; i++) {
+      for (int j = i + 1; j < bubbles.length; j++) {
+        if (shouldMerge(bubbles[i], bubbles[j])) {
+          union(i, j);
+        }
+      }
+    }
+
+    final Map<int, List<MangaSpeechBubbleCluster>> clusters = {};
+    for (int i = 0; i < bubbles.length; i++) {
+      final root = find(i);
+      clusters.putIfAbsent(root, () => []).add(bubbles[i]);
+    }
+
+    final List<MangaSpeechBubbleCluster> mergedList = [];
+
+    for (final cluster in clusters.values) {
+      if (cluster.length == 1) {
+        mergedList.add(cluster.first);
+        continue;
+      }
+
+      // Compute union bounding rect
+      double left = cluster.first.rect.left;
+      double top = cluster.first.rect.top;
+      double right = cluster.first.rect.right;
+      double bottom = cluster.first.rect.bottom;
+
+      for (final b in cluster.skip(1)) {
+        left = math.min(left, b.rect.left);
+        top = math.min(top, b.rect.top);
+        right = math.max(right, b.rect.right);
+        bottom = math.max(bottom, b.rect.bottom);
+      }
+      final mergedRect = Rect.fromLTRB(left, top, right, bottom);
+
+      final sortedCluster = List<MangaSpeechBubbleCluster>.from(cluster);
+      sortedCluster.sort((a, b) {
+        final dy = a.rect.top.compareTo(b.rect.top);
+        if (dy != 0) return dy;
+        return a.rect.left.compareTo(b.rect.left);
+      });
+
+      // Deduplicate identical or substring texts
+      final List<String> distinctTexts = [];
+      for (final b in sortedCluster) {
+        final lines = b.text
+            .split('\n')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty);
+        for (final t in lines) {
+          int replaceIdx = -1;
+          bool isDuplicate = false;
+          for (int i = 0; i < distinctTexts.length; i++) {
+            final existing = distinctTexts[i];
+            if (existing.toLowerCase() == t.toLowerCase()) {
+              isDuplicate = true;
+              break;
+            }
+            final minLen = math.min(t.length, existing.length);
+            if (minLen >= 4 &&
+                (existing.contains(t) || t.contains(existing))) {
+              if (t.length > existing.length) {
+                replaceIdx = i;
+              } else {
+                isDuplicate = true;
+              }
+              break;
+            }
+          }
+          if (replaceIdx != -1) {
+            distinctTexts[replaceIdx] = t;
+          } else if (!isDuplicate) {
+            distinctTexts.add(t);
+          }
+        }
+      }
+
+      mergedList.add(
+        MangaSpeechBubbleCluster(
+          rect: mergedRect,
+          text: distinctTexts.join('\n'),
+        ),
+      );
+    }
+
+    return mergedList;
   }
 
   /// Computes bubble geometry locked to original detected rect (+3.0px padding)

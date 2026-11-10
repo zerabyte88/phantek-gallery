@@ -662,57 +662,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             _SettingsCard(
               children: [
                 _ModernTile(
-                  icon: Icons.language_rounded,
-                  title: context.tr.sourceLanguage,
-                  subtitle: switch (settings.translationSourceLanguage) {
-                    TranslationSourceLanguage.japanese =>
-                      context.tr.langJapanese,
-                    TranslationSourceLanguage.chinese => context.tr.langChinese,
-                    TranslationSourceLanguage.korean => context.tr.langKorean,
-                    TranslationSourceLanguage.auto => context.tr.autoDetect,
-                  },
-                  onTap: () async {
-                    final chosen =
-                        await _showModernOptionDialog<TranslationSourceLanguage>(
-                      context,
-                      title: context.tr.sourceLanguage,
-                      subtitle: context.tr.mangaTranslation,
-                      headerIcon: Icons.language_rounded,
-                      currentValue: settings.translationSourceLanguage,
-                      options: [
-                        _OptionItem(
-                          value: TranslationSourceLanguage.japanese,
-                          title: context.tr.langJapanese,
-                          subtitle: 'JA → EN',
-                          icon: Icons.translate_rounded,
-                        ),
-                        _OptionItem(
-                          value: TranslationSourceLanguage.chinese,
-                          title: context.tr.langChinese,
-                          subtitle: 'ZH → EN',
-                          icon: Icons.translate_rounded,
-                        ),
-                        _OptionItem(
-                          value: TranslationSourceLanguage.korean,
-                          title: context.tr.langKorean,
-                          subtitle: 'KO → EN',
-                          icon: Icons.translate_rounded,
-                        ),
-                        _OptionItem(
-                          value: TranslationSourceLanguage.auto,
-                          title: context.tr.autoDetect,
-                          icon: Icons.auto_awesome_rounded,
-                        ),
-                      ],
-                    );
-                    if (chosen != null) {
-                      patch((s) =>
-                          s.copyWith(translationSourceLanguage: chosen));
-                    }
-                  },
-                ),
-                const _CardDivider(),
-                _ModernTile(
                   icon: Icons.translate_rounded,
                   title: context.tr.translationEngine,
                   subtitle: settings.translationEngineType ==
@@ -747,6 +696,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 const _CardDivider(),
                 _ModernTile(
+                  icon: Icons.translate_rounded,
+                  title: context.tr.engineGoogleMlKit,
+                  subtitle: switch (settings.translationSourceLanguage) {
+                    TranslationSourceLanguage.japanese =>
+                      '${context.tr.sourceLanguage}: ${context.tr.langJapanese}',
+                    TranslationSourceLanguage.chinese =>
+                      '${context.tr.sourceLanguage}: ${context.tr.langChinese}',
+                    TranslationSourceLanguage.korean =>
+                      '${context.tr.sourceLanguage}: ${context.tr.langKorean}',
+                    TranslationSourceLanguage.auto =>
+                      '${context.tr.sourceLanguage}: ${context.tr.autoDetect}',
+                  },
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const GoogleMlKitSettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const _CardDivider(),
+                _ModernTile(
                   icon: Icons.psychology_outlined,
                   title: context.tr.mangaAiModel,
                   subtitle: settings.activeAiModelPath.isNotEmpty
@@ -754,26 +725,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       : '/storage/emulated/0/models/ (${context.tr.defaultAutoDetect})',
                   onTap: () =>
                       _showAiModelManagerDialog(context, ref, settings),
-                ),
-                const _CardDivider(),
-                _GoogleMlKitModelTile(
-                  bcpCode: 'ja',
-                  languageName: context.tr.langJapanese,
-                ),
-                const _CardDivider(),
-                _GoogleMlKitModelTile(
-                  bcpCode: 'zh',
-                  languageName: context.tr.langChinese,
-                ),
-                const _CardDivider(),
-                _GoogleMlKitModelTile(
-                  bcpCode: 'ko',
-                  languageName: context.tr.langKorean,
-                ),
-                const _CardDivider(),
-                _GoogleMlKitModelTile(
-                  bcpCode: 'en',
-                  languageName: context.tr.langEnglish,
                 ),
               ],
             ),
@@ -2796,6 +2747,119 @@ class _GoogleMlKitModelTileState extends State<_GoogleMlKitModelTile> {
                   : context.tr.downloadLanguagePack,
               onPressed: _isDownloaded ? _delete : _download,
             ),
+    );
+  }
+}
+
+class GoogleMlKitSettingsScreen extends ConsumerWidget {
+  const GoogleMlKitSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsNotifierProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          context.tr.engineGoogleMlKit,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        centerTitle: false,
+        scrolledUnderElevation: 0,
+      ),
+      body: Theme(
+        data: Theme.of(context).copyWith(
+          splashFactory: NoSplash.splashFactory,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          hoverColor: Colors.transparent,
+        ),
+        child: ListView(
+          padding: const EdgeInsets.only(top: 4, bottom: 32),
+          children: [
+            _SectionHeader(title: context.tr.sourceLanguage),
+            _SettingsCard(
+              children: [
+                _ModernTile(
+                  icon: Icons.language_rounded,
+                  title: context.tr.sourceLanguage,
+                  subtitle: switch (settings.translationSourceLanguage) {
+                    TranslationSourceLanguage.japanese =>
+                      context.tr.langJapanese,
+                    TranslationSourceLanguage.chinese => context.tr.langChinese,
+                    TranslationSourceLanguage.korean => context.tr.langKorean,
+                    TranslationSourceLanguage.auto => context.tr.autoDetect,
+                  },
+                  onTap: () async {
+                    final chosen =
+                        await _showModernOptionDialog<TranslationSourceLanguage>(
+                      context,
+                      title: context.tr.sourceLanguage,
+                      subtitle: context.tr.mangaTranslation,
+                      headerIcon: Icons.language_rounded,
+                      currentValue: settings.translationSourceLanguage,
+                      options: [
+                        _OptionItem(
+                          value: TranslationSourceLanguage.japanese,
+                          title: context.tr.langJapanese,
+                          subtitle: 'JA → EN',
+                          icon: Icons.translate_rounded,
+                        ),
+                        _OptionItem(
+                          value: TranslationSourceLanguage.chinese,
+                          title: context.tr.langChinese,
+                          subtitle: 'ZH → EN',
+                          icon: Icons.translate_rounded,
+                        ),
+                        _OptionItem(
+                          value: TranslationSourceLanguage.korean,
+                          title: context.tr.langKorean,
+                          subtitle: 'KO → EN',
+                          icon: Icons.translate_rounded,
+                        ),
+                        _OptionItem(
+                          value: TranslationSourceLanguage.auto,
+                          title: context.tr.autoDetect,
+                          icon: Icons.auto_awesome_rounded,
+                        ),
+                      ],
+                    );
+                    if (chosen != null) {
+                      ref.read(settingsNotifierProvider.notifier).update(
+                            (s) => s.copyWith(translationSourceLanguage: chosen),
+                          );
+                    }
+                  },
+                ),
+              ],
+            ),
+            _SectionHeader(title: context.tr.offlineTranslationModels),
+            _SettingsCard(
+              children: [
+                _GoogleMlKitModelTile(
+                  bcpCode: 'ja',
+                  languageName: context.tr.langJapanese,
+                ),
+                const _CardDivider(),
+                _GoogleMlKitModelTile(
+                  bcpCode: 'zh',
+                  languageName: context.tr.langChinese,
+                ),
+                const _CardDivider(),
+                _GoogleMlKitModelTile(
+                  bcpCode: 'ko',
+                  languageName: context.tr.langKorean,
+                ),
+                const _CardDivider(),
+                _GoogleMlKitModelTile(
+                  bcpCode: 'en',
+                  languageName: context.tr.langEnglish,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

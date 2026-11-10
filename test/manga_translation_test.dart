@@ -1961,5 +1961,138 @@ void main() {
       );
       expect(rectLong.width, greaterThan(0));
     });
+
+    test('mergeAdjacentBlocks merges vertical columns with 55px gap', () {
+      final rightCol = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(300, 100, 30, 200),
+        text: '右の列のセリフ',
+      );
+      // Left column: left = 215, width = 30 -> right = 245.
+      // Gap between 245 and 300 is exactly 55px!
+      final leftCol = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(215, 100, 30, 200),
+        text: '左の列のセリフ',
+      );
+
+      final merged = MangaOcrService.mergeAdjacentBlocks(
+        [leftCol, rightCol],
+        language: TranslationSourceLanguage.japanese,
+      );
+
+      expect(merged.length, 1);
+      expect(merged.first.boundingBox, const Rect.fromLTWH(215, 100, 115, 200));
+      expect(merged.first.text, '右の列のセリフ\n左の列のセリフ');
+    });
+
+    test('mergeAdjacentBlocks deduplicates identical or contained text lines', () {
+      final block1 = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(200, 100, 30, 150),
+        text: 'こんにちは世界',
+      );
+      final block2 = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(180, 100, 30, 150),
+        text: 'こんにちは世界', // Identical text
+      );
+      final block3 = const RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(140, 100, 30, 150),
+        text: 'こんにちは', // Substring of block1 (length >= 3)
+      );
+
+      final merged = MangaOcrService.mergeAdjacentBlocks(
+        [block1, block2, block3],
+        language: TranslationSourceLanguage.japanese,
+      );
+
+      expect(merged.length, 1);
+      // 'こんにちは世界' is kept, duplicates and substrings are dropped
+      expect(merged.first.text, 'こんにちは世界');
+    });
+
+    test('MangaTranslationPainter.clusterSpeechBubbles merges 3 colliding/overlapping fragments into 1 unified bubble', () {
+      final b1 = const MangaSpeechBubbleCluster(
+        rect: Rect.fromLTWH(100, 100, 60, 40),
+        text: 'Hello world',
+      );
+      final b2 = const MangaSpeechBubbleCluster(
+        rect: Rect.fromLTWH(140, 100, 60, 40), // overlaps b1
+        text: 'world', // Substring of b1
+      );
+      final b3 = const MangaSpeechBubbleCluster(
+        rect: Rect.fromLTWH(180, 100, 60, 40), // overlaps b2
+        text: 'How are you doing?',
+      );
+
+      final clustered = MangaTranslationPainter.clusterSpeechBubbles([b1, b2, b3]);
+
+      expect(clustered.length, 1);
+      expect(clustered.first.rect, const Rect.fromLTWH(100, 100, 140, 40));
+      expect(clustered.first.text, 'Hello world\nHow are you doing?');
+    });
+
+    test('MangaTranslationPainter.clusterSpeechBubbles preserves separate distant bubbles', () {
+      final b1 = const MangaSpeechBubbleCluster(
+        rect: Rect.fromLTWH(50, 50, 80, 40),
+        text: 'Top bubble',
+      );
+      final b2 = const MangaSpeechBubbleCluster(
+        rect: Rect.fromLTWH(300, 500, 100, 50),
+        text: 'Bottom bubble',
+      );
+
+      final clustered = MangaTranslationPainter.clusterSpeechBubbles([b1, b2]);
+
+      expect(clustered.length, 2);
+      expect(clustered[0].text, 'Top bubble');
+      expect(clustered[1].text, 'Bottom bubble');
+    });
+
+    testWidgets('MangaTranslationOverlay widget test verifying unified bubble rendering', (tester) async {
+      final result = TranslationResult(
+        imagePath: '/mock/clustering_test.jpg',
+        imageSize: const Size(1000, 1500),
+        blocks: const [
+          MangaTranslatedBlock(
+            boundingBox: Rect.fromLTWH(200, 200, 50, 40),
+            originalText: '断片1',
+            translatedText: 'This is bubble part 1',
+            isSpeechBubble: true,
+          ),
+          MangaTranslatedBlock(
+            boundingBox: Rect.fromLTWH(230, 200, 50, 40), // overlaps block 1
+            originalText: '断片2',
+            translatedText: 'bubble part 1', // duplicate substring
+            isSpeechBubble: true,
+          ),
+          MangaTranslatedBlock(
+            boundingBox: Rect.fromLTWH(260, 200, 50, 40), // overlaps block 2
+            originalText: '断片3',
+            translatedText: 'and part 2 here',
+            isSpeechBubble: true,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 500,
+              height: 750,
+              child: MangaTranslationOverlay(
+                result: result,
+                mode: TranslationRenderMode.speechBubblesOnly,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(MangaTranslationOverlay), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.painter is MangaTranslationPainter),
+        findsOneWidget,
+      );
+    });
   });
 }

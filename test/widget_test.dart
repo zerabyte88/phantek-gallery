@@ -35,6 +35,7 @@ import 'package:phantek_gallery/features/player/presentation/image_viewer_screen
     show displayImage, screenDisplayImage, ImageViewerScreen;
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
 import 'package:phantek_gallery/features/settings/presentation/widgets/developer_about_card.dart';
+import 'package:phantek_gallery/core/services/translation/translation_models.dart';
 import 'package:phantek_gallery/core/services/share_service.dart';
 import 'package:phantek_gallery/core/widgets/animated_flame_title.dart';
 import 'package:phantek_gallery/core/widgets/theme_header_background.dart';
@@ -2090,6 +2091,89 @@ void main() {
 
       // Dialog should display file manager selection button
       expect(find.text('Pilih lewat File Manager'), findsOneWidget);
+    });
+
+    testWidgets(
+        'SettingsScreen navigates to GoogleMlKitSettingsScreen and updates source language',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: AppLanguage.supportedLocales,
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: SettingsScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Find Google ML Kit tile under Manga Translation
+      final mlKitTile = find.text('Source Language: Japanese');
+      await tester.scrollUntilVisible(
+        mlKitTile,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(mlKitTile, findsOneWidget);
+
+      // Tap Google ML Kit tile to navigate to GoogleMlKitSettingsScreen
+      await tester.tap(mlKitTile);
+      await tester.pumpAndSettle();
+
+      // Verify GoogleMlKitSettingsScreen is displayed
+      expect(find.byType(GoogleMlKitSettingsScreen), findsOneWidget);
+
+      // Verify Source Language tile is present in GoogleMlKitSettingsScreen
+      expect(find.text('Source Language'), findsWidgets);
+
+      // Verify 4 offline models are rendered
+      expect(find.text('Japanese'), findsWidgets);
+      expect(find.text('Chinese'), findsOneWidget);
+      expect(find.text('Korean'), findsOneWidget);
+      expect(find.text('English (US)'), findsOneWidget);
+
+      // Tap Source Language tile to open selection dialog
+      await tester.tap(find.text('Source Language').last);
+      await tester.pumpAndSettle();
+
+      // Select Korean option in dialog
+      final koreanOption = find.widgetWithText(InkWell, 'Korean');
+      expect(koreanOption, findsOneWidget);
+      await tester.tap(koreanOption);
+      await tester.pumpAndSettle();
+
+      // Verify state updated in SettingsService
+      expect(
+        SettingsService.instance.settings.translationSourceLanguage,
+        TranslationSourceLanguage.korean,
+      );
+
+      // Pop back to SettingsScreen
+      Navigator.of(tester.element(find.byType(GoogleMlKitSettingsScreen))).pop();
+      await tester.pumpAndSettle();
+
+      // Verify SettingsScreen updated subtitle to Korean
+      expect(find.text('Source Language: Korean'), findsOneWidget);
     });
 
     testWidgets(
