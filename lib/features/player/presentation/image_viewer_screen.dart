@@ -2272,7 +2272,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           );
         }
 
-        return RepaintBoundary(child: content);
+        return content;
       } else if (_psdLoadError[it.path] == true) {
         return Center(
           child: Container(
@@ -2485,7 +2485,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       );
     }
 
-    return RepaintBoundary(child: content);
+    return content;
   }
 
   Future<void> _restoreCurrentItem() async {

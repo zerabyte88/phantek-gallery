@@ -228,8 +228,26 @@ class MangaOcrService {
       return blocks;
     }
 
+    // Estimated glyph size (short side divided by line count), so thresholds
+    // scale with page resolution instead of using fixed pixel gaps.
+    double charSize(RawMangaTextBlock b) {
+      final n = math.max(
+        1,
+        b.text.split('\n').where((s) => s.trim().isNotEmpty).length,
+      );
+      return math.max(
+        8.0,
+        math.min(b.boundingBox.width, b.boundingBox.height) / n,
+      );
+    }
+
     bool shouldMerge(RawMangaTextBlock b1, RawMangaTextBlock b2) {
       if (b1.boundingBox.overlaps(b2.boundingBox)) {
+        return true;
+      }
+
+      final ref = math.max(charSize(b1), charSize(b2));
+      if (b1.boundingBox.inflate(0.5 * ref).overlaps(b2.boundingBox)) {
         return true;
       }
 
@@ -245,7 +263,7 @@ class MangaOcrService {
       );
 
       // Fast exit if separated too far
-      if (hGap > 90.0 || vGap > 90.0) {
+      if (hGap > 3.0 * ref || vGap > 3.0 * ref) {
         return false;
       }
 
@@ -264,23 +282,23 @@ class MangaOcrService {
       final minW = math.min(b1.boundingBox.width, b2.boundingBox.width);
 
       // Vertical manga columns: merge if hGap <= 75.0 AND (vOverlap > 0 || (b1.boundingBox.top - b2.boundingBox.top).abs() <= minH * 0.8 || vGap <= 25.0)
-      if (hGap <= 75.0 &&
+      if (hGap <= 2.5 * ref &&
           (vOverlap > 0 ||
               (b1.boundingBox.top - b2.boundingBox.top).abs() <= minH * 0.8 ||
-              vGap <= 25.0)) {
+              vGap <= 0.85 * ref)) {
         return true;
       }
 
       // Horizontal lines: merge if vGap <= 55.0 AND (hOverlap > 0 || (b1.boundingBox.left - b2.boundingBox.left).abs() <= minW * 0.8 || hGap <= 25.0)
-      if (vGap <= 55.0 &&
+      if (vGap <= 1.8 * ref &&
           (hOverlap > 0 ||
               (b1.boundingBox.left - b2.boundingBox.left).abs() <= minW * 0.8 ||
-              hGap <= 25.0)) {
+              hGap <= 0.85 * ref)) {
         return true;
       }
 
       // Proximity inside a bubble
-      if (hGap <= 50.0 && vGap <= 35.0) {
+      if (hGap <= 1.7 * ref && vGap <= 1.2 * ref) {
         return true;
       }
 

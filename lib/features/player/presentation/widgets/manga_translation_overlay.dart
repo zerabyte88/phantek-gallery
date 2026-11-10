@@ -200,7 +200,16 @@ class MangaTranslationPainter extends CustomPainter {
         return true;
       }
 
-      if (b1.rect.inflate(16.0).overlaps(b2.rect.inflate(16.0))) {
+      // Thresholds scale with text size so merging is resolution independent.
+      final ref = math.max(
+        12.0,
+        math.max(
+          math.min(b1.rect.width, b1.rect.height),
+          math.min(b2.rect.width, b2.rect.height),
+        ),
+      );
+
+      if (b1.rect.inflate(0.35 * ref).overlaps(b2.rect.inflate(0.35 * ref))) {
         return true;
       }
 
@@ -215,7 +224,8 @@ class MangaTranslationPainter extends CustomPainter {
             math.min(b1.rect.bottom, b2.rect.bottom),
       );
 
-      if ((hGap <= 40.0 && vGap <= 20.0) || (vGap <= 30.0 && hGap <= 20.0)) {
+      if ((hGap <= 1.2 * ref && vGap <= 0.6 * ref) ||
+          (vGap <= 0.9 * ref && hGap <= 0.6 * ref)) {
         return true;
       }
 

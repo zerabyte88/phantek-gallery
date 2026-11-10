@@ -78,11 +78,9 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
     if (mem != null) {
       return Image.memory(
         mem,
-        cacheWidth: 320,
-        cacheHeight: 320,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.low,
+        filterQuality: FilterQuality.medium,
       );
     }
 
@@ -91,11 +89,9 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
     if (diskFile != null) {
       return Image.file(
         diskFile,
-        cacheWidth: 320,
-        cacheHeight: 320,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.low,
+        filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
       );
     }
@@ -112,11 +108,9 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
         if (snap.data != null && snap.data!.isNotEmpty) {
           return Image.memory(
             snap.data!,
-            cacheWidth: 320,
-            cacheHeight: 320,
             fit: BoxFit.cover,
             gaplessPlayback: true,
-            filterQuality: FilterQuality.low,
+            filterQuality: FilterQuality.medium,
           );
         }
         if (snap.connectionState == ConnectionState.done) {
@@ -125,11 +119,9 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
           if (currentMem != null) {
             return Image.memory(
               currentMem,
-              cacheWidth: 320,
-              cacheHeight: 320,
               fit: BoxFit.cover,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.low,
+              filterQuality: FilterQuality.medium,
             );
           }
           final currentDisk = ThumbnailService.instance
@@ -137,11 +129,9 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
           if (currentDisk != null) {
             return Image.file(
               currentDisk,
-              cacheWidth: 320,
-              cacheHeight: 320,
               fit: BoxFit.cover,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.low,
+              filterQuality: FilterQuality.medium,
               errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
             );
           }
@@ -150,11 +140,10 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
             if (file.existsSync()) {
               return Image.file(
                 file,
-                cacheWidth: 320,
-                cacheHeight: 320,
+                cacheWidth: 256,
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
-                filterQuality: FilterQuality.low,
+                filterQuality: FilterQuality.medium,
                 errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
               );
             }

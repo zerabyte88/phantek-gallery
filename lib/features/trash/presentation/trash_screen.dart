@@ -620,11 +620,9 @@ class _TrashThumbnail extends StatelessWidget {
     if (mem != null) {
       return Image.memory(
         mem,
-        cacheWidth: 320,
-        cacheHeight: 320,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.low,
+        filterQuality: FilterQuality.medium,
       );
     }
 
@@ -632,11 +630,9 @@ class _TrashThumbnail extends StatelessWidget {
     if (diskFile != null) {
       return Image.file(
         diskFile,
-        cacheWidth: 320,
-        cacheHeight: 320,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.low,
+        filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
       );
     }
@@ -653,11 +649,9 @@ class _TrashThumbnail extends StatelessWidget {
         if (snap.data != null) {
           return Image.memory(
             snap.data!,
-            cacheWidth: 320,
-            cacheHeight: 320,
             fit: BoxFit.cover,
             gaplessPlayback: true,
-            filterQuality: FilterQuality.low,
+            filterQuality: FilterQuality.medium,
           );
         }
         if (item.isVideo) {
@@ -665,11 +659,10 @@ class _TrashThumbnail extends StatelessWidget {
         }
         return Image.file(
           file,
-          cacheWidth: 320,
-          cacheHeight: 320,
+          cacheWidth: 256,
           fit: BoxFit.cover,
           gaplessPlayback: true,
-          filterQuality: FilterQuality.low,
+          filterQuality: FilterQuality.medium,
           errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
         );
       },

@@ -1984,6 +1984,37 @@ void main() {
       expect(merged.first.text, '右の列のセリフ\n左の列のセリフ');
     });
 
+    test('mergeAdjacentBlocks gap threshold scales with text size', () {
+      List<RawMangaTextBlock> columns(double s, double gap) => [
+            RawMangaTextBlock(
+              boundingBox: Rect.fromLTWH(1000 * s, 300 * s, 60 * s, 400 * s),
+              text: '右の列のセリフ',
+            ),
+            RawMangaTextBlock(
+              boundingBox:
+                  Rect.fromLTWH(1000 * s - gap * s - 60 * s, 300 * s, 60 * s, 400 * s),
+              text: '左の列のセリフ',
+            ),
+          ];
+
+      // 140px gap (high-res page) and the same layout at 1/3 scale: one bubble.
+      for (final s in [1.0, 1 / 3]) {
+        expect(
+          MangaOcrService.mergeAdjacentBlocks(columns(s, 140),
+              language: TranslationSourceLanguage.japanese),
+          hasLength(1),
+        );
+      }
+      // Gap > 4x text size stays as two separate bubbles at any scale.
+      for (final s in [1.0, 1 / 3]) {
+        expect(
+          MangaOcrService.mergeAdjacentBlocks(columns(s, 400),
+              language: TranslationSourceLanguage.japanese),
+          hasLength(2),
+        );
+      }
+    });
+
     test('mergeAdjacentBlocks deduplicates identical or contained text lines', () {
       final block1 = const RawMangaTextBlock(
         boundingBox: Rect.fromLTWH(200, 100, 30, 150),

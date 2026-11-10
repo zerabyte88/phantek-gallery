@@ -1337,18 +1337,6 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           _toggleSelect(item.id);
           return;
         }
-        if (tab == FilterOption.all) {
-          Navigator.of(context).openVideo(items, index);
-          return;
-        }
-        if (tab == FilterOption.photosOnly) {
-          Navigator.of(context).openImage(items, index);
-          return;
-        }
-        if (tab == FilterOption.videosOnly) {
-          Navigator.of(context).openVideo(items, index);
-          return;
-        }
         if (item.isVideo) {
           final videos = items.where((e) => e.isVideo).toList();
           final idx = videos.indexOf(item);
