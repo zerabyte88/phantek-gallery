@@ -225,21 +225,50 @@ class MlKitTranslationEngine {
     };
 
     if (mockMlKitTranslator != null) {
-      return await mockMlKitTranslator!(
-        cleaned,
-        sourceLang,
-        TranslateLanguage.english,
-      );
+      Future<String> mock(String t) =>
+          mockMlKitTranslator!(t, sourceLang, TranslateLanguage.english);
+      return await translateLeftoverCjk(await mock(cleaned), mock);
     }
 
     try {
       final translator = _getTranslator(sourceLang, TranslateLanguage.english);
       final translated = await translator.translateText(cleaned);
-      return translated;
+      return await translateLeftoverCjk(translated, translator.translateText);
     } catch (e) {
       debugPrint('[MlKitTranslationEngine] Google ML Kit error ($sourceLang -> en): $e');
       rethrow;
     }
+  }
+
+  /// ML Kit sometimes leaves fragments (e.g. 大丈夫…) untranslated inside the
+  /// English output; translate each leftover CJK run on its own.
+  @visibleForTesting
+  static Future<String> translateLeftoverCjk(
+    String output,
+    Future<String> Function(String) translate,
+  ) async {
+    final cjk = RegExp(r'[\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]+');
+    final buffer = StringBuffer();
+    int last = 0;
+    for (final m in cjk.allMatches(output)) {
+      buffer.write(output.substring(last, m.start));
+      final piece = (await translate(m.group(0)!)).trim();
+      final usable = piece.isNotEmpty && !cjk.hasMatch(piece);
+      if (usable) {
+        if (m.start > 0 && output[m.start - 1] != ' ') buffer.write(' ');
+        buffer.write(piece);
+        if (m.end < output.length &&
+            output[m.end] != ' ' &&
+            !RegExp(r'^[.,!?:;…~’”\)]').hasMatch(output.substring(m.end))) {
+          buffer.write(' ');
+        }
+      } else {
+        buffer.write(m.group(0));
+      }
+      last = m.end;
+    }
+    buffer.write(output.substring(last));
+    return buffer.toString().replaceAll(RegExp(r' {2,}'), ' ').trim();
   }
 
   /// Underlying Local LLM Engine (GGUF / llama.cpp).

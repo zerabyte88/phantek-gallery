@@ -113,6 +113,14 @@ void main() {
       expect(MlKitTranslationEngine.cleanMangaText(noisyText), '助けて！ 誰か...');
     });
 
+    test('translateLeftoverCjk re-translates untranslated CJK runs', () async {
+      final out = await MlKitTranslationEngine.translateLeftoverCjk(
+        'Umm 大丈夫..',
+        (t) async => t == '大丈夫' ? "it's okay" : t,
+      );
+      expect(out, "Umm it's okay..");
+    });
+
     test('Intra-CJK space removal and border artifact pipe removal in cleanMangaText', () {
       // Pipe misread of 一 / ー in vertical text
       expect(MlKitTranslationEngine.cleanMangaText('|旦戻ろう'), '一旦戻ろう');
@@ -710,10 +718,10 @@ void main() {
         screenSize: const Size(400, 800),
       );
 
-      // Original width 30 + 8 (pad = max(4, 0.12 * 30)) = 38.
+      // Original 30 x 150 vertical: padX = 0.15 * 30 = 4.5, padY = 0.05 * 150 = 7.5 -> 39 x 165.
       // Must not balloon to 30 * 2.2 = 66 or minWidthForLength (80-140).
-      expect(bubbleRect.width, equals(38.0));
-      expect(bubbleRect.height, equals(158.0));
+      expect(bubbleRect.width, equals(39.0));
+      expect(bubbleRect.height, equals(165.0));
       expect(bubbleRect.width, lessThan(50.0));
     });
 
@@ -726,11 +734,11 @@ void main() {
         screenSize: const Size(400, 800),
       );
 
-      // Original 150 x 80 -> pad 0.12 * 80 = 9.6 gives 169.2 x 99.2
-      expect(bubbleRect.width, closeTo(169.2, 1e-9));
-      expect(bubbleRect.height, closeTo(99.2, 1e-9));
-      expect(bubbleRect.left, closeTo(40.4, 1e-9));
-      expect(bubbleRect.top, closeTo(90.4, 1e-9));
+      // Original 150 x 80 horizontal: pad 0.04 * 80 = 3.2 gives 156.4 x 86.4
+      expect(bubbleRect.width, closeTo(156.4, 1e-9));
+      expect(bubbleRect.height, closeTo(86.4, 1e-9));
+      expect(bubbleRect.left, closeTo(46.8, 1e-9));
+      expect(bubbleRect.top, closeTo(96.8, 1e-9));
     });
 
     test(

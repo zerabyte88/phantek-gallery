@@ -195,26 +195,35 @@ class MangaTranslationPainter extends CustomPainter {
       return bubbles;
     }
 
+    double charSize(MangaSpeechBubbleCluster b) {
+      final lines =
+          b.text.split('\n').where((s) => s.trim().isNotEmpty).length;
+      final words = b.text
+          .split(RegExp(r'\s+'))
+          .where((s) => s.trim().isNotEmpty)
+          .length;
+      final n = math.max(1, math.max(lines, (words / 3).round()));
+      return math.max(
+        10.0,
+        math.min(26.0, math.min(b.rect.width, b.rect.height) / n),
+      );
+    }
+
     bool shouldMerge(MangaSpeechBubbleCluster b1, MangaSpeechBubbleCluster b2) {
       if (b1.rect.overlaps(b2.rect)) {
         return true;
       }
 
-      // Thresholds scale with text size so merging is resolution independent.
-      final ref = math.max(
-        12.0,
-        math.min(
-          math.min(b1.rect.width, b1.rect.height),
-          math.min(b2.rect.width, b2.rect.height),
-        ),
-      );
+      // Thresholds scale with character/line glyph size, not block dimensions,
+      // so multi-line horizontal paragraphs don't balloon and merge across panels.
+      final ref = math.min(charSize(b1), charSize(b2));
 
       // Reject merges whose union would cover far more than the text itself
       // (prevents an oversized patch hiding neighbouring panel artwork).
       final union = b1.rect.expandToInclude(b2.rect);
       final sumArea = b1.rect.width * b1.rect.height +
           b2.rect.width * b2.rect.height;
-      if (union.width * union.height > 2.2 * sumArea) {
+      if (union.width * union.height > 2.0 * sumArea) {
         return false;
       }
 
@@ -315,7 +324,7 @@ class MangaTranslationPainter extends CustomPainter {
               break;
             }
             final minLen = math.min(t.length, existing.length);
-            if (minLen >= 4 &&
+            if (minLen >= 3 &&
                 (existing.contains(t) || t.contains(existing))) {
               if (t.length > existing.length) {
                 replaceIdx = i;
@@ -365,11 +374,21 @@ class MangaTranslationPainter extends CustomPainter {
       math.max(20.0, screenH - 16.0),
     );
 
-    // OCR boxes hug the glyphs tightly; pad proportionally so the patch fully
-    // hides the original text without spilling into panel artwork.
-    final double pad =
-        (0.12 * math.min(rect.width, rect.height)).clamp(4.0, 12.0);
-    final inflated = rect.inflate(pad);
+    // Vertical columns need side and vertical padding (ML Kit boxes clip glyphs);
+    // horizontal blocks are already tight and must not spill past the bubble.
+    final bool srcVertical = rect.height > rect.width * 1.25;
+    final double padX = srcVertical
+        ? (0.15 * rect.width).clamp(4.0, 12.0)
+        : (0.04 * math.min(rect.width, rect.height)).clamp(2.0, 6.0);
+    final double padY = srcVertical
+        ? (0.05 * rect.height).clamp(6.0, 14.0)
+        : padX;
+    final inflated = Rect.fromLTRB(
+      rect.left - padX,
+      rect.top - padY,
+      rect.right + padX,
+      rect.bottom + padY,
+    );
     final double width = math.min(inflated.width, safeViewport.width);
     final double height = math.min(inflated.height, safeViewport.height);
 
