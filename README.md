@@ -3,7 +3,7 @@
 
   # Phantek Gallery
 
-  **A fast, privacy-focused Android gallery with PSD layer support and 100% offline on-device manga translation using Google ML Kit or local GGUF LLMs.**
+  **Offline Android gallery for photos, videos, PSD files, and manga, with on-device translation via Google ML Kit or local GGUF LLMs.**
 
   [![Version](https://img.shields.io/badge/Version-v2.19.5-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
@@ -18,7 +18,7 @@
 
 ## Overview
 
-Phantek Gallery is an offline-first gallery for photos, videos, Adobe Photoshop (`.psd`) files, and manga. Your media remains strictly on your device—with zero tracking, no telemetry, and no cloud dependencies. 
+Phantek Gallery is an offline gallery for photos, videos, Adobe Photoshop (`.psd`) files, and manga. Your media remains strictly on your device with zero tracking, no telemetry, and no cloud dependencies. 
 
 For comic and manga readers, Phantek Gallery features dual offline translation engines:
 1. **Google ML Kit On-Device Translation**: Instant, zero-config neural translation directly on your device.
@@ -30,15 +30,14 @@ For comic and manga readers, Phantek Gallery features dual offline translation e
 
 ### Gallery and Viewing
 
-- **Fast Media Grid**: Hardware-accelerated thumbnails via `MediaStore.loadThumbnail` (1–2 ms), memory cache indexing, and background isolate decoding for smooth scrolling up to 120 Hz.
-- **PSD Layer Viewer**: Open Adobe Photoshop (`.psd`) documents with instant embedded-JPEG previews and a dedicated sheet for toggling individual layer visibilities.
-- **Hardware Video Playback**: Built on AndroidX Media3 / ExoPlayer with dual SurfaceView pipelines for smooth 2K and 4K playback. Includes double-tap seek, gesture-based brightness and volume controls, and resume playback.
+- **PSD Layer Viewer**: Open Adobe Photoshop (`.psd`) documents with embedded-JPEG previews and a dedicated sheet for toggling individual layer visibilities.
+- **Hardware Video Playback**: Built on AndroidX Media3 / ExoPlayer. Includes double-tap seek, gesture-based brightness and volume controls, and resume playback.
 - **EXIF and Technical Inspector**: Detailed photo metadata (ISO, aperture, shutter speed, focal length, resolution) and video properties (bitrate, fps, codec, channels).
 
 ### Manga Reader & Offline Translation
 
 - **Dual Offline Translation Engines**: Choose between Google ML Kit (fast, lightweight, zero-configuration) and Local LLM (nuanced comic dialogue localization via GGUF).
-- **Manual Target Language Selection**: Seamlessly choose your source language with dedicated buttons:
+- **Manual Target Language Selection**: Choose your source language with dedicated buttons:
   - **Japanese** (`JA → EN`)
   - **Chinese** (`ZH → EN`)
   - **Korean** (`KO → EN`)
@@ -46,8 +45,6 @@ For comic and manga readers, Phantek Gallery features dual offline translation e
 - **Natural Comic Speech Bubble Geometry**:
   - **Preserved Original Bubble Contours**: Speech bubbles retain their natural comic outline and original bounding dimensions, completely eliminating artificial ballooning or obscuring character artwork.
   - **Vertical Dialogue Flow**: Automatically rotates English translations for tall, narrow Asian speech bubbles (90° clockwise with RTL column flow) so vertical dialogue fits cleanly and reads naturally without forced horizontal distortion.
-  - **Dual-Layer Bubble Clustering & Deduplication**: High-resolution OCR clustering (supporting up to 75px gaps between columns) coupled with painter-level fail-safe deduplication guarantees every multi-column bubble is unified into exactly 1 speech bubble with duplicate sentences removed.
-  - **Google Translate Lens Styling**: Renders a clean, semi-transparent background patch (`#F7F7F8`, 92% opacity) bounded by an ultra-subtle 0.5px hairline border.
 - **Manga Reader with Natural Sort**: Continuous vertical reading mode with edge-to-edge layout, chapter progress indicators, and natural alphanumeric sorting (`Chapter 1`, `1.1`, `2.1`, `10`).
 
 ### Privacy and Security
@@ -58,7 +55,7 @@ For comic and manga readers, Phantek Gallery features dual offline translation e
 
 ### Personalization
 
-- **Visual Themes**: Hand-crafted themes including *Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, and *Sakura* with dynamic theme headers.
+- **Visual Themes**: *Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, and *Sakura* with dynamic theme headers.
 
 ---
 
@@ -77,7 +74,7 @@ Google ML Kit provides lightweight neural translation directly on your device wi
    - **Chinese** (`zh`)
    - **Korean** (`ko`)
    - **English** (`en`)
-4. In the viewer, open any manga page, tap the **Translate** button in the bottom bar, select your language button (**Jepang**, **China**, or **Korea**), and enjoy instant offline translation.
+4. In the viewer, open any manga page, tap the **Translate** button in the bottom bar, select your language button (**Japan**, **China**, or **Korea**), and enjoy offline translation.
 
 ---
 
@@ -91,7 +88,7 @@ Models can be downloaded from Hugging Face and placed in the app's models direct
 
 | Model | Format | Size | Recommended For | Hugging Face Download |
 | :--- | :---: | :---: | :--- | :--- |
-| **Qwen 2.5 0.5B abliterated (Q4_K_M)** *(Recommended)* | GGUF | ~380 MB | Ultra-fast inference on mobile devices, low memory footprint (~500 MB RAM). | [Download Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf](https://huggingface.co/failspy/Qwen2.5-0.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf?download=true) |
+| **Qwen 2.5 0.5B abliterated (Q4_K_M)** | GGUF | ~380 MB | Ultra-fast inference on mobile devices, low memory footprint (~500 MB RAM). | [Download Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf](https://huggingface.co/failspy/Qwen2.5-0.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf?download=true) |
 | **Qwen 2.5 1.5B abliterated (Q4_K_M)** | GGUF | ~986 MB | Higher translation nuance and grammar accuracy for devices with 4 GB+ RAM. | [Download Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf](https://huggingface.co/failspy/Qwen2.5-1.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf?download=true) |
 
 #### Step-by-Step GGUF Installation
