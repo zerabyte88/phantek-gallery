@@ -251,6 +251,14 @@ class MangaOcrService {
         return true;
       }
 
+      final uni = b1.boundingBox.expandToInclude(b2.boundingBox);
+      if (uni.width * uni.height >
+          2.4 *
+              (b1.boundingBox.width * b1.boundingBox.height +
+                  b2.boundingBox.width * b2.boundingBox.height)) {
+        return false;
+      }
+
       final hGap = math.max(
         0.0,
         math.max(b1.boundingBox.left, b2.boundingBox.left) -
@@ -290,7 +298,7 @@ class MangaOcrService {
       }
 
       // Horizontal lines: merge if vGap <= 55.0 AND (hOverlap > 0 || (b1.boundingBox.left - b2.boundingBox.left).abs() <= minW * 0.8 || hGap <= 25.0)
-      if (vGap <= 1.8 * ref &&
+      if (vGap <= 1.3 * ref &&
           (hOverlap > 0 ||
               (b1.boundingBox.left - b2.boundingBox.left).abs() <= minW * 0.8 ||
               hGap <= 0.85 * ref)) {
@@ -298,7 +306,7 @@ class MangaOcrService {
       }
 
       // Proximity inside a bubble
-      if (hGap <= 1.7 * ref && vGap <= 1.2 * ref) {
+      if (hGap <= 1.2 * ref && vGap <= 0.9 * ref) {
         return true;
       }
 

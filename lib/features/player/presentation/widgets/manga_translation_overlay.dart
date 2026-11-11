@@ -203,13 +203,22 @@ class MangaTranslationPainter extends CustomPainter {
       // Thresholds scale with text size so merging is resolution independent.
       final ref = math.max(
         12.0,
-        math.max(
+        math.min(
           math.min(b1.rect.width, b1.rect.height),
           math.min(b2.rect.width, b2.rect.height),
         ),
       );
 
-      if (b1.rect.inflate(0.35 * ref).overlaps(b2.rect.inflate(0.35 * ref))) {
+      // Reject merges whose union would cover far more than the text itself
+      // (prevents an oversized patch hiding neighbouring panel artwork).
+      final union = b1.rect.expandToInclude(b2.rect);
+      final sumArea = b1.rect.width * b1.rect.height +
+          b2.rect.width * b2.rect.height;
+      if (union.width * union.height > 2.2 * sumArea) {
+        return false;
+      }
+
+      if (b1.rect.inflate(0.25 * ref).overlaps(b2.rect.inflate(0.25 * ref))) {
         return true;
       }
 
@@ -224,8 +233,8 @@ class MangaTranslationPainter extends CustomPainter {
             math.min(b1.rect.bottom, b2.rect.bottom),
       );
 
-      if ((hGap <= 1.2 * ref && vGap <= 0.6 * ref) ||
-          (vGap <= 0.9 * ref && hGap <= 0.6 * ref)) {
+      if ((hGap <= 0.9 * ref && vGap <= 0.4 * ref) ||
+          (vGap <= 0.6 * ref && hGap <= 0.4 * ref)) {
         return true;
       }
 
