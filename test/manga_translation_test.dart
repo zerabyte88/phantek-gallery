@@ -114,6 +114,10 @@ void main() {
     });
 
     test('Intra-CJK space removal and border artifact pipe removal in cleanMangaText', () {
+      // Pipe misread of 一 / ー in vertical text
+      expect(MlKitTranslationEngine.cleanMangaText('|旦戻ろう'), '一旦戻ろう');
+      expect(MlKitTranslationEngine.cleanMangaText('| 時間経ったら'), '一時間経ったら');
+      expect(MlKitTranslationEngine.cleanMangaText('ゲ|ム'), 'ゲーム');
       // Intra-CJK space removal (Japanese Hiragana/Katakana)
       expect(
         MlKitTranslationEngine.cleanMangaText('こ ん に ち は'),
@@ -706,10 +710,10 @@ void main() {
         screenSize: const Size(400, 800),
       );
 
-      // Original width 30 + 6 (inflate 3.0) = 36.
+      // Original width 30 + 8 (pad = max(4, 0.12 * 30)) = 38.
       // Must not balloon to 30 * 2.2 = 66 or minWidthForLength (80-140).
-      expect(bubbleRect.width, equals(36.0));
-      expect(bubbleRect.height, equals(156.0));
+      expect(bubbleRect.width, equals(38.0));
+      expect(bubbleRect.height, equals(158.0));
       expect(bubbleRect.width, lessThan(50.0));
     });
 
@@ -722,11 +726,11 @@ void main() {
         screenSize: const Size(400, 800),
       );
 
-      // Original width 150, height 80 -> inflate(3.0) gives 156 x 86
-      expect(bubbleRect.width, equals(156.0));
-      expect(bubbleRect.height, equals(86.0));
-      expect(bubbleRect.left, equals(47.0));
-      expect(bubbleRect.top, equals(97.0));
+      // Original 150 x 80 -> pad 0.12 * 80 = 9.6 gives 169.2 x 99.2
+      expect(bubbleRect.width, closeTo(169.2, 1e-9));
+      expect(bubbleRect.height, closeTo(99.2, 1e-9));
+      expect(bubbleRect.left, closeTo(40.4, 1e-9));
+      expect(bubbleRect.top, closeTo(90.4, 1e-9));
     });
 
     test(

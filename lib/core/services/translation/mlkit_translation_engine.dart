@@ -324,7 +324,12 @@ class MlKitTranslationEngine {
     final cleaned = text
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
-        .replaceAll(RegExp(r'(?:^|\n)\s*[|丨¦‖]\s*(?=\n|$)'), '\n');
+        .replaceAll(RegExp(r'(?:^|\n)\s*[|丨¦‖]\s*(?=\n|$)'), '\n')
+        // Vertical OCR misreads the long-vowel mark after katakana and the
+        // kanji 一 (e.g. 一旦, 一時間) as a pipe.
+        .replaceAll(RegExp(r'(?<=[\u30a0-\u30ff])\s*[|丨¦‖]'), 'ー')
+        .replaceAll(
+            RegExp(r'[|丨¦‖]\s*(?=[\u3040-\u30ff\u4e00-\u9fff])'), '一');
 
     final lines = cleaned
         .split('\n')

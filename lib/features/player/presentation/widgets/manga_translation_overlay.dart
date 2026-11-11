@@ -365,8 +365,11 @@ class MangaTranslationPainter extends CustomPainter {
       math.max(20.0, screenH - 16.0),
     );
 
-    // Derive bubbleRect from rect.inflate(3.0) clamped within safeViewport
-    final inflated = rect.inflate(3.0);
+    // OCR boxes hug the glyphs tightly; pad proportionally so the patch fully
+    // hides the original text without spilling into panel artwork.
+    final double pad =
+        (0.12 * math.min(rect.width, rect.height)).clamp(4.0, 12.0);
+    final inflated = rect.inflate(pad);
     final double width = math.min(inflated.width, safeViewport.width);
     final double height = math.min(inflated.height, safeViewport.height);
 
@@ -452,18 +455,8 @@ class MangaTranslationPainter extends CustomPainter {
     final rrect =
         RRect.fromRectAndRadius(bubbleRect, const Radius.circular(8.0));
 
-    // Google Translate style: Soft semi-transparent light patch
-    final patchPaint = Paint()
-      ..color = const Color(0xFFF7F7F8).withValues(alpha: 0.92)
-      ..style = PaintingStyle.fill;
-    canvas.drawRRect(rrect, patchPaint);
-
-    // Google Translate style: Ultra-subtle hairline border (0.5px, 5% opacity)
-    final borderPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.05)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5;
-    canvas.drawRRect(rrect, borderPaint);
+    // Opaque white patch blends into the bubble and fully hides the source text.
+    canvas.drawRRect(rrect, Paint()..color = Colors.white);
 
     if (isVertical) {
       final double marginH =
