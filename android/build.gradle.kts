@@ -31,7 +31,7 @@ subprojects {
                     it.parameterTypes.size == 1 &&
                     (it.parameterTypes[0] == Int::class.javaPrimitiveType || it.parameterTypes[0] == java.lang.Integer::class.java)
                 }
-                method?.invoke(androidExt, 35)
+                method?.invoke(androidExt, 37)
             } catch (_: Exception) {}
         }
     }
