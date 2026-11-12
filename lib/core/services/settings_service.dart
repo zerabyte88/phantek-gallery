@@ -39,7 +39,12 @@ class _K {
   static const filterSmallImages = 'filterSmallImages';
   static const showHiddenFiles = 'showHiddenFiles';
   static const secureScreen = 'secureScreen';
-  static const activeAiModelPath = 'activeAiModelPath';
+  static const lmStudioServerUrl = 'lmStudioServerUrl';
+  static const lmStudioApiKey = 'lmStudioApiKey';
+  static const lmStudioModel = 'lmStudioModel';
+  static const onnxModelDirJa = 'onnxModelDirJa';
+  static const onnxModelDirZh = 'onnxModelDirZh';
+  static const onnxModelDirKo = 'onnxModelDirKo';
   static const translationEngineType = 'translationEngineType';
   static const translationSourceLanguage = 'translationSourceLanguage';
 }
@@ -108,7 +113,13 @@ class SettingsService {
       filterSmallImages: _prefs.getBool(_K.filterSmallImages) ?? false,
       showHiddenFiles: _prefs.getBool(_K.showHiddenFiles) ?? false,
       secureScreen: _prefs.getBool(_K.secureScreen) ?? false,
-      activeAiModelPath: _prefs.getString(_K.activeAiModelPath) ?? '',
+      lmStudioServerUrl: _prefs.getString(_K.lmStudioServerUrl) ??
+          'http://192.168.1.2:1234/v1',
+      lmStudioApiKey: _prefs.getString(_K.lmStudioApiKey) ?? '',
+      lmStudioModel: _prefs.getString(_K.lmStudioModel) ?? '',
+      onnxModelDirJa: _prefs.getString(_K.onnxModelDirJa) ?? '',
+      onnxModelDirZh: _prefs.getString(_K.onnxModelDirZh) ?? '',
+      onnxModelDirKo: _prefs.getString(_K.onnxModelDirKo) ?? '',
       translationEngineType: _readEnum(
         _K.translationEngineType,
         TranslationEngineType.values,
@@ -153,7 +164,12 @@ class SettingsService {
       _prefs.setBool(_K.filterSmallImages, model.filterSmallImages),
       _prefs.setBool(_K.showHiddenFiles, model.showHiddenFiles),
       _prefs.setBool(_K.secureScreen, model.secureScreen),
-      _prefs.setString(_K.activeAiModelPath, model.activeAiModelPath),
+      _prefs.setString(_K.lmStudioServerUrl, model.lmStudioServerUrl),
+      _prefs.setString(_K.lmStudioApiKey, model.lmStudioApiKey),
+      _prefs.setString(_K.lmStudioModel, model.lmStudioModel),
+      _prefs.setString(_K.onnxModelDirJa, model.onnxModelDirJa),
+      _prefs.setString(_K.onnxModelDirZh, model.onnxModelDirZh),
+      _prefs.setString(_K.onnxModelDirKo, model.onnxModelDirKo),
       _prefs.setString(
           _K.translationEngineType, model.translationEngineType.name),
       _prefs.setString(
@@ -163,8 +179,50 @@ class SettingsService {
 
   Future<void> reset() => save(const SettingsModel());
 
-  Future<void> setActiveAiModelPath(String path) async {
-    await _prefs.setString(_K.activeAiModelPath, path);
+  Future<void> setLmStudioServerUrl(String url) async {
+    await _prefs.setString(_K.lmStudioServerUrl, url);
+  }
+
+  Future<void> setLmStudioApiKey(String key) async {
+    await _prefs.setString(_K.lmStudioApiKey, key);
+  }
+
+  Future<void> setLmStudioModel(String model) async {
+    await _prefs.setString(_K.lmStudioModel, model);
+  }
+
+  Future<void> setOnnxModelDirJa(String path) async {
+    await _prefs.setString(_K.onnxModelDirJa, path);
+  }
+
+  Future<void> setOnnxModelDirZh(String path) async {
+    await _prefs.setString(_K.onnxModelDirZh, path);
+  }
+
+  Future<void> setOnnxModelDirKo(String path) async {
+    await _prefs.setString(_K.onnxModelDirKo, path);
+  }
+
+  String getOnnxModelDir(String langCode) {
+    return switch (langCode.toLowerCase()) {
+      'ja' || 'ja-en' => settings.onnxModelDirJa,
+      'zh' || 'zh-en' => settings.onnxModelDirZh,
+      'ko' || 'ko-en' => settings.onnxModelDirKo,
+      _ => '',
+    };
+  }
+
+  Future<void> setOnnxModelDir(String langCode, String path) async {
+    switch (langCode.toLowerCase()) {
+      case 'ja' || 'ja-en':
+        await setOnnxModelDirJa(path);
+      case 'zh' || 'zh-en':
+        await setOnnxModelDirZh(path);
+      case 'ko' || 'ko-en':
+        await setOnnxModelDirKo(path);
+      default:
+        throw ArgumentError('Unsupported language code: $langCode');
+    }
   }
 
   Future<void> setTranslationEngineType(TranslationEngineType type) async {

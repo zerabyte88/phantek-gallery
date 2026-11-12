@@ -38,7 +38,12 @@ class SettingsModel extends Equatable {
     this.filterSmallImages = false,
     this.showHiddenFiles = false,
     this.secureScreen = false,
-    this.activeAiModelPath = '',
+    this.lmStudioServerUrl = 'http://192.168.1.2:1234/v1',
+    this.lmStudioApiKey = '',
+    this.lmStudioModel = '',
+    this.onnxModelDirJa = '',
+    this.onnxModelDirZh = '',
+    this.onnxModelDirKo = '',
     this.translationEngineType = TranslationEngineType.googleMlKit,
     this.translationSourceLanguage = TranslationSourceLanguage.japanese,
   });
@@ -115,10 +120,25 @@ class SettingsModel extends Equatable {
   /// Prevent screenshots and hide app previews in recent tasks (FLAG_SECURE).
   final bool secureScreen;
 
-  /// Active offline GGUF LLM model file path for manga translation (empty for default auto-detect).
-  final String activeAiModelPath;
+  /// Server URL for OpenAI-compatible Local AI / LM Studio translation server.
+  final String lmStudioServerUrl;
 
-  /// Active offline translation engine (Google ML Kit or Local GGUF LLM).
+  /// Optional API Key / Bearer token for LM Studio / Local AI server.
+  final String lmStudioApiKey;
+
+  /// Model name / identifier on LM Studio / Local AI server.
+  final String lmStudioModel;
+
+  /// Directory path for Helsinki-NLP Opus-MT Japanese ONNX model files.
+  final String onnxModelDirJa;
+
+  /// Directory path for Helsinki-NLP Opus-MT Chinese ONNX model files.
+  final String onnxModelDirZh;
+
+  /// Directory path for Helsinki-NLP Opus-MT Korean ONNX model files.
+  final String onnxModelDirKo;
+
+  /// Active offline/local translation engine (Google ML Kit, Helsinki Opus-MT, or Local AI / LM Studio).
   final TranslationEngineType translationEngineType;
 
   /// Default source language for manga translation (Japanese, Chinese, Korean, Auto).
@@ -151,7 +171,12 @@ class SettingsModel extends Equatable {
         'filterSmallImages': filterSmallImages,
         'showHiddenFiles': showHiddenFiles,
         'secureScreen': secureScreen,
-        'activeAiModelPath': activeAiModelPath,
+        'lmStudioServerUrl': lmStudioServerUrl,
+        'lmStudioApiKey': lmStudioApiKey,
+        'lmStudioModel': lmStudioModel,
+        'onnxModelDirJa': onnxModelDirJa,
+        'onnxModelDirZh': onnxModelDirZh,
+        'onnxModelDirKo': onnxModelDirKo,
         'translationEngineType': translationEngineType.name,
         'translationSourceLanguage': translationSourceLanguage.name,
       };
@@ -217,11 +242,19 @@ class SettingsModel extends Equatable {
       filterSmallImages: map['filterSmallImages'] as bool? ?? false,
       showHiddenFiles: map['showHiddenFiles'] as bool? ?? false,
       secureScreen: map['secureScreen'] as bool? ?? false,
-      activeAiModelPath: map['activeAiModelPath'] as String? ?? '',
-      translationEngineType: TranslationEngineType.values.firstWhere(
-        (e) => e.name == map['translationEngineType'],
-        orElse: () => TranslationEngineType.googleMlKit,
-      ),
+      lmStudioServerUrl:
+          map['lmStudioServerUrl'] as String? ?? 'http://192.168.1.2:1234/v1',
+      lmStudioApiKey: map['lmStudioApiKey'] as String? ?? '',
+      lmStudioModel: map['lmStudioModel'] as String? ?? '',
+      onnxModelDirJa: map['onnxModelDirJa'] as String? ?? '',
+      onnxModelDirZh: map['onnxModelDirZh'] as String? ?? '',
+      onnxModelDirKo: map['onnxModelDirKo'] as String? ?? '',
+      translationEngineType: switch (map['translationEngineType']) {
+        'lmStudio' => TranslationEngineType.lmStudio,
+        'localLlm' => TranslationEngineType.lmStudio,
+        'onnxHelsinki' => TranslationEngineType.onnxHelsinki,
+        _ => TranslationEngineType.googleMlKit,
+      },
       translationSourceLanguage: TranslationSourceLanguage.values.firstWhere(
         (e) => e.name == map['translationSourceLanguage'],
         orElse: () => TranslationSourceLanguage.japanese,
@@ -256,7 +289,12 @@ class SettingsModel extends Equatable {
     bool? filterSmallImages,
     bool? showHiddenFiles,
     bool? secureScreen,
-    String? activeAiModelPath,
+    String? lmStudioServerUrl,
+    String? lmStudioApiKey,
+    String? lmStudioModel,
+    String? onnxModelDirJa,
+    String? onnxModelDirZh,
+    String? onnxModelDirKo,
     TranslationEngineType? translationEngineType,
     TranslationSourceLanguage? translationSourceLanguage,
   }) {
@@ -288,7 +326,12 @@ class SettingsModel extends Equatable {
       filterSmallImages: filterSmallImages ?? this.filterSmallImages,
       showHiddenFiles: showHiddenFiles ?? this.showHiddenFiles,
       secureScreen: secureScreen ?? this.secureScreen,
-      activeAiModelPath: activeAiModelPath ?? this.activeAiModelPath,
+      lmStudioServerUrl: lmStudioServerUrl ?? this.lmStudioServerUrl,
+      lmStudioApiKey: lmStudioApiKey ?? this.lmStudioApiKey,
+      lmStudioModel: lmStudioModel ?? this.lmStudioModel,
+      onnxModelDirJa: onnxModelDirJa ?? this.onnxModelDirJa,
+      onnxModelDirZh: onnxModelDirZh ?? this.onnxModelDirZh,
+      onnxModelDirKo: onnxModelDirKo ?? this.onnxModelDirKo,
       translationEngineType:
           translationEngineType ?? this.translationEngineType,
       translationSourceLanguage:
@@ -324,7 +367,12 @@ class SettingsModel extends Equatable {
         filterSmallImages,
         showHiddenFiles,
         secureScreen,
-        activeAiModelPath,
+        lmStudioServerUrl,
+        lmStudioApiKey,
+        lmStudioModel,
+        onnxModelDirJa,
+        onnxModelDirZh,
+        onnxModelDirKo,
         translationEngineType,
         translationSourceLanguage,
       ];

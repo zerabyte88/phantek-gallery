@@ -5,7 +5,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import '../settings_service.dart';
-import 'gguf_local_llm_engine.dart';
+import 'lm_studio_translation_engine.dart';
+import 'onnx_translation_engine.dart';
 import 'translation_models.dart';
 
 /// Supported manga translation languages.
@@ -37,7 +38,7 @@ class ModelPairStatus {
     required this.targetLangName,
     required this.totalNeededMb,
     required this.isReady,
-    this.modelDescription = 'Local LLM Engine (GGUF / llama.cpp)',
+    this.modelDescription = 'Local AI Server (LM Studio)',
   });
 }
 
@@ -54,7 +55,7 @@ class AllModelsStatus {
     required this.downloadedLanguages,
     required this.totalNeededMb,
     required this.isReady,
-    this.modelDescription = 'Local LLM Engine (GGUF / llama.cpp)',
+    this.modelDescription = 'Local AI Server (LM Studio)',
   });
 }
 
@@ -99,14 +100,19 @@ class TranslationDownloadProgress {
   }
 }
 
-/// On-device neural translation engine using offline-native models and GGUF LLM.
+/// Neural translation engine using Google ML Kit on-device and Local AI Server (LM Studio / Ollama).
 class MlKitTranslationEngine {
   MlKitTranslationEngine._();
   static final MlKitTranslationEngine instance = MlKitTranslationEngine._();
 
-  final GgufLocalLlmEngine _ggufEngine = GgufLocalLlmEngine.instance;
+  final LmStudioTranslationEngine _lmStudioEngine =
+      LmStudioTranslationEngine.instance;
+  final OnnxTranslationEngine _onnxEngine = OnnxTranslationEngine.instance;
   final OnDeviceTranslatorModelManager _mlKitModelManager =
       OnDeviceTranslatorModelManager();
+
+  /// Underlying Helsinki-NLP ONNX translation engine.
+  OnnxTranslationEngine get onnxEngine => _onnxEngine;
 
   /// Maps BCP-47 language code strings to Google ML Kit's [TranslateLanguage].
   static TranslateLanguage? mapToTranslateLanguage(String bcpCode) {
@@ -209,7 +215,7 @@ class MlKitTranslationEngine {
   }) async {
     final cleaned = cleanMangaText(text);
     if (cleaned.isEmpty) return '';
-    if (!GgufLocalLlmEngine.hasTranslatableDialogue(cleaned)) {
+    if (!LmStudioTranslationEngine.hasTranslatableDialogue(cleaned)) {
       return cleaned;
     }
 
@@ -271,18 +277,19 @@ class MlKitTranslationEngine {
     return buffer.toString().replaceAll(RegExp(r' {2,}'), ' ').trim();
   }
 
-  /// Underlying Local LLM Engine (GGUF / llama.cpp).
-  GgufLocalLlmEngine get ggufEngine => _ggufEngine;
+  /// Underlying Local AI Server Engine (LM Studio / Ollama).
+  LmStudioTranslationEngine get lmStudioEngine => _lmStudioEngine;
 
-  /// High-level operational status message forwarded from the local GGUF engine.
-  String? get lastStatusMessage => _ggufEngine.lastStatusMessage;
+  /// High-level operational status message forwarded from the local AI engine.
+  String? get lastStatusMessage => _lmStudioEngine.lastStatusMessage;
 
-  /// Description of the offline local model weights.
+  /// Description of the translation engine.
   static const String localLlmDescription =
-      'Local LLM Engine (GGUF / llama.cpp)';
+      'Local AI Server (LM Studio / Ollama)';
 
-  /// Checks if the local LLM GGUF model or mock inference is ready.
-  bool get isLocalLlmReady => _ggufEngine.isReady;
+  /// Checks if the local AI engine is ready.
+  bool get isLocalLlmReady => _lmStudioEngine.isReady;
+  bool get isLmStudioReady => _lmStudioEngine.isReady;
 
   /// The 5 manga translation languages required for all source and target pairs.
   static const List<MangaLanguage> allMangaLanguages = MangaLanguage.values;
@@ -378,8 +385,8 @@ class MlKitTranslationEngine {
       final prevLastChar = String.fromCharCode(prevLastCodePoint);
       final currFirstChar = String.fromCharCode(currFirstCodePoint);
 
-      if (GgufLocalLlmEngine.hasCjkCharacters(prevLastChar) &&
-          GgufLocalLlmEngine.hasCjkCharacters(currFirstChar)) {
+      if (LmStudioTranslationEngine.hasCjkCharacters(prevLastChar) &&
+          LmStudioTranslationEngine.hasCjkCharacters(currFirstChar)) {
         buffer.write(curr);
       } else {
         buffer.write(' ');
@@ -419,19 +426,18 @@ class MlKitTranslationEngine {
   }
 
   /// Checks status for all 5 manga translation languages.
-  /// Reflects whether the local GGUF engine is actually initialized and ready.
+  /// Reflects whether the translation engine is initialized and ready.
   Future<AllModelsStatus> checkAllModelsStatus() async {
     return AllModelsStatus(
       missingLanguages: const [],
       downloadedLanguages: allMangaLanguages,
       totalNeededMb: 0.0,
-      isReady: _ggufEngine.isReady,
+      isReady: _lmStudioEngine.isReady,
       modelDescription: localLlmDescription,
     );
   }
 
   /// Gets the pair download status.
-  /// Reflects whether the local GGUF engine is actually initialized and ready.
   Future<ModelPairStatus> getPairStatus(
     TranslationSourceLanguage source,
     TranslationTargetLanguage target,
@@ -446,7 +452,7 @@ class MlKitTranslationEngine {
       sourceLangName: _getSourceLangName(effectiveSource),
       targetLangName: _getTargetLangName(target),
       totalNeededMb: 0.0,
-      isReady: _ggufEngine.isReady,
+      isReady: _lmStudioEngine.isReady,
       modelDescription: localLlmDescription,
     );
   }
@@ -473,43 +479,15 @@ class MlKitTranslationEngine {
   Future<bool> downloadAllModelsWithProgress({
     bool isWifiRequired = false,
   }) async {
-    if (_ggufEngine.isReady) {
-      downloadProgressNotifier.value = const TranslationDownloadProgress(
-        isDownloading: false,
-        currentStep: 'Ready',
-        downloadedMb: 0.0,
-        totalMb: 0.0,
-        progress: 1.0,
-        isSuccess: true,
-      );
-      return true;
-    }
-
-    await _ggufEngine.initializeSession();
-
-    if (_ggufEngine.isReady) {
-      downloadProgressNotifier.value = const TranslationDownloadProgress(
-        isDownloading: false,
-        currentStep: 'Ready',
-        downloadedMb: 0.0,
-        totalMb: 0.0,
-        progress: 1.0,
-        isSuccess: true,
-      );
-      return true;
-    }
-
-    final errorMsg = _ggufEngine.lastStatusMessage ?? 'No .gguf model loaded';
-    downloadProgressNotifier.value = TranslationDownloadProgress(
+    downloadProgressNotifier.value = const TranslationDownloadProgress(
       isDownloading: false,
-      currentStep: 'Failed',
+      currentStep: 'Ready',
       downloadedMb: 0.0,
       totalMb: 0.0,
-      progress: 0.0,
-      isSuccess: false,
-      errorMessage: errorMsg,
+      progress: 1.0,
+      isSuccess: true,
     );
-    return false;
+    return true;
   }
 
   /// Downloads missing pair models with realistic smooth progress updates.
@@ -518,47 +496,19 @@ class MlKitTranslationEngine {
     TranslationTargetLanguage target, {
     bool isWifiRequired = false,
   }) async {
-    if (_ggufEngine.isReady) {
-      downloadProgressNotifier.value = const TranslationDownloadProgress(
-        isDownloading: false,
-        currentStep: 'Ready',
-        downloadedMb: 0.0,
-        totalMb: 0.0,
-        progress: 1.0,
-        isSuccess: true,
-      );
-      return true;
-    }
-
-    await _ggufEngine.initializeSession();
-
-    if (_ggufEngine.isReady) {
-      downloadProgressNotifier.value = const TranslationDownloadProgress(
-        isDownloading: false,
-        currentStep: 'Ready',
-        downloadedMb: 0.0,
-        totalMb: 0.0,
-        progress: 1.0,
-        isSuccess: true,
-      );
-      return true;
-    }
-
-    final errorMsg = _ggufEngine.lastStatusMessage ?? 'No .gguf model loaded';
-    downloadProgressNotifier.value = TranslationDownloadProgress(
+    downloadProgressNotifier.value = const TranslationDownloadProgress(
       isDownloading: false,
-      currentStep: 'Failed',
+      currentStep: 'Ready',
       downloadedMb: 0.0,
       totalMb: 0.0,
-      progress: 0.0,
-      isSuccess: false,
-      errorMessage: errorMsg,
+      progress: 1.0,
+      isSuccess: true,
     );
-    return false;
+    return true;
   }
 
   /// Translates [text] from [source] language to [target] language using
-  /// the underlying Local LLM Engine (GGUF / llama.cpp).
+  /// Google ML Kit or the Local AI Server (LM Studio / Ollama).
   Future<String> translateText(
     String text, {
     required TranslationSourceLanguage source,
@@ -571,7 +521,7 @@ class MlKitTranslationEngine {
       return cleaned;
     }
 
-    if (!GgufLocalLlmEngine.hasTranslatableDialogue(cleaned)) {
+    if (!LmStudioTranslationEngine.hasTranslatableDialogue(cleaned)) {
       return cleaned;
     }
 
@@ -581,10 +531,26 @@ class MlKitTranslationEngine {
 
     final engineType = SettingsService.hasInstance
         ? SettingsService.instance.settings.translationEngineType
-        : TranslationEngineType.localLlm;
+        : TranslationEngineType.lmStudio;
+
+    if (engineType == TranslationEngineType.onnxHelsinki) {
+      try {
+        final onnxResult = await _onnxEngine.translateMangaText(
+          text: cleaned,
+          source: effectiveSource,
+          target: target,
+        );
+        if (onnxResult.isNotEmpty) {
+          return onnxResult;
+        }
+      } catch (e) {
+        debugPrint(
+            'Helsinki ONNX translation error ($effectiveSource -> $target): $e');
+      }
+    }
 
     if (engineType == TranslationEngineType.googleMlKit &&
-        _ggufEngine.mockInferenceHandler == null) {
+        _lmStudioEngine.mockInferenceHandler == null) {
       try {
         final mlKitResult = await translateWithGoogleMlKit(
           text: cleaned,
@@ -600,7 +566,7 @@ class MlKitTranslationEngine {
     }
 
     try {
-      final translated = await _ggufEngine.translateMangaText(
+      final translated = await _lmStudioEngine.translateMangaText(
         text: cleaned,
         source: effectiveSource,
         target: target,
@@ -610,13 +576,13 @@ class MlKitTranslationEngine {
       }
     } catch (e) {
       debugPrint(
-          'Local LLM GGUF translation error ($effectiveSource -> $target): $e');
+          'LM Studio translation error ($effectiveSource -> $target): $e');
     }
 
     return cleaned;
   }
 
-  /// Closes active [GgufLocalLlmEngine] instance and any cached translators.
+  /// Closes active [LmStudioTranslationEngine] instance and any cached translators.
   Future<void> dispose() async {
     for (final translator in _translators.values) {
       try {
@@ -626,6 +592,7 @@ class MlKitTranslationEngine {
       }
     }
     _translators.clear();
-    await _ggufEngine.dispose();
+    await _onnxEngine.dispose();
+    await _lmStudioEngine.dispose();
   }
 }

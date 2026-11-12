@@ -268,7 +268,7 @@ void main() {
       await tester.tap(find.text('Berserk'));
       await tester.pumpAndSettle();
 
-      expect(find.text('📖 Read All Chapters (3 pages)'), findsOneWidget);
+      expect(find.text('Read All Chapters (3 pages)'), findsOneWidget);
       expect(find.widgetWithText(ListTile, 'Chapter 1'), findsOneWidget);
       expect(find.widgetWithText(ListTile, 'Chapter 2'), findsOneWidget);
 
@@ -305,7 +305,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Tap Read All Chapters
-      await tester.tap(find.text('📖 Read All Chapters (3 pages)'));
+      await tester.tap(find.text('Read All Chapters (3 pages)'));
       await tester.pump();
 
       expect(selectedItems, isNotNull);

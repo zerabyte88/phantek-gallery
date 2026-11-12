@@ -25,7 +25,8 @@ enum TranslationTargetLanguage {
 /// Translation engine selection.
 enum TranslationEngineType {
   googleMlKit,
-  localLlm,
+  onnxHelsinki,
+  lmStudio,
 }
 
 /// Translated text block on a manga page.

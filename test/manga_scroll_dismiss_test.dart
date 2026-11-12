@@ -58,12 +58,12 @@ void main() {
       await tester.pumpWidget(buildViewer(mangaMode: true));
       await tester.pumpAndSettle();
 
-      // Verify Manga mode is active with ListView
-      expect(find.byType(ListView), findsOneWidget);
+      // Verify Manga mode is active with PageView
+      expect(find.byType(PageView), findsOneWidget);
       expect(find.byType(ImageViewerScreen), findsOneWidget);
 
       // Perform downward drag gesture (which simulates scrolling up towards page 1)
-      final center = tester.getCenter(find.byType(ListView));
+      final center = tester.getCenter(find.byType(PageView));
       final gesture = await tester.startGesture(center);
       await gesture.moveBy(const Offset(0, 300));
       await tester.pump();
@@ -77,7 +77,7 @@ void main() {
 
       // Screen MUST NOT be popped
       expect(find.byType(ImageViewerScreen), findsOneWidget);
-      expect(find.byType(ListView), findsOneWidget);
+      expect(find.byType(PageView), findsOneWidget);
     });
 
     testWidgets('Downward drag in standard photo mode triggers dismiss pop',
@@ -153,7 +153,7 @@ void main() {
       expect(alignWidget.alignment, Alignment.topCenter);
 
       // 5. Tap once on the screen to focus (hide header and footer)
-      await tester.tap(find.byType(ListView));
+      await tester.tap(find.byType(PageView));
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pumpAndSettle();
 
@@ -163,7 +163,7 @@ void main() {
       expect(find.text('1 / 5'), findsOneWidget);
 
       // 6. Tap again to bring bars back
-      await tester.tap(find.byType(ListView));
+      await tester.tap(find.byType(PageView));
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pumpAndSettle();
 

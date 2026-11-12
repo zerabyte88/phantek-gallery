@@ -3,7 +3,6 @@
 
 import 'dart:io';
 import 'dart:ui';
-import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,7 +13,7 @@ import 'package:phantek_gallery/core/models/media_item.dart';
 import 'package:phantek_gallery/core/models/settings_model.dart';
 import 'package:phantek_gallery/core/services/translation/translation_models.dart';
 import 'package:phantek_gallery/core/services/translation/mlkit_translation_engine.dart';
-import 'package:phantek_gallery/core/services/translation/gguf_local_llm_engine.dart';
+import 'package:phantek_gallery/core/services/translation/lm_studio_translation_engine.dart';
 import 'package:phantek_gallery/core/services/translation/manga_ocr_service.dart';
 import 'package:phantek_gallery/core/services/translation/translation_isolate_coordinator.dart';
 import 'package:phantek_gallery/features/player/presentation/widgets/manga_translation_overlay.dart';
@@ -23,6 +22,8 @@ import 'package:phantek_gallery/features/player/presentation/image_viewer_screen
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:phantek_gallery/core/services/settings_service.dart';
+import 'package:phantek_gallery/core/services/translation/onnx_translation_engine.dart';
+import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
 
 class MockMangaTextDetector implements MangaTextDetector {
   final List<RawMangaTextBlock> mockBlocks;
@@ -121,7 +122,9 @@ void main() {
       expect(out, "Umm it's okay..");
     });
 
-    test('Intra-CJK space removal and border artifact pipe removal in cleanMangaText', () {
+    test(
+        'Intra-CJK space removal and border artifact pipe removal in cleanMangaText',
+        () {
       // Pipe misread of 一 / ー in vertical text
       expect(MlKitTranslationEngine.cleanMangaText('|旦戻ろう'), '一旦戻ろう');
       expect(MlKitTranslationEngine.cleanMangaText('| 時間経ったら'), '一時間経ったら');
@@ -221,7 +224,9 @@ void main() {
       }
     });
 
-    test('MlKitMangaTextDetector mapBlocks RTL reordering and artifact filtering', () {
+    test(
+        'MlKitMangaTextDetector mapBlocks RTL reordering and artifact filtering',
+        () {
       final lineLeft = TextLine(
         text: '左のセリフ',
         elements: const [],
@@ -672,7 +677,9 @@ void main() {
       picture.dispose();
     });
 
-    test('MangaTranslationPainter speech bubble clamping to screen viewport margins', () {
+    test(
+        'MangaTranslationPainter speech bubble clamping to screen viewport margins',
+        () {
       const screenSize = Size(400, 800);
 
       // Bubble far off the left/top edge (x = -50, y = -100)
@@ -695,12 +702,14 @@ void main() {
       expect(rectRightBottom.left, greaterThanOrEqualTo(8.0));
       expect(rectRightBottom.top, greaterThanOrEqualTo(8.0));
       expect(rectRightBottom.right, lessThanOrEqualTo(screenSize.width - 8.0));
-      expect(rectRightBottom.bottom, lessThanOrEqualTo(screenSize.height - 8.0));
+      expect(
+          rectRightBottom.bottom, lessThanOrEqualTo(screenSize.height - 8.0));
 
       // Extreme width bubble capped within safeViewport
       final rectWide = MangaTranslationPainter.calculateBubbleRect(
         rect: const Rect.fromLTWH(0, 300, 600, 80),
-        text: 'This is a very long dialogue that spans across many words and sentences in manga.',
+        text:
+            'This is a very long dialogue that spans across many words and sentences in manga.',
         screenSize: screenSize,
       );
       expect(rectWide.width, lessThanOrEqualTo(screenSize.width - 16.0));
@@ -982,7 +991,7 @@ void main() {
       expect(status.missingLanguages.length + status.downloadedLanguages.length,
           4);
       expect(status.totalNeededMb, status.missingLanguages.length * 30.0);
-      expect(status.isReady, engine.ggufEngine.isReady);
+      expect(status.isReady, engine.lmStudioEngine.isReady);
     });
 
     test(
@@ -1031,64 +1040,66 @@ void main() {
     });
   });
 
-  group('GgufLocalLlmEngine Local LLM Translation', () {
+  group('LmStudioTranslationEngine Local AI Server Translation', () {
     test('System prompt formatting and payload validation', () {
       expect(
-        GgufLocalLlmEngine.systemPromptTemplate,
+        LmStudioTranslationEngine.systemPromptTemplate,
         contains('You are an expert localizer for Asian comics.'),
       );
       expect(
-        GgufLocalLlmEngine.systemPromptTemplate,
+        LmStudioTranslationEngine.systemPromptTemplate,
         contains('Output ONLY the final English translation.'),
       );
 
-      final promptJa = GgufLocalLlmEngine.buildPrompt(
+      final promptJa = LmStudioTranslationEngine.buildPrompt(
         language: 'Japanese',
         rawOcrText: '助けて！',
       );
       expect(promptJa, startsWith('<system>\n'));
       expect(
         promptJa,
-        contains('Translate the raw OCR text from Japanese into natural English comic dialogue.'),
+        contains(
+            'Translate the raw OCR text from Japanese into natural English comic dialogue.'),
       );
       expect(promptJa, endsWith('</system>\n<user>\n助けて！\n</user>'));
 
-      final promptKo = GgufLocalLlmEngine.buildPrompt(
+      final promptKo = LmStudioTranslationEngine.buildPrompt(
         language: 'Korean',
         rawOcrText: '살려줘!',
       );
       expect(
         promptKo,
-        contains('Translate the raw OCR text from Korean into natural English comic dialogue.'),
+        contains(
+            'Translate the raw OCR text from Korean into natural English comic dialogue.'),
       );
       expect(promptKo, endsWith('</system>\n<user>\n살려줘!\n</user>'));
     });
 
-    test('Temperature (0.1) and max tokens (60) constraints', () async {
-      expect(GgufLocalLlmEngine.defaultTemperature, 0.1);
-      expect(GgufLocalLlmEngine.defaultMaxTokens, 60);
+    test('Temperature (0.1) and max tokens (80) constraints', () async {
+      expect(LmStudioTranslationEngine.defaultTemperature, 0.1);
+      expect(LmStudioTranslationEngine.defaultMaxTokens, 80);
 
       // Temperature bounds: locked at 0.1 .. 0.2
-      expect(GgufLocalLlmEngine.constrainTemperature(0.1), 0.1);
-      expect(GgufLocalLlmEngine.constrainTemperature(0.2), 0.2);
-      expect(GgufLocalLlmEngine.constrainTemperature(0.0), 0.1);
-      expect(GgufLocalLlmEngine.constrainTemperature(-0.5), 0.1);
-      expect(GgufLocalLlmEngine.constrainTemperature(0.7), 0.2);
-      expect(GgufLocalLlmEngine.constrainTemperature(1.5), 0.2);
+      expect(LmStudioTranslationEngine.constrainTemperature(0.1), 0.1);
+      expect(LmStudioTranslationEngine.constrainTemperature(0.2), 0.2);
+      expect(LmStudioTranslationEngine.constrainTemperature(0.0), 0.1);
+      expect(LmStudioTranslationEngine.constrainTemperature(-0.5), 0.1);
+      expect(LmStudioTranslationEngine.constrainTemperature(0.7), 0.2);
+      expect(LmStudioTranslationEngine.constrainTemperature(1.5), 0.2);
 
       // Max tokens bounds: limited to 50 .. 80
-      expect(GgufLocalLlmEngine.constrainMaxTokens(60), 60);
-      expect(GgufLocalLlmEngine.constrainMaxTokens(50), 50);
-      expect(GgufLocalLlmEngine.constrainMaxTokens(80), 80);
-      expect(GgufLocalLlmEngine.constrainMaxTokens(10), 50);
-      expect(GgufLocalLlmEngine.constrainMaxTokens(0), 50);
-      expect(GgufLocalLlmEngine.constrainMaxTokens(120), 80);
-      expect(GgufLocalLlmEngine.constrainMaxTokens(1000), 80);
+      expect(LmStudioTranslationEngine.constrainMaxTokens(60), 60);
+      expect(LmStudioTranslationEngine.constrainMaxTokens(50), 50);
+      expect(LmStudioTranslationEngine.constrainMaxTokens(80), 80);
+      expect(LmStudioTranslationEngine.constrainMaxTokens(10), 50);
+      expect(LmStudioTranslationEngine.constrainMaxTokens(0), 50);
+      expect(LmStudioTranslationEngine.constrainMaxTokens(120), 80);
+      expect(LmStudioTranslationEngine.constrainMaxTokens(1000), 80);
 
       // Verify that translateMangaText locks the parameters passed to the handler
       double? receivedTemp;
       int? receivedTokens;
-      final engine = GgufLocalLlmEngine(
+      final engine = LmStudioTranslationEngine(
         mockInferenceHandler: (prompt,
             {required temperature, required maxTokens}) async {
           receivedTemp = temperature;
@@ -1098,16 +1109,16 @@ void main() {
       );
 
       final out = await engine.translateMangaText(
-        text: 'ここにいるぞ！',
+        text: '助けて！',
         source: TranslationSourceLanguage.japanese,
         temperature: 0.99,
         maxTokens: 500,
       );
 
-      expect(receivedTemp, 0.2);
-      // For 6 CJK characters: (6 * 2 + 16).clamp(16, 80) = 28
-      expect(receivedTokens, 28);
       expect(out, 'I am here!');
+      expect(receivedTemp, 0.2);
+      // For 3 CJK characters: (3 * 2 + 16).clamp(16, 80) = 22
+      expect(receivedTokens, 22);
 
       // Long text reaching max tokens cap
       await engine.translateMangaText(
@@ -1118,100 +1129,130 @@ void main() {
       );
       expect(receivedTemp, 0.2);
       expect(receivedTokens, 80);
-
-      // Underflow bounds
-      await engine.translateMangaText(
-        text: 'これはテストです。長い漫画のセリフを翻訳してみましょう。どうなるでしょうか？ここにいるぞ！',
-        source: TranslationSourceLanguage.japanese,
-        temperature: 0.01,
-        maxTokens: 20,
-      );
-      expect(receivedTemp, 0.1);
-      expect(receivedTokens, 50);
-
-      // Non-CJK text bypasses LLM inference
-      receivedTokens = null;
-      final nonCjk = await engine.translateMangaText(
-        text: 'LIVE 1080P',
-        source: TranslationSourceLanguage.japanese,
-      );
-      expect(nonCjk, 'LIVE 1080P');
-      expect(receivedTokens, isNull);
     });
 
-    test('Markdown cleanup and output sanitization', () {
-      // Strips <system>, <user>, <assistant>, <think> tags
+    test('cleanLlmOutput strips think tags and reasoning blocks', () {
       expect(
-        GgufLocalLlmEngine.cleanLlmOutput('<assistant>Hello world</assistant>'),
-        'Hello world',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          '<system>Instructions</system><user>Raw</user><assistant>Clean comic dialogue</assistant>',
+        LmStudioTranslationEngine.cleanLlmOutput(
+          '<think>Analyze Japanese: 助けて means Help me</think>Help me!',
         ),
-        'Clean comic dialogue',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          '<think>Reasoning process...</think><assistant>Dialogue text</assistant>',
-        ),
-        'Dialogue text',
+        'Help me!',
       );
 
-      // Strips markdown formatting (bold, italics, code, blockquotes)
       expect(
-        GgufLocalLlmEngine.cleanLlmOutput('**Translation:** *Run away!*'),
-        'Run away!',
+        LmStudioTranslationEngine.cleanLlmOutput(
+          '<think>Thinking process...\nStill thinking...</think>\n\nLet me go!',
+        ),
+        'Let me go!',
       );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('> `Watch out!`'),
-        'Watch out!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('### Warning: Danger!'),
-        'Warning: Danger!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput("```text\nFire in the hole!\n```"),
-        'Fire in the hole!',
-      );
+    });
 
-      // Strips chat preambles
+    test('cleanLlmOutput removes markdown fences, headings, and formatting',
+        () {
       expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-            'Here is the English translation: "Don\'t move!"'),
-        "Don't move!",
+        LmStudioTranslationEngine.cleanLlmOutput('**Help me!**'),
+        'Help me!',
       );
       expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-            'The English translation is: "Stop right there!"'),
-        'Stop right there!',
+        LmStudioTranslationEngine.cleanLlmOutput('```\nStop it!\n```'),
+        'Stop it!',
       );
       expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-            'Translation: **What did you say?!**'),
+        LmStudioTranslationEngine.cleanLlmOutput('### Who goes there?'),
+        'Who goes there?',
+      );
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput('> Don\'t touch that!'),
+        'Don\'t touch that!',
+      );
+    });
+
+    test('cleanLlmOutput strips conversational preambles', () {
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput(
+          'Here is the English translation:\nWait up!',
+        ),
+        'Wait up!',
+      );
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput(
+          'Sure! The translation is: What did you say?!',
+        ),
         'What did you say?!',
       );
       expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-            'English Translation: That cannot be true.'),
-        'That cannot be true.',
+        LmStudioTranslationEngine.cleanLlmOutput(
+          'Natural English: Look out behind you!',
+        ),
+        'Look out behind you!',
       );
       expect(
-        GgufLocalLlmEngine.cleanLlmOutput('“Hold on to me!”'),
+        LmStudioTranslationEngine.cleanLlmOutput(
+          'Translation: Let\'s go together.',
+        ),
+        'Let\'s go together.',
+      );
+    });
+
+    test('cleanLlmOutput strips outer quotation marks and cleans whitespace',
+        () {
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput('"Wait for me!"'),
+        'Wait for me!',
+      );
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput('“Hold on to me!”'),
         'Hold on to me!',
       );
       expect(
-        GgufLocalLlmEngine.cleanLlmOutput('「Wait!」'),
+        LmStudioTranslationEngine.cleanLlmOutput('「Wait!」'),
         'Wait!',
       );
+    });
+
+    test('normalizeBaseUrl formats endpoints properly', () {
+      expect(
+        LmStudioTranslationEngine.normalizeBaseUrl('http://192.168.1.10:1234'),
+        'http://192.168.1.10:1234/v1',
+      );
+      expect(
+        LmStudioTranslationEngine.normalizeBaseUrl('http://192.168.1.10:1234/'),
+        'http://192.168.1.10:1234/v1',
+      );
+      expect(
+        LmStudioTranslationEngine.normalizeBaseUrl(
+            'http://192.168.1.10:1234/v1'),
+        'http://192.168.1.10:1234/v1',
+      );
+      expect(
+        LmStudioTranslationEngine.normalizeBaseUrl(
+            'http://192.168.1.10:1234/v1/'),
+        'http://192.168.1.10:1234/v1',
+      );
+    });
+
+    test('testConnection mock handler works correctly', () async {
+      final engine = LmStudioTranslationEngine(
+        mockTestConnectionHandler: (url, key) async {
+          return const LmStudioConnectionResult(
+            isSuccess: true,
+            message: 'Connected successfully (200)',
+            availableModels: ['qwen2.5-7b-instruct', 'llama-3.2-3b'],
+          );
+        },
+      );
+
+      final res = await engine.testConnection(baseUrl: 'http://localhost:1234');
+      expect(res.isSuccess, isTrue);
+      expect(res.availableModels, contains('qwen2.5-7b-instruct'));
+      expect(res.availableModels.length, 2);
     });
 
     test('MlKitTranslationEngine routes manga translation through mock handler',
         () async {
       final mlEngine = MlKitTranslationEngine.instance;
 
-      MlKitTranslationEngine.instance.ggufEngine.mockInferenceHandler =
+      MlKitTranslationEngine.instance.lmStudioEngine.mockInferenceHandler =
           (prompt, {required temperature, required maxTokens}) async {
         if (prompt.contains('助けて')) {
           return 'Help me!';
@@ -1250,503 +1291,54 @@ void main() {
         );
         expect(empty, '');
       } finally {
-        MlKitTranslationEngine.instance.ggufEngine.mockInferenceHandler = null;
+        MlKitTranslationEngine.instance.lmStudioEngine.mockInferenceHandler =
+            null;
       }
     });
 
-    test(
-        'Native GGUF graceful fallback and punctuation pass-through without throwing',
-        () async {
-      final engine = GgufLocalLlmEngine.instance;
-      // Standalone punctuation pass-through
+    test('LmStudioTranslationEngine.hasCjkCharacters script validation', () {
+      expect(LmStudioTranslationEngine.hasCjkCharacters('こんにちは'), isTrue);
+      expect(LmStudioTranslationEngine.hasCjkCharacters('スゴイ！'), isTrue);
+      expect(LmStudioTranslationEngine.hasCjkCharacters('ﾆﾎﾝ'), isTrue);
+      expect(LmStudioTranslationEngine.hasCjkCharacters('你好世界'), isTrue);
+      expect(LmStudioTranslationEngine.hasCjkCharacters('漫画'), isTrue);
+      expect(LmStudioTranslationEngine.hasCjkCharacters('안녕하세요'), isTrue);
+      expect(LmStudioTranslationEngine.hasCjkCharacters('ㅋㅋㅋ'), isTrue);
       expect(
-        await engine.translateMangaText(
-          text: '！？',
-          source: TranslationSourceLanguage.japanese,
-        ),
-        '！？',
-      );
-      expect(
-        await engine.translateMangaText(
-          text: '...',
-          source: TranslationSourceLanguage.japanese,
-        ),
-        '...',
-      );
-      expect(
-        await engine.translateMangaText(
-          text: '',
-          source: TranslationSourceLanguage.japanese,
-        ),
-        '',
-      );
-
-      // Japanese text with no session initialized passes through gracefully
-      final fallback = await engine.translateMangaText(
-        text: 'こんにちは',
-        source: TranslationSourceLanguage.japanese,
-      );
-      expect(fallback, 'こんにちは');
+          LmStudioTranslationEngine.hasCjkCharacters('Hello World!'), isFalse);
+      expect(LmStudioTranslationEngine.hasCjkCharacters('1234567890'), isFalse);
     });
 
-    test('GgufLocalLlmEngine.hasCjkCharacters script validation', () {
-      // Japanese
-      expect(GgufLocalLlmEngine.hasCjkCharacters('こんにちは'), isTrue);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('スゴイ！'), isTrue);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('ﾆﾎﾝ'), isTrue);
-
-      // Chinese
-      expect(GgufLocalLlmEngine.hasCjkCharacters('你好世界'), isTrue);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('漫画'), isTrue);
-
-      // Korean
-      expect(GgufLocalLlmEngine.hasCjkCharacters('안녕하세요'), isTrue);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('ㅋㅋㅋ'), isTrue);
-
-      // Non-CJK
-      expect(GgufLocalLlmEngine.hasCjkCharacters('Hello World!'), isFalse);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('LIVE 1080P'), isFalse);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('CHAPTER 24: THE END'), isFalse);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('1234567890'), isFalse);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('...?!#@%'), isFalse);
-      expect(GgufLocalLlmEngine.hasCjkCharacters(''), isFalse);
-    });
-
-    test('GgufLocalLlmEngine.hasTranslatableDialogue detects Asian dialogue characters and ignores non-letter symbols', () {
-      // True for real Asian dialogue characters
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('こんにちは'), isTrue);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('スゴイ'), isTrue);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('ラーメン'), isTrue);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('你好世界'), isTrue);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('漫画'), isTrue);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('안녕하세요'), isTrue);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('ㅋㅋㅋ'), isTrue);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('待て！'), isTrue);
-
-      // False for solitary dashes, dots, and non-dialogue artifacts
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('ー'), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('ーーー'), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('・'), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('・・・'), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('…'), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('|'), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('~'), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('！？'), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('!?'), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue(''), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('   '), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('12345'), isFalse);
-      expect(GgufLocalLlmEngine.hasTranslatableDialogue('---'), isFalse);
-    });
-
-    test('cleanLlmOutput strips conversational preambles, echoes, and readiness chatter', () {
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput("I'm ready, please send OCR text"),
-        '',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput("I am ready. Please provide the text to translate."),
-        '',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput("Ready to translate! Please send the OCR text."),
-        '',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput("Send me the OCR text you want translated."),
-        '',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput("Give me the text to translate."),
-        '',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput("Waiting for the OCR text..."),
-        '',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput("What is the text you'd like me to translate?"),
-        '',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput("Ready for the OCR text."),
-        '',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('Sure, here is the English translation: Stop right there!'),
-        'Stop right there!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('Here is the English translation:\n\nGet out of my way!'),
-        'Get out of my way!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          "I'm going to translate this text into natural English dialogue. Here's the translation: What?",
-        ),
-        'What?',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          "I'm going to translate this text into natural English dialogue. Here's the translation:",
-        ),
-        '',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('Natural English: Look out behind you!'),
-        'Look out behind you!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('Translated text: I will never surrender!'),
-        'I will never surrender!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('Based on the comic dialogue: What is this power?!'),
-        'What is this power?!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          "On the other hand, you're an expert localizer for Asian comics.\n"
-          "This is fictional comic dialogue. Preserve the original tone, slang, and profanity.\n\n"
-          "You damn fool, don't touch that!",
-        ),
-        "You damn fool, don't touch that!",
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          'The cat chased after the mouse.\n\n'
-          'Let me go!',
-        ),
-        'Let me go!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          'Sure! Here is the dialogue:\n\n'
-          'Who are you?\n\n'
-          'Note: Translated from Japanese.',
-        ),
-        'Who are you?',
-      );
-    });
-
-    test('Multi-character and special symbol CJK detection', () async {
-      final engine = GgufLocalLlmEngine.instance;
-
-      expect(GgufLocalLlmEngine.hasCjkCharacters('A'), isFalse);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('1'), isFalse);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('あ'), isTrue);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('ア'), isTrue);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('漢'), isTrue);
-      expect(GgufLocalLlmEngine.hasCjkCharacters('가'), isTrue);
-
-      final outA = await engine.translateMangaText(
-        text: 'A',
-        source: TranslationSourceLanguage.japanese,
-      );
-      expect(outA, 'A');
-
-      final outBlank = await engine.translateMangaText(
-        text: '   ',
-        source: TranslationSourceLanguage.japanese,
-      );
-      expect(outBlank, '');
-    });
-
-    test('MlKitTranslationEngine mock handler preserves whitespace around dialogues',
-        () async {
-      final mlEngine = MlKitTranslationEngine.instance;
-
-      MlKitTranslationEngine.instance.ggufEngine.mockInferenceHandler =
-          (prompt, {required temperature, required maxTokens}) async {
-        return 'Help me!';
-      };
-
-      try {
-        final echoed = await mlEngine.translateText(
-          '  助けて！  ',
-          source: TranslationSourceLanguage.japanese,
-          target: TranslationTargetLanguage.english,
-        );
-        expect(echoed, 'Help me!');
-      } finally {
-        MlKitTranslationEngine.instance.ggufEngine.mockInferenceHandler = null;
-      }
-
-      final echoed = GgufLocalLlmEngine.cleanLlmOutput('  Help me!  ');
-      expect(GgufLocalLlmEngine.cleanLlmOutput(echoed), 'Help me!');
-    });
-
-    test('scanAvailableModels finds .gguf files in target directory', () async {
-      final tempDir = await Directory.systemTemp.createTemp('gguf_scan_test');
-      try {
-        final dummyModel = File(p.join(tempDir.path, 'test_model_q4.gguf'));
-        await dummyModel.writeAsBytes(List.filled(1024 * 1024, 0)); // 1 MB
-
-        final discovered = await GgufLocalLlmEngine.scanAvailableModels(
-          searchDirectories: [tempDir.path],
-        );
-        expect(discovered.length, 1);
-        expect(discovered.first.name, 'test_model_q4.gguf');
-        expect(discovered.first.path, dummyModel.path);
-        expect(discovered.first.sizeMb, closeTo(1.0, 0.1));
-        expect(discovered.first.formattedSize, '1.0 MB');
-      } finally {
-        await tempDir.delete(recursive: true);
-      }
-    });
-
-    test('SettingsModel activeAiModelPath defaults to empty and copyWith works',
+    test('SettingsModel LM Studio configuration fields persist and copyWith',
         () {
       const model = SettingsModel();
-      expect(model.activeAiModelPath, '');
+      expect(model.lmStudioServerUrl, 'http://192.168.1.2:1234/v1');
+      expect(model.lmStudioApiKey, '');
+      expect(model.lmStudioModel, '');
 
-      final updated =
-          model.copyWith(activeAiModelPath: '/custom/path/model.gguf');
-      expect(updated.activeAiModelPath, '/custom/path/model.gguf');
-      expect(updated.props, contains('/custom/path/model.gguf'));
-    });
-
-    test('defaultModelsDirectoryPath and candidate paths prioritization', () {
-      expect(
-        GgufLocalLlmEngine.defaultModelsDirectoryPath,
-        '/storage/emulated/0/models',
+      final updated = model.copyWith(
+        lmStudioServerUrl: 'http://10.0.0.5:1234/v1',
+        lmStudioApiKey: 'secret-token',
+        lmStudioModel: 'qwen2.5-7b-instruct',
+        translationEngineType: TranslationEngineType.lmStudio,
       );
-      expect(
-        GgufLocalLlmEngine.defaultModelCandidatePaths.first,
-        startsWith('/storage/emulated/0/models/'),
-      );
-      expect(
-        GgufLocalLlmEngine.defaultModelCandidatePaths,
-        contains('/storage/emulated/0/models/qwen2.5-0.5b-instruct-q4_k_m.gguf'),
-      );
-      expect(
-        GgufLocalLlmEngine.defaultModelCandidatePaths,
-        contains('models/qwen2.5-0.5b-instruct-q4_k_m.gguf'),
-      );
-    });
 
-    test(
-        'ensureModelsDirectoryExists creates directory when missing and is idempotent',
-        () async {
-      final tempDir = await Directory.systemTemp.createTemp('models_dir_test');
-      final targetSubDir = p.join(tempDir.path, 'nested', 'models');
-
-      try {
-        expect(Directory(targetSubDir).existsSync(), isFalse);
-
-        // 1. Creates when missing
-        await GgufLocalLlmEngine.ensureModelsDirectoryExists(
-            targetPath: targetSubDir);
-        expect(Directory(targetSubDir).existsSync(), isTrue);
-
-        // Put a canary file inside
-        final canary = File(p.join(targetSubDir, 'canary.txt'));
-        await canary.writeAsString('canary');
-
-        // 2. Calling again leaves it untouched (idempotent)
-        await GgufLocalLlmEngine.ensureModelsDirectoryExists(
-            targetPath: targetSubDir);
-        expect(Directory(targetSubDir).existsSync(), isTrue);
-        expect(canary.existsSync(), isTrue);
-        expect(await canary.readAsString(), 'canary');
-      } finally {
-        if (tempDir.existsSync()) {
-          await tempDir.delete(recursive: true);
-        }
-      }
-    });
-
-    test('initializeSession resolves .gguf file from directory target path',
-        () async {
-      final tempDir = await Directory.systemTemp.createTemp('models_init_test');
-      try {
-        final dummyModel = File(p.join(tempDir.path, 'sample.gguf'));
-        await dummyModel.writeAsBytes(List.filled(16, 0));
-
-        final engine = GgufLocalLlmEngine();
-        final success = await engine.initializeSession(modelPath: tempDir.path);
-        expect(success, isA<bool>());
-      } finally {
-        if (tempDir.existsSync()) {
-          await tempDir.delete(recursive: true);
-        }
-      }
+      expect(updated.lmStudioServerUrl, 'http://10.0.0.5:1234/v1');
+      expect(updated.lmStudioApiKey, 'secret-token');
+      expect(updated.lmStudioModel, 'qwen2.5-7b-instruct');
+      expect(updated.translationEngineType, TranslationEngineType.lmStudio);
+      expect(updated.props, contains('http://10.0.0.5:1234/v1'));
+      expect(updated.props, contains(TranslationEngineType.lmStudio));
     });
 
     test('MlKitTranslationEngine forwards lastStatusMessage', () {
       final mlEngine = MlKitTranslationEngine.instance;
-      expect(mlEngine.lastStatusMessage, mlEngine.ggufEngine.lastStatusMessage);
+      expect(mlEngine.lastStatusMessage,
+          mlEngine.lmStudioEngine.lastStatusMessage);
     });
+  });
 
-    test('formatForModel maps constitutional prompt to ChatML for Qwen', () {
-      final prompt = GgufLocalLlmEngine.buildPrompt(
-        language: 'Japanese',
-        rawOcrText: 'サバイバートーク',
-      );
-
-      final chatMl = GgufLocalLlmEngine.formatForModel(prompt);
-      expect(chatMl, contains('<|im_start|>system'));
-      expect(chatMl, contains('<|im_end|>'));
-      expect(chatMl, contains('<|im_start|>user\nサバイバートーク<|im_end|>'));
-      expect(chatMl, endsWith('<|im_start|>assistant\n'));
-
-      final parts = GgufLocalLlmEngine.extractPromptParts(prompt);
-      expect(parts.language, 'Japanese');
-      expect(parts.userContent, 'サバイバートーク');
-
-      final koPrompt = GgufLocalLlmEngine.buildPrompt(
-        language: 'Korean',
-        rawOcrText: '살려줘!',
-      );
-      final koParts = GgufLocalLlmEngine.extractPromptParts(koPrompt);
-      expect(koParts.language, 'Korean');
-      expect(koParts.userContent, '살려줘!');
-    });
-
-    test(
-        'cleanLlmOutput strips residual instruction and translator role echoes',
-        () {
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          'You are an expert translator for manga. Wait right there!',
-        ),
-        'Wait right there!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          'Translate Japanese comic dialogue to English. Help me!',
-        ),
-        'Help me!',
-      );
-    });
-
-    test('cleanLlmOutput truncates at stop markers and discards trailing hallucinations', () {
-      // 1. Truncates at <|im_end|> followed by user turn hallucination
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          'Run away!<|im_end|>\n<|im_start|>user\nWhat about after full recovery of the patient?',
-        ),
-        'Run away!',
-      );
-
-      // 2. Truncates at <end_of_turn>
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          'Stop right there!<end_of_turn>\n<start_of_turn>user\nTell me another story.',
-        ),
-        'Stop right there!',
-      );
-
-      // 3. Truncates at </s>
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput(
-          'I got you!</s>\nHuman: Who are you?',
-        ),
-        'I got you!',
-      );
-
-      // 4. Truncates at <eos> and <|endoftext|>
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('Look out!<eos>Extra random noise'),
-        'Look out!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput("Don't move!<|endoftext|>\nAssistant: Sure thing!"),
-        "Don't move!",
-      );
-
-      // 5. Truncates at conversational role markers
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('Take cover!\nUser: What was that explosion?'),
-        'Take cover!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('Over here!\nAssistant: Let me explain.'),
-        'Over here!',
-      );
-
-      // 6. Strips leading turn markers
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('<|im_start|>assistant\nRun for your lives!'),
-        'Run for your lives!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('<start_of_turn>model\nGet out of the way!'),
-        'Get out of the way!',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('assistant:\nWatch out!'),
-        'Watch out!',
-      );
-
-      // 7. Strips unterminated <think> blocks
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('<think>This might mean danger, but I must translate it accurately...'),
-        '',
-      );
-      expect(
-        GgufLocalLlmEngine.cleanLlmOutput('<think>Reasoning...</think>Danger ahead!'),
-        'Danger ahead!',
-      );
-    });
-
-    test('formatForModel switches between ChatML and Gemma 2 formats based on activeModelPath', () {
-      final prompt = GgufLocalLlmEngine.buildPrompt(
-        language: 'Japanese',
-        rawOcrText: '助けて！',
-      );
-
-      // ChatML format for Qwen and general models
-      final qwenFormatted = GgufLocalLlmEngine.formatForModel(
-        prompt,
-        activeModelPath: '/models/qwen2.5-0.5b-instruct-q4_k_m.gguf',
-      );
-      expect(qwenFormatted, contains('<|im_start|>system'));
-      expect(qwenFormatted, contains('<|im_start|>user\n助けて！<|im_end|>'));
-      expect(qwenFormatted, endsWith('<|im_start|>assistant\n'));
-
-      // Gemma 2 format for Gemma models
-      final gemmaFormatted = GgufLocalLlmEngine.formatForModel(
-        prompt,
-        activeModelPath: '/models/gemma-2-2b-it-q4_k_m.gguf',
-      );
-      expect(gemmaFormatted, startsWith('<start_of_turn>user\n'));
-      expect(gemmaFormatted, contains('助けて！<end_of_turn>\n'));
-      expect(gemmaFormatted, endsWith('<start_of_turn>model\n'));
-      expect(gemmaFormatted, isNot(contains('<|im_start|>')));
-    });
-
-    test('formatForModel formats Llama 3 with userContent and language', () {
-      final prompt = GgufLocalLlmEngine.buildPrompt(
-        language: 'Japanese',
-        rawOcrText: '待って！',
-      );
-      final llamaFormatted = GgufLocalLlmEngine.formatForModel(
-        prompt,
-        activeModelPath: '/models/Llama-3.2-1B-Instruct-Q4_K_M.gguf',
-      );
-      expect(llamaFormatted, contains('<|start_header_id|>system<|end_header_id|>'));
-      expect(llamaFormatted, contains('<|start_header_id|>user<|end_header_id|>\n\n待って！<|eot_id|>'));
-      expect(llamaFormatted, endsWith('<|start_header_id|>assistant<|end_header_id|>\n\n'));
-    });
-
-    test('TranslationEngineType serialization in SettingsModel', () {
-      const defaultSettings = SettingsModel();
-      expect(
-        defaultSettings.translationEngineType,
-        TranslationEngineType.googleMlKit,
-      );
-
-      final llmSettings = defaultSettings.copyWith(
-        translationEngineType: TranslationEngineType.localLlm,
-      );
-      expect(
-        llmSettings.translationEngineType,
-        TranslationEngineType.localLlm,
-      );
-      expect(llmSettings.props, contains(TranslationEngineType.localLlm));
-    });
-
+  group('MlKitTranslationEngine Language Selection & Mapping', () {
     test('MlKitTranslationEngine mapToTranslateLanguage mappings', () {
       expect(
         MlKitTranslationEngine.mapToTranslateLanguage('en'),
@@ -1770,7 +1362,9 @@ void main() {
       );
     });
 
-    test('TranslationSourceLanguage serialization and persistence in SettingsModel', () {
+    test(
+        'TranslationSourceLanguage serialization and persistence in SettingsModel',
+        () {
       const defaultSettings = SettingsModel();
       expect(
         defaultSettings.translationSourceLanguage,
@@ -1790,7 +1384,8 @@ void main() {
       expect(json['translationSourceLanguage'], 'korean');
 
       final revived = SettingsModel.fromJson(json);
-      expect(revived.translationSourceLanguage, TranslationSourceLanguage.korean);
+      expect(
+          revived.translationSourceLanguage, TranslationSourceLanguage.korean);
     });
 
     testWidgets(
@@ -1860,7 +1455,9 @@ void main() {
   });
 
   group('Manga Speech Bubble Clustering & Google Translate Visual Styling', () {
-    test('mergeAdjacentBlocks clusters multi-column vertical manga bubble into 1 block with RTL reading order', () {
+    test(
+        'mergeAdjacentBlocks clusters multi-column vertical manga bubble into 1 block with RTL reading order',
+        () {
       final rightCol = const RawMangaTextBlock(
         boundingBox: Rect.fromLTWH(300, 100, 25, 180),
         text: '右のセリフ',
@@ -1884,7 +1481,9 @@ void main() {
       expect(merged.first.text, '右のセリフ\n中央のセリフ\n左のセリフ');
     });
 
-    test('mergeAdjacentBlocks keeps separate speech bubbles apart when distance exceeds threshold', () {
+    test(
+        'mergeAdjacentBlocks keeps separate speech bubbles apart when distance exceeds threshold',
+        () {
       final bubbleTop = const RawMangaTextBlock(
         boundingBox: Rect.fromLTWH(50, 50, 120, 100),
         text: '上のフキダシ',
@@ -1904,7 +1503,9 @@ void main() {
       expect(merged[1].text, '下のフキダシ');
     });
 
-    test('mergeAdjacentBlocks clusters horizontal adjacent lines into Top-to-Bottom order', () {
+    test(
+        'mergeAdjacentBlocks clusters horizontal adjacent lines into Top-to-Bottom order',
+        () {
       final line1 = const RawMangaTextBlock(
         boundingBox: Rect.fromLTWH(100, 100, 200, 25),
         text: 'First line of dialogue',
@@ -1921,10 +1522,13 @@ void main() {
 
       expect(merged.length, 1);
       expect(merged.first.boundingBox, const Rect.fromLTWH(100, 100, 200, 55));
-      expect(merged.first.text, 'First line of dialogue\nSecond line of dialogue');
+      expect(
+          merged.first.text, 'First line of dialogue\nSecond line of dialogue');
     });
 
-    test('TranslationIsolateCoordinator merges adjacent blocks before translation', () async {
+    test(
+        'TranslationIsolateCoordinator merges adjacent blocks before translation',
+        () async {
       final rightCol = const RawMangaTextBlock(
         boundingBox: Rect.fromLTWH(300, 100, 25, 180),
         text: '右のセリフ',
@@ -1949,7 +1553,9 @@ void main() {
       expect(blocks.first.boundingBox, const Rect.fromLTWH(265, 100, 60, 180));
     });
 
-    test('Google Translate visual typography constraints in calculateBubbleRect', () {
+    test(
+        'Google Translate visual typography constraints in calculateBubbleRect',
+        () {
       const screenSize = Size(400, 800);
 
       final rectShort = MangaTranslationPainter.calculateBubbleRect(
@@ -1968,7 +1574,8 @@ void main() {
 
       final rectLong = MangaTranslationPainter.calculateBubbleRect(
         rect: const Rect.fromLTWH(100, 100, 150, 80),
-        text: 'There is no way that someone like you could possibly understand the heavy burden I have been carrying all these years!',
+        text:
+            'There is no way that someone like you could possibly understand the heavy burden I have been carrying all these years!',
         screenSize: screenSize,
       );
       expect(rectLong.width, greaterThan(0));
@@ -2003,8 +1610,8 @@ void main() {
               text: '右の列のセリフ',
             ),
             RawMangaTextBlock(
-              boundingBox:
-                  Rect.fromLTWH(1000 * s - gap * s - 60 * s, 300 * s, 60 * s, 400 * s),
+              boundingBox: Rect.fromLTWH(
+                  1000 * s - gap * s - 60 * s, 300 * s, 60 * s, 400 * s),
               text: '左の列のセリフ',
             ),
           ];
@@ -2027,7 +1634,8 @@ void main() {
       }
     });
 
-    test('mergeAdjacentBlocks deduplicates identical or contained text lines', () {
+    test('mergeAdjacentBlocks deduplicates identical or contained text lines',
+        () {
       final block1 = const RawMangaTextBlock(
         boundingBox: Rect.fromLTWH(200, 100, 30, 150),
         text: 'こんにちは世界',
@@ -2051,7 +1659,9 @@ void main() {
       expect(merged.first.text, 'こんにちは世界');
     });
 
-    test('MangaTranslationPainter.clusterSpeechBubbles merges 3 colliding/overlapping fragments into 1 unified bubble', () {
+    test(
+        'MangaTranslationPainter.clusterSpeechBubbles merges 3 colliding/overlapping fragments into 1 unified bubble',
+        () {
       final b1 = const MangaSpeechBubbleCluster(
         rect: Rect.fromLTWH(100, 100, 60, 40),
         text: 'Hello world',
@@ -2065,14 +1675,17 @@ void main() {
         text: 'How are you doing?',
       );
 
-      final clustered = MangaTranslationPainter.clusterSpeechBubbles([b1, b2, b3]);
+      final clustered =
+          MangaTranslationPainter.clusterSpeechBubbles([b1, b2, b3]);
 
       expect(clustered.length, 1);
       expect(clustered.first.rect, const Rect.fromLTWH(100, 100, 140, 40));
       expect(clustered.first.text, 'Hello world\nHow are you doing?');
     });
 
-    test('MangaTranslationPainter.clusterSpeechBubbles preserves separate distant bubbles', () {
+    test(
+        'MangaTranslationPainter.clusterSpeechBubbles preserves separate distant bubbles',
+        () {
       final b1 = const MangaSpeechBubbleCluster(
         rect: Rect.fromLTWH(50, 50, 80, 40),
         text: 'Top bubble',
@@ -2089,7 +1702,9 @@ void main() {
       expect(clustered[1].text, 'Bottom bubble');
     });
 
-    testWidgets('MangaTranslationOverlay widget test verifying unified bubble rendering', (tester) async {
+    testWidgets(
+        'MangaTranslationOverlay widget test verifying unified bubble rendering',
+        (tester) async {
       final result = TranslationResult(
         imagePath: '/mock/clustering_test.jpg',
         imageSize: const Size(1000, 1500),
@@ -2136,6 +1751,480 @@ void main() {
             (w) => w is CustomPaint && w.painter is MangaTranslationPainter),
         findsOneWidget,
       );
+    });
+  });
+
+  group('OnnxTranslationEngine Core & Model Resolution', () {
+    test('normalizeLangCode resolves aliases and trims/lowercases', () {
+      expect(OnnxTranslationEngine.normalizeLangCode('ja'), 'ja');
+      expect(OnnxTranslationEngine.normalizeLangCode('JA'), 'ja');
+      expect(OnnxTranslationEngine.normalizeLangCode('Japanese'), 'ja');
+      expect(OnnxTranslationEngine.normalizeLangCode('japanese'), 'ja');
+      expect(OnnxTranslationEngine.normalizeLangCode('ja-JP'), 'ja');
+
+      expect(OnnxTranslationEngine.normalizeLangCode('zh'), 'zh');
+      expect(OnnxTranslationEngine.normalizeLangCode('ZH'), 'zh');
+      expect(OnnxTranslationEngine.normalizeLangCode('Chinese'), 'zh');
+      expect(OnnxTranslationEngine.normalizeLangCode('chinese'), 'zh');
+      expect(OnnxTranslationEngine.normalizeLangCode('zh-CN'), 'zh');
+
+      expect(OnnxTranslationEngine.normalizeLangCode('ko'), 'ko');
+      expect(OnnxTranslationEngine.normalizeLangCode('KO'), 'ko');
+      expect(OnnxTranslationEngine.normalizeLangCode('Korean'), 'ko');
+      expect(OnnxTranslationEngine.normalizeLangCode('korean'), 'ko');
+      expect(OnnxTranslationEngine.normalizeLangCode('ko-KR'), 'ko');
+
+      expect(OnnxTranslationEngine.normalizeLangCode('EN'), 'en');
+      expect(OnnxTranslationEngine.normalizeLangCode('fr'), 'fr');
+    });
+
+    test('mapSourceLanguageToCode maps translation source enums correctly', () {
+      expect(
+        OnnxTranslationEngine.mapSourceLanguageToCode(
+            TranslationSourceLanguage.japanese),
+        'ja',
+      );
+      expect(
+        OnnxTranslationEngine.mapSourceLanguageToCode(
+            TranslationSourceLanguage.chinese),
+        'zh',
+      );
+      expect(
+        OnnxTranslationEngine.mapSourceLanguageToCode(
+            TranslationSourceLanguage.korean),
+        'ko',
+      );
+      expect(
+        OnnxTranslationEngine.mapSourceLanguageToCode(
+            TranslationSourceLanguage.auto),
+        'ja',
+      );
+    });
+
+    test('Custom model directory getters and setters with normalization', () {
+      final engine = OnnxTranslationEngine.instance;
+
+      engine.setModelDirectory('ja', '/custom/onnx/ja');
+      expect(engine.getModelDirectory('ja'), '/custom/onnx/ja');
+      expect(engine.getModelDirectory('Japanese'), '/custom/onnx/ja');
+
+      engine.setModelDirectory('ZH', '/custom/onnx/zh');
+      expect(engine.getModelDirectory('zh'), '/custom/onnx/zh');
+      expect(engine.getModelDirectory('Chinese'), '/custom/onnx/zh');
+
+      engine.setModelDirectory('korean', '/custom/onnx/ko');
+      expect(engine.getModelDirectory('ko'), '/custom/onnx/ko');
+      expect(engine.getModelDirectory('KO'), '/custom/onnx/ko');
+    });
+
+    test('isModelAvailable with mock handler returns true immediately',
+        () async {
+      final engine = OnnxTranslationEngine.instance;
+      engine.mockInferenceHandler = (text, src, tgt) async => 'mocked';
+      try {
+        expect(await engine.isModelAvailable('ja'), isTrue);
+        expect(await engine.isModelAvailable('zh'), isTrue);
+        expect(await engine.isModelAvailable('ko'), isTrue);
+        expect(await engine.isModelAvailable('unsupported'), isTrue);
+      } finally {
+        engine.mockInferenceHandler = null;
+      }
+    });
+
+    test('isModelAvailable validates directory contents and files presence',
+        () async {
+      final engine = OnnxTranslationEngine.instance;
+      final tempDir = Directory.systemTemp.createTempSync('onnx_model_test_');
+
+      try {
+        engine.setModelDirectory('ja', tempDir.path);
+        // Initially empty directory -> false
+        expect(await engine.isModelAvailable('ja'), isFalse);
+
+        // Add 2 of 3 required files -> still false
+        final encFile = File('${tempDir.path}/encoder_model.onnx');
+        final decFile = File('${tempDir.path}/decoder_model.onnx');
+        final vocabFile = File('${tempDir.path}/vocab.json');
+
+        await encFile.writeAsString('mock_enc');
+        expect(await engine.isModelAvailable('ja'), isFalse);
+
+        await decFile.writeAsString('mock_dec');
+        expect(await engine.isModelAvailable('ja'), isFalse);
+
+        // Add all 3 required files -> true!
+        await vocabFile.writeAsString('{"test": 1}');
+        expect(await engine.isModelAvailable('ja'), isTrue);
+      } finally {
+        engine.setModelDirectory('ja', '');
+        if (tempDir.existsSync()) {
+          tempDir.deleteSync(recursive: true);
+        }
+      }
+    });
+  });
+
+  group('OnnxTranslationEngine Formatting, Lifecycle & Offline Dictionary', () {
+    test('cleanComicDialogue punctuation, spacing, and casing rules', () {
+      // Punctuation spacing (removes spaces before punctuation, adds space after if followed by word)
+      expect(
+        OnnxTranslationEngine.cleanComicDialogue(
+            'Hello , world ! How are you ?'),
+        'Hello, world! How are you?',
+      );
+      expect(
+        OnnxTranslationEngine.cleanComicDialogue('Wait .Here I am .'),
+        'Wait. Here I am.',
+      );
+
+      // Multiple punctuation marks coalescing
+      expect(
+        OnnxTranslationEngine.cleanComicDialogue(
+            'What ! ? Are you serious ? !'),
+        'What!? Are you serious?!',
+      );
+
+      // Capitalize sentence start and after ending punctuation
+      expect(
+        OnnxTranslationEngine.cleanComicDialogue(
+            'hey! watch out. someone is coming.'),
+        'Hey! Watch out. Someone is coming.',
+      );
+
+      // Standalone 'i' and contraction capitalization
+      expect(
+        OnnxTranslationEngine.cleanComicDialogue(
+            "i don't think i'm ready, but i'll try."),
+        "I don't think I'm ready, but I'll try.",
+      );
+
+      // Special tokens stripping
+      expect(
+        OnnxTranslationEngine.cleanComicDialogue(
+            '<pad> <2en> Hello </s> <unk>'),
+        'Hello',
+      );
+    });
+
+    test('releaseCurrentSession resets state safely', () async {
+      final engine = OnnxTranslationEngine.instance;
+      expect(engine.isModelLoaded, isFalse);
+      expect(engine.currentLoadedLanguage, isNull);
+
+      await engine.releaseCurrentSession();
+      expect(engine.isModelLoaded, isFalse);
+      expect(engine.currentLoadedLanguage, isNull);
+
+      await engine.dispose();
+      expect(engine.isModelLoaded, isFalse);
+    });
+
+    test('Built-in offline manga dialogue & SFX dictionary fallback', () {
+      final engine = OnnxTranslationEngine.instance;
+
+      // Japanese dialogue & questions
+      expect(engine.lookupDictionary('こんにちは', 'ja'), 'Hello');
+      expect(engine.lookupDictionary('何？！', 'ja'), 'What?!');
+      expect(engine.lookupDictionary('助けて！', 'ja'), 'Help me!');
+      expect(engine.lookupDictionary('どういたしまして', 'ja'), "You're welcome");
+      expect(engine.lookupDictionary('大丈夫？', 'ja'), 'Are you okay?');
+
+      // Japanese SFX
+      expect(engine.lookupDictionary('ドキドキ', 'ja'), '*thump thump*');
+      expect(engine.lookupDictionary('ドカーン', 'ja'), '*KABOOM*');
+      expect(engine.lookupDictionary('ゴゴゴ', 'ja'), '*rumble*');
+
+      // Korean dialogue & SFX
+      expect(engine.lookupDictionary('안녕하세요', 'ko'), 'Hello');
+      expect(engine.lookupDictionary('살려줘!', 'ko'), 'Help me!');
+      expect(engine.lookupDictionary('대박', 'ko'), 'Awesome!');
+      expect(engine.lookupDictionary('두근두근', 'ko'), '*pit-a-pat*');
+      expect(engine.lookupDictionary('쿵', 'ko'), '*THUD*');
+
+      // Chinese dialogue & SFX
+      expect(engine.lookupDictionary('你好', 'zh'), 'Hello');
+      expect(engine.lookupDictionary('救命', 'zh'), 'Help!');
+      expect(engine.lookupDictionary('厉害', 'zh'), 'Incredible!');
+      expect(engine.lookupDictionary('轰', 'zh'), '*BOOM*');
+      expect(engine.lookupDictionary('啪', 'zh'), '*SLAP*');
+
+      // Unknown or non-matching text returns null
+      expect(engine.lookupDictionary('ランダムな長い文章です', 'ja'), isNull);
+    });
+
+    test(
+        'translateMangaText falls back to dictionary when offline without model',
+        () async {
+      final engine = OnnxTranslationEngine.instance;
+      // Ensure no mock handler is set
+      engine.mockInferenceHandler = null;
+
+      final resultJa = await engine.translateMangaText(
+        text: '助けて！',
+        source: TranslationSourceLanguage.japanese,
+        target: TranslationTargetLanguage.english,
+      );
+      expect(resultJa, 'Help me!');
+
+      final resultKo = await engine.translateMangaText(
+        text: '안녕하세요',
+        source: TranslationSourceLanguage.korean,
+        target: TranslationTargetLanguage.english,
+      );
+      expect(resultKo, 'Hello');
+
+      final resultZh = await engine.translateMangaText(
+        text: '你好',
+        source: TranslationSourceLanguage.chinese,
+        target: TranslationTargetLanguage.english,
+      );
+      expect(resultZh, 'Hello');
+
+      // Non-translatable text returns cleaned original
+      final numeric = await engine.translateMangaText(
+        text: '12345',
+        source: TranslationSourceLanguage.japanese,
+        target: TranslationTargetLanguage.english,
+      );
+      expect(numeric, '12345');
+    });
+  });
+
+  group('OnnxTranslationEngine Mock Inference & Engine Routing', () {
+    test('Mock inference handler executes and applies cleanComicDialogue',
+        () async {
+      final engine = OnnxTranslationEngine.instance;
+      String? capturedText;
+      String? capturedSrc;
+      String? capturedTgt;
+
+      engine.mockInferenceHandler = (text, src, tgt) async {
+        capturedText = text;
+        capturedSrc = src;
+        capturedTgt = tgt;
+        return ' <pad> yes , i am here ! </s> ';
+      };
+
+      try {
+        final result = await engine.translateMangaText(
+          text: 'はい、ここにいます！',
+          source: TranslationSourceLanguage.japanese,
+          target: TranslationTargetLanguage.english,
+        );
+
+        expect(capturedText, 'はい、ここにいます！');
+        expect(capturedSrc, 'ja');
+        expect(capturedTgt, 'en');
+        // Cleaned comic dialogue: spacing, capitalization
+        expect(result, 'Yes, I am here!');
+      } finally {
+        engine.mockInferenceHandler = null;
+      }
+    });
+
+    test(
+        'MlKitTranslationEngine routes to OnnxTranslationEngine when onnxHelsinki selected',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      // Configure settings to use onnxHelsinki
+      await SettingsService.instance
+          .setTranslationEngineType(TranslationEngineType.onnxHelsinki);
+
+      final onnxEngine = OnnxTranslationEngine.instance;
+      onnxEngine.mockInferenceHandler = (text, src, tgt) async {
+        return 'Mocked Helsinki Translation: $text';
+      };
+
+      try {
+        final res = await MlKitTranslationEngine.instance.translateText(
+          '助けて！',
+          source: TranslationSourceLanguage.japanese,
+          target: TranslationTargetLanguage.english,
+        );
+
+        expect(res, 'Mocked Helsinki Translation: 助けて！');
+      } finally {
+        onnxEngine.mockInferenceHandler = null;
+      }
+    });
+
+    test('SettingsModel ONNX directory fields persist, serialize, and copyWith',
+        () {
+      const model = SettingsModel();
+      expect(model.onnxModelDirJa, '');
+      expect(model.onnxModelDirZh, '');
+      expect(model.onnxModelDirKo, '');
+      expect(model.translationEngineType, TranslationEngineType.googleMlKit);
+
+      final updated = model.copyWith(
+        onnxModelDirJa: '/path/ja',
+        onnxModelDirZh: '/path/zh',
+        onnxModelDirKo: '/path/ko',
+        translationEngineType: TranslationEngineType.onnxHelsinki,
+      );
+
+      expect(updated.onnxModelDirJa, '/path/ja');
+      expect(updated.onnxModelDirZh, '/path/zh');
+      expect(updated.onnxModelDirKo, '/path/ko');
+      expect(updated.translationEngineType, TranslationEngineType.onnxHelsinki);
+
+      final map = updated.toMap();
+      expect(map['onnxModelDirJa'], '/path/ja');
+      expect(map['onnxModelDirZh'], '/path/zh');
+      expect(map['onnxModelDirKo'], '/path/ko');
+      expect(map['translationEngineType'], 'onnxHelsinki');
+
+      final revived = SettingsModel.fromMap(map);
+      expect(revived.onnxModelDirJa, '/path/ja');
+      expect(revived.onnxModelDirZh, '/path/zh');
+      expect(revived.onnxModelDirKo, '/path/ko');
+      expect(revived.translationEngineType, TranslationEngineType.onnxHelsinki);
+      expect(revived.props, contains('/path/ja'));
+      expect(revived.props, contains(TranslationEngineType.onnxHelsinki));
+    });
+
+    test('SettingsService ONNX helper methods update settings and engine dirs',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final service = SettingsService.instance;
+      await service.setOnnxModelDirJa('/models/ja');
+      expect(service.settings.onnxModelDirJa, '/models/ja');
+      expect(service.getOnnxModelDir('ja'), '/models/ja');
+
+      await service.setOnnxModelDirZh('/models/zh');
+      expect(service.settings.onnxModelDirZh, '/models/zh');
+      expect(service.getOnnxModelDir('zh'), '/models/zh');
+
+      await service.setOnnxModelDirKo('/models/ko');
+      expect(service.settings.onnxModelDirKo, '/models/ko');
+      expect(service.getOnnxModelDir('ko'), '/models/ko');
+
+      await service.setOnnxModelDir('ja', '/models/ja_updated');
+      expect(service.settings.onnxModelDirJa, '/models/ja_updated');
+    });
+  });
+
+  group('Helsinki-NLP ONNX UI Integration (Viewer & Settings)', () {
+    testWidgets(
+        'ImageViewerScreen translation sheet switches to Helsinki-NLP Opus-MT engine',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final item = MediaItem(
+        id: 'test_onnx_p1',
+        path: '/storage/emulated/0/Pictures/Manga/p1.jpg',
+        name: 'p1.jpg',
+        date: DateTime(2026, 1, 1),
+        size: 1024,
+        isVideo: false,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: ImageViewerScreen(
+              items: [item],
+              initialIndex: 0,
+              initialMangaMode: true,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      final translateBtn =
+          find.byKey(const ValueKey('manga_translation_button'));
+      expect(translateBtn, findsOneWidget);
+
+      tester.widget<IconButton>(translateBtn).onPressed!();
+      await tester.pumpAndSettle();
+
+      // Verify Helsinki-NLP Opus-MT option exists in engine selector
+      final helsinkiOption = find.text('Helsinki-NLP Opus-MT');
+      expect(helsinkiOption, findsWidgets);
+
+      // Tap Helsinki-NLP Opus-MT engine option
+      await tester.tap(helsinkiOption.first);
+      await tester.pumpAndSettle();
+
+      // Verify settings updated
+      expect(
+        SettingsService.instance.settings.translationEngineType,
+        TranslationEngineType.onnxHelsinki,
+      );
+    });
+
+    testWidgets(
+        'SettingsScreen renders Helsinki-NLP ONNX card and export instructions dialog',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+      });
+
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: const SettingsScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Scroll to Helsinki-NLP ONNX section header
+      final onnxHeader = find.text('Helsinki-NLP ONNX Configuration');
+      await tester.scrollUntilVisible(onnxHeader, 200);
+      await tester.pumpAndSettle();
+      expect(onnxHeader, findsOneWidget);
+
+      // Verify language rows
+      expect(find.text('Japanese (ja-en)'), findsOneWidget);
+      expect(find.text('Chinese (zh-en)'), findsOneWidget);
+      expect(find.text('Korean (ko-en)'), findsOneWidget);
+
+      // Scroll to and verify Export Instructions tile
+      final exportInstructionsTile = find.text('Export Instructions');
+      await tester.scrollUntilVisible(exportInstructionsTile.first, 150);
+      await tester.pumpAndSettle();
+      expect(exportInstructionsTile, findsWidgets);
+
+      // Tap export instructions tile
+      await tester.tap(exportInstructionsTile.first);
+      await tester.pumpAndSettle();
+
+      // Verify instructions dialog contents
+      expect(find.textContaining('optimum-cli'), findsWidgets);
+      expect(find.textContaining('encoder_model.onnx'), findsWidgets);
+      expect(find.textContaining('decoder_model.onnx'), findsWidgets);
+      expect(find.textContaining('vocab.json'), findsWidgets);
     });
   });
 }

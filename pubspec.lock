@@ -126,14 +126,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.0"
-  flutter_llama:
-    dependency: "direct main"
-    description:
-      name: flutter_llama
-      sha256: cbdda3aaee0179a99a5339925ef1aa91c37c0aafaa5703e4e5fda96f1a37d6d5
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.2.1"
   flutter_localizations:
     dependency: "direct main"
     description: flutter
@@ -325,6 +317,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "9.5.0"
+  onnx_translation:
+    dependency: "direct main"
+    description:
+      name: onnx_translation
+      sha256: "244c3d283fdd23819edce97301fae8ef5cbc08884c62bc7aeb3ada9e342933d9"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
+  onnxruntime:
+    dependency: "direct main"
+    description:
+      name: onnxruntime
+      sha256: e77ec05acafc135cc5fe7bcdf11b101b39f06513c9d5e9fa02cb1929f6bac72a
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.4.1"
   package_config:
     dependency: transitive
     description:

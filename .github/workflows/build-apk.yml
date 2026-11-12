@@ -65,15 +65,6 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Configure flutter_llama build options
-        run: |
-          echo "Configuring flutter_llama build options..."
-          CMAKE_FILE=$(find ~/.pub-cache/hosted/pub.dev -path "*/flutter_llama-*/android/src/main/cpp/CMakeLists.txt" 2>/dev/null | head -n 1)
-          if [ -n "$CMAKE_FILE" ]; then
-            sed -i 's/option(FLUTTER_LLAMA_ANDROID_VULKAN "Build the optional Vulkan backend module" ON)/option(FLUTTER_LLAMA_ANDROID_VULKAN "Build the optional Vulkan backend module" OFF)/g' "$CMAKE_FILE"
-            echo "Successfully configured $CMAKE_FILE with Vulkan OFF (ARM NEON CPU engine)."
-          fi
-
       - name: Build 64-bit Release APK (Single ARM64 Binary)
         run: flutter build apk --release --target-platform android-arm64 --android-skip-build-dependency-validation
 

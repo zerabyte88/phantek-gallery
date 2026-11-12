@@ -128,6 +128,24 @@ void main() {
             reason: '$code doubleTapActionSeekOnly');
         expect(loc.doubleTapActionZoomOnly.isNotEmpty, isTrue,
             reason: '$code doubleTapActionZoomOnly');
+        expect(loc.engineOnnxHelsinki.isNotEmpty, isTrue,
+            reason: '$code engineOnnxHelsinki');
+        expect(loc.onnxConfigTitle.isNotEmpty, isTrue,
+            reason: '$code onnxConfigTitle');
+        expect(loc.onnxSubtitle.isNotEmpty, isTrue,
+            reason: '$code onnxSubtitle');
+        expect(loc.onnxModelStatus.isNotEmpty, isTrue,
+            reason: '$code onnxModelStatus');
+        expect(loc.onnxExportInstructions.isNotEmpty, isTrue,
+            reason: '$code onnxExportInstructions');
+        expect(loc.onnxModelInstalled.isNotEmpty, isTrue,
+            reason: '$code onnxModelInstalled');
+        expect(loc.onnxModelMissing.isNotEmpty, isTrue,
+            reason: '$code onnxModelMissing');
+        expect(loc.onnxSelectFolder.isNotEmpty, isTrue,
+            reason: '$code onnxSelectFolder');
+        expect(loc.onnxFolderSelected.isNotEmpty, isTrue,
+            reason: '$code onnxFolderSelected');
 
         for (final action in VideoDoubleTapAction.values) {
           expect(loc.videoDoubleTapActionLabel(action).isNotEmpty, isTrue,

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import '../../../core/services/translation/gguf_local_llm_engine.dart';
+import '../../../core/services/translation/lm_studio_translation_engine.dart';
 import '../../../core/services/translation/mlkit_translation_engine.dart';
+import '../../../core/services/translation/onnx_translation_engine.dart';
 import '../../../core/services/translation/translation_models.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_localizations.dart';
@@ -665,10 +666,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 _ModernTile(
                   icon: Icons.translate_rounded,
                   title: context.tr.translationEngine,
-                  subtitle: settings.translationEngineType ==
-                          TranslationEngineType.googleMlKit
-                      ? context.tr.engineGoogleMlKit
-                      : context.tr.engineLocalLlm,
+                  subtitle: switch (settings.translationEngineType) {
+                    TranslationEngineType.googleMlKit =>
+                      context.tr.engineGoogleMlKit,
+                    TranslationEngineType.onnxHelsinki =>
+                      context.tr.engineOnnxHelsinki,
+                    TranslationEngineType.lmStudio => context.tr.engineLmStudio,
+                  },
                   onTap: () async {
                     final chosen =
                         await _showModernOptionDialog<TranslationEngineType>(
@@ -684,9 +688,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           icon: Icons.bolt_rounded,
                         ),
                         _OptionItem(
-                          value: TranslationEngineType.localLlm,
-                          title: context.tr.engineLocalLlm,
-                          icon: Icons.smart_toy_outlined,
+                          value: TranslationEngineType.onnxHelsinki,
+                          title: context.tr.engineOnnxHelsinki,
+                          icon: Icons.memory_rounded,
+                        ),
+                        _OptionItem(
+                          value: TranslationEngineType.lmStudio,
+                          title: context.tr.engineLmStudio,
+                          icon: Icons.dns_outlined,
                         ),
                       ],
                     );
@@ -702,12 +711,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   subtitle: switch (settings.translationSourceLanguage) {
                     TranslationSourceLanguage.japanese =>
                       context.tr.langJapanese,
-                    TranslationSourceLanguage.chinese =>
-                      context.tr.langChinese,
-                    TranslationSourceLanguage.korean =>
-                      context.tr.langKorean,
-                    TranslationSourceLanguage.auto =>
-                      context.tr.autoDetect,
+                    TranslationSourceLanguage.chinese => context.tr.langChinese,
+                    TranslationSourceLanguage.korean => context.tr.langKorean,
+                    TranslationSourceLanguage.auto => context.tr.autoDetect,
                   },
                   onTap: () {
                     Navigator.of(context).push(
@@ -719,13 +725,69 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
                 const _CardDivider(),
                 _ModernTile(
-                  icon: Icons.psychology_outlined,
-                  title: context.tr.mangaAiModel,
-                  subtitle: settings.activeAiModelPath.isNotEmpty
-                      ? p.basename(settings.activeAiModelPath)
-                      : '/storage/emulated/0/models/ (${context.tr.defaultAutoDetect})',
+                  icon: Icons.dns_outlined,
+                  title: context.tr.lmStudioConfigTitle,
+                  subtitle: settings.lmStudioModel.isNotEmpty
+                      ? '${settings.lmStudioModel} (${settings.lmStudioServerUrl})'
+                      : settings.lmStudioServerUrl,
                   onTap: () =>
-                      _showAiModelManagerDialog(context, ref, settings),
+                      _showLmStudioConfigDialog(context, ref, settings),
+                ),
+              ],
+            ),
+            _SectionHeader(title: context.tr.onnxConfigTitle),
+            _SettingsCard(
+              children: [
+                _OnnxModelLanguageTile(
+                  langCode: 'ja',
+                  languageName: '${context.tr.langJapanese} (ja-en)',
+                  currentPath: settings.onnxModelDirJa,
+                  onPathUpdated: (newPath) {
+                    patch((s) => s.copyWith(onnxModelDirJa: newPath));
+                    OnnxTranslationEngine.instance
+                        .setModelDirectory('ja', newPath);
+                  },
+                  onShowInstructions: () =>
+                      _showOnnxExportInstructionsDialog(context),
+                ),
+                const _CardDivider(),
+                _OnnxModelLanguageTile(
+                  langCode: 'zh',
+                  languageName: '${context.tr.langChinese} (zh-en)',
+                  currentPath: settings.onnxModelDirZh,
+                  onPathUpdated: (newPath) {
+                    patch((s) => s.copyWith(onnxModelDirZh: newPath));
+                    OnnxTranslationEngine.instance
+                        .setModelDirectory('zh', newPath);
+                  },
+                  onShowInstructions: () =>
+                      _showOnnxExportInstructionsDialog(context),
+                ),
+                const _CardDivider(),
+                _OnnxModelLanguageTile(
+                  langCode: 'ko',
+                  languageName: '${context.tr.langKorean} (ko-en)',
+                  currentPath: settings.onnxModelDirKo,
+                  onPathUpdated: (newPath) {
+                    patch((s) => s.copyWith(onnxModelDirKo: newPath));
+                    OnnxTranslationEngine.instance
+                        .setModelDirectory('ko', newPath);
+                  },
+                  onShowInstructions: () =>
+                      _showOnnxExportInstructionsDialog(context),
+                ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.terminal_rounded,
+                  iconColor: cs.primary,
+                  title: context.tr.onnxExportInstructions,
+                  subtitle: context.tr.onnxSubtitle,
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.38),
+                  ),
+                  onTap: () => _showOnnxExportInstructionsDialog(context),
                 ),
               ],
             ),
@@ -1194,45 +1256,29 @@ class _CardDivider extends StatelessWidget {
   }
 }
 
-Future<void> _showAiModelManagerDialog(
+Future<void> _showLmStudioConfigDialog(
   BuildContext context,
   WidgetRef ref,
   SettingsModel settings,
 ) async {
-  await GgufLocalLlmEngine.ensureModelsDirectoryExists();
+  final urlController = TextEditingController(text: settings.lmStudioServerUrl);
+  final keyController = TextEditingController(text: settings.lmStudioApiKey);
+  final modelController = TextEditingController(text: settings.lmStudioModel);
 
-  if (!context.mounted) return;
-
-  final dTheme = Theme.of(context);
-  final cs = dTheme.colorScheme;
-  final isDark = dTheme.brightness == Brightness.dark;
-
-  List<DiscoveredAiModel> models = [];
-  bool isLoading = true;
+  bool isTesting = false;
+  String? testMessage;
+  bool? testSuccess;
+  List<String> discoveredModels = [];
 
   await showDialog<void>(
     context: context,
     builder: (ctx) {
+      final dTheme = Theme.of(ctx);
+      final cs = dTheme.colorScheme;
+      final isDark = dTheme.brightness == Brightness.dark;
+
       return StatefulBuilder(
         builder: (ctx, setSt) {
-          void refreshModels() {
-            setSt(() => isLoading = true);
-            GgufLocalLlmEngine.scanAvailableModels().then((result) {
-              if (ctx.mounted) {
-                setSt(() {
-                  models = result;
-                  isLoading = false;
-                });
-              }
-            });
-          }
-
-          if (isLoading && models.isEmpty) {
-            refreshModels();
-          }
-
-          final currentPath = settings.activeAiModelPath;
-
           return AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
@@ -1242,8 +1288,6 @@ Future<void> _showAiModelManagerDialog(
                 width: 1,
               ),
             ),
-            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
             title: Row(
               children: [
                 Container(
@@ -1253,27 +1297,15 @@ Future<void> _showAiModelManagerDialog(
                     color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
                     borderRadius: BorderRadius.circular(9),
                   ),
-                  child: Icon(
-                    Icons.psychology_outlined,
-                    color: cs.primary,
-                    size: 20,
-                  ),
+                  child: Icon(Icons.dns_outlined, color: cs.primary, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    context.tr.mangaAiModel,
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface,
-                    ),
+                    context.tr.lmStudioConfigTitle,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
                   ),
-                ),
-                IconButton(
-                  tooltip: context.tr.rescanModels,
-                  icon: const Icon(Icons.refresh_rounded, size: 20),
-                  onPressed: refreshModels,
                 ),
               ],
             ),
@@ -1284,252 +1316,471 @@ Future<void> _showAiModelManagerDialog(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest
-                            .withValues(alpha: isDark ? 0.4 : 0.5),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline_rounded,
-                            size: 16,
-                            color: cs.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              context.tr.modelsDirectoryNotice,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurfaceVariant,
-                                height: 1.3,
-                              ),
-                            ),
-                          ),
-                        ],
+                    TextField(
+                      controller: urlController,
+                      decoration: InputDecoration(
+                        labelText: context.tr.serverUrl,
+                        hintText: 'http://192.168.1.2:1234/v1',
+                        prefixIcon: const Icon(Icons.link_rounded),
+                        isDense: true,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    ListTile(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    TextField(
+                      controller: modelController,
+                      decoration: InputDecoration(
+                        labelText: context.tr.modelIdentifier,
+                        hintText: 'qwen2.5-7b-instruct',
+                        prefixIcon: const Icon(Icons.smart_toy_outlined),
+                        isDense: true,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                      leading: Icon(
-                        currentPath.isEmpty
-                            ? Icons.radio_button_checked
-                            : Icons.radio_button_off,
-                        color: currentPath.isEmpty
-                            ? cs.primary
-                            : cs.onSurfaceVariant,
-                        size: 20,
-                      ),
-                      title: Text(
-                        context.tr.defaultAutoDetect,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: currentPath.isEmpty
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      subtitle: Text(
-                        '/storage/emulated/0/models/',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                      onTap: () async {
-                        ref.read(settingsNotifierProvider.notifier).update(
-                              (s) => s.copyWith(activeAiModelPath: ''),
-                            );
-                        await GgufLocalLlmEngine.instance.initializeSession(
-                          modelPath: null,
-                        );
-                        if (ctx.mounted) Navigator.pop(ctx);
-                      },
                     ),
-                    const Divider(height: 16),
-                    if (isLoading) ...[
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Center(
-                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: keyController,
+                      obscureText: true,
+                      decoration: InputDecoration(
+                        labelText: context.tr.apiKeyOptional,
+                        hintText: context.tr.apiKeyHint,
+                        prefixIcon: const Icon(Icons.key_outlined),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        FilledButton.tonalIcon(
+                          onPressed: isTesting
+                              ? null
+                              : () async {
+                                  setSt(() {
+                                    isTesting = true;
+                                    testMessage = null;
+                                  });
+                                  final res = await LmStudioTranslationEngine
+                                      .instance
+                                      .testConnection(
+                                    baseUrl: urlController.text.trim(),
+                                    apiKey: keyController.text.trim(),
+                                  );
+                                  setSt(() {
+                                    isTesting = false;
+                                    testSuccess = res.isSuccess;
+                                    testMessage = res.message;
+                                    discoveredModels = res.availableModels;
+                                  });
+                                },
+                          icon: isTesting
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.wifi_tethering_rounded,
+                                  size: 16),
+                          label: Text(
+                            isTesting
+                                ? context.tr.testingConnection
+                                : context.tr.testConnection,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (testMessage != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: (testSuccess == true
+                                  ? Colors.green
+                                  : Colors.redAccent)
+                              .withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: testSuccess == true
+                                ? Colors.green
+                                : Colors.redAccent,
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Text(
+                          testMessage!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: testSuccess == true
+                                ? Colors.green
+                                : Colors.redAccent,
+                          ),
                         ),
                       ),
-                    ] else if (models.isEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Center(
-                          child: Text(
-                            context.tr.noModelsFound,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      ...models.map((model) {
-                        final isSelected = currentPath == model.path;
-                        return ListTile(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 8),
-                          leading: Icon(
-                            isSelected
-                                ? Icons.radio_button_checked
-                                : Icons.radio_button_off,
-                            color:
-                                isSelected ? cs.primary : cs.onSurfaceVariant,
-                            size: 20,
-                          ),
-                          title: Text(
-                            model.name,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                              color: cs.onSurface,
-                            ),
-                          ),
-                          subtitle: Text(
-                            '${model.formattedSize} • ${model.path}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                          onTap: () async {
-                            ref.read(settingsNotifierProvider.notifier).update(
-                                  (s) =>
-                                      s.copyWith(activeAiModelPath: model.path),
-                                );
-                            await GgufLocalLlmEngine.instance.initializeSession(
-                              modelPath: model.path,
-                            );
-                            if (ctx.mounted) Navigator.pop(ctx);
-                          },
-                        );
-                      }),
                     ],
-                    const Divider(height: 16),
-                    ListTile(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    if (discoveredModels.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        context.tr.availableModels,
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.bold),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                      leading: Icon(
-                        Icons.edit_road_outlined,
-                        color: cs.primary,
-                        size: 20,
-                      ),
-                      title: Text(
-                        context.tr.customModelPath,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      subtitle: currentPath.isNotEmpty &&
-                              !models.any((m) => m.path == currentPath)
-                          ? Text(
-                              currentPath,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                color: cs.primary,
-                              ),
-                            )
-                          : null,
-                      trailing:
-                          const Icon(Icons.chevron_right_rounded, size: 20),
-                      onTap: () async {
-                        final controller =
-                            TextEditingController(text: currentPath);
-                        final customPath = await showDialog<String>(
-                          context: ctx,
-                          builder: (subCtx) => AlertDialog(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            title: Text(
-                              context.tr.customModelPath,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            content: TextField(
-                              controller: controller,
-                              autofocus: true,
-                              decoration: const InputDecoration(
-                                hintText: '/path/to/model.gguf',
-                                isDense: true,
-                              ),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(subCtx),
-                                child: Text(context.tr.cancel),
-                              ),
-                              FilledButton(
-                                onPressed: () => Navigator.pop(
-                                    subCtx, controller.text.trim()),
-                                child: Text(context.tr.ok),
-                              ),
-                            ],
-                          ),
-                        );
-
-                        if (customPath != null && customPath.isNotEmpty) {
-                          ref.read(settingsNotifierProvider.notifier).update(
-                                (s) =>
-                                    s.copyWith(activeAiModelPath: customPath),
-                              );
-                          await GgufLocalLlmEngine.instance.initializeSession(
-                            modelPath: customPath,
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: discoveredModels.map((m) {
+                          return ActionChip(
+                            label:
+                                Text(m, style: const TextStyle(fontSize: 11)),
+                            onPressed: () {
+                              setSt(() {
+                                modelController.text = m;
+                              });
+                            },
                           );
-                          if (ctx.mounted) Navigator.pop(ctx);
-                        }
-                      },
-                    ),
+                        }).toList(),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
-            actionsPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             actions: [
               TextButton(
-                style: TextButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                ),
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(context.tr.cancel),
+              ),
+              FilledButton(
+                onPressed: () {
+                  ref.read(settingsNotifierProvider.notifier).update(
+                        (s) => s.copyWith(
+                          lmStudioServerUrl: urlController.text.trim(),
+                          lmStudioApiKey: keyController.text.trim(),
+                          lmStudioModel: modelController.text.trim(),
+                        ),
+                      );
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Save'),
               ),
             ],
           );
         },
       );
     },
+  );
+}
+
+Future<void> _showOnnxExportInstructionsDialog(BuildContext context) async {
+  final cs = Theme.of(context).colorScheme;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+
+  void copyWithSnack(String text, String label) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$label copied to clipboard'),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+            width: 1,
+          ),
+        ),
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(Icons.terminal_rounded, color: cs.primary, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                context.tr.onnxExportInstructions,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Helsinki-NLP Opus-MT models run 100% offline on your device using ONNX Runtime. Export Hugging Face models using optimum-cli:',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: cs.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildInstructionStepHeader(
+                  ctx,
+                  stepNumber: '1',
+                  title: 'Install Hugging Face Optimum',
+                ),
+                const SizedBox(height: 8),
+                _buildCopyableCodeBlock(
+                  ctx,
+                  code:
+                      'pip install "optimum[onnxruntime]" transformers sentencepiece',
+                  onCopy: () => copyWithSnack(
+                    'pip install "optimum[onnxruntime]" transformers sentencepiece',
+                    'Installation command',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildInstructionStepHeader(
+                  ctx,
+                  stepNumber: '2',
+                  title: 'Export Model via optimum-cli',
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Japanese → English (ja-en):',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface),
+                ),
+                const SizedBox(height: 4),
+                _buildCopyableCodeBlock(
+                  ctx,
+                  code:
+                      'optimum-cli export onnx --model Helsinki-NLP/opus-mt-ja-en ./models/ja-en/',
+                  onCopy: () => copyWithSnack(
+                    'optimum-cli export onnx --model Helsinki-NLP/opus-mt-ja-en ./models/ja-en/',
+                    'Japanese export command',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Chinese → English (zh-en):',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface),
+                ),
+                const SizedBox(height: 4),
+                _buildCopyableCodeBlock(
+                  ctx,
+                  code:
+                      'optimum-cli export onnx --model Helsinki-NLP/opus-mt-zh-en ./models/zh-en/',
+                  onCopy: () => copyWithSnack(
+                    'optimum-cli export onnx --model Helsinki-NLP/opus-mt-zh-en ./models/zh-en/',
+                    'Chinese export command',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Korean → English (ko-en):',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface),
+                ),
+                const SizedBox(height: 4),
+                _buildCopyableCodeBlock(
+                  ctx,
+                  code:
+                      'optimum-cli export onnx --model Helsinki-NLP/opus-mt-tc-big-en-ko ./models/ko-en/',
+                  onCopy: () => copyWithSnack(
+                    'optimum-cli export onnx --model Helsinki-NLP/opus-mt-tc-big-en-ko ./models/ko-en/',
+                    'Korean export command',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildInstructionStepHeader(
+                  ctx,
+                  stepNumber: '3',
+                  title: 'Verify Required 5 Files',
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Ensure the exported folder contains exactly these 5 files:',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 8),
+                _buildFileChecklist(ctx, [
+                  'encoder_model.onnx (Encoder network)',
+                  'decoder_model.onnx (Autoregressive decoder)',
+                  'vocab.json (Vocabulary mapping)',
+                  'tokenizer_config.json (Tokenizer configuration)',
+                  'generation_config.json (Generation parameters)',
+                ]),
+                const SizedBox(height: 16),
+                _buildInstructionStepHeader(
+                  ctx,
+                  stepNumber: '4',
+                  title: 'Where to Put the Files',
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '• Custom Folder: Copy the folder to your phone and use the folder picker icon in settings to configure it.\n'
+                  '• App Storage: Place under Documents/models/onnx/<lang>/\n'
+                  '• Bundle Assets: Place in assets/models/translation/<lang>/',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: cs.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr.ok),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Widget _buildInstructionStepHeader(
+  BuildContext context, {
+  required String stepNumber,
+  required String title,
+}) {
+  final cs = Theme.of(context).colorScheme;
+  return Row(
+    children: [
+      Container(
+        width: 20,
+        height: 20,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: cs.primary,
+          shape: BoxShape.circle,
+        ),
+        child: Text(
+          stepNumber,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: cs.onPrimary,
+          ),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Text(
+        title,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: cs.onSurface,
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _buildCopyableCodeBlock(
+  BuildContext context, {
+  required String code,
+  required VoidCallback onCopy,
+}) {
+  final cs = Theme.of(context).colorScheme;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    decoration: BoxDecoration(
+      color: isDark
+          ? Colors.black26
+          : cs.surfaceContainerHighest.withValues(alpha: 0.5),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: cs.outlineVariant.withValues(alpha: isDark ? 0.15 : 0.25),
+        width: 1,
+      ),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SelectableText(
+              code,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                color: cs.onSurface,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        IconButton(
+          icon: const Icon(Icons.copy_rounded, size: 16),
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          padding: EdgeInsets.zero,
+          tooltip: 'Copy command',
+          onPressed: onCopy,
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildFileChecklist(BuildContext context, List<String> files) {
+  final cs = Theme.of(context).colorScheme;
+  return Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: cs.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: files.map((file) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.check_circle_rounded,
+                size: 14,
+                color: Color(0xFF10B981),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  file,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontFamily: 'monospace',
+                    color: cs.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    ),
   );
 }
 
@@ -2669,6 +2920,242 @@ Future<T?> _showModernOptionDialog<T>(
   );
 }
 
+class _OnnxModelLanguageTile extends StatefulWidget {
+  final String langCode;
+  final String languageName;
+  final String currentPath;
+  final ValueChanged<String> onPathUpdated;
+  final VoidCallback onShowInstructions;
+
+  const _OnnxModelLanguageTile({
+    required this.langCode,
+    required this.languageName,
+    required this.currentPath,
+    required this.onPathUpdated,
+    required this.onShowInstructions,
+  });
+
+  @override
+  State<_OnnxModelLanguageTile> createState() => _OnnxModelLanguageTileState();
+}
+
+class _OnnxModelLanguageTileState extends State<_OnnxModelLanguageTile> {
+  bool _isAvailable = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatus();
+  }
+
+  @override
+  void didUpdateWidget(covariant _OnnxModelLanguageTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentPath != widget.currentPath) {
+      _checkStatus();
+    }
+  }
+
+  Future<void> _checkStatus() async {
+    if (widget.currentPath.isNotEmpty) {
+      OnnxTranslationEngine.instance
+          .setModelDirectory(widget.langCode, widget.currentPath);
+    }
+    final available =
+        await OnnxTranslationEngine.instance.isModelAvailable(widget.langCode);
+    if (mounted) {
+      setState(() {
+        _isAvailable = available;
+      });
+    }
+  }
+
+  Future<void> _pickFolder() async {
+    setState(() => _isLoading = true);
+    try {
+      final picked = await FolderPickerService.instance.pickFolder();
+      if (picked != null && picked.isNotEmpty) {
+        widget.onPathUpdated(picked);
+        OnnxTranslationEngine.instance
+            .setModelDirectory(widget.langCode, picked);
+        final available = await OnnxTranslationEngine.instance
+            .isModelAvailable(widget.langCode);
+        if (mounted) {
+          setState(() {
+            _isAvailable = available;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                available
+                    ? '${widget.languageName}: ${context.tr.onnxFolderSelected}'
+                    : '${widget.languageName}: Missing required ONNX files in folder',
+              ),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _clearFolder() async {
+    widget.onPathUpdated('');
+    OnnxTranslationEngine.instance.setModelDirectory(widget.langCode, '');
+    final available =
+        await OnnxTranslationEngine.instance.isModelAvailable(widget.langCode);
+    if (mounted) {
+      setState(() {
+        _isAvailable = available;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final String subtitleText;
+    if (_isLoading) {
+      subtitleText = 'Checking model files...';
+    } else if (widget.currentPath.isNotEmpty) {
+      subtitleText = _isAvailable
+          ? '${context.tr.onnxModelInstalled} (${p.basename(widget.currentPath)})'
+          : '${context.tr.onnxModelMissing} (${p.basename(widget.currentPath)})';
+    } else {
+      subtitleText = _isAvailable
+          ? '${context.tr.onnxModelInstalled} (Built-in / Assets)'
+          : context.tr.onnxModelMissing;
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 56),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: (_isAvailable ? const Color(0xFF10B981) : Colors.amber)
+                    .withValues(alpha: isDark ? 0.14 : 0.10),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(
+                _isAvailable ? Icons.memory_rounded : Icons.folder_open_rounded,
+                color: _isAvailable ? const Color(0xFF10B981) : Colors.amber,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.languageName,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitleText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _isAvailable
+                          ? cs.onSurfaceVariant
+                          : (isDark
+                              ? Colors.amber.shade300
+                              : Colors.amber.shade800),
+                      height: 1.25,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (_isLoading)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (_isAvailable ? const Color(0xFF10B981) : Colors.amber)
+                      .withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _isAvailable
+                          ? Icons.check_circle_rounded
+                          : Icons.warning_amber_rounded,
+                      size: 13,
+                      color:
+                          _isAvailable ? const Color(0xFF10B981) : Colors.amber,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _isAvailable
+                          ? context.tr.onnxModelInstalled
+                          : context.tr.onnxModelMissing,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _isAvailable
+                            ? const Color(0xFF10B981)
+                            : (isDark
+                                ? Colors.amber.shade300
+                                : Colors.amber.shade800),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                icon: const Icon(Icons.folder_open_rounded, size: 20),
+                tooltip: context.tr.onnxSelectFolder,
+                onPressed: _pickFolder,
+              ),
+              if (widget.currentPath.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  tooltip: 'Reset to default',
+                  onPressed: _clearFolder,
+                )
+              else if (!_isAvailable)
+                IconButton(
+                  icon: const Icon(Icons.help_outline_rounded, size: 18),
+                  tooltip: context.tr.onnxExportInstructions,
+                  onPressed: widget.onShowInstructions,
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _GoogleMlKitModelTile extends StatefulWidget {
   const _GoogleMlKitModelTile({
@@ -2814,14 +3301,19 @@ class GoogleMlKitSettingsScreen extends ConsumerWidget {
                     TranslationSourceLanguage.auto => context.tr.autoDetect,
                   },
                   onTap: () async {
-                    final chosen =
-                        await _showModernOptionDialog<TranslationSourceLanguage>(
+                    final chosen = await _showModernOptionDialog<
+                        TranslationSourceLanguage>(
                       context,
                       title: context.tr.sourceLanguage,
                       subtitle: context.tr.mangaTranslation,
                       headerIcon: Icons.language_rounded,
                       currentValue: settings.translationSourceLanguage,
                       options: [
+                        _OptionItem(
+                          value: TranslationSourceLanguage.auto,
+                          title: context.tr.autoDetect,
+                          icon: Icons.auto_awesome_rounded,
+                        ),
                         _OptionItem(
                           value: TranslationSourceLanguage.japanese,
                           title: context.tr.langJapanese,
@@ -2840,16 +3332,12 @@ class GoogleMlKitSettingsScreen extends ConsumerWidget {
                           subtitle: 'KO → EN',
                           icon: Icons.translate_rounded,
                         ),
-                        _OptionItem(
-                          value: TranslationSourceLanguage.auto,
-                          title: context.tr.autoDetect,
-                          icon: Icons.auto_awesome_rounded,
-                        ),
                       ],
                     );
                     if (chosen != null) {
                       ref.read(settingsNotifierProvider.notifier).update(
-                            (s) => s.copyWith(translationSourceLanguage: chosen),
+                            (s) =>
+                                s.copyWith(translationSourceLanguage: chosen),
                           );
                     }
                   },

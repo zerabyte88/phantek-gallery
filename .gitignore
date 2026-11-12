@@ -50,10 +50,15 @@ app.*.map.json
 # Signing keys and credentials
 key.properties
 **/key.properties
+local.properties
+**/local.properties
 *.jks
 *.keystore
+*.pem
+*.key
 keystore_base64.txt
 **/keystore_base64.txt
+service-account*.json
 .env*
 *.secrets
 

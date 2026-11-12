@@ -4,9 +4,10 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
+import '../settings_service.dart';
 import 'manga_ocr_service.dart';
 import 'mlkit_translation_engine.dart';
-import 'gguf_local_llm_engine.dart';
+import 'lm_studio_translation_engine.dart';
 import 'translation_models.dart';
 
 Future<List<MangaTranslatedBlock>> _translateBlocks(
@@ -47,7 +48,7 @@ Future<List<MangaTranslatedBlock>> _translateBlocks(
 
     final trimmed = raw.text.trim();
     if (trimmed.isEmpty ||
-        !GgufLocalLlmEngine.hasTranslatableDialogue(trimmed) ||
+        !LmStudioTranslationEngine.hasTranslatableDialogue(trimmed) ||
         raw.boundingBox.width < 8 ||
         raw.boundingBox.height < 8) {
       continue;
@@ -107,7 +108,9 @@ class TranslationIsolateCoordinator {
     required TranslationSourceLanguage language,
     required TranslationTargetLanguage targetLanguage,
   }) {
-    final model = _translationEngine.ggufEngine.activeModelPath ?? 'default';
+    final model = SettingsService.hasInstance
+        ? SettingsService.instance.settings.lmStudioModel
+        : 'default';
     return '${imagePath}__${model}__${mode.name}__${language.name}__${targetLanguage.name}';
   }
 
