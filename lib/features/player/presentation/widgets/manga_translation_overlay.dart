@@ -409,18 +409,8 @@ class MangaTranslationPainter extends CustomPainter {
     if (top < safeViewport.top) top = safeViewport.top;
 
     final Rect bubbleRect = Rect.fromLTWH(left, top, width, height);
-    final bool isVertical = bubbleRect.height > bubbleRect.width * 1.25;
-
-    // Compute text layout boundaries
-    final double maxTextWidth;
-    final double targetMaxHeight;
-    if (isVertical) {
-      maxTextWidth = math.max(20.0, bubbleRect.height - 10.0);
-      targetMaxHeight = math.max(16.0, bubbleRect.width - 6.0);
-    } else {
-      maxTextWidth = math.max(16.0, bubbleRect.width - 8.0);
-      targetMaxHeight = math.max(16.0, bubbleRect.height - 6.0);
-    }
+    final (:maxTextWidth, :targetMaxHeight, isVertical: _) =
+        _computeTextBounds(bubbleRect);
 
     _getOrCreateFittedPainter(
       trimmedText: trimmedText,
@@ -430,6 +420,25 @@ class MangaTranslationPainter extends CustomPainter {
     );
 
     return bubbleRect;
+  }
+
+  static bool _shouldRotateVertical(Rect bubbleRect) {
+    return bubbleRect.width < 42.0 &&
+        bubbleRect.height > bubbleRect.width * 1.8;
+  }
+
+  static ({double maxTextWidth, double targetMaxHeight, bool isVertical})
+      _computeTextBounds(Rect bubbleRect) {
+    final bool isVertical = _shouldRotateVertical(bubbleRect);
+    final double hPad = math.min(6.0, bubbleRect.width * 0.08);
+    final double vPad = math.min(6.0, bubbleRect.height * 0.08);
+    final double availW = math.max(12.0, bubbleRect.width - hPad);
+    final double availH = math.max(12.0, bubbleRect.height - vPad);
+    return (
+      maxTextWidth: isVertical ? availH : availW,
+      targetMaxHeight: isVertical ? availW : availH,
+      isVertical: isVertical,
+    );
   }
 
   void _drawSpeechBubbleBlock(
@@ -449,17 +458,8 @@ class MangaTranslationPainter extends CustomPainter {
       screenSize: screenSize,
     );
 
-    final bool isVertical = bubbleRect.height > bubbleRect.width * 1.25;
-
-    final double maxTextWidth;
-    final double targetMaxHeight;
-    if (isVertical) {
-      maxTextWidth = math.max(20.0, bubbleRect.height - 10.0);
-      targetMaxHeight = math.max(16.0, bubbleRect.width - 6.0);
-    } else {
-      maxTextWidth = math.max(16.0, bubbleRect.width - 8.0);
-      targetMaxHeight = math.max(16.0, bubbleRect.height - 6.0);
-    }
+    final (:maxTextWidth, :targetMaxHeight, :isVertical) =
+        _computeTextBounds(bubbleRect);
 
     final int wordCount =
         trimmedText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
@@ -650,32 +650,50 @@ class MangaTranslationPainter extends CustomPainter {
       maxAllowedFontSize = 9.5;
     }
 
+    String longestWord = '';
+    for (final w in trimmedText.split(RegExp(r'\s+'))) {
+      if (w.length > longestWord.length) longestWord = w;
+    }
+
+    const double minFontSize = 4.5;
     double fontSize = maxAllowedFontSize;
+
+    TextStyle styleFor(double size) => TextStyle(
+          color: const Color(0xFF202124),
+          fontSize: size,
+          fontWeight: FontWeight.w500,
+          height: size <= 8.0 ? 1.08 : 1.18,
+        );
+
+    bool longestWordFits(double size) {
+      if (longestWord.isEmpty) return true;
+      final wp = _buildTextPainter(
+        text: longestWord,
+        style: styleFor(size),
+        maxWidth: double.infinity,
+        maxLines: 1,
+      );
+      return wp.width <= maxTextWidth;
+    }
+
     TextPainter painter = _buildTextPainter(
       text: trimmedText,
-      style: TextStyle(
-        color: const Color(0xFF202124),
-        fontSize: fontSize,
-        fontWeight: FontWeight.w500,
-        height: 1.22,
-      ),
+      style: styleFor(fontSize),
       maxWidth: maxTextWidth,
+      maxLines: null,
     );
 
-    while ((painter.height > targetMaxHeight || painter.width > maxTextWidth) &&
-        fontSize > 7.0) {
-      fontSize = math.max(7.0, fontSize - 0.5);
+    while ((painter.height > targetMaxHeight ||
+            painter.width > maxTextWidth ||
+            !longestWordFits(fontSize)) &&
+        fontSize > minFontSize) {
+      fontSize = math.max(minFontSize, fontSize - 0.5);
       painter = _buildTextPainter(
         text: trimmedText,
-        style: TextStyle(
-          color: const Color(0xFF202124),
-          fontSize: fontSize,
-          fontWeight: FontWeight.w500,
-          height: 1.22,
-        ),
+        style: styleFor(fontSize),
         maxWidth: maxTextWidth,
+        maxLines: null,
       );
-      if (fontSize <= 7.0) break;
     }
 
     if (_fittedPainterCache.length >= 250) {
