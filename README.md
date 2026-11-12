@@ -79,38 +79,7 @@ Google ML Kit provides lightweight neural translation directly on your device wi
 
 ---
 
-### Option B: Local AI Server (LM Studio / Ollama)
-
-For deeper dialogue nuance, comic slang preservation, and contextual localization without straining phone battery or thermal limits, you can connect Phantek Gallery to your local PC or home server running LM Studio, Ollama, or any OpenAI-compatible inference server.
-
-#### Why Local AI Server?
-- **Zero Phone Thermal & Memory Overhead**: High-parameter LLMs (e.g. Qwen 2.5 7B / 14B, Llama 3) run on your desktop GPU/CPU instead of draining your mobile device RAM and battery.
-- **Strict Privacy**: Requests are sent over your private Wi-Fi / Local Area Network (LAN) directly from your phone to your PC. No third-party cloud APIs, no external telemetry, and no data leaves your home network.
-- **Uncensored Comic Slang & Dialogue**: Ideal for preserving raw dialogue, emotional cues, and colloquial comic speech.
-
-#### Setup Guide (LM Studio Example)
-
-1. **Start Server on PC**:
-   - Open **LM Studio** on your PC and load your favorite translation model (e.g. `Qwen/Qwen2.5-7B-Instruct` or `Qwen2.5-1.5B-Instruct`).
-   - Navigate to the **Local Server** tab (`<->`).
-   - Turn **ON** the server.
-   - Note the port (default: `1234`) and your PC's local IP address (e.g. `http://192.168.1.100:1234`).
-   - *(Optional)* Ensure your PC firewall allows incoming connections on port `1234` from devices on your local network.
-
-2. **Configure in Phantek Gallery**:
-   - Open **Settings > Manga Translation > LM Studio / Local AI Server**.
-   - Enter your **Server URL** (e.g., `http://192.168.1.100:1234` or `http://10.0.2.2:1234` if using Android Emulator).
-   - *(Optional)* Enter an API Key if your server requires authentication.
-   - Tap **Test Connection** to verify reachability and automatically fetch available loaded models.
-   - Select your active model from the list.
-
-3. **Translate in Reader**:
-   - In the reader translation sheet, switch the engine toggle to **LM Studio**.
-   - Tap any language button to translate speech bubbles using your private desktop AI server!
-
----
-
-### Option C: Helsinki-NLP Opus-MT (ONNX)
+### Option B: Helsinki-NLP Opus-MT (ONNX)
 
 Helsinki-NLP Opus-MT provides dedicated neural machine translation running locally on-device through ONNX Runtime for high-speed offline inference with enhanced translation quality.
 
@@ -139,6 +108,8 @@ Each exported model folder contains the required 5 files:
 - `tokenizer_config.json`
 - `generation_config.json`
 
+---
+
 #### Setup Guide in Phantek Gallery
 
 1. **Transfer Model Folders to Device**:
@@ -150,6 +121,37 @@ Each exported model folder contains the required 5 files:
 3. **Translate in Reader**:
    - In the reader translation sheet, switch the engine toggle to **Helsinki Opus-MT**.
    - Tap any language button to run local ONNX neural translation offline!
+
+---
+
+### Option C: Local AI Server (LM Studio / Ollama)
+
+For deeper dialogue nuance, comic slang preservation, and contextual localization without straining phone battery or thermal limits, you can connect Phantek Gallery to your local PC or home server running LM Studio, Ollama, or any OpenAI-compatible inference server.
+
+#### Why Local AI Server?
+- **Zero Phone Thermal & Memory Overhead**: High-parameter LLMs (e.g. Qwen 2.5 7B / 14B, Llama 3) run on your desktop GPU/CPU instead of draining your mobile device RAM and battery.
+- **Strict Privacy**: Requests are sent over your private Wi-Fi / Local Area Network (LAN) directly from your phone to your PC. No third-party cloud APIs, no external telemetry, and no data leaves your home network.
+- **Uncensored Comic Slang & Dialogue**: Ideal for preserving raw dialogue, emotional cues, and colloquial comic speech.
+
+#### Setup Guide (LM Studio Example)
+
+1. **Start Server on PC**:
+   - Open **LM Studio** on your PC and load your favorite translation model (e.g. `Qwen/Qwen2.5-7B-Instruct` or `Qwen2.5-1.5B-Instruct`).
+   - Navigate to the **Local Server** tab (`<->`).
+   - Turn **ON** the server.
+   - Note the port (default: `1234`) and your PC's local IP address (e.g. `http://192.168.1.100:1234`).
+   - *(Optional)* Ensure your PC firewall allows incoming connections on port `1234` from devices on your local network.
+
+2. **Configure in Phantek Gallery**:
+   - Open **Settings > Manga Translation > LM Studio / Local AI Server**.
+   - Enter your **Server URL** (e.g., `http://192.168.1.100:1234` or `http://10.0.2.2:1234` if using Android Emulator).
+   - *(Optional)* Enter an API Key if your server requires authentication.
+   - Tap **Test Connection** to verify reachability and automatically fetch available loaded models.
+   - Select your active model from the list.
+
+3. **Translate in Reader**:
+   - In the reader translation sheet, switch the engine toggle to **LM Studio**.
+   - Tap any language button to translate speech bubbles using your private desktop AI server!
 
 ---
 
