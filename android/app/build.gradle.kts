@@ -47,6 +47,15 @@ android {
         multiDexEnabled = true
     }
 
+    packaging {
+        resources {
+            excludes += listOf("/META-INF/{AL2.0,LGPL2.1}")
+        }
+        jniLibs {
+            pickFirsts += listOf("**/libc++_shared.so")
+        }
+    }
+
     buildTypes {
         debug {
         }
