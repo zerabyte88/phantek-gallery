@@ -15,13 +15,6 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 
-    // Bypass stale AAR metadata checks on plugin subprojects (e.g. :onnxruntime)
-    tasks.configureEach {
-        if (name.contains("AarMetadata", ignoreCase = true)) {
-            enabled = false
-        }
-    }
-
     val updateCompileSdk = {
         val androidExt = project.extensions.findByName("android")
         if (androidExt != null) {
