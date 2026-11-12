@@ -14,14 +14,15 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
-}
-subprojects {
-    project.evaluationDependsOn(":app")
-}
 
-// Ensure subprojects and plugins (e.g. :onnxruntime) use a compatible compileSdk and bypass stale AAR metadata checks
-subprojects {
-    afterEvaluate {
+    // Bypass stale AAR metadata checks on plugin subprojects (e.g. :onnxruntime)
+    tasks.configureEach {
+        if (name.contains("AarMetadata", ignoreCase = true)) {
+            enabled = false
+        }
+    }
+
+    val updateCompileSdk = {
         val androidExt = project.extensions.findByName("android")
         if (androidExt != null) {
             try {
@@ -34,9 +35,22 @@ subprojects {
             } catch (_: Exception) {}
         }
     }
-    tasks.matching { it.name.contains("AarMetadata", ignoreCase = true) }.configureEach {
-        enabled = false
+
+    plugins.withId("com.android.library") {
+        updateCompileSdk()
     }
+
+    if (state.executed) {
+        updateCompileSdk()
+    } else {
+        afterEvaluate {
+            updateCompileSdk()
+        }
+    }
+}
+
+subprojects {
+    project.evaluationDependsOn(":app")
 }
 
 tasks.register<Delete>("clean") {
