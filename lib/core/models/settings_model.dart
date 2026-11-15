@@ -41,10 +41,7 @@ class SettingsModel extends Equatable {
     this.lmStudioServerUrl = 'http://192.168.1.2:1234/v1',
     this.lmStudioApiKey = '',
     this.lmStudioModel = '',
-    this.onnxModelDirJa = '',
-    this.onnxModelDirZh = '',
-    this.onnxModelDirKo = '',
-    this.translationEngineType = TranslationEngineType.googleMlKit,
+    this.translationEngineType = TranslationEngineType.lmStudio,
     this.translationSourceLanguage = TranslationSourceLanguage.japanese,
   });
 
@@ -129,16 +126,7 @@ class SettingsModel extends Equatable {
   /// Model name / identifier on LM Studio / Local AI server.
   final String lmStudioModel;
 
-  /// Directory path for Helsinki-NLP Opus-MT Japanese ONNX model files.
-  final String onnxModelDirJa;
-
-  /// Directory path for Helsinki-NLP Opus-MT Chinese ONNX model files.
-  final String onnxModelDirZh;
-
-  /// Directory path for Helsinki-NLP Opus-MT Korean ONNX model files.
-  final String onnxModelDirKo;
-
-  /// Active offline/local translation engine (Google ML Kit, Helsinki Opus-MT, or Local AI / LM Studio).
+  /// Active translation engine (Local AI / LM Studio).
   final TranslationEngineType translationEngineType;
 
   /// Default source language for manga translation (Japanese, Chinese, Korean, Auto).
@@ -174,9 +162,6 @@ class SettingsModel extends Equatable {
         'lmStudioServerUrl': lmStudioServerUrl,
         'lmStudioApiKey': lmStudioApiKey,
         'lmStudioModel': lmStudioModel,
-        'onnxModelDirJa': onnxModelDirJa,
-        'onnxModelDirZh': onnxModelDirZh,
-        'onnxModelDirKo': onnxModelDirKo,
         'translationEngineType': translationEngineType.name,
         'translationSourceLanguage': translationSourceLanguage.name,
       };
@@ -246,15 +231,7 @@ class SettingsModel extends Equatable {
           map['lmStudioServerUrl'] as String? ?? 'http://192.168.1.2:1234/v1',
       lmStudioApiKey: map['lmStudioApiKey'] as String? ?? '',
       lmStudioModel: map['lmStudioModel'] as String? ?? '',
-      onnxModelDirJa: map['onnxModelDirJa'] as String? ?? '',
-      onnxModelDirZh: map['onnxModelDirZh'] as String? ?? '',
-      onnxModelDirKo: map['onnxModelDirKo'] as String? ?? '',
-      translationEngineType: switch (map['translationEngineType']) {
-        'lmStudio' => TranslationEngineType.lmStudio,
-        'localLlm' => TranslationEngineType.lmStudio,
-        'onnxHelsinki' => TranslationEngineType.onnxHelsinki,
-        _ => TranslationEngineType.googleMlKit,
-      },
+      translationEngineType: TranslationEngineType.lmStudio,
       translationSourceLanguage: TranslationSourceLanguage.values.firstWhere(
         (e) => e.name == map['translationSourceLanguage'],
         orElse: () => TranslationSourceLanguage.japanese,
@@ -292,9 +269,6 @@ class SettingsModel extends Equatable {
     String? lmStudioServerUrl,
     String? lmStudioApiKey,
     String? lmStudioModel,
-    String? onnxModelDirJa,
-    String? onnxModelDirZh,
-    String? onnxModelDirKo,
     TranslationEngineType? translationEngineType,
     TranslationSourceLanguage? translationSourceLanguage,
   }) {
@@ -329,9 +303,6 @@ class SettingsModel extends Equatable {
       lmStudioServerUrl: lmStudioServerUrl ?? this.lmStudioServerUrl,
       lmStudioApiKey: lmStudioApiKey ?? this.lmStudioApiKey,
       lmStudioModel: lmStudioModel ?? this.lmStudioModel,
-      onnxModelDirJa: onnxModelDirJa ?? this.onnxModelDirJa,
-      onnxModelDirZh: onnxModelDirZh ?? this.onnxModelDirZh,
-      onnxModelDirKo: onnxModelDirKo ?? this.onnxModelDirKo,
       translationEngineType:
           translationEngineType ?? this.translationEngineType,
       translationSourceLanguage:
@@ -370,9 +341,6 @@ class SettingsModel extends Equatable {
         lmStudioServerUrl,
         lmStudioApiKey,
         lmStudioModel,
-        onnxModelDirJa,
-        onnxModelDirZh,
-        onnxModelDirKo,
         translationEngineType,
         translationSourceLanguage,
       ];

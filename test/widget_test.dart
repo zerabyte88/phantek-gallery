@@ -33,6 +33,11 @@ import 'package:phantek_gallery/features/gallery/presentation/widgets/sort_botto
 import 'package:phantek_gallery/features/player/presentation/widgets/media_info_sheet.dart';
 import 'package:phantek_gallery/features/player/presentation/image_viewer_screen.dart'
     show displayImage, screenDisplayImage, ImageViewerScreen;
+import 'package:phantek_gallery/features/player/presentation/video_player_screen.dart'
+    show
+        resolveEffectiveVideoSize,
+        computeNormalizedVideoLayoutSize,
+        resolveAutoPlayAfterInit;
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
 import 'package:phantek_gallery/features/settings/presentation/widgets/developer_about_card.dart';
 import 'package:phantek_gallery/core/services/translation/translation_models.dart';
@@ -2092,7 +2097,7 @@ void main() {
     });
 
     testWidgets(
-        'SettingsScreen navigates to GoogleMlKitSettingsScreen and updates source language',
+        'SettingsScreen updates source language inline under Manga Translation',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1.0;
@@ -2124,34 +2129,19 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Find Google ML Kit tile under Manga Translation
-      final mlKitTile = find.text('Japanese');
+      // Find Source Language tile directly under Manga Translation
+      final sourceLangTile = find.text('Source Language');
       await tester.scrollUntilVisible(
-        mlKitTile,
+        sourceLangTile,
         200,
         scrollable: find.byType(Scrollable).first,
       );
       await tester.pumpAndSettle();
-      expect(mlKitTile, findsOneWidget);
-
-      // Tap Google ML Kit tile to navigate to GoogleMlKitSettingsScreen
-      await tester.tap(mlKitTile);
-      await tester.pumpAndSettle();
-
-      // Verify GoogleMlKitSettingsScreen is displayed
-      expect(find.byType(GoogleMlKitSettingsScreen), findsOneWidget);
-
-      // Verify Source Language tile is present in GoogleMlKitSettingsScreen
-      expect(find.text('Source Language'), findsWidgets);
-
-      // Verify 4 offline models are rendered
-      expect(find.text('Japanese'), findsWidgets);
-      expect(find.text('Chinese'), findsOneWidget);
-      expect(find.text('Korean'), findsOneWidget);
-      expect(find.text('English (US)'), findsOneWidget);
+      expect(sourceLangTile, findsOneWidget);
+      expect(find.text('Japanese'), findsOneWidget);
 
       // Tap Source Language tile to open selection dialog
-      await tester.tap(find.text('Source Language').last);
+      await tester.tap(sourceLangTile);
       await tester.pumpAndSettle();
 
       // Select Korean option in dialog
@@ -2165,10 +2155,6 @@ void main() {
         SettingsService.instance.settings.translationSourceLanguage,
         TranslationSourceLanguage.korean,
       );
-
-      // Pop back to SettingsScreen
-      Navigator.of(tester.element(find.byType(GoogleMlKitSettingsScreen))).pop();
-      await tester.pumpAndSettle();
 
       // Verify SettingsScreen updated subtitle to Korean
       expect(find.text('Korean'), findsOneWidget);
@@ -3206,6 +3192,187 @@ void main() {
 
       await PsdService.instance.clearSavedLayerVisibility(testPsdPath);
       expect(PsdService.instance.getSavedLayerVisibility(testPsdPath), isNull);
+    });
+
+    test(
+        'resolveEffectiveVideoSize handles rotations on 1080p, 2K, 4K and zero fallback',
+        () {
+      const resolutions = [
+        Size(1920, 1080),
+        Size(2560, 1440),
+        Size(3840, 2160),
+      ];
+
+      for (final raw in resolutions) {
+        expect(resolveEffectiveVideoSize(raw, 0), raw);
+        expect(resolveEffectiveVideoSize(raw, 180), raw);
+        expect(resolveEffectiveVideoSize(raw, 90), Size(raw.height, raw.width));
+        expect(
+            resolveEffectiveVideoSize(raw, 270), Size(raw.height, raw.width));
+        expect(
+            resolveEffectiveVideoSize(raw, -90), Size(raw.height, raw.width));
+      }
+
+      expect(resolveEffectiveVideoSize(Size.zero, 0), const Size(16, 9));
+      expect(resolveEffectiveVideoSize(Size.zero, 90), const Size(16, 9));
+      expect(
+          resolveEffectiveVideoSize(const Size(0, 1080), 0), const Size(16, 9));
+      expect(resolveEffectiveVideoSize(const Size(-1920, 1080), 90),
+          const Size(16, 9));
+    });
+
+    test(
+        'computeNormalizedVideoLayoutSize fits 720p/1080p/2K/4K within viewport preserving exact aspect ratio',
+        () {
+      const sizes = [
+        // 720p: landscape 16:9, portrait 9:16, ultrawide 21:9
+        Size(1280, 720),
+        Size(720, 1280),
+        Size(1680, 720),
+        // 1080p: landscape 16:9, portrait 9:16, ultrawide 21:9
+        Size(1920, 1080),
+        Size(1080, 1920),
+        Size(2520, 1080),
+        // 2K (1440p): landscape 16:9, portrait 9:16, ultrawide 21:9
+        Size(2560, 1440),
+        Size(1440, 2560),
+        Size(3360, 1440),
+        // 4K: landscape 16:9, portrait 9:16, ultrawide 21:9
+        Size(3840, 2160),
+        Size(2160, 3840),
+        Size(5040, 2160),
+      ];
+
+      const viewports = [
+        Size(412, 915),
+        Size(915, 412),
+        Size(1920, 1080),
+        Size(1080, 1920),
+      ];
+
+      for (final viewport in viewports) {
+        for (final effective in sizes) {
+          final layout = computeNormalizedVideoLayoutSize(
+            effectiveSize: effective,
+            maxViewportSize: viewport,
+          );
+          expect(layout.width, greaterThan(0));
+          expect(layout.height, greaterThan(0));
+          expect(layout.width, lessThanOrEqualTo(viewport.width));
+          expect(layout.height, lessThanOrEqualTo(viewport.height));
+          expect(
+            layout.width / layout.height,
+            closeTo(effective.width / effective.height, 1e-9),
+          );
+        }
+      }
+
+      // Fallbacks for zero/non-finite dimensions
+      final zeroEffective = computeNormalizedVideoLayoutSize(
+        effectiveSize: Size.zero,
+        maxViewportSize: const Size(400, 800),
+      );
+      expect(zeroEffective.width, lessThanOrEqualTo(400));
+      expect(zeroEffective.height, lessThanOrEqualTo(800));
+      expect(zeroEffective.width / zeroEffective.height, closeTo(16 / 9, 1e-9));
+
+      final invalidViewport = computeNormalizedVideoLayoutSize(
+        effectiveSize: const Size(3840, 2160),
+        maxViewportSize: const Size(double.infinity, 0),
+      );
+      expect(invalidViewport.width, lessThanOrEqualTo(1080));
+      expect(invalidViewport.height, lessThanOrEqualTo(1920));
+      expect(
+          invalidViewport.width / invalidViewport.height, closeTo(16 / 9, 1e-9));
+    });
+
+    test(
+        'resolveAutoPlayAfterInit handles slow >720p init after route transition completes',
+        () {
+      // Captured false during initState while transition ran; transition completed before init finished.
+      expect(
+        resolveAutoPlayAfterInit(
+          capturedAutoPlay: false,
+          routeTransitionComplete: true,
+          routeAnimationCompleted: false,
+          isSlideshowPlaying: false,
+          startSlideshow: false,
+          settingAutoPlayVideo: true,
+        ),
+        isTrue,
+      );
+      expect(
+        resolveAutoPlayAfterInit(
+          capturedAutoPlay: false,
+          routeTransitionComplete: false,
+          routeAnimationCompleted: true,
+          isSlideshowPlaying: false,
+          startSlideshow: false,
+          settingAutoPlayVideo: true,
+        ),
+        isTrue,
+      );
+
+      // Still waiting for route transition
+      expect(
+        resolveAutoPlayAfterInit(
+          capturedAutoPlay: false,
+          routeTransitionComplete: false,
+          routeAnimationCompleted: false,
+          isSlideshowPlaying: false,
+          startSlideshow: false,
+          settingAutoPlayVideo: true,
+        ),
+        isFalse,
+      );
+
+      // Disabled by setting
+      expect(
+        resolveAutoPlayAfterInit(
+          capturedAutoPlay: false,
+          routeTransitionComplete: true,
+          routeAnimationCompleted: true,
+          isSlideshowPlaying: false,
+          startSlideshow: false,
+          settingAutoPlayVideo: false,
+        ),
+        isFalse,
+      );
+
+      // Suppressed during slideshow unless capturedAutoPlay is true
+      expect(
+        resolveAutoPlayAfterInit(
+          capturedAutoPlay: false,
+          routeTransitionComplete: true,
+          routeAnimationCompleted: true,
+          isSlideshowPlaying: true,
+          startSlideshow: false,
+          settingAutoPlayVideo: true,
+        ),
+        isFalse,
+      );
+      expect(
+        resolveAutoPlayAfterInit(
+          capturedAutoPlay: false,
+          routeTransitionComplete: true,
+          routeAnimationCompleted: true,
+          isSlideshowPlaying: false,
+          startSlideshow: true,
+          settingAutoPlayVideo: true,
+        ),
+        isFalse,
+      );
+      expect(
+        resolveAutoPlayAfterInit(
+          capturedAutoPlay: true,
+          routeTransitionComplete: false,
+          routeAnimationCompleted: false,
+          isSlideshowPlaying: true,
+          startSlideshow: true,
+          settingAutoPlayVideo: false,
+        ),
+        isTrue,
+      );
     });
   });
 }

@@ -126,6 +126,7 @@ class MainActivity : FlutterFragmentActivity() {
         }
 
         val executor = java.util.concurrent.Executors.newFixedThreadPool(4)
+        val videoExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -139,7 +140,7 @@ class MainActivity : FlutterFragmentActivity() {
                     result.error("INVALID_ARGS", "Both path and assetId are null/empty", null)
                     return@setMethodCallHandler
                 }
-                executor.execute {
+                videoExecutor.execute {
                     try {
                         val bytes = extractVideoThumbnail(path, assetId, size)
                         runOnUiThread {
@@ -180,7 +181,7 @@ class MainActivity : FlutterFragmentActivity() {
                     result.error("INVALID_PATH", "Path is null", null)
                     return@setMethodCallHandler
                 }
-                executor.execute {
+                videoExecutor.execute {
                     try {
                         val bytes = extractVideoFrame(path, timeUs, width, height)
                         runOnUiThread {
@@ -323,7 +324,6 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun extractVideoThumbnail(path: String, assetId: String?, targetSize: Int): ByteArray? {
         var bitmap: android.graphics.Bitmap? = null
-        val needHighRes = targetSize > 512
 
         // Resolve MediaStore URI from assetId or path
         var id: Long? = assetId?.toLongOrNull()
@@ -372,10 +372,14 @@ class MainActivity : FlutterFragmentActivity() {
             )
         } else null
 
-        // 1. Android Q+ (API 29+): prioritize contentResolver.loadThumbnail in <2ms when !needHighRes and uri != null
-        if (!needHighRes && uri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        // 1. Android Q+ (API 29+): prioritize contentResolver.loadThumbnail in <2ms when uri != null
+        if (uri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
-                bitmap = contentResolver.loadThumbnail(uri, android.util.Size(targetSize, targetSize), null)
+                bitmap = contentResolver.loadThumbnail(
+                    uri,
+                    android.util.Size(targetSize.coerceAtMost(1080), targetSize.coerceAtMost(1080)),
+                    null
+                )
             } catch (_: Throwable) {}
         }
 
@@ -433,11 +437,16 @@ class MainActivity : FlutterFragmentActivity() {
 
                     val streamW = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
                     val streamH = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                    val durationMs = retriever.extractMetadata(
+                        android.media.MediaMetadataRetriever.METADATA_KEY_DURATION
+                    )?.toLongOrNull() ?: 0L
+                    val altTimeUs = if (durationMs > 1000L) (durationMs * 1000L) / 3L else 500000L
+                    val scaleTarget = if (streamW >= 1920 || streamH >= 1920) targetSize.coerceAtMost(1280) else targetSize
 
                     val attempts = arrayOf(
                         Pair(-1L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC),
                         Pair(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC),
-                        Pair(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST),
+                        Pair(altTimeUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC),
                         Pair(500000L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                     )
 
@@ -445,7 +454,7 @@ class MainActivity : FlutterFragmentActivity() {
                         if (bitmap != null) break
                         try {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                                bitmap = retriever.getScaledFrameAtTime(att.first, att.second, targetSize, targetSize)
+                                bitmap = retriever.getScaledFrameAtTime(att.first, att.second, scaleTarget, scaleTarget)
                             }
                             if (bitmap == null) {
                                 bitmap = retriever.getFrameAtTime(att.first, att.second)
@@ -641,13 +650,20 @@ class MainActivity : FlutterFragmentActivity() {
                 Pair(targetWidth, targetHeight)
             }
 
-            // Prioritize OPTION_CLOSEST for accurate frame at requested timestamp,
-            // followed by OPTION_CLOSEST_SYNC and OPTION_PREVIOUS_SYNC as fallbacks.
-            val options = intArrayOf(
-                android.media.MediaMetadataRetriever.OPTION_CLOSEST,
-                android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                android.media.MediaMetadataRetriever.OPTION_PREVIOUS_SYNC
-            )
+            // Use sync-frame extraction for >=720p streams to avoid keyframe decode stalls.
+            val isHighRes = origW >= 1280 || origH >= 1280
+            val options = if (isHighRes) {
+                intArrayOf(
+                    android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                    android.media.MediaMetadataRetriever.OPTION_PREVIOUS_SYNC
+                )
+            } else {
+                intArrayOf(
+                    android.media.MediaMetadataRetriever.OPTION_CLOSEST,
+                    android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                    android.media.MediaMetadataRetriever.OPTION_PREVIOUS_SYNC
+                )
+            }
 
             val safeTimeUs = timeUs.coerceAtLeast(0L)
             var bitmap: android.graphics.Bitmap? = null

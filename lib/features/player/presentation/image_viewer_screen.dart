@@ -26,7 +26,6 @@ import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
 import '../../../core/widgets/feedback_pill.dart';
 import '../../../core/services/translation/translation_models.dart';
 import '../../../core/services/translation/mlkit_translation_engine.dart';
-import '../../../core/services/translation/onnx_translation_engine.dart';
 import '../../../core/services/translation/translation_isolate_coordinator.dart';
 import 'widgets/manga_translation_overlay.dart';
 import '../../../core/services/settings_service.dart';
@@ -570,17 +569,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       _translationMode = mode;
     });
     if (mode != null && widget.items.isNotEmpty) {
-      final engineType =
-          SettingsService.instance.settings.translationEngineType;
-      if (engineType == TranslationEngineType.lmStudio) {
-        final status = MlKitTranslationEngine.instance.lastStatusMessage;
-        if (status != null && mounted) {
-          showFeedbackPill(
-            context,
-            message: status,
-            icon: Icons.info_outline_rounded,
-          );
-        }
+      final status = MlKitTranslationEngine.instance.lastStatusMessage;
+      if (status != null && mounted) {
+        showFeedbackPill(
+          context,
+          message: status,
+          icon: Icons.info_outline_rounded,
+        );
       }
       _triggerMangaTranslationForActivePage();
     } else {
@@ -746,29 +741,20 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               lang: TranslationSourceLanguage.japanese,
                               title: loc.langJapanese,
                               subtext: 'JA → EN',
-                              bcpCode: 'ja',
                             ),
                             (
                               lang: TranslationSourceLanguage.chinese,
                               title: loc.langChinese,
                               subtext: 'ZH → EN',
-                              bcpCode: 'zh',
                             ),
                             (
                               lang: TranslationSourceLanguage.korean,
                               title: loc.langKorean,
                               subtext: 'KO → EN',
-                              bcpCode: 'ko',
                             ),
                           ].map((item) {
                             final isSelected =
                                 _translationLanguage == item.lang;
-                            final isMlKit = SettingsService
-                                    .instance.settings.translationEngineType ==
-                                TranslationEngineType.googleMlKit;
-                            final isOnnx = SettingsService
-                                    .instance.settings.translationEngineType ==
-                                TranslationEngineType.onnxHelsinki;
 
                             return Expanded(
                               child: Padding(
@@ -839,112 +825,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                             letterSpacing: 0.3,
                                           ),
                                         ),
-                                        if (isMlKit) ...[
-                                           const SizedBox(height: 4),
-                                           FutureBuilder<bool>(
-                                             future: MlKitTranslationEngine
-                                                 .instance
-                                                 .isModelDownloaded(
-                                                     item.bcpCode),
-                                             builder: (context, snapshot) {
-                                               final isReady =
-                                                   snapshot.data == true;
-                                               return Row(
-                                                 mainAxisSize: MainAxisSize.min,
-                                                 mainAxisAlignment:
-                                                     MainAxisAlignment.center,
-                                                 children: [
-                                                   Container(
-                                                     width: 5,
-                                                     height: 5,
-                                                     decoration: BoxDecoration(
-                                                       shape: BoxShape.circle,
-                                                       color: isReady
-                                                           ? Colors.tealAccent
-                                                           : Colors.white24,
-                                                     ),
-                                                   ),
-                                                   const SizedBox(width: 4),
-                                                   Text(
-                                                     isReady
-                                                         ? 'Ready'
-                                                         : 'Download',
-                                                     style: TextStyle(
-                                                       fontSize: 9,
-                                                       color: isReady
-                                                           ? Colors.tealAccent
-                                                               .withValues(
-                                                                   alpha: 0.9)
-                                                           : Colors.white38,
-                                                       fontWeight:
-                                                           FontWeight.w500,
-                                                     ),
-                                                   ),
-                                                 ],
-                                               );
-                                             },
-                                           ),
-                                         ],
-                                         if (isOnnx) ...[
-                                           const SizedBox(height: 4),
-                                           FutureBuilder<bool>(
-                                             future: () {
-                                               final customDir = SettingsService
-                                                   .instance
-                                                   .getOnnxModelDir(
-                                                       item.bcpCode);
-                                               if (customDir.isNotEmpty) {
-                                                 OnnxTranslationEngine.instance
-                                                     .setModelDirectory(
-                                                         item.bcpCode,
-                                                         customDir);
-                                               }
-                                               return OnnxTranslationEngine
-                                                   .instance
-                                                   .isModelAvailable(
-                                                       item.bcpCode);
-                                             }(),
-                                             builder: (context, snapshot) {
-                                               final isReady =
-                                                   snapshot.data == true;
-                                               return Row(
-                                                 mainAxisSize: MainAxisSize.min,
-                                                 mainAxisAlignment:
-                                                     MainAxisAlignment.center,
-                                                 children: [
-                                                   Container(
-                                                     width: 5,
-                                                     height: 5,
-                                                     decoration: BoxDecoration(
-                                                       shape: BoxShape.circle,
-                                                       color: isReady
-                                                           ? Colors.tealAccent
-                                                           : Colors.amberAccent,
-                                                     ),
-                                                   ),
-                                                   const SizedBox(width: 4),
-                                                   Text(
-                                                     isReady
-                                                         ? loc.onnxModelInstalled
-                                                         : loc.onnxModelMissing,
-                                                     style: TextStyle(
-                                                       fontSize: 9,
-                                                       color: isReady
-                                                           ? Colors.tealAccent
-                                                               .withValues(
-                                                                   alpha: 0.9)
-                                                           : Colors.amberAccent
-                                                               .withValues(
-                                                                   alpha: 0.8),
-                                                       fontWeight:
-                                                           FontWeight.w500,
-                                                     ),
-                                                   ),
-                                                 ],
-                                               );
-                                             },
-                                           ),
-                                         ],
                                        ],
                                      ),
                                    ),
@@ -955,350 +835,92 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                         ),
                       ),
 
-                      // Section: Triple-Engine Segmented Control (No Emojis)
+                      // Section 3: Engine Status Card (Minimalist & Professional)
                       Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(10),
+                          color: Colors.white.withValues(alpha: 0.03),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            width: 1,
-                          ),
+                              color: Colors.white.withValues(alpha: 0.08),
+                              width: 1),
                         ),
                         child: Row(
                           children: [
-                            (
-                              type: TranslationEngineType.googleMlKit,
-                              title: loc.engineGoogleMlKit,
-                              icon: Icons.bolt_rounded,
-                            ),
-                            (
-                              type: TranslationEngineType.onnxHelsinki,
-                              title: loc.engineOnnxHelsinki,
-                              icon: Icons.memory_rounded,
-                            ),
-                            (
-                              type: TranslationEngineType.lmStudio,
-                              title: loc.engineLmStudio,
-                              icon: Icons.dns_outlined,
-                            ),
-                          ].map((engine) {
-                            final isSelected = SettingsService.instance.settings
-                                    .translationEngineType ==
-                                engine.type;
-                            return Expanded(
-                              child: InkWell(
-                                onTap: () async {
-                                  await SettingsService.instance
-                                      .setTranslationEngineType(engine.type);
-                                  setSheetState(() {});
-                                },
+                            Container(
+                              padding: const EdgeInsets.all(7),
+                              decoration: BoxDecoration(
+                                color: Colors.tealAccent.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 7),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? primary.withValues(alpha: 0.22)
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? primary.withValues(alpha: 0.5)
-                                          : Colors.transparent,
-                                      width: 1,
-                                    ),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    mainAxisSize: MainAxisSize.min,
+                              ),
+                              child: const Icon(
+                                Icons.dns_outlined,
+                                color: Colors.tealAccent,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                     children: [
-                                      Icon(
-                                        engine.icon,
-                                        size: 14,
-                                        color: isSelected
-                                            ? Colors.white
-                                            : Colors.white60,
-                                      ),
-                                      const SizedBox(width: 4),
                                       Flexible(
                                         child: Text(
-                                          engine.title,
-                                          style: TextStyle(
-                                            color: isSelected
-                                                ? Colors.white
-                                                : Colors.white70,
-                                            fontSize: 11,
-                                            fontWeight: isSelected
-                                                ? FontWeight.w600
-                                                : FontWeight.w500,
+                                          loc.engineLmStudio,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                           overflow: TextOverflow.ellipsis,
-                                          maxLines: 1,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.tealAccent
+                                              .withValues(alpha: 0.15),
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          loc.modelActive,
+                                          style: const TextStyle(
+                                            color: Colors.tealAccent,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.2,
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    SettingsService.instance.settings
+                                            .lmStudioModel.isNotEmpty
+                                        ? '${SettingsService.instance.settings.lmStudioModel} • ${SettingsService.instance.settings.lmStudioServerUrl}'
+                                        : SettingsService.instance.settings
+                                            .lmStudioServerUrl,
+                                    style: TextStyle(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.6),
+                                      fontSize: 11,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
-                            );
-                          }).toList(),
+                            ),
+                          ],
                         ),
                       ),
-
-                      // Section 3: Engine Status Card (Minimalist & Professional)
-                      if (SettingsService
-                              .instance.settings.translationEngineType ==
-                          TranslationEngineType.googleMlKit)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.03),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.08),
-                                width: 1),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(7),
-                                decoration: BoxDecoration(
-                                  color:
-                                      Colors.tealAccent.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(
-                                  Icons.check_circle_outline_rounded,
-                                  color: Colors.tealAccent,
-                                  size: 18,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          loc.engineGoogleMlKit,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.tealAccent
-                                                .withValues(alpha: 0.15),
-                                            borderRadius:
-                                                BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            loc.modelActive,
-                                            style: const TextStyle(
-                                              color: Colors.tealAccent,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                              letterSpacing: 0.2,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      loc.offlineTranslationModelsSubtitle,
-                                      style: TextStyle(
-                                        color:
-                                            Colors.white.withValues(alpha: 0.6),
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else if (SettingsService
-                              .instance.settings.translationEngineType ==
-                          TranslationEngineType.onnxHelsinki)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.03),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color:
-                                    Colors.tealAccent.withValues(alpha: 0.25),
-                                width: 1),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(7),
-                                decoration: BoxDecoration(
-                                  color:
-                                      Colors.tealAccent.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(
-                                  Icons.memory_rounded,
-                                  color: Colors.tealAccent,
-                                  size: 18,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          loc.engineOnnxHelsinki,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.tealAccent
-                                                .withValues(alpha: 0.15),
-                                            borderRadius:
-                                                BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            loc.modelActive,
-                                            style: const TextStyle(
-                                              color: Colors.tealAccent,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                              letterSpacing: 0.2,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      loc.onnxSubtitle,
-                                      style: TextStyle(
-                                        color:
-                                            Colors.white.withValues(alpha: 0.6),
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.03),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color:
-                                    Colors.tealAccent.withValues(alpha: 0.25),
-                                width: 1),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(7),
-                                decoration: BoxDecoration(
-                                  color:
-                                      Colors.tealAccent.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(
-                                  Icons.dns_outlined,
-                                  color: Colors.tealAccent,
-                                  size: 18,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            loc.engineLmStudio,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.tealAccent
-                                                .withValues(alpha: 0.15),
-                                            borderRadius:
-                                                BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            loc.modelActive,
-                                            style: const TextStyle(
-                                              color: Colors.tealAccent,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                              letterSpacing: 0.2,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      SettingsService.instance.settings
-                                              .lmStudioModel.isNotEmpty
-                                          ? '${SettingsService.instance.settings.lmStudioModel} • ${SettingsService.instance.settings.lmStudioServerUrl}'
-                                          : SettingsService.instance.settings
-                                              .lmStudioServerUrl,
-                                      style: TextStyle(
-                                        color:
-                                            Colors.white.withValues(alpha: 0.6),
-                                        fontSize: 11,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
 
                       const SizedBox(height: 14),
 

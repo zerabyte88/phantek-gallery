@@ -3,10 +3,7 @@
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:google_mlkit_translation/google_mlkit_translation.dart';
-import '../settings_service.dart';
 import 'lm_studio_translation_engine.dart';
-import 'onnx_translation_engine.dart';
 import 'translation_models.dart';
 
 /// Supported manga translation languages.
@@ -100,182 +97,13 @@ class TranslationDownloadProgress {
   }
 }
 
-/// Neural translation engine using Google ML Kit on-device and Local AI Server (LM Studio / Ollama).
+/// Translation coordinator delegating comic dialogue translation to the Local AI Server (LM Studio / Ollama).
 class MlKitTranslationEngine {
   MlKitTranslationEngine._();
   static final MlKitTranslationEngine instance = MlKitTranslationEngine._();
 
   final LmStudioTranslationEngine _lmStudioEngine =
       LmStudioTranslationEngine.instance;
-  final OnnxTranslationEngine _onnxEngine = OnnxTranslationEngine.instance;
-  final OnDeviceTranslatorModelManager _mlKitModelManager =
-      OnDeviceTranslatorModelManager();
-
-  /// Underlying Helsinki-NLP ONNX translation engine.
-  OnnxTranslationEngine get onnxEngine => _onnxEngine;
-
-  /// Maps BCP-47 language code strings to Google ML Kit's [TranslateLanguage].
-  static TranslateLanguage? mapToTranslateLanguage(String bcpCode) {
-    switch (bcpCode.toLowerCase()) {
-      case 'en':
-        return TranslateLanguage.english;
-      case 'ja':
-        return TranslateLanguage.japanese;
-      case 'zh':
-        return TranslateLanguage.chinese;
-      case 'ko':
-        return TranslateLanguage.korean;
-      default:
-        return null;
-    }
-  }
-
-  /// Checks if Google ML Kit on-device model for [bcpCode] is downloaded.
-  Future<bool> isModelDownloaded(String bcpCode) async {
-    final lang = mapToTranslateLanguage(bcpCode);
-    if (lang == null) return false;
-    try {
-      return await _mlKitModelManager.isModelDownloaded(lang.bcpCode);
-    } catch (e) {
-      debugPrint('Error checking ML Kit model download ($bcpCode): $e');
-      return false;
-    }
-  }
-
-  /// Downloads Google ML Kit on-device model for [bcpCode] with 1 hour timeout.
-  /// When downloading ja, zh, or ko, also verifies and automatically downloads en (English).
-  Future<bool> downloadModel(String bcpCode, {bool isWifiRequired = false}) async {
-    final lang = mapToTranslateLanguage(bcpCode);
-    if (lang == null) return false;
-    try {
-      final success = await _mlKitModelManager
-          .downloadModel(lang.bcpCode, isWifiRequired: isWifiRequired)
-          .timeout(const Duration(hours: 1));
-      if (!success) return false;
-
-      // Automatically download en model if not present, ensuring translation pair is complete
-      if (lang != TranslateLanguage.english) {
-        try {
-          final enDownloaded = await isModelDownloaded('en');
-          if (!enDownloaded) {
-            await _mlKitModelManager
-                .downloadModel(TranslateLanguage.english.bcpCode,
-                    isWifiRequired: isWifiRequired)
-                .timeout(const Duration(hours: 1));
-          }
-        } catch (_) {}
-      }
-      return true;
-    } catch (e) {
-      debugPrint('Error downloading ML Kit model ($bcpCode): $e');
-      return false;
-    }
-  }
-
-  /// Deletes Google ML Kit on-device model for [bcpCode].
-  Future<bool> deleteModel(String bcpCode) async {
-    final lang = mapToTranslateLanguage(bcpCode);
-    if (lang == null) return false;
-    try {
-      return await _mlKitModelManager.deleteModel(lang.bcpCode);
-    } catch (e) {
-      debugPrint('Error deleting ML Kit model ($bcpCode): $e');
-      return false;
-    }
-  }
-
-  final Map<String, OnDeviceTranslator> _translators = {};
-
-  OnDeviceTranslator _getTranslator(
-    TranslateLanguage source,
-    TranslateLanguage target,
-  ) {
-    final key = '${source.bcpCode}_${target.bcpCode}';
-    return _translators.putIfAbsent(
-      key,
-      () => OnDeviceTranslator(
-        sourceLanguage: source,
-        targetLanguage: target,
-      ),
-    );
-  }
-
-  /// Optional mock translator hook for unit tests.
-  @visibleForTesting
-  Future<String> Function(
-    String text,
-    TranslateLanguage source,
-    TranslateLanguage target,
-  )? mockMlKitTranslator;
-
-  /// Translates text using Google ML Kit's on-device neural translator.
-  Future<String> translateWithGoogleMlKit({
-    required String text,
-    required TranslationSourceLanguage source,
-  }) async {
-    final cleaned = cleanMangaText(text);
-    if (cleaned.isEmpty) return '';
-    if (!LmStudioTranslationEngine.hasTranslatableDialogue(cleaned)) {
-      return cleaned;
-    }
-
-    final effectiveSource = (source == TranslationSourceLanguage.auto)
-        ? detectLanguageFromText(cleaned)
-        : source;
-
-    final sourceLang = switch (effectiveSource) {
-      TranslationSourceLanguage.japanese => TranslateLanguage.japanese,
-      TranslationSourceLanguage.korean => TranslateLanguage.korean,
-      TranslationSourceLanguage.chinese => TranslateLanguage.chinese,
-      TranslationSourceLanguage.auto => TranslateLanguage.japanese,
-    };
-
-    if (mockMlKitTranslator != null) {
-      Future<String> mock(String t) =>
-          mockMlKitTranslator!(t, sourceLang, TranslateLanguage.english);
-      return await translateLeftoverCjk(await mock(cleaned), mock);
-    }
-
-    try {
-      final translator = _getTranslator(sourceLang, TranslateLanguage.english);
-      final translated = await translator.translateText(cleaned);
-      return await translateLeftoverCjk(translated, translator.translateText);
-    } catch (e) {
-      debugPrint('[MlKitTranslationEngine] Google ML Kit error ($sourceLang -> en): $e');
-      rethrow;
-    }
-  }
-
-  /// ML Kit sometimes leaves fragments (e.g. 大丈夫…) untranslated inside the
-  /// English output; translate each leftover CJK run on its own.
-  @visibleForTesting
-  static Future<String> translateLeftoverCjk(
-    String output,
-    Future<String> Function(String) translate,
-  ) async {
-    final cjk = RegExp(r'[\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]+');
-    final buffer = StringBuffer();
-    int last = 0;
-    for (final m in cjk.allMatches(output)) {
-      buffer.write(output.substring(last, m.start));
-      final piece = (await translate(m.group(0)!)).trim();
-      final usable = piece.isNotEmpty && !cjk.hasMatch(piece);
-      if (usable) {
-        if (m.start > 0 && output[m.start - 1] != ' ') buffer.write(' ');
-        buffer.write(piece);
-        if (m.end < output.length &&
-            output[m.end] != ' ' &&
-            !RegExp(r'^[.,!?:;…~’”\)]').hasMatch(output.substring(m.end))) {
-          buffer.write(' ');
-        }
-      } else {
-        buffer.write(m.group(0));
-      }
-      last = m.end;
-    }
-    buffer.write(output.substring(last));
-    return buffer.toString().replaceAll(RegExp(r' {2,}'), ' ').trim();
-  }
 
   /// Underlying Local AI Server Engine (LM Studio / Ollama).
   LmStudioTranslationEngine get lmStudioEngine => _lmStudioEngine;
@@ -508,7 +336,7 @@ class MlKitTranslationEngine {
   }
 
   /// Translates [text] from [source] language to [target] language using
-  /// Google ML Kit or the Local AI Server (LM Studio / Ollama).
+  /// the Local AI Server (LM Studio / Ollama).
   Future<String> translateText(
     String text, {
     required TranslationSourceLanguage source,
@@ -529,42 +357,6 @@ class MlKitTranslationEngine {
         ? detectLanguageFromText(cleaned)
         : source;
 
-    final engineType = SettingsService.hasInstance
-        ? SettingsService.instance.settings.translationEngineType
-        : TranslationEngineType.lmStudio;
-
-    if (engineType == TranslationEngineType.onnxHelsinki) {
-      try {
-        final onnxResult = await _onnxEngine.translateMangaText(
-          text: cleaned,
-          source: effectiveSource,
-          target: target,
-        );
-        if (onnxResult.isNotEmpty) {
-          return onnxResult;
-        }
-      } catch (e) {
-        debugPrint(
-            'Helsinki ONNX translation error ($effectiveSource -> $target): $e');
-      }
-    }
-
-    if (engineType == TranslationEngineType.googleMlKit &&
-        _lmStudioEngine.mockInferenceHandler == null) {
-      try {
-        final mlKitResult = await translateWithGoogleMlKit(
-          text: cleaned,
-          source: effectiveSource,
-        );
-        if (mlKitResult.isNotEmpty) {
-          return mlKitResult;
-        }
-      } catch (e) {
-        debugPrint(
-            'Google ML Kit translation error ($effectiveSource -> $target): $e');
-      }
-    }
-
     try {
       final translated = await _lmStudioEngine.translateMangaText(
         text: cleaned,
@@ -582,17 +374,8 @@ class MlKitTranslationEngine {
     return cleaned;
   }
 
-  /// Closes active [LmStudioTranslationEngine] instance and any cached translators.
+  /// Closes active [LmStudioTranslationEngine] instance.
   Future<void> dispose() async {
-    for (final translator in _translators.values) {
-      try {
-        await translator.close();
-      } catch (e) {
-        debugPrint('Error closing OnDeviceTranslator: $e');
-      }
-    }
-    _translators.clear();
-    await _onnxEngine.dispose();
     await _lmStudioEngine.dispose();
   }
 }

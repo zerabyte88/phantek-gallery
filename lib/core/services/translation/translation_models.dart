@@ -24,8 +24,6 @@ enum TranslationTargetLanguage {
 
 /// Translation engine selection.
 enum TranslationEngineType {
-  googleMlKit,
-  onnxHelsinki,
   lmStudio,
 }
 
