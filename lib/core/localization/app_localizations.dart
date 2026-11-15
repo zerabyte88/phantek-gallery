@@ -49,7 +49,6 @@ class AppLocalizations {
   String get albums => _t('albums');
   String get favorites => _t('favorites');
   String get searchHint => _t('searchHint');
-  String get noMediaFound => _t('noMediaFound');
   String get selected => _t('selected');
   String get settings => _t('settings');
   String get appearance => _t('appearance');
@@ -62,7 +61,6 @@ class AppLocalizations {
   String get albumsGridColumns => _t('albumsGridColumns');
   String get showDurationBadges => _t('showDurationBadges');
   String get showDurationBadgesSubtitle => _t('showDurationBadgesSubtitle');
-  String get cache => _t('cache');
   String get clearThumbnailCache => _t('clearThumbnailCache');
   String get clearCache => _t('clearCache');
   String get clearAll => _t('clearAll');
@@ -80,10 +78,7 @@ class AppLocalizations {
   String get none => _t('none');
   String get allFilesAccess => _t('allFilesAccess');
   String get allFilesAccessSubtitle => _t('allFilesAccessSubtitle');
-  String get about => _t('about');
-  String get resetAllSettings => _t('resetAllSettings');
   String get cancel => _t('cancel');
-  String get ok => _t('ok');
   String get save => _t('save');
   String get add => _t('add');
   String get delete => _t('delete');
@@ -103,82 +98,28 @@ class AppLocalizations {
   String get readAsManga => _t('readAsManga');
 
   String get mangaTranslation => _t('mangaTranslation');
-  String get sourceLanguage => _t('sourceLanguage');
-  String get targetLanguage => _t('targetLanguage');
-  String get autoDetect => _t('autoDetect');
-  String get langJapanese => _t('langJapanese');
-  String get langKorean => _t('langKorean');
-  String get langChinese => _t('langChinese');
-  String get langIndonesian => _t('langIndonesian');
-  String get langEnglish => _t('langEnglish');
   String get translateSpeechBubbles => _t('translateSpeechBubbles');
   String get translateSpeechBubblesSubtitle =>
       _t('translateSpeechBubblesSubtitle');
   String get translateFullPage => _t('translateFullPage');
   String get translateFullPageSubtitle => _t('translateFullPageSubtitle');
   String get disableTranslation => _t('disableTranslation');
-  String get modelReady => _t('modelReady');
-  String get downloadModelPrompt => _t('downloadModelPrompt');
-  String get downloadingModel => _t('downloadingModel');
-  String get download => _t('download');
-  String get modelDownloadRequired => _t('modelDownloadRequired');
-  String get modelDownloadSuccess => _t('modelDownloadSuccess');
-  String get modelDownloadFailed => _t('modelDownloadFailed');
-  String get retry => _t('retry');
-  String get downloadSize => _t('downloadSize');
-  String get modelInstalled => _t('modelInstalled');
-  String get loadingAiModel => _t('loadingAiModel');
-  String get modelNotDetected => _t('modelNotDetected');
-  String get changeModel => _t('changeModel');
-  String get grantStoragePermission => _t('grantStoragePermission');
-  String get selectModel => _t('selectModel');
   String get translatingPage => _t('translatingPage');
   String get modelActive => _t('modelActive');
-  String get translationEngine => _t('translationEngine');
-  String get engineGoogleMlKit => _t('engineGoogleMlKit');
-  String get engineOnnxHelsinki => _t('engineOnnxHelsinki');
-  String get engineLocalLlm => _t('engineLocalLlm');
   String get engineLmStudio => _t('engineLmStudio');
-  String get onnxConfigTitle => _t('onnxConfigTitle');
-  String get onnxSubtitle => _t('onnxSubtitle');
-  String get onnxModelStatus => _t('onnxModelStatus');
-  String get onnxExportInstructions => _t('onnxExportInstructions');
-  String get onnxModelInstalled => _t('onnxModelInstalled');
-  String get onnxModelMissing => _t('onnxModelMissing');
-  String get onnxSelectFolder => _t('onnxSelectFolder');
-  String get onnxFolderSelected => _t('onnxFolderSelected');
   String get lmStudioConfigTitle => _t('lmStudioConfigTitle');
-  String get lmStudioSubtitle => _t('lmStudioSubtitle');
   String get serverUrl => _t('serverUrl');
-  String get serverUrlHint => _t('serverUrlHint');
   String get apiKeyOptional => _t('apiKeyOptional');
   String get apiKeyHint => _t('apiKeyHint');
   String get modelIdentifier => _t('modelIdentifier');
-  String get modelIdentifierHint => _t('modelIdentifierHint');
   String get testConnection => _t('testConnection');
   String get testingConnection => _t('testingConnection');
-  String get connectionSuccess => _t('connectionSuccess');
-  String get connectionFailed => _t('connectionFailed');
   String get availableModels => _t('availableModels');
-  String get selectFromAvailable => _t('selectFromAvailable');
-  String get statusConnected => _t('statusConnected');
-  String get statusDisconnected => _t('statusDisconnected');
-  String get offlineTranslationModels => _t('offlineTranslationModels');
-  String get offlineTranslationModelsSubtitle =>
-      _t('offlineTranslationModelsSubtitle');
-  String get downloadLanguagePack => _t('downloadLanguagePack');
-  String get languagePackDownloaded => _t('languagePackDownloaded');
-  String get languagePackNotDownloaded => _t('languagePackNotDownloaded');
-  String get deleteLanguagePack => _t('deleteLanguagePack');
-  String get downloadingLanguagePack => _t('downloadingLanguagePack');
-
 
   String get flattenSubfolders => _t('flattenSubfolders');
   String get showSubfolders => _t('showSubfolders');
   String get allChapters => _t('allChapters');
   String get chapters => _t('chapters');
-  String get subfolderView => _t('subfolderView');
-  String get flatView => _t('flatView');
   String get layerStateSaved => _t('layerStateSaved');
   String get oldestToNewest => _t('oldestToNewest');
   String get newestToOldest => _t('newestToOldest');
@@ -196,11 +137,8 @@ class AppLocalizations {
   String get normal => _t('normal');
   String get loopOn => _t('loopOn');
   String get loopOff => _t('loopOff');
-  String get fullscreen => _t('fullscreen');
-  String get exitFullscreen => _t('exitFullscreen');
   String get loopEnabled => _t('loopEnabled');
   String get loopDisabled => _t('loopDisabled');
-  String get playbackSpeedTitle => _t('playbackSpeedTitle');
   String get rename => _t('rename');
   String get setAsWallpaper => _t('setAsWallpaper');
   String get renameFile => _t('renameFile');
@@ -259,14 +197,9 @@ class AppLocalizations {
   String get compactDetailedView => _t('compactDetailedView');
   String get denseHighCapacity => _t('denseHighCapacity');
   String get aboutApp => _t('aboutApp');
-  String get aboutPhantek => _t('aboutApp');
-  String get offlineGalleryDesc => _t('offlineGalleryDesc');
   String get appVersion => _t('appVersion');
   String get buildNumberLabel => _t('buildNumberLabel');
   String get license => _t('license');
-  String get developerLabel => _t('developerLabel');
-  String get creatorMaintainer => _t('creatorMaintainer');
-  String get openGitHubProfile => _t('openGitHubProfile');
 
   String get browsingAndNavigation => _t('browsingAndNavigation');
   String get startupScreen => _t('startupScreen');
@@ -288,7 +221,6 @@ class AppLocalizations {
   String get startMuted => _t('startMuted');
   String get startMutedDesc => _t('startMutedDesc');
   String get videoDoubleTapAction => _t('videoDoubleTapAction');
-  String get videoDoubleTapActionDesc => _t('videoDoubleTapActionDesc');
   String get doubleTapActionSmart => _t('doubleTapActionSmart');
   String get doubleTapActionSeekOnly => _t('doubleTapActionSeekOnly');
   String get doubleTapActionZoomOnly => _t('doubleTapActionZoomOnly');
@@ -304,18 +236,10 @@ class AppLocalizations {
   String get cacheCleared => _t('cacheCleared');
   String get privacyAndSecurity => _t('privacyAndSecurity');
   String get secureScreen => _t('secureScreen');
-  String get mangaAiModel => _t('mangaAiModel');
-  String get mangaAiModelSubtitle => _t('mangaAiModelSubtitle');
-  String get noModelsFound => _t('noModelsFound');
-  String get modelsDirectoryNotice => _t('modelsDirectoryNotice');
-  String get rescanModels => _t('rescanModels');
-  String get defaultAutoDetect => _t('defaultAutoDetect');
-  String get customModelPath => _t('customModelPath');
   String get secureScreenDesc => _t('secureScreenDesc');
   String get today => _t('today');
   String get yesterday => _t('yesterday');
   String get deleted => _t('deleted');
-  String get movedToTrash => _t('movedToTrash');
   String get itemsRestoredCountSingular => _t('itemsRestoredCountSingular');
 
   String itemDeleted(String name) =>
@@ -334,12 +258,6 @@ class AppLocalizations {
 
   String failedToRename(String err) =>
       _t('failedToRename').replaceAll('{err}', err);
-
-  String deletePermanentlyItemDesc(String name) =>
-      _t('deletePermanentlyItemDesc').replaceAll('{name}', name);
-
-  String moveToTrashItemDesc(String name) =>
-      _t('moveToTrashItemDesc').replaceAll('{name}', name);
 
   String itemRestored(String name) =>
       _t('itemRestored').replaceAll('{name}', name);
@@ -365,13 +283,6 @@ class AppLocalizations {
       return _dict['itemsCountSingular']!;
     }
     return _t('itemsCount').replaceAll('{count}', '$count');
-  }
-
-  String albumsCount(int count) {
-    if (count == 1 && _dict.containsKey('albumsCountSingular')) {
-      return _dict['albumsCountSingular']!;
-    }
-    return _t('albumsCount').replaceAll('{count}', '$count');
   }
 
   String permanentlyDeleteCountTitle(int count) {

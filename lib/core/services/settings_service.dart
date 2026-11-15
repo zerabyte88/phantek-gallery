@@ -46,9 +46,7 @@ class _K {
   static const translationSourceLanguage = 'translationSourceLanguage';
 }
 
-/// Thin wrapper around SharedPreferences for typed settings access.
-///
-/// Initialise once with [SettingsService.init()] before using.
+/// Typed SharedPreferences wrapper; call [SettingsService.init()] before use.
 class SettingsService {
   SettingsService._(this._prefs);
 
@@ -180,15 +178,6 @@ class SettingsService {
 
   Future<void> setLmStudioModel(String model) async {
     await _prefs.setString(_K.lmStudioModel, model);
-  }
-
-  Future<void> setTranslationEngineType(TranslationEngineType type) async {
-    await save(settings.copyWith(translationEngineType: type));
-  }
-
-  Future<void> setTranslationSourceLanguage(
-      TranslationSourceLanguage lang) async {
-    await save(settings.copyWith(translationSourceLanguage: lang));
   }
 
   // ── Video Resume Position ──────────────────────────────────────────────────

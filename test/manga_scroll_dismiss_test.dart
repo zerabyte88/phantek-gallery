@@ -244,5 +244,179 @@ void main() {
 
       expect(find.text('169 / 169'), findsOneWidget);
     });
+
+    testWidgets(
+        'Manga Mode double-tap zoom cycles 1.0x -> 2.5x -> 4.0x -> 1.0x without popping',
+        (tester) async {
+      await tester.pumpWidget(buildViewer(mangaMode: true));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1.0x'), findsOneWidget);
+
+      final center = tester.getCenter(find.byType(PageView));
+
+      // Double-tap 1 -> 2.5x
+      await tester.tapAt(center);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(center);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+      expect(find.text('2.5x'), findsOneWidget);
+
+      // Double-tap 2 -> 4.0x
+      await tester.tapAt(center);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(center);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+      expect(find.text('4.0x'), findsOneWidget);
+
+      // Double-tap 3 -> reset back to 1.0x
+      await tester.tapAt(center);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(center);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+      expect(find.text('1.0x'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Manga Mode per-panel zoom pill buttons zoom in, zoom out, and reset cleanly',
+        (tester) async {
+      await tester.pumpWidget(buildViewer(mangaMode: true));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      final zoomIn = find.byKey(const ValueKey('manga_zoom_in_button'));
+      final zoomOut = find.byKey(const ValueKey('manga_zoom_out_button'));
+      final zoomReset = find.byKey(const ValueKey('manga_zoom_reset_button'));
+
+      expect(zoomIn, findsOneWidget);
+      expect(zoomOut, findsOneWidget);
+      expect(zoomReset, findsOneWidget);
+      expect(find.text('1.0x'), findsOneWidget);
+
+      // Zoom in once -> 1.5x
+      await tester.tap(zoomIn);
+      await tester.pumpAndSettle();
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+      expect(find.text('1.5x'), findsOneWidget);
+
+      // Zoom in again -> ~2.3x
+      await tester.tap(zoomIn);
+      await tester.pumpAndSettle();
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+      expect(find.text('1.0x'), findsNothing);
+      expect(find.text('1.5x'), findsNothing);
+
+      // Zoom out -> ~1.5x
+      await tester.tap(zoomOut);
+      await tester.pumpAndSettle();
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+      expect(find.text('1.5x'), findsOneWidget);
+
+      // Tap reset badge -> 1.0x
+      await tester.tap(zoomReset);
+      await tester.pumpAndSettle();
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+      expect(find.text('1.0x'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Manga translating indicator renders centered Column with spinner above outlined text and no pill container',
+        (tester) async {
+      const label = 'Translating page...';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: buildTranslatingIndicatorForTest(label),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 150));
+
+      final indicatorFinder =
+          find.byKey(const ValueKey('manga_translating_indicator'));
+      expect(indicatorFinder, findsOneWidget);
+
+      final column = tester.widget<Column>(indicatorFinder);
+      expect(column.mainAxisSize, MainAxisSize.min);
+      expect(column.mainAxisAlignment, MainAxisAlignment.center);
+      expect(column.crossAxisAlignment, CrossAxisAlignment.center);
+
+      // Centered in parent
+      expect(
+        find.ancestor(
+          of: indicatorFinder,
+          matching: find.byType(Center),
+        ),
+        findsOneWidget,
+      );
+
+      // No horizontal Row and no pill Container / BoxDecoration / Border
+      expect(
+        find.descendant(of: indicatorFinder, matching: find.byType(Row)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: indicatorFinder, matching: find.byType(Container)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+            of: indicatorFinder, matching: find.byType(DecoratedBox)),
+        findsNothing,
+      );
+
+      // Spinner CustomPaint inside 28x28 SizedBox strictly above outlined text Stack
+      final spinnerFinder = find.descendant(
+        of: indicatorFinder,
+        matching: find.byType(CustomPaint),
+      );
+      final textStackFinder = find.descendant(
+        of: indicatorFinder,
+        matching: find.byType(Stack),
+      );
+      expect(spinnerFinder, findsOneWidget);
+      expect(textStackFinder, findsOneWidget);
+      expect(tester.getSize(spinnerFinder), const Size(28, 28));
+
+      final spinnerRect = tester.getRect(spinnerFinder);
+      final textRect = tester.getRect(textStackFinder);
+      expect(spinnerRect.bottom, lessThan(textRect.top));
+      expect((spinnerRect.center.dx - textRect.center.dx).abs(), lessThan(1.0));
+
+      // Outlined text has stroke (ExcludeSemantics) + fill layers
+      expect(
+        find.descendant(of: textStackFinder, matching: find.text(label)),
+        findsNWidgets(2),
+      );
+      expect(
+        find.descendant(
+          of: textStackFinder,
+          matching: find.byType(ExcludeSemantics),
+        ),
+        findsOneWidget,
+      );
+
+      // Pump additional animation frames cleanly without layout/overflow errors
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(tester.takeException(), isNull);
+    });
   });
 }

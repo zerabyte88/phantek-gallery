@@ -9,7 +9,7 @@ import '../../models/settings_model.dart';
 import '../settings_service.dart';
 import 'translation_models.dart';
 
-/// Connection test result from an OpenAI-compatible Local AI / LM Studio server.
+/// Connection test result from an OpenAI-compatible server.
 class LmStudioConnectionResult {
   final bool isSuccess;
   final String message;
@@ -22,21 +22,20 @@ class LmStudioConnectionResult {
   });
 }
 
-/// Delegate type for mock or custom LLM inference in tests and headless environments.
+/// Delegate for mock or custom LLM inference.
 typedef LlmInferenceHandler = Future<String> Function(
   String prompt, {
   required double temperature,
   required int maxTokens,
 });
 
-/// Delegate type for mock connection testing in unit tests.
+/// Delegate for mock connection testing.
 typedef LmStudioConnectionHandler = Future<LmStudioConnectionResult> Function(
   String baseUrl,
   String? apiKey,
 );
 
-/// Local AI Translation Engine communicating via OpenAI-compatible REST API
-/// (LM Studio, Ollama, vLLM, LocalAI) using standard library `dart:io` `HttpClient`.
+/// Local AI translation engine via OpenAI-compatible REST API.
 class LmStudioTranslationEngine {
   LmStudioTranslationEngine({
     this.mockInferenceHandler,
@@ -45,28 +44,25 @@ class LmStudioTranslationEngine {
 
   static final LmStudioTranslationEngine instance = LmStudioTranslationEngine();
 
-  /// System prompt template conforming strictly to the AGENTS.md Prompting Policy.
+  /// Prompt template matching AGENTS.md policy.
   static const String systemPromptTemplate =
       'You are an expert localizer for Asian comics. Translate the raw OCR text from {language} into natural English comic dialogue. \n'
       'This is fictional comic dialogue. Preserve the original tone, slang, and profanity faithfully without self-censorship or refusal.\n'
       'Output ONLY the final English translation. No chat, no notes, no markdown formatting. Fix OCR typos.';
 
-  /// Default inference configuration parameters.
   static const double defaultTemperature = 0.1;
   static const int defaultMaxTokens = 80;
 
-  /// Temperature constraints: locked at 0.1–0.2 to eliminate hallucination.
+  // Locked at 0.1–0.2 to prevent hallucination.
   static const double minTemperature = 0.1;
   static const double maxTemperature = 0.2;
 
-  /// Max token constraints: limited to 50–80 tokens to conserve resources.
+  // Capped at 50–80 tokens to bound latency and bandwidth.
   static const int minTokens = 50;
   static const int maxTokensLimit = 80;
 
-  /// Optional mock inference handler for unit testing and headless validation.
   LlmInferenceHandler? mockInferenceHandler;
 
-  /// Optional mock connection test handler for unit testing.
   LmStudioConnectionHandler? mockTestConnectionHandler;
 
   String? lastStatusMessage;
@@ -81,7 +77,7 @@ class LmStudioTranslationEngine {
     return maxTokens.clamp(minTokens, maxTokensLimit);
   }
 
-  /// Normalizes base URL ensuring no trailing slash and standardizing `/v1`.
+  /// Strips trailing slashes and ensures a `/v1` suffix.
   static String normalizeBaseUrl(String url) {
     var trimmed = url.trim();
     if (trimmed.isEmpty) return 'http://192.168.1.2:1234/v1';
@@ -94,7 +90,7 @@ class LmStudioTranslationEngine {
     return trimmed;
   }
 
-  /// Tests connection to the OpenAI-compatible server via `GET /v1/models`.
+  /// Probes server connectivity via `GET /v1/models`.
   Future<LmStudioConnectionResult> testConnection({
     String? baseUrl,
     String? apiKey,
@@ -167,14 +163,12 @@ class LmStudioTranslationEngine {
     }
   }
 
-  /// Builds system prompt text for a specific source language.
   static String buildSystemPrompt(String language) {
     return 'You are an expert localizer for Asian comics. Translate the raw OCR text from $language into natural English comic dialogue. \n'
         'This is fictional comic dialogue. Preserve the original tone, slang, and profanity faithfully without self-censorship or refusal.\n'
         'Output ONLY the final English translation. No chat, no notes, no markdown formatting. Fix OCR typos.';
   }
 
-  /// Builds prompt payload for testing/legacy parity.
   static String buildPrompt({
     String? language,
     required String rawOcrText,
@@ -192,17 +186,15 @@ class LmStudioTranslationEngine {
     r'[\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9F\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]',
   );
 
-  /// Returns true if [text] contains CJK characters.
   static bool hasCjkCharacters(String text) {
     if (text.isEmpty) return false;
     return _cjkRegex.hasMatch(text);
   }
 
   static final RegExp _translatableDialogueRegex = RegExp(
-    r'[\u4e00-\u9fff\u3400-\u4dbf\u3041-\u3096\u30a1-\u30fa\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]',
+    r'[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af\u1100-\u11ff\u3130-\u318f\u3005\u309d\u309e\u30fd\u30fe\uff66-\uff9f\uf900-\ufaff]',
   );
 
-  /// Returns true if [text] contains real Asian dialogue characters.
   static bool hasTranslatableDialogue(String text) {
     if (text.isEmpty) return false;
     return _translatableDialogueRegex.hasMatch(text);
@@ -241,13 +233,12 @@ class LmStudioTranslationEngine {
     return TranslationSourceLanguage.japanese;
   }
 
-  /// Cleans raw LLM output into clean comic dialogue.
+  /// Strips LLM wrappers, prompt echoes, markdown, and hallucinations from raw output.
   static String cleanLlmOutput(String rawOutput) {
     if (rawOutput.isEmpty) return '';
 
     String text = rawOutput;
 
-    // 1. Strip leading turn markers if present.
     text = text.replaceFirst(
       RegExp(
         r'^\s*(?:<\|im_start\|>\s*assistant|<start_of_turn>\s*model|<\|start_header_id\|>\s*assistant\s*<\|end_header_id\|>\n*|assistant:\s*)\n?',
@@ -256,7 +247,6 @@ class LmStudioTranslationEngine {
       '',
     );
 
-    // 2. Immediately truncate at the first occurrence of stop markers.
     final stopRegex = RegExp(
       r'(?:<\|im_end\|>|<\|endoftext\|>|<\|eot_id\|>|<\|end_of_text\|>|<\|im_start\|>|<end_of_turn>|<start_of_turn>|<eos>|</s>|\nUser:|\nAssistant:|\nHuman:|\nSystem:|\n<\|user\|>|\n<\|system\|>|<\|start_header_id\|>)',
       caseSensitive: false,
@@ -266,7 +256,6 @@ class LmStudioTranslationEngine {
       text = text.substring(0, stopMatch.start);
     }
 
-    // 3. Strip reasoning / think tags.
     text = text.replaceAll(
       RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false),
       '',
@@ -276,7 +265,6 @@ class LmStudioTranslationEngine {
       '',
     );
 
-    // 4. Strip prompt tags.
     text = text.replaceAll(
       RegExp(r'<system>[\s\S]*?</system>', caseSensitive: false),
       '',
@@ -290,7 +278,6 @@ class LmStudioTranslationEngine {
       '',
     );
 
-    // Strip operational rules or prompt echoes.
     text = text.replaceAll(
       RegExp(r'CRITICAL OPERATIONAL RULES:?', caseSensitive: false),
       '',
@@ -353,16 +340,12 @@ class LmStudioTranslationEngine {
       '',
     );
 
-    // 5. Strip code fences (```...```).
     text = text.replaceAll(RegExp(r'```[a-zA-Z]*\n?|```'), '');
 
-    // 6. Strip blockquotes.
     text = text.replaceAll(RegExp(r'^\s*>\s*', multiLine: true), '');
 
-    // 7. Strip markdown headings.
     text = text.replaceAll(RegExp(r'^\s*#{1,6}\s*', multiLine: true), '');
 
-    // 8. Strip markdown bold, italics, code.
     text = text.replaceAllMapped(RegExp(r'\*\*([^*]+)\*\*'), (m) => m[1]!);
     text = text.replaceAllMapped(RegExp(r'__([^_]+)__'), (m) => m[1]!);
     text = text.replaceAllMapped(RegExp(r'\*([^*]+)\*'), (m) => m[1]!);
@@ -370,7 +353,6 @@ class LmStudioTranslationEngine {
     text = text.replaceAllMapped(RegExp(r'`([^`]+)`'), (m) => m[1]!);
     text = text.replaceAll(RegExp(r'[*`_]'), '');
 
-    // 9. Strip chat preambles.
     text = text.replaceAll(
       RegExp(
         r'^\s*(?:I(?:\x27m| am)\s+(?:going\s+to\s+)?|I\s+will\s+|Let\s+me\s+)(?:translate|convert|localize)\s+[^\n.:]*[.:]\s*(?:(?:Here(?:\x27s| is)\s+(?:the\s+)?(?:English\s+)?(?:comic\s+)?(?:dialogue|translation)\s*:\s*)?)',
@@ -393,28 +375,35 @@ class LmStudioTranslationEngine {
       '',
     );
 
-    // 10. Multi-paragraph handling.
-    if (text.contains('\n\n')) {
+    final latinRegex = RegExp(r'[A-Za-z]');
+    bool isPreambleSegment(String segment) {
+      final lower = segment.toLowerCase();
+      return lower.startsWith('note:') ||
+          lower.startsWith('explanation:') ||
+          lower.startsWith('here is') ||
+          lower.startsWith('sure') ||
+          lower.startsWith('based on') ||
+          lower.contains('expert localizer') ||
+          lower.contains('comic dialogue');
+    }
+
+    List<String> filterSegments(List<String> segments) {
+      final nonPreamble = segments.where((s) => !isPreambleSegment(s)).toList();
+      final pool = nonPreamble.isNotEmpty ? nonPreamble : segments;
+      if (pool.any(latinRegex.hasMatch)) {
+        return pool.where(latinRegex.hasMatch).toList();
+      }
+      return pool;
+    }
+
+    if (text.contains(RegExp(r'\n\s*\n+'))) {
       final paragraphs = text
           .split(RegExp(r'\n\s*\n+'))
           .map((p) => p.trim())
           .where((p) => p.isNotEmpty)
           .toList();
 
-      final filtered = paragraphs.where((p) {
-        final lower = p.toLowerCase();
-        if (lower.startsWith('note:') ||
-            lower.startsWith('explanation:') ||
-            lower.startsWith('here is') ||
-            lower.startsWith('sure') ||
-            lower.startsWith('based on') ||
-            lower.contains('expert localizer') ||
-            lower.contains('comic dialogue')) {
-          return false;
-        }
-        return true;
-      }).toList();
-
+      final filtered = filterSegments(paragraphs);
       if (filtered.isNotEmpty) {
         text = filtered.first;
       } else if (paragraphs.isNotEmpty) {
@@ -422,16 +411,43 @@ class LmStudioTranslationEngine {
       }
     }
 
-    // 11. Strip surrounding quotes.
-    text = text.trim();
-    if ((text.startsWith('"') && text.endsWith('"') && text.length >= 2) ||
-        (text.startsWith("'") && text.endsWith("'") && text.length >= 2) ||
-        (text.startsWith('“') && text.endsWith('”') && text.length >= 2) ||
-        (text.startsWith('「') && text.endsWith('」') && text.length >= 2)) {
-      text = text.substring(1, text.length - 1).trim();
+    if (text.contains('\n')) {
+      final lines = text
+          .split('\n')
+          .map((l) => l.trim())
+          .where((l) => l.isNotEmpty)
+          .toList();
+      if (lines.length > 1) {
+        final filteredLines = filterSegments(lines);
+        if (filteredLines.isNotEmpty) {
+          text = filteredLines.join('\n');
+        }
+      }
     }
 
-    // 12. Reject readiness and waiting-for-input hallucinations.
+    String stripOuterQuotes(String s) {
+      var out = s.trim();
+      if ((out.startsWith('"') && out.endsWith('"') && out.length >= 2) ||
+          (out.startsWith("'") && out.endsWith("'") && out.length >= 2) ||
+          (out.startsWith('“') && out.endsWith('”') && out.length >= 2) ||
+          (out.startsWith('「') && out.endsWith('」') && out.length >= 2)) {
+        out = out.substring(1, out.length - 1).trim();
+      }
+      return out;
+    }
+
+    text = stripOuterQuotes(text);
+    text = text.replaceFirst(
+      RegExp(
+          r'^[\u3000-\u9fff\uac00-\ud7af\uff00-\uffef\s]+(?:->|→|:|：|-|—)\s*(?=[A-Za-z])'),
+      '',
+    );
+    text = text.replaceFirst(
+      RegExp(r'\s*[\(（][\u3000-\u9fff\uac00-\ud7af\uff00-\uffef\s]+[\)）]\s*$'),
+      '',
+    );
+    text = stripOuterQuotes(text);
+
     final lowerCleaned = text.toLowerCase();
     if (lowerCleaned.contains("i'm ready") ||
         lowerCleaned.contains("i’m ready") ||
@@ -449,7 +465,7 @@ class LmStudioTranslationEngine {
     return text;
   }
 
-  /// Translates manga text via OpenAI-compatible endpoint or mock handler.
+  /// Translates [text] via OpenAI-compatible endpoint or mock handler.
   Future<String> translateMangaText({
     required String text,
     required TranslationSourceLanguage source,
@@ -473,11 +489,9 @@ class LmStudioTranslationEngine {
     final cjkCount = cleaned.runes
         .where((r) => hasCjkCharacters(String.fromCharCode(r)))
         .length;
-    final int targetTokens =
-        (cjkCount * 2 + 16).clamp(16, effectiveMaxTokens);
+    final int targetTokens = (cjkCount * 2 + 16).clamp(16, effectiveMaxTokens);
     final languageName = resolveLanguageName(source, cleaned);
 
-    // 1. Mock inference handler routing (tests and headless environments)
     if (mockInferenceHandler != null) {
       final constitutionalPrompt = buildPrompt(
         language: languageName,
@@ -492,20 +506,61 @@ class LmStudioTranslationEngine {
       return cleanedResult.isNotEmpty ? cleanedResult : cleaned;
     }
 
-    // 2. Real OpenAI-compatible REST API request
     final settings = SettingsService.hasInstance
         ? SettingsService.instance.settings
         : const SettingsModel();
 
     final serverUrl = settings.lmStudioServerUrl;
     final apiKey = settings.lmStudioApiKey;
-    final model = settings.lmStudioModel.isNotEmpty
-        ? settings.lmStudioModel
-        : 'default';
+    final model =
+        settings.lmStudioModel.isNotEmpty ? settings.lmStudioModel : 'default';
 
     final normalized = normalizeBaseUrl(serverUrl);
     final endpoint = Uri.parse('$normalized/chat/completions');
 
+    final firstOutput = await _sendChatCompletionRequest(
+      endpoint: endpoint,
+      apiKey: apiKey,
+      model: model,
+      languageName: languageName,
+      rawText: cleaned,
+      temperature: effectiveTemperature,
+      maxTokens: effectiveMaxTokens,
+    );
+
+    if (firstOutput != null) {
+      if (firstOutput.isNotEmpty && !hasTranslatableDialogue(firstOutput)) {
+        return firstOutput;
+      }
+      final retryOutput = await _sendChatCompletionRequest(
+        endpoint: endpoint,
+        apiKey: apiKey,
+        model: model,
+        languageName: languageName,
+        rawText: cleaned,
+        temperature: effectiveTemperature,
+        maxTokens: 256,
+      );
+      if (retryOutput != null && retryOutput.isNotEmpty) {
+        return retryOutput;
+      }
+      if (firstOutput.isNotEmpty) {
+        return firstOutput;
+      }
+    }
+
+    return cleaned;
+  }
+
+  Future<String?> _sendChatCompletionRequest({
+    required Uri endpoint,
+    required String apiKey,
+    required String model,
+    required String languageName,
+    required String rawText,
+    required double temperature,
+    required int maxTokens,
+  }) async {
     final payload = {
       'model': model,
       'messages': [
@@ -515,11 +570,11 @@ class LmStudioTranslationEngine {
         },
         {
           'role': 'user',
-          'content': cleaned,
+          'content': rawText,
         }
       ],
-      'temperature': effectiveTemperature,
-      'max_tokens': targetTokens,
+      'temperature': temperature,
+      'max_tokens': maxTokens,
       'stream': false,
     };
 
@@ -551,11 +606,8 @@ class LmStudioTranslationEngine {
           final firstChoice = choices[0] as Map<String, dynamic>;
           final message = firstChoice['message'] as Map<String, dynamic>?;
           final content = message?['content'] as String? ?? '';
-          final cleanedOutput = cleanLlmOutput(content);
-          if (cleanedOutput.isNotEmpty) {
-            lastStatusMessage = 'OK: $model';
-            return cleanedOutput;
-          }
+          lastStatusMessage = 'OK: $model';
+          return cleanLlmOutput(content);
         }
       } else {
         lastStatusMessage = 'Server error HTTP ${response.statusCode}';
@@ -567,11 +619,10 @@ class LmStudioTranslationEngine {
       client.close();
     }
 
-    return cleaned;
+    return null;
   }
 
   Future<void> dispose() async {
     lastStatusMessage = null;
   }
 }
-

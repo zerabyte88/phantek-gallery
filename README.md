@@ -5,7 +5,7 @@
 
   **Offline Android gallery for photos, videos, PSD files, and manga, with on-device manga OCR and dialogue localization via Local AI Server (LM Studio / Ollama).**
 
-  [![Version](https://img.shields.io/badge/Version-v2.19.11-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.19.13-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20LM%20Studio-6366f1.svg?style=flat-square)](https://lmstudio.ai/)
@@ -35,11 +35,6 @@ For comic and manga readers, Phantek Gallery pairs on-device OCR (**Google ML Ki
 ### Manga Reader & Translation
 
 - **Local AI Server Translation**: Nuanced comic dialogue localization via LM Studio or Ollama over your private local network (LAN).
-- **Manual Target Language Selection**: Choose your source language with dedicated buttons:
-  - **Japanese** (`JA → EN`)
-  - **Chinese** (`ZH → EN`)
-  - **Korean** (`KO → EN`)
-  - **Auto-Detect** (Script detection across Kanji/Kana, Hanzi, and Hangul)
 - **Natural Comic Speech Bubble Geometry**:
   - **Preserved Original Bubble Contours**: Speech bubbles retain their natural comic outline and original bounding dimensions, completely eliminating artificial ballooning or obscuring character artwork.
   - **Vertical Dialogue Flow**: Automatically rotates English translations for tall, narrow Asian speech bubbles (90° clockwise with RTL column flow) so vertical dialogue fits cleanly and reads naturally without forced horizontal distortion.
@@ -83,10 +78,9 @@ For natural dialogue nuance, comic slang preservation, and contextual localizati
    - *(Optional)* Enter an API Key if your server requires authentication.
    - Tap **Test Connection** to verify reachability and automatically fetch available loaded models.
    - Select your active model from the list.
-   - Optionally select your default **Source Language** under **Settings > Manga Translation > Source Language**.
 
 3. **Translate in Reader**:
-   - In the reader translation sheet, select your language and render mode to translate speech bubbles using your private desktop AI server!
+   - In the reader translation sheet, select your render mode to translate speech bubbles using your private desktop AI server (source language is automatically detected)!
 
 ---
 

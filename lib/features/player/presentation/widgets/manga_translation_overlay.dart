@@ -38,7 +38,7 @@ class MangaTranslationOverlay extends StatelessWidget {
   }
 }
 
-/// Represents a cluster of adjacent or overlapping speech bubbles to be rendered together.
+/// Cluster of adjacent or overlapping speech bubbles rendered together.
 class MangaSpeechBubbleCluster {
   final Rect rect;
   final String text;
@@ -69,11 +69,14 @@ class MangaTranslationPainter extends CustomPainter {
   List<MangaSpeechBubbleCluster>? _precomputedClusters;
   List<({Rect rect, String text})>? _precomputedSfx;
 
-  static final Map<_ClusterCacheKey,
-          ({List<MangaSpeechBubbleCluster> bubbles, List<({Rect rect, String text})> sfx})>
-      _clusterCache = {};
-  static final Map<_FittedTextPainterCacheKey, TextPainter> _fittedPainterCache =
-      {};
+  static final Map<
+      _ClusterCacheKey,
+      ({
+        List<MangaSpeechBubbleCluster> bubbles,
+        List<({Rect rect, String text})> sfx
+      })> _clusterCache = {};
+  static final Map<_FittedTextPainterCacheKey, TextPainter>
+      _fittedPainterCache = {};
 
   MangaTranslationPainter({
     required this.result,
@@ -91,8 +94,10 @@ class MangaTranslationPainter extends CustomPainter {
     }
   }
 
-  ({List<MangaSpeechBubbleCluster> bubbles, List<({Rect rect, String text})> sfx})
-      _getOrComputeClusters(Size size) {
+  ({
+    List<MangaSpeechBubbleCluster> bubbles,
+    List<({Rect rect, String text})> sfx
+  }) _getOrComputeClusters(Size size) {
     final key = _ClusterCacheKey(result, mode, size.width, size.height);
     final existing = _clusterCache[key];
     if (existing != null) return existing;
@@ -162,7 +167,10 @@ class MangaTranslationPainter extends CustomPainter {
     final Rect destRect =
         Alignment.center.inscribe(fitted.destination, Offset.zero & size);
 
-    final ({List<MangaSpeechBubbleCluster> bubbles, List<({Rect rect, String text})> sfx}) data;
+    final ({
+      List<MangaSpeechBubbleCluster> bubbles,
+      List<({Rect rect, String text})> sfx
+    }) data;
     if (_precomputedClusters != null &&
         _precomputedSfx != null &&
         size == viewportSize) {
@@ -186,8 +194,7 @@ class MangaTranslationPainter extends CustomPainter {
     }
   }
 
-  /// Merges overlapping and closely adjacent speech bubble fragments into unified clusters.
-  /// Deduplicates identical or substring texts within each cluster.
+  /// Merges overlapping or adjacent speech bubble fragments and deduplicates lines.
   static List<MangaSpeechBubbleCluster> clusterSpeechBubbles(
     List<MangaSpeechBubbleCluster> bubbles,
   ) {
@@ -195,59 +202,18 @@ class MangaTranslationPainter extends CustomPainter {
       return bubbles;
     }
 
-    double charSize(MangaSpeechBubbleCluster b) {
-      final lines =
-          b.text.split('\n').where((s) => s.trim().isNotEmpty).length;
-      final words = b.text
-          .split(RegExp(r'\s+'))
-          .where((s) => s.trim().isNotEmpty)
-          .length;
-      final n = math.max(1, math.max(lines, (words / 3).round()));
-      return math.max(
-        10.0,
-        math.min(26.0, math.min(b.rect.width, b.rect.height) / n),
-      );
-    }
-
     bool shouldMerge(MangaSpeechBubbleCluster b1, MangaSpeechBubbleCluster b2) {
       if (b1.rect.overlaps(b2.rect)) {
         return true;
       }
-
-      // Thresholds scale with character/line glyph size, not block dimensions,
-      // so multi-line horizontal paragraphs don't balloon and merge across panels.
-      final ref = math.min(charSize(b1), charSize(b2));
-
-      // Reject merges whose union would cover far more than the text itself
-      // (prevents an oversized patch hiding neighbouring panel artwork).
-      final union = b1.rect.expandToInclude(b2.rect);
-      final sumArea = b1.rect.width * b1.rect.height +
-          b2.rect.width * b2.rect.height;
-      if (union.width * union.height > 2.0 * sumArea) {
+      if (!b1.rect.inflate(1.5).overlaps(b2.rect.inflate(1.5))) {
         return false;
       }
 
-      if (b1.rect.inflate(0.25 * ref).overlaps(b2.rect.inflate(0.25 * ref))) {
-        return true;
-      }
-
-      final hGap = math.max(
-        0.0,
-        math.max(b1.rect.left, b2.rect.left) -
-            math.min(b1.rect.right, b2.rect.right),
-      );
-      final vGap = math.max(
-        0.0,
-        math.max(b1.rect.top, b2.rect.top) -
-            math.min(b1.rect.bottom, b2.rect.bottom),
-      );
-
-      if ((hGap <= 0.9 * ref && vGap <= 0.4 * ref) ||
-          (vGap <= 0.6 * ref && hGap <= 0.4 * ref)) {
-        return true;
-      }
-
-      return false;
+      final union = b1.rect.expandToInclude(b2.rect);
+      final sumArea =
+          b1.rect.width * b1.rect.height + b2.rect.width * b2.rect.height;
+      return union.width * union.height <= 1.45 * sumArea;
     }
 
     final parent = List<int>.generate(bubbles.length, (i) => i);
@@ -286,7 +252,6 @@ class MangaTranslationPainter extends CustomPainter {
         continue;
       }
 
-      // Compute union bounding rect
       double left = cluster.first.rect.left;
       double top = cluster.first.rect.top;
       double right = cluster.first.rect.right;
@@ -307,13 +272,10 @@ class MangaTranslationPainter extends CustomPainter {
         return a.rect.left.compareTo(b.rect.left);
       });
 
-      // Deduplicate identical or substring texts
       final List<String> distinctTexts = [];
       for (final b in sortedCluster) {
-        final lines = b.text
-            .split('\n')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty);
+        final lines =
+            b.text.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty);
         for (final t in lines) {
           int replaceIdx = -1;
           bool isDuplicate = false;
@@ -324,8 +286,7 @@ class MangaTranslationPainter extends CustomPainter {
               break;
             }
             final minLen = math.min(t.length, existing.length);
-            if (minLen >= 3 &&
-                (existing.contains(t) || t.contains(existing))) {
+            if (minLen >= 3 && (existing.contains(t) || t.contains(existing))) {
               if (t.length > existing.length) {
                 replaceIdx = i;
               } else {
@@ -353,8 +314,7 @@ class MangaTranslationPainter extends CustomPainter {
     return mergedList;
   }
 
-  /// Computes bubble geometry locked to original detected rect (+3.0px padding)
-  /// clamped strictly within the safe screen viewport.
+  /// Clamps bubble geometry strictly within the safe screen viewport.
   static Rect calculateBubbleRect({
     required Rect rect,
     required String text,
@@ -374,15 +334,8 @@ class MangaTranslationPainter extends CustomPainter {
       math.max(20.0, screenH - 16.0),
     );
 
-    // Vertical columns need side and vertical padding (ML Kit boxes clip glyphs);
-    // horizontal blocks are already tight and must not spill past the bubble.
-    final bool srcVertical = rect.height > rect.width * 1.25;
-    final double padX = srcVertical
-        ? (0.15 * rect.width).clamp(4.0, 12.0)
-        : (0.04 * math.min(rect.width, rect.height)).clamp(2.0, 6.0);
-    final double padY = srcVertical
-        ? (0.05 * rect.height).clamp(6.0, 14.0)
-        : padX;
+    const double padX = 0.0;
+    const double padY = 0.0;
     final inflated = Rect.fromLTRB(
       rect.left - padX,
       rect.top - padY,
@@ -422,22 +375,34 @@ class MangaTranslationPainter extends CustomPainter {
     return bubbleRect;
   }
 
-  static bool _shouldRotateVertical(Rect bubbleRect) {
-    return bubbleRect.width < 42.0 &&
-        bubbleRect.height > bubbleRect.width * 1.8;
-  }
+  static bool _shouldRotateVertical(Rect bubbleRect) => false;
 
   static ({double maxTextWidth, double targetMaxHeight, bool isVertical})
       _computeTextBounds(Rect bubbleRect) {
     final bool isVertical = _shouldRotateVertical(bubbleRect);
-    final double hPad = math.min(6.0, bubbleRect.width * 0.08);
-    final double vPad = math.min(6.0, bubbleRect.height * 0.08);
-    final double availW = math.max(12.0, bubbleRect.width - hPad);
-    final double availH = math.max(12.0, bubbleRect.height - vPad);
+    final double hPad = math.min(4.0, bubbleRect.width * 0.06);
+    final double vPad = math.min(4.0, bubbleRect.height * 0.06);
+    final double availW = math.max(6.0, bubbleRect.width - hPad);
+    final double availH = math.max(6.0, bubbleRect.height - vPad);
     return (
       maxTextWidth: isVertical ? availH : availW,
       targetMaxHeight: isVertical ? availW : availH,
       isVertical: isVertical,
+    );
+  }
+
+  @visibleForTesting
+  static TextPainter debugFitSpeechBubbleText(Rect bubbleRect, String text) {
+    final trimmedText = text.trim();
+    final int wordCount =
+        trimmedText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+    final (:maxTextWidth, :targetMaxHeight, isVertical: _) =
+        _computeTextBounds(bubbleRect);
+    return _getOrCreateFittedPainter(
+      trimmedText: trimmedText,
+      maxTextWidth: maxTextWidth,
+      targetMaxHeight: targetMaxHeight,
+      wordCount: wordCount,
     );
   }
 
@@ -458,7 +423,7 @@ class MangaTranslationPainter extends CustomPainter {
       screenSize: screenSize,
     );
 
-    final (:maxTextWidth, :targetMaxHeight, :isVertical) =
+    final (:maxTextWidth, :targetMaxHeight, isVertical: _) =
         _computeTextBounds(bubbleRect);
 
     final int wordCount =
@@ -474,34 +439,36 @@ class MangaTranslationPainter extends CustomPainter {
     final rrect =
         RRect.fromRectAndRadius(bubbleRect, const Radius.circular(8.0));
 
-    // Opaque white patch blends into the bubble and fully hides the source text.
+    // Opaque patch hides the source text inside the bubble.
     canvas.drawRRect(rrect, Paint()..color = Colors.white);
 
-    if (isVertical) {
-      final double marginH =
-          math.max(2.0, (bubbleRect.height - painter.width) / 2.0);
-      final double marginW =
-          math.max(2.0, (bubbleRect.width - painter.height) / 2.0);
-      final double originX = bubbleRect.right - marginW;
-      final double originY = bubbleRect.top + marginH;
+    final double fitScale =
+        (painter.width > maxTextWidth || painter.height > targetMaxHeight)
+            ? math
+                .min(
+                  maxTextWidth / math.max(1.0, painter.width),
+                  targetMaxHeight / math.max(1.0, painter.height),
+                )
+                .clamp(0.1, 1.0)
+            : 1.0;
 
-      canvas.save();
-      canvas.clipRRect(rrect);
-      canvas.translate(originX, originY);
-      canvas.rotate(math.pi / 2);
-      painter.paint(canvas, Offset.zero);
-      canvas.restore();
+    canvas.save();
+    canvas.clipRRect(rrect);
+    if (fitScale < 1.0) {
+      canvas.translate(bubbleRect.center.dx, bubbleRect.center.dy);
+      canvas.scale(fitScale);
+      painter.paint(
+        canvas,
+        Offset(-painter.width / 2.0, -painter.height / 2.0),
+      );
     } else {
-      final double dx = bubbleRect.left +
-          math.max(0.0, (bubbleRect.width - painter.width) / 2.0);
-      final double dy = bubbleRect.top +
-          math.max(0.0, (bubbleRect.height - painter.height) / 2.0);
-
-      canvas.save();
-      canvas.clipRRect(rrect);
+      final double dx =
+          bubbleRect.left + (bubbleRect.width - painter.width) / 2.0;
+      final double dy =
+          bubbleRect.top + (bubbleRect.height - painter.height) / 2.0;
       painter.paint(canvas, Offset(dx, dy));
-      canvas.restore();
     }
+    canvas.restore();
   }
 
   void _drawSfxBlock(
@@ -510,6 +477,9 @@ class MangaTranslationPainter extends CustomPainter {
     String text, [
     Size? screenSize,
   ]) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+
     final double screenW = screenSize?.width ?? 400.0;
     final double screenH = screenSize?.height ?? 800.0;
     final Rect safeViewport = Rect.fromLTWH(
@@ -519,52 +489,14 @@ class MangaTranslationPainter extends CustomPainter {
       math.max(20.0, screenH - 16.0),
     );
 
-    final double fontSize = (rect.height * 0.35).clamp(11.0, 16.0);
-    final double maxTextWidth = math.min(
-      math.max(rect.width * 1.4, 40.0),
-      safeViewport.width - 16.0,
-    );
+    final double pillWidth = math.min(rect.width, safeViewport.width);
+    final double pillHeight = math.min(rect.height, safeViewport.height);
+    if (pillWidth <= 0 || pillHeight <= 0) return;
 
-    final strokePainter = _buildTextPainter(
-      text: text,
-      style: TextStyle(
-        fontSize: fontSize,
-        fontWeight: FontWeight.w900,
-        foreground: Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3.5
-          ..strokeJoin = StrokeJoin.round
-          ..color = Colors.black,
-      ),
-      maxWidth: maxTextWidth,
-    );
+    double pillLeft = rect.left;
+    double pillTop = rect.top;
 
-    final fillPainter = _buildTextPainter(
-      text: text,
-      style: TextStyle(
-        color: Colors.white,
-        fontSize: fontSize,
-        fontWeight: FontWeight.w900,
-        shadows: const [
-          Shadow(
-            offset: Offset(1.5, 1.5),
-            blurRadius: 3.0,
-            color: Colors.black87,
-          ),
-        ],
-      ),
-      maxWidth: maxTextWidth,
-    );
-
-    final double pillWidth =
-        math.min(fillPainter.width + 8.0, safeViewport.width);
-    final double pillHeight =
-        math.min(fillPainter.height + 4.0, safeViewport.height);
-
-    double pillLeft = rect.left + (rect.width - pillWidth) / 2.0;
-    double pillTop = rect.top + (rect.height - pillHeight) / 2.0;
-
-    // Strictly clamp pill within safeViewport
+    // Clamp pill within safeViewport without expanding beyond rect.
     if (pillLeft < safeViewport.left) {
       pillLeft = safeViewport.left;
     } else if (pillLeft + pillWidth > safeViewport.right) {
@@ -583,22 +515,125 @@ class MangaTranslationPainter extends CustomPainter {
     final pillRRect =
         RRect.fromRectAndRadius(pillRect, const Radius.circular(6.0));
 
-    final double textDx =
-        pillRect.left + (pillRect.width - fillPainter.width) / 2.0;
-    final double textDy =
-        pillRect.top + (pillRect.height - fillPainter.height) / 2.0;
-    final offset = Offset(textDx, textDy);
+    final double hPad = math.min(4.0, pillRect.width * 0.06);
+    final double vPad = math.min(4.0, pillRect.height * 0.06);
+    final double maxTextWidth = math.max(6.0, pillRect.width - hPad);
+    final double maxTextHeight = math.max(6.0, pillRect.height - vPad);
+
+    const double minFontSize = 1.5;
+    double fontSize = (pillRect.height * 0.35).clamp(7.0, 14.0);
+
+    TextStyle fillStyleFor(double size) => TextStyle(
+          color: Colors.white,
+          fontSize: size,
+          fontWeight: FontWeight.w900,
+          height: size <= 8.0 ? 1.08 : 1.15,
+          shadows: const [
+            Shadow(
+              offset: Offset(1.5, 1.5),
+              blurRadius: 3.0,
+              color: Colors.black87,
+            ),
+          ],
+        );
+
+    String longestWord = '';
+    for (final w in trimmed.split(RegExp(r'\s+'))) {
+      if (w.length > longestWord.length) longestWord = w;
+    }
+    bool longestWordFits(double size) {
+      if (longestWord.isEmpty) return true;
+      final wp = _buildTextPainter(
+        text: longestWord,
+        style: fillStyleFor(size),
+        maxWidth: double.infinity,
+        maxLines: 1,
+      );
+      return wp.width <= maxTextWidth;
+    }
+
+    TextPainter fillPainter = _buildTextPainter(
+      text: trimmed,
+      style: fillStyleFor(fontSize),
+      maxWidth: maxTextWidth,
+      maxLines: null,
+    );
+
+    while ((fillPainter.height > maxTextHeight ||
+            fillPainter.width > maxTextWidth ||
+            !longestWordFits(fontSize)) &&
+        fontSize > 5.0) {
+      fontSize = math.max(5.0, fontSize - 0.5);
+      fillPainter = _buildTextPainter(
+        text: trimmed,
+        style: fillStyleFor(fontSize),
+        maxWidth: maxTextWidth,
+        maxLines: null,
+      );
+    }
+
+    while ((fillPainter.height > maxTextHeight ||
+            fillPainter.width > maxTextWidth) &&
+        fontSize > minFontSize) {
+      fontSize = math.max(minFontSize, fontSize - 0.25);
+      fillPainter = _buildTextPainter(
+        text: trimmed,
+        style: fillStyleFor(fontSize),
+        maxWidth: maxTextWidth,
+        maxLines: null,
+      );
+    }
+
+    final double strokeWidth = (fontSize * 0.25).clamp(0.6, 3.5);
+    final strokePainter = _buildTextPainter(
+      text: trimmed,
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w900,
+        height: fontSize <= 8.0 ? 1.08 : 1.15,
+        foreground: Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeJoin = StrokeJoin.round
+          ..color = Colors.black,
+      ),
+      maxWidth: maxTextWidth,
+      maxLines: null,
+    );
+
+    final double fitScale =
+        (fillPainter.width > maxTextWidth || fillPainter.height > maxTextHeight)
+            ? math
+                .min(
+                  maxTextWidth / math.max(1.0, fillPainter.width),
+                  maxTextHeight / math.max(1.0, fillPainter.height),
+                )
+                .clamp(0.1, 1.0)
+            : 1.0;
 
     canvas.save();
-    canvas.clipRect(safeViewport);
+    canvas.clipRRect(pillRRect);
 
     final bgPaint = Paint()
       ..color = Colors.black.withValues(alpha: 0.65)
       ..style = PaintingStyle.fill;
     canvas.drawRRect(pillRRect, bgPaint);
 
-    strokePainter.paint(canvas, offset);
-    fillPainter.paint(canvas, offset);
+    if (fitScale < 1.0) {
+      canvas.translate(pillRect.center.dx, pillRect.center.dy);
+      canvas.scale(fitScale);
+      final centeredOffset =
+          Offset(-fillPainter.width / 2.0, -fillPainter.height / 2.0);
+      strokePainter.paint(canvas, centeredOffset);
+      fillPainter.paint(canvas, centeredOffset);
+    } else {
+      final offset = Offset(
+        pillRect.left + (pillRect.width - fillPainter.width) / 2.0,
+        pillRect.top + (pillRect.height - fillPainter.height) / 2.0,
+      );
+      strokePainter.paint(canvas, offset);
+      fillPainter.paint(canvas, offset);
+    }
     canvas.restore();
   }
 
@@ -655,7 +690,7 @@ class MangaTranslationPainter extends CustomPainter {
       if (w.length > longestWord.length) longestWord = w;
     }
 
-    const double minFontSize = 4.5;
+    const double minFontSize = 1.5;
     double fontSize = maxAllowedFontSize;
 
     TextStyle styleFor(double size) => TextStyle(
@@ -686,8 +721,19 @@ class MangaTranslationPainter extends CustomPainter {
     while ((painter.height > targetMaxHeight ||
             painter.width > maxTextWidth ||
             !longestWordFits(fontSize)) &&
+        fontSize > 5.0) {
+      fontSize = math.max(5.0, fontSize - 0.5);
+      painter = _buildTextPainter(
+        text: trimmedText,
+        style: styleFor(fontSize),
+        maxWidth: maxTextWidth,
+        maxLines: null,
+      );
+    }
+
+    while ((painter.height > targetMaxHeight || painter.width > maxTextWidth) &&
         fontSize > minFontSize) {
-      fontSize = math.max(minFontSize, fontSize - 0.5);
+      fontSize = math.max(minFontSize, fontSize - 0.25);
       painter = _buildTextPainter(
         text: trimmedText,
         style: styleFor(fontSize),

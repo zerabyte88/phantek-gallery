@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
@@ -181,10 +182,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   late final PageController _mangaPageController;
 
   TranslationRenderMode? _translationMode;
-  TranslationSourceLanguage _translationLanguage =
-      TranslationSourceLanguage.japanese;
-  final TranslationTargetLanguage _translationTargetLanguage =
-      TranslationTargetLanguage.english;
   late List<MediaItem> _cachedMangaList;
   late final ValueNotifier<int> _activeMangaPageNotifier;
 
@@ -415,8 +412,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _activeMangaPageNotifier = ValueNotifier<int>(initialActive);
     _mangaPageController = PageController(initialPage: initialActive);
     _translationCoordinator = TranslationIsolateCoordinator();
-    _translationLanguage =
-        SettingsService.instance.settings.translationSourceLanguage;
 
     if (_isMangaMode && widget.initialIndex > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -558,8 +553,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       imagePath: it.path,
       imageSize: Size(w, h),
       mode: _translationMode!,
-      language: _translationLanguage,
-      targetLanguage: _translationTargetLanguage,
+      language: TranslationSourceLanguage.auto,
+      targetLanguage: TranslationTargetLanguage.english,
       debounceDuration: const Duration(milliseconds: 300),
     );
   }
@@ -596,409 +591,210 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return SafeArea(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Row(
                     children: [
-                      // Drag handle
-                      Center(
-                        child: Container(
-                          width: 36,
-                          height: 4,
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-
-                      // Header
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: primary.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(Icons.translate_rounded,
-                                color: primary, size: 20),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              loc.mangaTranslation,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.15,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close_rounded,
-                                color: Colors.white70, size: 20),
-                            onPressed: () => Navigator.pop(sheetContext),
-                          ),
-                        ],
-                      ),
-
-                      // Section: Source Language Selector Header & Otomatis Chip
-                      Padding(
-                        padding: const EdgeInsets.only(top: 14, bottom: 8),
-                        child: Row(
-                          children: [
-                            Text(
-                              loc.sourceLanguage,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.7),
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const Spacer(),
-                            // Clean Otomatis / Auto-detect Chip
-                            InkWell(
-                              onTap: () async {
-                                setState(() {
-                                  _translationLanguage =
-                                      TranslationSourceLanguage.auto;
-                                });
-                                await SettingsService.instance
-                                    .setTranslationSourceLanguage(
-                                        TranslationSourceLanguage.auto);
-                                setSheetState(() {});
-                                if (_translationMode != null) {
-                                  _triggerMangaTranslationForActivePage();
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: _translationLanguage ==
-                                          TranslationSourceLanguage.auto
-                                      ? primary.withValues(alpha: 0.22)
-                                      : Colors.white.withValues(alpha: 0.05),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: _translationLanguage ==
-                                            TranslationSourceLanguage.auto
-                                        ? primary.withValues(alpha: 0.6)
-                                        : Colors.white.withValues(alpha: 0.08),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.auto_awesome_rounded,
-                                      size: 13,
-                                      color: _translationLanguage ==
-                                              TranslationSourceLanguage.auto
-                                          ? primary
-                                          : Colors.white70,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      loc.autoDetect,
-                                      style: TextStyle(
-                                        color: _translationLanguage ==
-                                                TranslationSourceLanguage.auto
-                                            ? Colors.white
-                                            : Colors.white70,
-                                        fontSize: 11.5,
-                                        fontWeight: _translationLanguage ==
-                                                TranslationSourceLanguage.auto
-                                            ? FontWeight.w600
-                                            : FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // 3 Dedicated Target Language Selection Buttons (Jepang, China, Korea -> English)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: Row(
-                          children: [
-                            (
-                              lang: TranslationSourceLanguage.japanese,
-                              title: loc.langJapanese,
-                              subtext: 'JA → EN',
-                            ),
-                            (
-                              lang: TranslationSourceLanguage.chinese,
-                              title: loc.langChinese,
-                              subtext: 'ZH → EN',
-                            ),
-                            (
-                              lang: TranslationSourceLanguage.korean,
-                              title: loc.langKorean,
-                              subtext: 'KO → EN',
-                            ),
-                          ].map((item) {
-                            final isSelected =
-                                _translationLanguage == item.lang;
-
-                            return Expanded(
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 3),
-                                child: InkWell(
-                                  onTap: () async {
-                                    setState(() {
-                                      _translationLanguage = item.lang;
-                                    });
-                                    await SettingsService.instance
-                                        .setTranslationSourceLanguage(
-                                            item.lang);
-                                    setSheetState(() {});
-                                    if (_translationMode != null) {
-                                      _triggerMangaTranslationForActivePage();
-                                    }
-                                  },
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 10, horizontal: 6),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? primary.withValues(alpha: 0.20)
-                                          : Colors.white
-                                              .withValues(alpha: 0.04),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: isSelected
-                                            ? primary.withValues(alpha: 0.7)
-                                            : Colors.white
-                                                .withValues(alpha: 0.08),
-                                        width: isSelected ? 1.5 : 1.0,
-                                      ),
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          item.title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            color: isSelected
-                                                ? Colors.white
-                                                : Colors.white
-                                                    .withValues(alpha: 0.85),
-                                            fontSize: 12,
-                                            fontWeight: isSelected
-                                                ? FontWeight.w600
-                                                : FontWeight.w500,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          item.subtext,
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            color: isSelected
-                                                ? primary.withValues(
-                                                    alpha: 0.95)
-                                                : Colors.white
-                                                    .withValues(alpha: 0.45),
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: 0.3,
-                                          ),
-                                        ),
-                                       ],
-                                     ),
-                                   ),
-                                 ),
-                                ),
-                              );
-                           }).toList(),
-                        ),
-                      ),
-
-                      // Section 3: Engine Status Card (Minimalist & Professional)
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.03),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08),
-                              width: 1),
+                          color: primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(7),
-                              decoration: BoxDecoration(
-                                color: Colors.tealAccent.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.dns_outlined,
-                                color: Colors.tealAccent,
-                                size: 18,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Icon(Icons.translate_rounded,
+                            color: primary, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          loc.mangaTranslation,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.15,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded,
+                            color: Colors.white70, size: 20),
+                        onPressed: () => Navigator.pop(sheetContext),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          width: 1),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: Colors.tealAccent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.dns_outlined,
+                            color: Colors.tealAccent,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
-                                  Row(
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          loc.engineLmStudio,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                  Flexible(
+                                    child: Text(
+                                      loc.engineLmStudio,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.tealAccent
-                                              .withValues(alpha: 0.15),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          loc.modelActive,
-                                          style: const TextStyle(
-                                            color: Colors.tealAccent,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: 0.2,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    SettingsService.instance.settings
-                                            .lmStudioModel.isNotEmpty
-                                        ? '${SettingsService.instance.settings.lmStudioModel} • ${SettingsService.instance.settings.lmStudioServerUrl}'
-                                        : SettingsService.instance.settings
-                                            .lmStudioServerUrl,
-                                    style: TextStyle(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.6),
-                                      fontSize: 11,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.tealAccent
+                                          .withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      loc.modelActive,
+                                      style: const TextStyle(
+                                        color: Colors.tealAccent,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      // Section 4: Render Mode Option Cards
-                      _buildModeCard(
-                        title: loc.translateSpeechBubbles,
-                        subtitle: loc.translateSpeechBubblesSubtitle,
-                        icon: Icons.chat_bubble_outline_rounded,
-                        selected: _translationMode ==
-                            TranslationRenderMode.speechBubblesOnly,
-                        onTap: () {
-                          Navigator.pop(sheetContext);
-                          _setTranslationMode(
-                              TranslationRenderMode.speechBubblesOnly);
-                          showFeedbackPill(
-                            context,
-                            message: '${loc.mangaTranslation}...',
-                            icon: Icons.translate_rounded,
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      _buildModeCard(
-                        title: loc.translateFullPage,
-                        subtitle: loc.translateFullPageSubtitle,
-                        icon: Icons.auto_stories_outlined,
-                        selected: _translationMode ==
-                            TranslationRenderMode.fullImageWithSfx,
-                        onTap: () {
-                          Navigator.pop(sheetContext);
-                          _setTranslationMode(
-                              TranslationRenderMode.fullImageWithSfx);
-                          showFeedbackPill(
-                            context,
-                            message: '${loc.mangaTranslation}...',
-                            icon: Icons.translate_rounded,
-                          );
-                        },
-                      ),
-
-                      // Section 5: Turn off translation
-                      if (_translationMode != null) ...[
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.redAccent.shade100,
-                              side: BorderSide(
-                                color: Colors.redAccent.withValues(alpha: 0.25),
+                              const SizedBox(height: 3),
+                              Text(
+                                SettingsService.instance.settings.lmStudioModel
+                                        .isNotEmpty
+                                    ? '${SettingsService.instance.settings.lmStudioModel} • ${SettingsService.instance.settings.lmStudioServerUrl}'
+                                    : SettingsService
+                                        .instance.settings.lmStudioServerUrl,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  fontSize: 11,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            icon: const Icon(Icons.power_settings_new_rounded,
-                                size: 16),
-                            label: Text(
-                              loc.disableTranslation,
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            onPressed: () {
-                              Navigator.pop(sheetContext);
-                              _setTranslationMode(null);
-                            },
+                            ],
                           ),
                         ),
                       ],
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 14),
+                  _buildModeCard(
+                    title: loc.translateSpeechBubbles,
+                    subtitle: loc.translateSpeechBubblesSubtitle,
+                    icon: Icons.chat_bubble_outline_rounded,
+                    selected: _translationMode ==
+                        TranslationRenderMode.speechBubblesOnly,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _setTranslationMode(
+                          TranslationRenderMode.speechBubblesOnly);
+                      showFeedbackPill(
+                        context,
+                        message: '${loc.mangaTranslation}...',
+                        icon: Icons.translate_rounded,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _buildModeCard(
+                    title: loc.translateFullPage,
+                    subtitle: loc.translateFullPageSubtitle,
+                    icon: Icons.auto_stories_outlined,
+                    selected: _translationMode ==
+                        TranslationRenderMode.fullImageWithSfx,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _setTranslationMode(
+                          TranslationRenderMode.fullImageWithSfx);
+                      showFeedbackPill(
+                        context,
+                        message: '${loc.mangaTranslation}...',
+                        icon: Icons.translate_rounded,
+                      );
+                    },
+                  ),
+                  if (_translationMode != null) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent.shade100,
+                          side: BorderSide(
+                            color: Colors.redAccent.withValues(alpha: 0.25),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        icon: const Icon(Icons.power_settings_new_rounded,
+                            size: 16),
+                        label: Text(
+                          loc.disableTranslation,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(sheetContext);
+                          _setTranslationMode(null);
+                        },
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            );
-          },
+            ),
+          ),
         );
       },
     );
@@ -1121,54 +917,95 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
   }
 
+  Widget _buildTranslatingOverlay(String imagePath) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: ValueListenableBuilder<bool>(
+          valueListenable:
+              _translationCoordinator.getLoadingNotifier(imagePath),
+          builder: (context, isLoading, _) {
+            if (!isLoading) return const SizedBox.shrink();
+            return Center(
+              child: _MangaTranslatingIndicator(
+                label: context.tr.translatingPage,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildMangaView() {
     final mangaList = _mangaItems;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: _toggleBars,
-      child: PageView.builder(
-        controller: _mangaPageController,
-        physics: const BouncingScrollPhysics(),
-        itemCount: mangaList.length,
-        onPageChanged: (index) {
+    return PageView.builder(
+      controller: _mangaPageController,
+      physics: (_isCurrentlyZoomed ||
+              _isPinching ||
+              _isMultiTouch ||
+              _activePointers.length >= 2)
+          ? const NeverScrollableScrollPhysics()
+          : const BouncingScrollPhysics(),
+      itemCount: mangaList.length,
+      onPageChanged: (index) {
+        setState(() {
           _activeMangaPageNotifier.value = index;
+          _isPhotoZoomed = false;
+          _isDeepZoomed = false;
+          _isPinching = false;
+          _transformationController.value = Matrix4.identity();
           final globalIndex = widget.items.indexOf(mangaList[index]);
           if (globalIndex != -1 && globalIndex != _current) {
             _current = globalIndex;
             _activeMediaNotifier?.state = mangaList[index].id;
           }
-          _triggerMangaTranslationForActivePage();
-        },
-        itemBuilder: (context, index) {
-          final it = mangaList[index];
-          Widget imageWidget = Image(
-            image: screenDisplayImage(it.path),
-            fit: BoxFit.contain,
-            width: double.infinity,
-            height: double.infinity,
-            gaplessPlayback: true,
-            filterQuality: FilterQuality.medium,
-            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-              if (wasSynchronouslyLoaded || frame != null) return child;
-              return _thumb(it.id, it.path);
-            },
-            errorBuilder: (_, __, ___) => Container(
-              height: 300,
-              color: Colors.black26,
-              alignment: Alignment.center,
-              child: const Icon(Icons.broken_image,
-                  size: 60, color: Colors.white38),
-            ),
-          );
+        });
+        _triggerMangaTranslationForActivePage();
+      },
+      itemBuilder: (context, index) {
+        final it = mangaList[index];
+        return RepaintBoundary(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ValueListenableBuilder<int>(
+                valueListenable: _activeMangaPageNotifier,
+                builder: (context, activeIndex, _) {
+                  final isActive = index == activeIndex;
+                  final Widget imageWidget = Image(
+                    image: (isActive && _isDeepZoomed)
+                        ? displayImage(it.path, maxDimension: 4096)
+                        : screenDisplayImage(it.path),
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                    height: double.infinity,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.medium,
+                    frameBuilder:
+                        (context, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded || frame != null) return child;
+                      if (_isDeepZoomed) {
+                        return Image(
+                          image: screenDisplayImage(it.path),
+                          fit: BoxFit.contain,
+                          width: double.infinity,
+                          height: double.infinity,
+                          gaplessPlayback: true,
+                          filterQuality: FilterQuality.medium,
+                        );
+                      }
+                      return _thumb(it.id, it.path);
+                    },
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 300,
+                      color: Colors.black26,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.broken_image,
+                          size: 60, color: Colors.white38),
+                    ),
+                  );
 
-          return RepaintBoundary(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                InteractiveViewer(
-                  minScale: 1.0,
-                  maxScale: 4.0,
-                  child: Stack(
+                  final Widget pageContent = Stack(
                     fit: StackFit.expand,
                     children: [
                       imageWidget,
@@ -1191,79 +1028,67 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                           ),
                         ),
                     ],
-                  ),
-                ),
-                if (_translationMode != null)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: IgnorePointer(
-                      child: SafeArea(
-                        child: AnimatedPadding(
-                          duration: const Duration(milliseconds: 200),
-                          padding: EdgeInsets.only(top: _barsVisible ? 80 : 20),
-                          child: Align(
-                            alignment: Alignment.topCenter,
-                            child: ValueListenableBuilder<bool>(
-                              valueListenable: _translationCoordinator
-                                  .getLoadingNotifier(it.path),
-                              builder: (context, isLoading, _) {
-                                if (!isLoading) return const SizedBox.shrink();
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.75),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                        color: Colors.white24, width: 0.8),
-                                    boxShadow: const [
-                                      BoxShadow(
-                                        color: Colors.black45,
-                                        blurRadius: 8,
-                                        offset: Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                  Colors.white),
-                                        ),
-                                      ),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        context.tr.translatingPage,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          letterSpacing: 0.2,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        },
-      ),
+                  );
+
+                  if (!isActive) {
+                    return InteractiveViewer(
+                      minScale: 1.0,
+                      maxScale: 6.0,
+                      panEnabled: false,
+                      child: pageContent,
+                    );
+                  }
+
+                  return InteractiveViewer(
+                    key: ValueKey('manga_iv_${it.id}'),
+                    transformationController: _transformationController,
+                    minScale: 1.0,
+                    maxScale: 6.0,
+                    panEnabled: _isCurrentlyZoomed,
+                    clipBehavior: Clip.hardEdge,
+                    onInteractionStart: (details) {
+                      _zoomAnimController?.stop();
+                      if (details.pointerCount >= 2) {
+                        _isPinching = true;
+                      }
+                    },
+                    onInteractionUpdate: (details) {
+                      final scale =
+                          _transformationController.value.getMaxScaleOnAxis();
+                      final isZoomed = scale > 1.05;
+                      if (isZoomed != _isPhotoZoomed) {
+                        setState(() {
+                          _isPhotoZoomed = isZoomed;
+                        });
+                      }
+                    },
+                    onInteractionEnd: (details) {
+                      _isPinching = false;
+                      final scale =
+                          _transformationController.value.getMaxScaleOnAxis();
+                      if (scale <= 1.02) {
+                        _resetPhotoZoom();
+                      } else {
+                        final shouldDeepZoom = scale > 1.2;
+                        if ((!_isPhotoZoomed ||
+                                _isDeepZoomed != shouldDeepZoom) &&
+                            mounted) {
+                          setState(() {
+                            _isPhotoZoomed = true;
+                            _isDeepZoomed = shouldDeepZoom;
+                          });
+                        }
+                      }
+                    },
+                    child: pageContent,
+                  );
+                },
+              ),
+              if (_translationMode != null) _buildTranslatingOverlay(it.path),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1369,27 +1194,32 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _zoomAnimController!.forward();
   }
 
-  void _zoomToPosition(Offset tapPos) {
+  Matrix4 _clampedFocalMatrix(Offset focal, double targetScale) {
+    if (targetScale <= 1.05) return Matrix4.identity();
+    final currentMatrix = _transformationController.value;
+    final currentScale = currentMatrix.getMaxScaleOnAxis();
+    final viewportSize = context.size ?? MediaQuery.sizeOf(context);
+    final sceneX = (focal.dx - currentMatrix.storage[12]) / currentScale;
+    final sceneY = (focal.dy - currentMatrix.storage[13]) / currentScale;
+    final minTx = -viewportSize.width * (targetScale - 1.0);
+    final minTy = -viewportSize.height * (targetScale - 1.0);
+    final tx = (focal.dx - sceneX * targetScale).clamp(minTx, 0.0);
+    final ty = (focal.dy - sceneY * targetScale).clamp(minTy, 0.0);
+    return Matrix4.translationValues(tx, ty, 0.0)
+      ..scaleByDouble(targetScale, targetScale, 1.0, 1.0);
+  }
+
+  void _animateZoomToScale(
+    Matrix4 endMatrix,
+    double targetScale, {
+    Duration duration = const Duration(milliseconds: 280),
+  }) {
     _zoomAnimController?.stop();
     _zoomAnimController?.dispose();
 
-    final currentScale = _transformationController.value.getMaxScaleOnAxis();
-    final bool isZoomed = currentScale > 1.05 || _isPhotoZoomed;
-
-    final Matrix4 endMatrix;
-    if (isZoomed) {
-      endMatrix = Matrix4.identity();
-    } else {
-      const double targetScale = 2.5;
-      endMatrix = Matrix4.identity()
-        ..translateByDouble(tapPos.dx, tapPos.dy, 0.0, 1.0)
-        ..scaleByDouble(targetScale, targetScale, 1.0, 1.0)
-        ..translateByDouble(-tapPos.dx, -tapPos.dy, 0.0, 1.0);
-    }
-
     _zoomAnimController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 280),
+      duration: duration,
     );
 
     final animation = Matrix4Tween(
@@ -1404,20 +1234,57 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       _transformationController.value = animation.value;
     });
 
+    final bool willReset = targetScale <= 1.05;
     _zoomAnimController!.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
-        if (isZoomed) {
+        if (willReset) {
           _transformationController.value = Matrix4.identity();
         }
         setState(() {
-          _isPhotoZoomed = !isZoomed;
-          _isDeepZoomed = !isZoomed;
+          _isPhotoZoomed = !willReset;
+          _isDeepZoomed = targetScale > 1.2;
         });
       }
     });
 
-    HapticFeedback.lightImpact();
     _zoomAnimController!.forward();
+  }
+
+  void _zoomToPosition(Offset tapPos) {
+    final currentScale = _transformationController.value.getMaxScaleOnAxis();
+    final double targetScale;
+    if (currentScale < 1.8) {
+      targetScale = 2.5;
+    } else if (currentScale < 3.3) {
+      targetScale = 4.0;
+    } else {
+      targetScale = 1.0;
+    }
+
+    final Matrix4 endMatrix = _clampedFocalMatrix(tapPos, targetScale);
+    HapticFeedback.lightImpact();
+    _animateZoomToScale(endMatrix, targetScale);
+  }
+
+  void _stepZoom(double factor, {bool reset = false}) {
+    final currentScale = _transformationController.value.getMaxScaleOnAxis();
+    final double targetScale =
+        reset ? 1.0 : (currentScale * factor).clamp(1.0, 6.0);
+    if (targetScale <= 1.05) {
+      _resetPhotoZoom();
+      return;
+    }
+    if ((targetScale - currentScale).abs() < 0.01) return;
+
+    final viewportSize = context.size ?? MediaQuery.sizeOf(context);
+    final focal = Offset(viewportSize.width / 2.0, viewportSize.height / 2.0);
+    final Matrix4 endMatrix = _clampedFocalMatrix(focal, targetScale);
+    HapticFeedback.selectionClick();
+    _animateZoomToScale(
+      endMatrix,
+      targetScale,
+      duration: const Duration(milliseconds: 220),
+    );
   }
 
   void _handleDoubleTap() {
@@ -1709,6 +1576,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         if (wasSynchronouslyLoaded || frame != null) {
           return child;
         }
+        if (_isDeepZoomed) {
+          return Image(
+            image: screenDisplayImage(it.path),
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.medium,
+          );
+        }
         return _thumb(it.id, it.path);
       },
       errorBuilder: (_, __, ___) => const Center(
@@ -1948,10 +1823,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             _settle.stop();
             _zoomAnimController?.stop();
             _isSwipingHorizontal = false;
-            if (_isMangaMode) {
-              if (_drag.value != Offset.zero) _setDrag(Offset.zero);
-              return;
-            }
             if (_activePointers.length == 1) {
               _setDrag(Offset.zero);
               _isMultiTouch = false;
@@ -1962,10 +1833,18 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
               }
             }
             if (_activePointers.length >= 2 || _isCurrentlyZoomed) {
+              final bool wasPinching = _isPinching;
               _isMultiTouch = true;
               _isPinching = true;
               _startDragY = null;
               _startDragX = null;
+              if (_drag.value != Offset.zero) _setDrag(Offset.zero);
+              if (mounted && _isMangaMode && !wasPinching) {
+                setState(() {});
+              }
+              return;
+            }
+            if (_isMangaMode) {
               if (_drag.value != Offset.zero) _setDrag(Offset.zero);
               return;
             }
@@ -1982,6 +1861,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             _vt.addPosition(e.timeStamp, e.position);
           },
           onPointerMove: (e) {
+            if (_activePointers.length >= 2 || _isCurrentlyZoomed) {
+              final bool wasPinching = _isPinching;
+              _isMultiTouch = true;
+              _isPinching = true;
+              if (mounted && _isMangaMode && !wasPinching) {
+                setState(() {});
+              }
+            }
             if (_isMangaMode) return;
             if (_startDragY == null ||
                 _startDragX == null ||
@@ -2021,6 +1908,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
             if (_activePointers.isEmpty) {
               final wasMultiTouch = _isMultiTouch;
+              final wasPinching = _isPinching;
               _isMultiTouch = false;
               _isPinching = false;
               _isSwipingHorizontal = false;
@@ -2028,6 +1916,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
               _startDragX = null;
               if (_isMangaMode) {
                 if (_drag.value != Offset.zero) _setDrag(Offset.zero);
+                if (mounted && wasPinching) {
+                  setState(() {});
+                }
                 return;
               }
               final d = _drag.value;
@@ -2058,11 +1949,19 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           onPointerCancel: (e) {
             _activePointers.remove(e.pointer);
             if (_activePointers.isEmpty) {
+              final wasPinching = _isPinching;
               _isMultiTouch = false;
               _isPinching = false;
               _isSwipingHorizontal = false;
               _startDragY = null;
               _startDragX = null;
+              if (_isMangaMode) {
+                if (_drag.value != Offset.zero) _setDrag(Offset.zero);
+                if (mounted && wasPinching) {
+                  setState(() {});
+                }
+                return;
+              }
               if (_drag.value != Offset.zero) {
                 _springBack(0);
               } else {
@@ -2070,405 +1969,637 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
               }
             }
           },
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              if (_drag.value.dy < 10) {
-                _toggleBars();
-              }
-            },
-            onDoubleTapDown: (details) {
-              _doubleTapDetails = details;
-            },
-            onDoubleTap: _handleDoubleTap,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: AnimatedBuilder(
-                    animation: ModalRoute.of(context)?.animation ??
-                        kAlwaysCompleteAnimation,
-                    builder: (context, _) {
-                      final routeAnim =
-                          ModalRoute.of(context)?.animation?.value ?? 1.0;
-                      final curved = const Cubic(0.2, 0.0, 0.0, 1.0)
-                          .transform(routeAnim.clamp(0.0, 1.0));
-                      return ValueListenableBuilder<Offset>(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (_drag.value.dy < 10) {
+                      _toggleBars();
+                    }
+                  },
+                  onDoubleTapDown: (details) {
+                    _doubleTapDetails = details;
+                  },
+                  onDoubleTap: _handleDoubleTap,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: AnimatedBuilder(
+                          animation: ModalRoute.of(context)?.animation ??
+                              kAlwaysCompleteAnimation,
+                          builder: (context, _) {
+                            final routeAnim =
+                                ModalRoute.of(context)?.animation?.value ?? 1.0;
+                            final curved = const Cubic(0.2, 0.0, 0.0, 1.0)
+                                .transform(routeAnim.clamp(0.0, 1.0));
+                            return ValueListenableBuilder<Offset>(
+                              valueListenable: _drag,
+                              builder: (_, d, __) {
+                                final dragFade =
+                                    (1.0 - (d.dy / 320.0)).clamp(0.0, 1.0);
+                                return ColoredBox(
+                                  color: Colors.black.withValues(
+                                    alpha: (curved * dragFade).clamp(0.0, 1.0),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                      ValueListenableBuilder<Offset>(
                         valueListenable: _drag,
-                        builder: (_, d, __) {
-                          final dragFade =
-                              (1.0 - (d.dy / 320.0)).clamp(0.0, 1.0);
-                          return ColoredBox(
-                            color: Colors.black.withValues(
-                              alpha: (curved * dragFade).clamp(0.0, 1.0),
+                        builder: (_, d, child) {
+                          final s =
+                              (1.0 - (d.dy / 1000.0) * 0.28).clamp(0.72, 1.0);
+                          final radius =
+                              (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
+                          return Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.translationValues(d.dx, d.dy, 0)
+                              ..scaleByDouble(s, s, 1.0, 1.0),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(radius),
+                              clipBehavior:
+                                  radius > 0 ? Clip.antiAlias : Clip.none,
+                              child: child,
                             ),
                           );
                         },
-                      );
-                    },
-                  ),
-                ),
-                ValueListenableBuilder<Offset>(
-                  valueListenable: _drag,
-                  builder: (_, d, child) {
-                    final s = (1.0 - (d.dy / 1000.0) * 0.28).clamp(0.72, 1.0);
-                    final radius =
-                        (d.dy > 0 ? (d.dy / 12.0).clamp(0.0, 20.0) : 0.0);
-                    return Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.translationValues(d.dx, d.dy, 0)
-                        ..scaleByDouble(s, s, 1.0, 1.0),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(radius),
-                        clipBehavior: radius > 0 ? Clip.antiAlias : Clip.none,
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: ValueListenableBuilder<bool>(
-                    valueListenable: _isDraggingDown,
-                    builder: (context, isDraggingDown, child) {
-                      return IgnorePointer(
-                        ignoring: isDraggingDown,
-                        child: child,
-                      );
-                    },
-                    child: _isMangaMode
-                        ? _buildMangaView()
-                        : NotificationListener<ScrollNotification>(
-                            onNotification: (notification) {
-                              if (notification is ScrollStartNotification) {
-                                if (notification.dragDetails != null) {
-                                  _isSwipingPage.value = true;
-                                }
-                              } else if (notification
-                                  is ScrollEndNotification) {
-                                _isSwipingPage.value = false;
-                                _precacheAdjacent(_current);
-                                _activeMediaNotifier?.state =
-                                    widget.items[_current].id;
-                              }
-                              return false;
-                            },
-                            child: PageView.builder(
-                              controller: _page,
-                              dragStartBehavior: DragStartBehavior.down,
-                              itemCount: widget.items.length,
-                              onPageChanged: (i) {
-                                setState(() {
-                                  _current = i;
-                                  _isPhotoZoomed = false;
-                                  _isDeepZoomed = false;
-                                  _isPinching = false;
-                                  _transformationController.value =
-                                      Matrix4.identity();
-                                });
-                                _precacheAdjacent(i);
-                                if (widget.items.isNotEmpty &&
-                                    i < widget.items.length) {
-                                  _loadPsdDataIfNeeded(widget.items[i].path);
-                                }
-                                if (_translationMode != null) {
-                                  _triggerMangaTranslationForActivePage();
-                                }
-                              },
-                              physics: (_isCurrentlyZoomed ||
-                                      _isPinching ||
-                                      _isMultiTouch ||
-                                      _activePointers.length >= 2)
-                                  ? const NeverScrollableScrollPhysics()
-                                  : const PageScrollPhysics(),
-                              itemBuilder: (context, index) {
-                                final it = widget.items[index];
-                                final isCur = index == _current;
-                                return Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    ListenableBuilder(
-                                      listenable: Listenable.merge(
-                                          [_isDraggingDown, _isDismissing]),
-                                      builder: (context, child) {
-                                        if ((_isDraggingDown.value ||
-                                                _isDismissing.value) &&
-                                            !isCur) {
-                                          return const SizedBox.shrink();
-                                        }
-                                        return child!;
-                                      },
-                                      child: RepaintBoundary(
-                                        child: Center(
-                                          child: ClipRect(
-                                            child: isCur
-                                                ? InteractiveViewer(
-                                                    key: ValueKey(
-                                                        'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
-                                                    transformationController:
-                                                        _transformationController,
-                                                    minScale: 1.0,
-                                                    maxScale: 8.0,
-                                                    panEnabled:
-                                                        _isCurrentlyZoomed &&
-                                                            (_psdLoadError[
-                                                                    it.path] !=
-                                                                true),
-                                                    scaleEnabled: (!PsdService
-                                                            .isPsd(it.path) ||
-                                                        (_psdRenderedBytes[
-                                                                    it.path] !=
-                                                                null &&
-                                                            _psdRenderedBytes[
-                                                                    it.path]!
-                                                                .isNotEmpty)),
-                                                    clipBehavior: Clip.hardEdge,
-                                                    onInteractionStart:
-                                                        (details) {
-                                                      _zoomAnimController
-                                                          ?.stop();
-                                                      if (details
-                                                              .pointerCount >=
-                                                          2) {
-                                                        _isPinching = true;
-                                                      }
-                                                    },
-                                                    onInteractionUpdate:
-                                                        (details) {
-                                                      final scale =
-                                                          _transformationController
-                                                              .value
-                                                              .getMaxScaleOnAxis();
-                                                      final isZoomed =
-                                                          scale > 1.05;
-                                                      if (isZoomed !=
-                                                          _isPhotoZoomed) {
-                                                        setState(() {
-                                                          _isPhotoZoomed =
-                                                              isZoomed;
-                                                        });
-                                                      }
-                                                    },
-                                                    onInteractionEnd:
-                                                        (details) {
-                                                      _isPinching = false;
-                                                      final scale =
-                                                          _transformationController
-                                                              .value
-                                                              .getMaxScaleOnAxis();
-                                                      if (scale <= 1.02) {
-                                                        _resetPhotoZoom();
-                                                      } else {
-                                                        final shouldDeepZoom =
-                                                            scale > 1.2;
-                                                        if ((!_isPhotoZoomed ||
-                                                                _isDeepZoomed !=
-                                                                    shouldDeepZoom) &&
-                                                            mounted) {
-                                                          setState(() {
-                                                            _isPhotoZoomed =
-                                                                true;
-                                                            _isDeepZoomed =
-                                                                shouldDeepZoom;
-                                                          });
-                                                        }
-                                                      }
-                                                    },
-                                                    child: Stack(
-                                                      alignment:
-                                                          Alignment.center,
-                                                      children: [
-                                                        Center(
-                                                          child: Hero(
-                                                            tag: it.id,
-                                                            flightShuttleBuilder: (
-                                                              flightContext,
-                                                              animation,
-                                                              flightDirection,
-                                                              fromHeroContext,
-                                                              toHeroContext,
-                                                            ) =>
-                                                                _buildHeroShuttle(
-                                                              animation:
-                                                                  animation,
-                                                              flightDirection:
-                                                                  flightDirection,
-                                                              id: it.id,
-                                                              path: it.path,
-                                                              psdFallbackBytes:
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: _isDraggingDown,
+                          builder: (context, isDraggingDown, child) {
+                            return IgnorePointer(
+                              ignoring: isDraggingDown,
+                              child: child,
+                            );
+                          },
+                          child: _isMangaMode
+                              ? _buildMangaView()
+                              : NotificationListener<ScrollNotification>(
+                                  onNotification: (notification) {
+                                    if (notification
+                                        is ScrollStartNotification) {
+                                      if (notification.dragDetails != null) {
+                                        _isSwipingPage.value = true;
+                                      }
+                                    } else if (notification
+                                        is ScrollEndNotification) {
+                                      _isSwipingPage.value = false;
+                                      _precacheAdjacent(_current);
+                                      _activeMediaNotifier?.state =
+                                          widget.items[_current].id;
+                                    }
+                                    return false;
+                                  },
+                                  child: PageView.builder(
+                                    controller: _page,
+                                    dragStartBehavior: DragStartBehavior.down,
+                                    itemCount: widget.items.length,
+                                    onPageChanged: (i) {
+                                      setState(() {
+                                        _current = i;
+                                        _isPhotoZoomed = false;
+                                        _isDeepZoomed = false;
+                                        _isPinching = false;
+                                        _transformationController.value =
+                                            Matrix4.identity();
+                                      });
+                                      _precacheAdjacent(i);
+                                      if (widget.items.isNotEmpty &&
+                                          i < widget.items.length) {
+                                        _loadPsdDataIfNeeded(
+                                            widget.items[i].path);
+                                      }
+                                      if (_translationMode != null) {
+                                        _triggerMangaTranslationForActivePage();
+                                      }
+                                    },
+                                    physics: (_isCurrentlyZoomed ||
+                                            _isPinching ||
+                                            _isMultiTouch ||
+                                            _activePointers.length >= 2)
+                                        ? const NeverScrollableScrollPhysics()
+                                        : const PageScrollPhysics(),
+                                    itemBuilder: (context, index) {
+                                      final it = widget.items[index];
+                                      final isCur = index == _current;
+                                      return Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          ListenableBuilder(
+                                            listenable: Listenable.merge([
+                                              _isDraggingDown,
+                                              _isDismissing
+                                            ]),
+                                            builder: (context, child) {
+                                              if ((_isDraggingDown.value ||
+                                                      _isDismissing.value) &&
+                                                  !isCur) {
+                                                return const SizedBox.shrink();
+                                              }
+                                              return child!;
+                                            },
+                                            child: RepaintBoundary(
+                                              child: Center(
+                                                child: ClipRect(
+                                                  child: isCur
+                                                      ? InteractiveViewer(
+                                                          key: ValueKey(
+                                                              'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
+                                                          transformationController:
+                                                              _transformationController,
+                                                          minScale: 1.0,
+                                                          maxScale: 8.0,
+                                                          panEnabled:
+                                                              _isCurrentlyZoomed &&
+                                                                  (_psdLoadError[
+                                                                          it.path] !=
+                                                                      true),
+                                                          scaleEnabled: (!PsdService
+                                                                  .isPsd(it
+                                                                      .path) ||
+                                                              (_psdRenderedBytes[it
+                                                                          .path] !=
+                                                                      null &&
                                                                   _psdRenderedBytes[
-                                                                      it.path],
-                                                              fallbackChild: flightDirection ==
-                                                                      HeroFlightDirection
-                                                                          .push
-                                                                  ? toHeroContext
-                                                                      .widget
-                                                                  : fromHeroContext
-                                                                      .widget,
-                                                            ),
-                                                            child:
-                                                                _buildPhotoPage(
-                                                                    it,
-                                                                    isCurrent:
-                                                                        true),
-                                                          ),
-                                                        ),
-                                                        if (_translationMode !=
-                                                                null &&
-                                                            !it.isVideo &&
-                                                            !PsdService.isPsd(
-                                                                it.path))
-                                                          Positioned.fill(
-                                                            child: ValueListenableBuilder<
-                                                                TranslationResult?>(
-                                                              valueListenable:
-                                                                  _translationCoordinator
-                                                                      .getResultNotifier(
-                                                                          it.path),
-                                                              builder: (context,
-                                                                  result, _) {
-                                                                if (result ==
-                                                                        null ||
-                                                                    !result
-                                                                        .isSuccess ||
-                                                                    result
-                                                                        .blocks
-                                                                        .isEmpty) {
-                                                                  return const SizedBox
-                                                                      .shrink();
-                                                                }
-                                                                return MangaTranslationOverlay(
-                                                                  result:
-                                                                      result,
-                                                                  mode:
-                                                                      _translationMode!,
-                                                                );
-                                                              },
-                                                            ),
-                                                          ),
-                                                      ],
-                                                    ),
-                                                  )
-                                                : Center(
-                                                    child: _buildPhotoPage(it,
-                                                        isCurrent: false),
-                                                  ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    if (_translationMode != null && isCur)
-                                      Positioned(
-                                        top: 0,
-                                        left: 0,
-                                        right: 0,
-                                        child: IgnorePointer(
-                                          child: SafeArea(
-                                            child: AnimatedPadding(
-                                              duration: const Duration(
-                                                  milliseconds: 200),
-                                              padding: EdgeInsets.only(
-                                                  top: _barsVisible ? 80 : 20),
-                                              child: Align(
-                                                alignment: Alignment.topCenter,
-                                                child: ValueListenableBuilder<
-                                                    bool>(
-                                                  valueListenable:
-                                                      _translationCoordinator
-                                                          .getLoadingNotifier(
-                                                              it.path),
-                                                  builder:
-                                                      (context, isLoading, _) {
-                                                    if (!isLoading) {
-                                                      return const SizedBox
-                                                          .shrink();
-                                                    }
-                                                    return Container(
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 14,
-                                                          vertical: 8),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.black
-                                                            .withValues(
-                                                                alpha: 0.75),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(20),
-                                                        border: Border.all(
-                                                            color:
-                                                                Colors.white24,
-                                                            width: 0.8),
-                                                        boxShadow: const [
-                                                          BoxShadow(
-                                                            color:
-                                                                Colors.black45,
-                                                            blurRadius: 8,
-                                                            offset:
-                                                                Offset(0, 2),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                      child: Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          const SizedBox(
-                                                            width: 14,
-                                                            height: 14,
-                                                            child:
-                                                                CircularProgressIndicator(
-                                                              strokeWidth: 2,
-                                                              valueColor:
-                                                                  AlwaysStoppedAnimation<
-                                                                      Color>(
-                                                                Colors.white,
+                                                                          it.path]!
+                                                                      .isNotEmpty)),
+                                                          clipBehavior:
+                                                              Clip.hardEdge,
+                                                          onInteractionStart:
+                                                              (details) {
+                                                            _zoomAnimController
+                                                                ?.stop();
+                                                            if (details
+                                                                    .pointerCount >=
+                                                                2) {
+                                                              _isPinching =
+                                                                  true;
+                                                            }
+                                                          },
+                                                          onInteractionUpdate:
+                                                              (details) {
+                                                            final scale =
+                                                                _transformationController
+                                                                    .value
+                                                                    .getMaxScaleOnAxis();
+                                                            final isZoomed =
+                                                                scale > 1.05;
+                                                            if (isZoomed !=
+                                                                _isPhotoZoomed) {
+                                                              setState(() {
+                                                                _isPhotoZoomed =
+                                                                    isZoomed;
+                                                              });
+                                                            }
+                                                          },
+                                                          onInteractionEnd:
+                                                              (details) {
+                                                            _isPinching = false;
+                                                            final scale =
+                                                                _transformationController
+                                                                    .value
+                                                                    .getMaxScaleOnAxis();
+                                                            if (scale <= 1.02) {
+                                                              _resetPhotoZoom();
+                                                            } else {
+                                                              final shouldDeepZoom =
+                                                                  scale > 1.2;
+                                                              if ((!_isPhotoZoomed ||
+                                                                      _isDeepZoomed !=
+                                                                          shouldDeepZoom) &&
+                                                                  mounted) {
+                                                                setState(() {
+                                                                  _isPhotoZoomed =
+                                                                      true;
+                                                                  _isDeepZoomed =
+                                                                      shouldDeepZoom;
+                                                                });
+                                                              }
+                                                            }
+                                                          },
+                                                          child: Stack(
+                                                            alignment: Alignment
+                                                                .center,
+                                                            children: [
+                                                              Center(
+                                                                child: Hero(
+                                                                  tag: it.id,
+                                                                  flightShuttleBuilder: (
+                                                                    flightContext,
+                                                                    animation,
+                                                                    flightDirection,
+                                                                    fromHeroContext,
+                                                                    toHeroContext,
+                                                                  ) =>
+                                                                      _buildHeroShuttle(
+                                                                    animation:
+                                                                        animation,
+                                                                    flightDirection:
+                                                                        flightDirection,
+                                                                    id: it.id,
+                                                                    path:
+                                                                        it.path,
+                                                                    psdFallbackBytes:
+                                                                        _psdRenderedBytes[
+                                                                            it.path],
+                                                                    fallbackChild: flightDirection ==
+                                                                            HeroFlightDirection
+                                                                                .push
+                                                                        ? toHeroContext
+                                                                            .widget
+                                                                        : fromHeroContext
+                                                                            .widget,
+                                                                  ),
+                                                                  child: _buildPhotoPage(
+                                                                      it,
+                                                                      isCurrent:
+                                                                          true),
+                                                                ),
                                                               ),
-                                                            ),
+                                                              if (_translationMode !=
+                                                                      null &&
+                                                                  !it.isVideo &&
+                                                                  !PsdService
+                                                                      .isPsd(it
+                                                                          .path))
+                                                                Positioned.fill(
+                                                                  child: ValueListenableBuilder<
+                                                                      TranslationResult?>(
+                                                                    valueListenable:
+                                                                        _translationCoordinator
+                                                                            .getResultNotifier(it.path),
+                                                                    builder:
+                                                                        (context,
+                                                                            result,
+                                                                            _) {
+                                                                      if (result ==
+                                                                              null ||
+                                                                          !result
+                                                                              .isSuccess ||
+                                                                          result
+                                                                              .blocks
+                                                                              .isEmpty) {
+                                                                        return const SizedBox
+                                                                            .shrink();
+                                                                      }
+                                                                      return MangaTranslationOverlay(
+                                                                        result:
+                                                                            result,
+                                                                        mode:
+                                                                            _translationMode!,
+                                                                      );
+                                                                    },
+                                                                  ),
+                                                                ),
+                                                            ],
                                                           ),
-                                                          const SizedBox(
-                                                              width: 8),
-                                                          Text(
-                                                            context.tr
-                                                                .translatingPage,
-                                                            style:
-                                                                const TextStyle(
-                                                              color:
-                                                                  Colors.white,
-                                                              fontSize: 12,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                              letterSpacing:
-                                                                  0.2,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    );
-                                                  },
+                                                        )
+                                                      : Center(
+                                                          child:
+                                                              _buildPhotoPage(
+                                                                  it,
+                                                                  isCurrent:
+                                                                      false),
+                                                        ),
                                                 ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                      ),
-                                  ],
+                                          if (_translationMode != null && isCur)
+                                            _buildTranslatingOverlay(it.path),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildStaggeredBar(
+                  context: context,
+                  showBars: showBars,
+                  isTopBar: true,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black87,
+                          Colors.black54,
+                          Colors.transparent,
+                        ],
+                        stops: [0.0, 0.7, 1.0],
+                      ),
+                    ),
+                    child: SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 4),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back_ios_new,
+                                  color: Colors.white, size: 20),
+                              onPressed: () {
+                                if (_page.hasClients && _page.page != null) {
+                                  final snapped = _page.page!
+                                      .round()
+                                      .clamp(0, widget.items.length - 1);
+                                  if (_current != snapped) {
+                                    _current = snapped;
+                                  }
+                                  _page.jumpToPage(_current);
+                                }
+                                _isDismissing.value = true;
+                                _activeMediaNotifier?.state = _currentItem.id;
+                                Navigator.of(context).pop();
+                              },
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _isMangaMode && item.albumName.isNotEmpty
+                                        ? item.albumName
+                                        : MediaUtils.formatViewerDate(
+                                            item.date),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _isMangaMode
+                                        ? item.name
+                                        : MediaUtils.formatViewerTime(
+                                            item.date),
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (!widget.isTrash && PsdService.isPsd(item.path))
+                              IconButton(
+                                icon: Icon(
+                                  (_psdHiddenLayers[item.path]?.isNotEmpty ??
+                                          false)
+                                      ? Icons.layers
+                                      : Icons.layers_outlined,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                                tooltip: 'Layers',
+                                onPressed: () => _openPsdLayerSheet(item),
+                              ),
+                            if (!item.isVideo &&
+                                !PsdService.isPsd(item.path)) ...[
+                              if (_isMangaMode)
+                                IconButton(
+                                  key: const ValueKey(
+                                      'manga_translation_button'),
+                                  icon: Icon(
+                                    Icons.translate_rounded,
+                                    color: _translationMode != null
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.white,
+                                    size: 22,
+                                  ),
+                                  tooltip: 'Manga Translation',
+                                  onPressed: _showTranslationSheet,
+                                ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.auto_stories_rounded,
+                                  color: _isMangaMode
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Colors.white,
+                                  size: 22,
+                                ),
+                                tooltip: context.tr.mangaMode,
+                                onPressed: _toggleMangaMode,
+                              ),
+                            ],
+                            if (!widget.isTrash)
+                              IconButton(
+                                icon: const Icon(Icons.info_outline,
+                                    color: Colors.white, size: 22),
+                                tooltip: context.tr.details,
+                                onPressed: () =>
+                                    showMediaInfoSheet(context, item),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (_isMangaMode)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: SafeArea(
+                      bottom: false,
+                      child: AnimatedPadding(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOutCubic,
+                        padding: EdgeInsets.only(
+                          top: showBars ? 58 : 8,
+                          left: showBars ? 0 : 16,
+                          right: showBars ? 0 : 16,
+                        ),
+                        child: AnimatedAlign(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeInOutCubic,
+                          alignment: showBars
+                              ? Alignment.topCenter
+                              : Alignment.topLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black
+                                  .withValues(alpha: showBars ? 0.75 : 0.6),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.18),
+                                width: 0.6,
+                              ),
+                            ),
+                            child: ValueListenableBuilder<int>(
+                              valueListenable: _activeMangaPageNotifier,
+                              builder: (context, activeIdx, _) {
+                                final mangaList = _mangaItems;
+                                final pageStr = mangaList.isNotEmpty
+                                    ? '${activeIdx + 1} / ${mangaList.length}'
+                                    : '${_current + 1} / ${widget.items.length}';
+                                return Text(
+                                  pageStr,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.5,
+                                  ),
                                 );
                               },
                             ),
                           ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
+              if (_isMangaMode)
                 Positioned(
-                  top: 0,
+                  right: 16,
+                  bottom: 20,
+                  child: SafeArea(
+                    top: false,
+                    left: false,
+                    child: ValueListenableBuilder<Matrix4>(
+                      valueListenable: _transformationController,
+                      builder: (context, matrix, _) {
+                        final scale = matrix.getMaxScaleOnAxis();
+                        final isZoomed = scale > 1.05;
+                        final visible =
+                            _barsVisible || _isCurrentlyZoomed || isZoomed;
+                        final canZoomIn = scale < 5.95;
+                        return IgnorePointer(
+                          ignoring: !visible,
+                          child: AnimatedOpacity(
+                            opacity: visible ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {},
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.72),
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.18),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      key: const ValueKey(
+                                          'manga_zoom_out_button'),
+                                      icon: Icon(
+                                        Icons.remove_rounded,
+                                        size: 18,
+                                        color: isZoomed
+                                            ? Colors.white
+                                            : Colors.white38,
+                                      ),
+                                      tooltip: 'Zoom out',
+                                      constraints: const BoxConstraints(
+                                        minWidth: 34,
+                                        minHeight: 34,
+                                      ),
+                                      padding: EdgeInsets.zero,
+                                      onPressed: isZoomed
+                                          ? () => _stepZoom(1 / 1.5)
+                                          : null,
+                                    ),
+                                    GestureDetector(
+                                      key: const ValueKey(
+                                          'manga_zoom_reset_button'),
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: isZoomed ? _resetPhotoZoom : () {},
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 6),
+                                        child: Text(
+                                          '${scale.toStringAsFixed(1)}x',
+                                          style: TextStyle(
+                                            color: isZoomed
+                                                ? Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                                : Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      key: const ValueKey(
+                                          'manga_zoom_in_button'),
+                                      icon: Icon(
+                                        Icons.add_rounded,
+                                        size: 18,
+                                        color: canZoomIn
+                                            ? Colors.white
+                                            : Colors.white38,
+                                      ),
+                                      tooltip: 'Zoom in',
+                                      constraints: const BoxConstraints(
+                                        minWidth: 34,
+                                        minHeight: 34,
+                                      ),
+                                      padding: EdgeInsets.zero,
+                                      onPressed: canZoomIn
+                                          ? () => _stepZoom(1.5)
+                                          : null,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              if (!_isMangaMode)
+                Positioned(
+                  bottom: 0,
                   left: 0,
                   right: 0,
                   child: _buildStaggeredBar(
                     context: context,
                     showBars: showBars,
-                    isTopBar: true,
+                    isTopBar: false,
                     child: Container(
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
                           colors: [
                             Colors.black87,
                             Colors.black54,
@@ -2478,445 +2609,261 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                         ),
                       ),
                       child: SafeArea(
-                        bottom: false,
+                        top: false,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 4),
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.arrow_back_ios_new,
-                                    color: Colors.white, size: 20),
-                                onPressed: () {
-                                  if (_page.hasClients && _page.page != null) {
-                                    final snapped = _page.page!
-                                        .round()
-                                        .clamp(0, widget.items.length - 1);
-                                    if (_current != snapped) {
-                                      _current = snapped;
-                                    }
-                                    _page.jumpToPage(_current);
-                                  }
-                                  _isDismissing.value = true;
-                                  _activeMediaNotifier?.state = _currentItem.id;
-                                  Navigator.of(context).pop();
-                                },
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: widget.isTrash
+                              ? Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceAround,
                                   children: [
-                                    Text(
-                                      _isMangaMode && item.albumName.isNotEmpty
-                                          ? item.albumName
-                                          : MediaUtils.formatViewerDate(
-                                              item.date),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                    _ViewerActionButton(
+                                      icon: const Icon(Icons.restore,
+                                          color: Colors.white, size: 22),
+                                      label: context.tr.restore,
+                                      onTap: _restoreCurrentItem,
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _isMangaMode
-                                          ? item.name
-                                          : MediaUtils.formatViewerTime(
-                                              item.date),
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 12,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                    _ViewerActionButton(
+                                      icon: const Icon(Icons.info_outline,
+                                          color: Colors.white, size: 22),
+                                      label: context.tr.details,
+                                      onTap: () =>
+                                          showMediaInfoSheet(context, item),
+                                    ),
+                                    _ViewerActionButton(
+                                      icon: const Icon(Icons.delete_forever,
+                                          color: Colors.white, size: 22),
+                                      label: context.tr.delete,
+                                      onTap: _deleteCurrentItem,
                                     ),
                                   ],
-                                ),
-                              ),
-                              if (!widget.isTrash &&
-                                  PsdService.isPsd(item.path))
-                                IconButton(
-                                  icon: Icon(
-                                    (_psdHiddenLayers[item.path]?.isNotEmpty ??
-                                            false)
-                                        ? Icons.layers
-                                        : Icons.layers_outlined,
-                                    color: Colors.white,
-                                    size: 22,
-                                  ),
-                                  tooltip: 'Layers',
-                                  onPressed: () => _openPsdLayerSheet(item),
-                                ),
-                              if (!item.isVideo &&
-                                  !PsdService.isPsd(item.path)) ...[
-                                if (_isMangaMode)
-                                  IconButton(
-                                    key: const ValueKey(
-                                        'manga_translation_button'),
-                                    icon: Icon(
-                                      Icons.translate_rounded,
-                                      color: _translationMode != null
-                                          ? Theme.of(context)
-                                              .colorScheme
-                                              .primary
-                                          : Colors.white,
-                                      size: 22,
+                                )
+                              : Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceAround,
+                                  children: [
+                                    _ViewerActionButton(
+                                      icon: const Icon(Icons.share_outlined,
+                                          color: Colors.white, size: 22),
+                                      label: context.tr.share,
+                                      onTap: () => ShareService.shareSingle(
+                                          item.path,
+                                          isVideo: false),
                                     ),
-                                    tooltip: 'Manga Translation',
-                                    onPressed: _showTranslationSheet,
-                                  ),
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.auto_stories_rounded,
-                                    color: _isMangaMode
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Colors.white,
-                                    size: 22,
-                                  ),
-                                  tooltip: context.tr.mangaMode,
-                                  onPressed: _toggleMangaMode,
-                                ),
-                              ],
-                              if (!widget.isTrash)
-                                IconButton(
-                                  icon: const Icon(Icons.info_outline,
-                                      color: Colors.white, size: 22),
-                                  tooltip: context.tr.details,
-                                  onPressed: () =>
-                                      showMediaInfoSheet(context, item),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                if (_isMangaMode)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: IgnorePointer(
-                      child: SafeArea(
-                        bottom: false,
-                        child: AnimatedPadding(
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeInOutCubic,
-                          padding: EdgeInsets.only(
-                            top: showBars ? 58 : 8,
-                            left: showBars ? 0 : 16,
-                            right: showBars ? 0 : 16,
-                          ),
-                          child: AnimatedAlign(
-                            duration: const Duration(milliseconds: 250),
-                            curve: Curves.easeInOutCubic,
-                            alignment: showBars
-                                ? Alignment.topCenter
-                                : Alignment.topLeft,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.black
-                                    .withValues(alpha: showBars ? 0.75 : 0.6),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                  width: 0.6,
-                                ),
-                              ),
-                              child: ValueListenableBuilder<int>(
-                                valueListenable: _activeMangaPageNotifier,
-                                builder: (context, activeIdx, _) {
-                                  final mangaList = _mangaItems;
-                                  final pageStr = mangaList.isNotEmpty
-                                      ? '${activeIdx + 1} / ${mangaList.length}'
-                                      : '${_current + 1} / ${widget.items.length}';
-                                  return Text(
-                                    pageStr,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                if (!_isMangaMode)
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: _buildStaggeredBar(
-                      context: context,
-                      showBars: showBars,
-                      isTopBar: false,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [
-                              Colors.black87,
-                              Colors.black54,
-                              Colors.transparent,
-                            ],
-                            stops: [0.0, 0.7, 1.0],
-                          ),
-                        ),
-                        child: SafeArea(
-                          top: false,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: widget.isTrash
-                                ? Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceAround,
-                                    children: [
-                                      _ViewerActionButton(
-                                        icon: const Icon(Icons.restore,
-                                            color: Colors.white, size: 22),
-                                        label: context.tr.restore,
-                                        onTap: _restoreCurrentItem,
-                                      ),
-                                      _ViewerActionButton(
-                                        icon: const Icon(Icons.info_outline,
-                                            color: Colors.white, size: 22),
-                                        label: context.tr.details,
-                                        onTap: () =>
-                                            showMediaInfoSheet(context, item),
-                                      ),
-                                      _ViewerActionButton(
-                                        icon: const Icon(Icons.delete_forever,
-                                            color: Colors.white, size: 22),
-                                        label: context.tr.delete,
-                                        onTap: _deleteCurrentItem,
-                                      ),
-                                    ],
-                                  )
-                                : Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceAround,
-                                    children: [
-                                      _ViewerActionButton(
-                                        icon: const Icon(Icons.share_outlined,
-                                            color: Colors.white, size: 22),
-                                        label: context.tr.share,
-                                        onTap: () => ShareService.shareSingle(
-                                            item.path,
-                                            isVideo: false),
-                                      ),
-                                      Consumer(
-                                        builder: (context, ref, _) {
-                                          final isFav = ref.watch(
-                                            settingsNotifierProvider.select(
-                                              (s) => s.favoriteIds
-                                                  .contains(item.id),
-                                            ),
-                                          );
-                                          return _ViewerActionButton(
-                                            icon: Icon(
-                                              isFav
-                                                  ? Icons.favorite
-                                                  : Icons.favorite_border,
-                                              color: isFav
-                                                  ? Colors.redAccent
-                                                  : Colors.white,
-                                              size: 22,
-                                            ),
-                                            label: context.tr.favorite,
-                                            onTap: () {
-                                              HapticFeedback.lightImpact();
-                                              final currentFavs =
-                                                  Set<String>.from(
-                                                ref
-                                                    .read(
-                                                        settingsNotifierProvider)
-                                                    .favoriteIds,
-                                              );
-                                              if (currentFavs
-                                                  .contains(item.id)) {
-                                                currentFavs.remove(item.id);
-                                              } else {
-                                                currentFavs.add(item.id);
-                                              }
+                                    Consumer(
+                                      builder: (context, ref, _) {
+                                        final isFav = ref.watch(
+                                          settingsNotifierProvider.select(
+                                            (s) =>
+                                                s.favoriteIds.contains(item.id),
+                                          ),
+                                        );
+                                        return _ViewerActionButton(
+                                          icon: Icon(
+                                            isFav
+                                                ? Icons.favorite
+                                                : Icons.favorite_border,
+                                            color: isFav
+                                                ? Colors.redAccent
+                                                : Colors.white,
+                                            size: 22,
+                                          ),
+                                          label: context.tr.favorite,
+                                          onTap: () {
+                                            HapticFeedback.lightImpact();
+                                            final currentFavs =
+                                                Set<String>.from(
                                               ref
-                                                  .read(settingsNotifierProvider
-                                                      .notifier)
-                                                  .update(
-                                                    (s) => s.copyWith(
-                                                        favoriteIds: currentFavs
-                                                            .toList()),
-                                                  );
-                                            },
-                                          );
-                                        },
-                                      ),
-                                      _ViewerActionButton(
-                                        icon: const Icon(Icons.delete_outline,
-                                            color: Colors.white, size: 22),
-                                        label: context.tr.delete,
-                                        onTap: _deleteCurrentItem,
-                                      ),
-                                      PopupMenuButton<String>(
-                                        tooltip: context.tr.moreOptions,
-                                        color: const Color(0xFF222222),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                        ),
-                                        constraints: const BoxConstraints(
-                                            minWidth: 130, maxWidth: 195),
-                                        onSelected: (value) async {
-                                          if (value == 'slideshow') {
-                                            if (_isSlideshowPlaying) {
-                                              _stopSlideshow();
+                                                  .read(
+                                                      settingsNotifierProvider)
+                                                  .favoriteIds,
+                                            );
+                                            if (currentFavs.contains(item.id)) {
+                                              currentFavs.remove(item.id);
                                             } else {
-                                              _startSlideshow();
+                                              currentFavs.add(item.id);
                                             }
-                                          } else if (value == 'rename') {
-                                            final updated =
-                                                await showRenameMediaDialog(
-                                                    context, item, ref);
-                                            if (updated != null && mounted) {
-                                              setState(() {
-                                                widget.items[_current] =
-                                                    updated;
-                                              });
-                                            }
-                                          } else if (value == 'wallpaper') {
-                                            ShareService.setAsWallpaper(
-                                                item.path);
-                                          } else if (value == 'manga') {
-                                            _toggleMangaMode();
+                                            ref
+                                                .read(settingsNotifierProvider
+                                                    .notifier)
+                                                .update(
+                                                  (s) => s.copyWith(
+                                                      favoriteIds:
+                                                          currentFavs.toList()),
+                                                );
+                                          },
+                                        );
+                                      },
+                                    ),
+                                    _ViewerActionButton(
+                                      icon: const Icon(Icons.delete_outline,
+                                          color: Colors.white, size: 22),
+                                      label: context.tr.delete,
+                                      onTap: _deleteCurrentItem,
+                                    ),
+                                    PopupMenuButton<String>(
+                                      tooltip: context.tr.moreOptions,
+                                      color: const Color(0xFF222222),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      constraints: const BoxConstraints(
+                                          minWidth: 130, maxWidth: 195),
+                                      onSelected: (value) async {
+                                        if (value == 'slideshow') {
+                                          if (_isSlideshowPlaying) {
+                                            _stopSlideshow();
+                                          } else {
+                                            _startSlideshow();
                                           }
-                                        },
-                                        itemBuilder: (context) => [
-                                          if (!item.isVideo &&
-                                              !PsdService.isPsd(item.path))
-                                            PopupMenuItem(
-                                              value: 'manga',
-                                              height: 40,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 14),
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                    Icons.auto_stories_rounded,
-                                                    size: 18,
-                                                    color: _isMangaMode
-                                                        ? Theme.of(context)
-                                                            .colorScheme
-                                                            .primary
-                                                        : Colors.white,
-                                                  ),
-                                                  const SizedBox(width: 10),
-                                                  Text(
-                                                    context.tr.mangaMode,
-                                                    style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 13.5),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
+                                        } else if (value == 'rename') {
+                                          final updated =
+                                              await showRenameMediaDialog(
+                                                  context, item, ref);
+                                          if (updated != null && mounted) {
+                                            setState(() {
+                                              widget.items[_current] = updated;
+                                            });
+                                          }
+                                        } else if (value == 'wallpaper') {
+                                          ShareService.setAsWallpaper(
+                                              item.path);
+                                        } else if (value == 'manga') {
+                                          _toggleMangaMode();
+                                        }
+                                      },
+                                      itemBuilder: (context) => [
+                                        if (!item.isVideo &&
+                                            !PsdService.isPsd(item.path))
                                           PopupMenuItem(
-                                            value: 'slideshow',
+                                            value: 'manga',
                                             height: 40,
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 14),
                                             child: Row(
                                               children: [
                                                 Icon(
-                                                  _isSlideshowPlaying
-                                                      ? Icons
-                                                          .pause_circle_outline_rounded
-                                                      : Icons.slideshow_rounded,
+                                                  Icons.auto_stories_rounded,
                                                   size: 18,
-                                                  color: Colors.white,
+                                                  color: _isMangaMode
+                                                      ? Theme.of(context)
+                                                          .colorScheme
+                                                          .primary
+                                                      : Colors.white,
                                                 ),
                                                 const SizedBox(width: 10),
-                                                Text(
+                                                Flexible(
+                                                  child: Text(
+                                                    context.tr.mangaMode,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 13.5),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        PopupMenuItem(
+                                          value: 'slideshow',
+                                          height: 40,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                _isSlideshowPlaying
+                                                    ? Icons
+                                                        .pause_circle_outline_rounded
+                                                    : Icons.slideshow_rounded,
+                                                size: 18,
+                                                color: Colors.white,
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Flexible(
+                                                child: Text(
                                                   _isSlideshowPlaying
                                                       ? context.tr.pause
                                                       : context.tr.slideshow,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                   style: const TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 13.5),
                                                 ),
-                                              ],
-                                            ),
+                                              ),
+                                            ],
                                           ),
-                                          PopupMenuItem(
-                                            value: 'rename',
-                                            height: 40,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 14),
-                                            child: Row(
-                                              children: [
-                                                const Icon(Icons.edit_outlined,
-                                                    size: 18,
-                                                    color: Colors.white),
-                                                const SizedBox(width: 10),
-                                                Text(
-                                                  context.tr.rename,
-                                                  style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 13.5),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          PopupMenuItem(
-                                            value: 'wallpaper',
-                                            height: 40,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 14),
-                                            child: Row(
-                                              children: [
-                                                const Icon(
-                                                    Icons.wallpaper_outlined,
-                                                    size: 18,
-                                                    color: Colors.white),
-                                                const SizedBox(width: 10),
-                                                Text(
-                                                  context.tr.setAsWallpaper,
-                                                  style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 13.5),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                        child: _ViewerActionButton(
-                                          icon: const Icon(Icons.more_vert,
-                                              color: Colors.white, size: 22),
-                                          label: context.tr.more,
                                         ),
+                                        PopupMenuItem(
+                                          value: 'rename',
+                                          height: 40,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.edit_outlined,
+                                                  size: 18,
+                                                  color: Colors.white),
+                                              const SizedBox(width: 10),
+                                              Flexible(
+                                                child: Text(
+                                                  context.tr.rename,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 13.5),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'wallpaper',
+                                          height: 40,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14),
+                                          child: Row(
+                                            children: [
+                                              const Icon(
+                                                  Icons.wallpaper_outlined,
+                                                  size: 18,
+                                                  color: Colors.white),
+                                              const SizedBox(width: 10),
+                                              Flexible(
+                                                child: Text(
+                                                  context.tr.setAsWallpaper,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 13.5),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                      child: _ViewerActionButton(
+                                        icon: const Icon(Icons.more_vert,
+                                            color: Colors.white, size: 22),
+                                        label: context.tr.more,
                                       ),
-                                    ],
-                                  ),
-                          ),
+                                    ),
+                                  ],
+                                ),
                         ),
                       ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),
@@ -2961,4 +2908,137 @@ class _ViewerActionButton extends StatelessWidget {
       child: content,
     );
   }
+}
+
+@visibleForTesting
+Widget buildTranslatingIndicatorForTest(String label) =>
+    Center(child: _MangaTranslatingIndicator(label: label));
+
+class _MangaTranslatingIndicator extends StatefulWidget {
+  const _MangaTranslatingIndicator({required this.label});
+
+  final String label;
+
+  @override
+  State<_MangaTranslatingIndicator> createState() =>
+      _MangaTranslatingIndicatorState();
+}
+
+class _MangaTranslatingIndicatorState extends State<_MangaTranslatingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 950),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const ValueKey('manga_translating_indicator'),
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 28,
+          height: 28,
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) {
+              return CustomPaint(
+                painter: _OutlinedSpinnerPainter(_controller.value),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            ExcludeSemantics(
+              child: Text(
+                widget.label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                  foreground: Paint()
+                    ..style = PaintingStyle.stroke
+                    ..strokeWidth = 3.8
+                    ..strokeJoin = StrokeJoin.round
+                    ..color = Colors.black,
+                ),
+              ),
+            ),
+            Text(
+              widget.label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+                shadows: [
+                  Shadow(color: Colors.black87, blurRadius: 4),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _OutlinedSpinnerPainter extends CustomPainter {
+  const _OutlinedSpinnerPainter(this.progress);
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const outerStrokeWidth = 5.5;
+    const innerStrokeWidth = 2.6;
+    const strokeInset = outerStrokeWidth / 2;
+    final rect = Rect.fromLTWH(
+      strokeInset,
+      strokeInset,
+      size.width - strokeInset * 2,
+      size.height - strokeInset * 2,
+    );
+    final startAngle = progress * 2 * math.pi - math.pi / 2;
+    const sweepAngle = (240 / 360) * 2 * math.pi;
+
+    final outlinePaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.9)
+      ..strokeWidth = outerStrokeWidth
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final fillPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = innerStrokeWidth
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawArc(rect, startAngle, sweepAngle, false, outlinePaint);
+    canvas.drawArc(rect, startAngle, sweepAngle, false, fillPaint);
+  }
+
+  @override
+  bool shouldRepaint(_OutlinedSpinnerPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }

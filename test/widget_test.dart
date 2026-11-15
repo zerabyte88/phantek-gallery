@@ -40,7 +40,6 @@ import 'package:phantek_gallery/features/player/presentation/video_player_screen
         resolveAutoPlayAfterInit;
 import 'package:phantek_gallery/features/settings/presentation/settings_screen.dart';
 import 'package:phantek_gallery/features/settings/presentation/widgets/developer_about_card.dart';
-import 'package:phantek_gallery/core/services/translation/translation_models.dart';
 import 'package:phantek_gallery/core/services/share_service.dart';
 import 'package:phantek_gallery/core/widgets/animated_flame_title.dart';
 import 'package:phantek_gallery/core/widgets/theme_header_background.dart';
@@ -1975,22 +1974,6 @@ void main() {
             reason: '${lang.code} clearAll');
         expect(loc.mangaTranslation.isNotEmpty, isTrue,
             reason: '${lang.code} mangaTranslation');
-        expect(loc.sourceLanguage.isNotEmpty, isTrue,
-            reason: '${lang.code} sourceLanguage');
-        expect(loc.targetLanguage.isNotEmpty, isTrue,
-            reason: '${lang.code} targetLanguage');
-        expect(loc.autoDetect.isNotEmpty, isTrue,
-            reason: '${lang.code} autoDetect');
-        expect(loc.langJapanese.isNotEmpty, isTrue,
-            reason: '${lang.code} langJapanese');
-        expect(loc.langKorean.isNotEmpty, isTrue,
-            reason: '${lang.code} langKorean');
-        expect(loc.langChinese.isNotEmpty, isTrue,
-            reason: '${lang.code} langChinese');
-        expect(loc.langIndonesian.isNotEmpty, isTrue,
-            reason: '${lang.code} langIndonesian');
-        expect(loc.langEnglish.isNotEmpty, isTrue,
-            reason: '${lang.code} langEnglish');
         expect(loc.translateSpeechBubbles.isNotEmpty, isTrue,
             reason: '${lang.code} translateSpeechBubbles');
         expect(loc.translateSpeechBubblesSubtitle.isNotEmpty, isTrue,
@@ -2001,14 +1984,6 @@ void main() {
             reason: '${lang.code} translateFullPageSubtitle');
         expect(loc.disableTranslation.isNotEmpty, isTrue,
             reason: '${lang.code} disableTranslation');
-        expect(loc.modelReady.isNotEmpty, isTrue,
-            reason: '${lang.code} modelReady');
-        expect(loc.downloadModelPrompt.isNotEmpty, isTrue,
-            reason: '${lang.code} downloadModelPrompt');
-        expect(loc.downloadingModel.isNotEmpty, isTrue,
-            reason: '${lang.code} downloadingModel');
-        expect(loc.modelDownloadRequired.isNotEmpty, isTrue,
-            reason: '${lang.code} modelDownloadRequired');
       }
     });
 
@@ -2097,7 +2072,7 @@ void main() {
     });
 
     testWidgets(
-        'SettingsScreen updates source language inline under Manga Translation',
+        'SettingsScreen omits Source Language under Manga Translation and keeps LM Studio config',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1.0;
@@ -2129,35 +2104,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Find Source Language tile directly under Manga Translation
-      final sourceLangTile = find.text('Source Language');
+      // Scroll to Manga Translation section and LM Studio configuration tile
+      final lmStudioTile = find.text('Local AI Server Configuration');
       await tester.scrollUntilVisible(
-        sourceLangTile,
+        lmStudioTile,
         200,
         scrollable: find.byType(Scrollable).first,
       );
       await tester.pumpAndSettle();
-      expect(sourceLangTile, findsOneWidget);
-      expect(find.text('Japanese'), findsOneWidget);
 
-      // Tap Source Language tile to open selection dialog
-      await tester.tap(sourceLangTile);
-      await tester.pumpAndSettle();
-
-      // Select Korean option in dialog
-      final koreanOption = find.widgetWithText(InkWell, 'Korean');
-      expect(koreanOption, findsOneWidget);
-      await tester.tap(koreanOption);
-      await tester.pumpAndSettle();
-
-      // Verify state updated in SettingsService
-      expect(
-        SettingsService.instance.settings.translationSourceLanguage,
-        TranslationSourceLanguage.korean,
-      );
-
-      // Verify SettingsScreen updated subtitle to Korean
-      expect(find.text('Korean'), findsOneWidget);
+      expect(find.text('Manga Translation'), findsOneWidget);
+      expect(lmStudioTile, findsOneWidget);
+      expect(find.text('Source Language'), findsNothing);
     });
 
     testWidgets(
@@ -2283,21 +2241,11 @@ void main() {
             reason: '${lang.code} themeSakuraDesc');
         expect(loc.aboutApp.isNotEmpty, isTrue,
             reason: '${lang.code} aboutApp');
-        expect(loc.aboutPhantek.isNotEmpty, isTrue,
-            reason: '${lang.code} aboutPhantek');
-        expect(loc.offlineGalleryDesc.isNotEmpty, isTrue,
-            reason: '${lang.code} offlineGalleryDesc');
         expect(loc.appVersion.isNotEmpty, isTrue,
             reason: '${lang.code} appVersion');
         expect(loc.buildNumberLabel.isNotEmpty, isTrue,
             reason: '${lang.code} buildNumberLabel');
         expect(loc.license.isNotEmpty, isTrue, reason: '${lang.code} license');
-        expect(loc.developerLabel.isNotEmpty, isTrue,
-            reason: '${lang.code} developerLabel');
-        expect(loc.creatorMaintainer.isNotEmpty, isTrue,
-            reason: '${lang.code} creatorMaintainer');
-        expect(loc.openGitHubProfile.isNotEmpty, isTrue,
-            reason: '${lang.code} openGitHubProfile');
       }
 
       // Verify previously missing languages produce real non-English translations
@@ -3282,8 +3230,8 @@ void main() {
       );
       expect(invalidViewport.width, lessThanOrEqualTo(1080));
       expect(invalidViewport.height, lessThanOrEqualTo(1920));
-      expect(
-          invalidViewport.width / invalidViewport.height, closeTo(16 / 9, 1e-9));
+      expect(invalidViewport.width / invalidViewport.height,
+          closeTo(16 / 9, 1e-9));
     });
 
     test(

@@ -21,7 +21,6 @@ Future<List<MangaTranslatedBlock>> _translateBlocks(
 }) async {
   final List<MangaTranslatedBlock> results = [];
 
-  // Page-level language detection when source is set to auto
   TranslationSourceLanguage effectiveLanguage = language;
   if (language == TranslationSourceLanguage.auto && rawBlocks.isNotEmpty) {
     final combinedText = rawBlocks.map((b) => b.text).join('\n');
@@ -37,7 +36,6 @@ Future<List<MangaTranslatedBlock>> _translateBlocks(
     }
   }
 
-  // Pre-merge adjacent blocks belonging to the same speech bubble
   final mergedBlocks = MangaOcrService.mergeAdjacentBlocks(
     rawBlocks,
     language: effectiveLanguage,
@@ -49,8 +47,8 @@ Future<List<MangaTranslatedBlock>> _translateBlocks(
     final trimmed = raw.text.trim();
     if (trimmed.isEmpty ||
         !LmStudioTranslationEngine.hasTranslatableDialogue(trimmed) ||
-        raw.boundingBox.width < 8 ||
-        raw.boundingBox.height < 8) {
+        raw.boundingBox.width < 4 ||
+        raw.boundingBox.height < 4) {
       continue;
     }
 
@@ -128,7 +126,6 @@ class TranslationIsolateCoordinator {
     );
   }
 
-  /// Chains [MangaOcrService] extracted blocks directly into [translateText].
   Future<List<MangaTranslatedBlock>> translateBlocks(
     List<RawMangaTextBlock> rawBlocks,
     Size imageSize, {
@@ -148,7 +145,7 @@ class TranslationIsolateCoordinator {
     );
   }
 
-  /// Schedules translation with debouncing for [imagePath].
+  /// Schedules debounced translation for [imagePath].
   void scheduleTranslation({
     required String imagePath,
     required Size imageSize,
@@ -200,7 +197,7 @@ class TranslationIsolateCoordinator {
 
     loadingNotifier.value = true;
 
-    // Resolve accurate dimensions if missing or zero for coordinate scaling
+    // Resolve image dimensions when zero so overlay coordinates scale properly.
     Size actualSize = imageSize;
     if (actualSize.width <= 0 || actualSize.height <= 0) {
       actualSize = await MangaOcrService.getImageDimensions(imagePath);

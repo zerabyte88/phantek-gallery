@@ -1,103 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 zerabyte88
 
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'lm_studio_translation_engine.dart';
 import 'translation_models.dart';
 
-/// Supported manga translation languages.
-enum MangaLanguage {
-  english('en', 'English'),
-  japanese('ja', 'Japanese'),
-  korean('ko', 'Korean'),
-  chinese('zh', 'Chinese');
-
-  final String bcpCode;
-  final String label;
-  const MangaLanguage(this.bcpCode, this.label);
-}
-
-/// Status model for language pair readiness and download footprint.
-class ModelPairStatus {
-  final bool sourceDownloaded;
-  final bool targetDownloaded;
-  final String sourceLangName;
-  final String targetLangName;
-  final double totalNeededMb;
-  final bool isReady;
-  final String modelDescription;
-
-  const ModelPairStatus({
-    required this.sourceDownloaded,
-    required this.targetDownloaded,
-    required this.sourceLangName,
-    required this.targetLangName,
-    required this.totalNeededMb,
-    required this.isReady,
-    this.modelDescription = 'Local AI Server (LM Studio)',
-  });
-}
-
-/// Status model for all 5 manga translation models readiness and download footprint.
-class AllModelsStatus {
-  final List<MangaLanguage> missingLanguages;
-  final List<MangaLanguage> downloadedLanguages;
-  final double totalNeededMb;
-  final bool isReady;
-  final String modelDescription;
-
-  const AllModelsStatus({
-    required this.missingLanguages,
-    required this.downloadedLanguages,
-    required this.totalNeededMb,
-    required this.isReady,
-    this.modelDescription = 'Local AI Server (LM Studio)',
-  });
-}
-
-/// Progress state model for live translation model downloads.
-class TranslationDownloadProgress {
-  final bool isDownloading;
-  final String currentStep;
-  final double downloadedMb;
-  final double totalMb;
-  final double progress;
-  final bool isSuccess;
-  final String? errorMessage;
-
-  const TranslationDownloadProgress({
-    this.isDownloading = false,
-    this.currentStep = '',
-    this.downloadedMb = 0.0,
-    this.totalMb = 0.0,
-    this.progress = 0.0,
-    this.isSuccess = false,
-    this.errorMessage,
-  });
-
-  TranslationDownloadProgress copyWith({
-    bool? isDownloading,
-    String? currentStep,
-    double? downloadedMb,
-    double? totalMb,
-    double? progress,
-    bool? isSuccess,
-    String? errorMessage,
-  }) {
-    return TranslationDownloadProgress(
-      isDownloading: isDownloading ?? this.isDownloading,
-      currentStep: currentStep ?? this.currentStep,
-      downloadedMb: downloadedMb ?? this.downloadedMb,
-      totalMb: totalMb ?? this.totalMb,
-      progress: progress ?? this.progress,
-      isSuccess: isSuccess ?? this.isSuccess,
-      errorMessage: errorMessage ?? this.errorMessage,
-    );
-  }
-}
-
-/// Translation coordinator delegating comic dialogue translation to the Local AI Server (LM Studio / Ollama).
+/// Delegates manga dialogue translation to the local AI server.
 class MlKitTranslationEngine {
   MlKitTranslationEngine._();
   static final MlKitTranslationEngine instance = MlKitTranslationEngine._();
@@ -105,70 +13,11 @@ class MlKitTranslationEngine {
   final LmStudioTranslationEngine _lmStudioEngine =
       LmStudioTranslationEngine.instance;
 
-  /// Underlying Local AI Server Engine (LM Studio / Ollama).
   LmStudioTranslationEngine get lmStudioEngine => _lmStudioEngine;
 
-  /// High-level operational status message forwarded from the local AI engine.
   String? get lastStatusMessage => _lmStudioEngine.lastStatusMessage;
 
-  /// Description of the translation engine.
-  static const String localLlmDescription =
-      'Local AI Server (LM Studio / Ollama)';
-
-  /// Checks if the local AI engine is ready.
-  bool get isLocalLlmReady => _lmStudioEngine.isReady;
-  bool get isLmStudioReady => _lmStudioEngine.isReady;
-
-  /// The 5 manga translation languages required for all source and target pairs.
-  static const List<MangaLanguage> allMangaLanguages = MangaLanguage.values;
-
-  /// Reactive notifier for model download progress and statuses.
-  final ValueNotifier<TranslationDownloadProgress> downloadProgressNotifier =
-      ValueNotifier<TranslationDownloadProgress>(
-          const TranslationDownloadProgress());
-
-  static String _getSourceLangName(TranslationSourceLanguage source) {
-    switch (source) {
-      case TranslationSourceLanguage.auto:
-      case TranslationSourceLanguage.japanese:
-        return 'Japanese';
-      case TranslationSourceLanguage.korean:
-        return 'Korean';
-      case TranslationSourceLanguage.chinese:
-        return 'Chinese';
-    }
-  }
-
-  static String _getTargetLangName(TranslationTargetLanguage target) {
-    switch (target) {
-      case TranslationTargetLanguage.english:
-        return 'English';
-    }
-  }
-
-  /// Maps [TranslationSourceLanguage] to [MangaLanguage].
-  static MangaLanguage mapSourceLanguage(TranslationSourceLanguage source) {
-    switch (source) {
-      case TranslationSourceLanguage.japanese:
-        return MangaLanguage.japanese;
-      case TranslationSourceLanguage.korean:
-        return MangaLanguage.korean;
-      case TranslationSourceLanguage.chinese:
-        return MangaLanguage.chinese;
-      case TranslationSourceLanguage.auto:
-        return MangaLanguage.japanese;
-    }
-  }
-
-  /// Maps [TranslationTargetLanguage] to [MangaLanguage].
-  static MangaLanguage mapTargetLanguage(TranslationTargetLanguage target) {
-    switch (target) {
-      case TranslationTargetLanguage.english:
-        return MangaLanguage.english;
-    }
-  }
-
-  /// Determines source language based on character Unicode ranges.
+  /// Detects source language from Unicode character ranges.
   static TranslationSourceLanguage detectLanguageFromText(String text) {
     if (RegExp(r'[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]').hasMatch(text)) {
       return TranslationSourceLanguage.korean;
@@ -182,18 +31,15 @@ class MlKitTranslationEngine {
     return TranslationSourceLanguage.japanese;
   }
 
-  /// Normalizes vertical line breaks, trims whitespace, removes border artifacts,
-  /// and merges accidental intra-CJK whitespace.
+  /// Normalizes line breaks, removes border artifacts, and merges intra-CJK spaces.
   static String cleanMangaText(String text) {
     final cleaned = text
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
         .replaceAll(RegExp(r'(?:^|\n)\s*[|丨¦‖]\s*(?=\n|$)'), '\n')
-        // Vertical OCR misreads the long-vowel mark after katakana and the
-        // kanji 一 (e.g. 一旦, 一時間) as a pipe.
+        // Vertical OCR misreads katakana long-vowel marks and 一 (e.g. 一旦) as a pipe.
         .replaceAll(RegExp(r'(?<=[\u30a0-\u30ff])\s*[|丨¦‖]'), 'ー')
-        .replaceAll(
-            RegExp(r'[|丨¦‖]\s*(?=[\u3040-\u30ff\u4e00-\u9fff])'), '一');
+        .replaceAll(RegExp(r'[|丨¦‖]\s*(?=[\u3040-\u30ff\u4e00-\u9fff])'), '一');
 
     final lines = cleaned
         .split('\n')
@@ -224,7 +70,6 @@ class MlKitTranslationEngine {
 
     var result = buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
 
-    // Remove accidental intra-CJK whitespace created by OCR character segmentation
     final cjkSpacePattern = RegExp(
       r'([\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff])\s+([\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff])',
     );
@@ -238,105 +83,6 @@ class MlKitTranslationEngine {
     return result;
   }
 
-  /// Checks if the model for [lang] is downloaded on-device.
-  /// In offline-native mode, all languages are supported on-device.
-  Future<bool> isLanguageDownloaded(MangaLanguage lang) async {
-    return true;
-  }
-
-  /// Downloads the on-device model for [lang].
-  /// In offline-native mode, models are bundled and ready immediately.
-  Future<bool> downloadLanguage(
-    MangaLanguage lang, {
-    bool isWifiRequired = false,
-  }) async {
-    return true;
-  }
-
-  /// Checks status for all 5 manga translation languages.
-  /// Reflects whether the translation engine is initialized and ready.
-  Future<AllModelsStatus> checkAllModelsStatus() async {
-    return AllModelsStatus(
-      missingLanguages: const [],
-      downloadedLanguages: allMangaLanguages,
-      totalNeededMb: 0.0,
-      isReady: _lmStudioEngine.isReady,
-      modelDescription: localLlmDescription,
-    );
-  }
-
-  /// Gets the pair download status.
-  Future<ModelPairStatus> getPairStatus(
-    TranslationSourceLanguage source,
-    TranslationTargetLanguage target,
-  ) async {
-    final effectiveSource = (source == TranslationSourceLanguage.auto)
-        ? TranslationSourceLanguage.japanese
-        : source;
-
-    return ModelPairStatus(
-      sourceDownloaded: true,
-      targetDownloaded: true,
-      sourceLangName: _getSourceLangName(effectiveSource),
-      targetLangName: _getTargetLangName(target),
-      totalNeededMb: 0.0,
-      isReady: _lmStudioEngine.isReady,
-      modelDescription: localLlmDescription,
-    );
-  }
-
-  /// Checks if both source and target models are downloaded and ready.
-  Future<bool> isPairReady(
-    TranslationSourceLanguage source,
-    TranslationTargetLanguage target,
-  ) async {
-    return true;
-  }
-
-  /// Downloads models for both source and target languages.
-  Future<bool> downloadPair(
-    TranslationSourceLanguage source,
-    TranslationTargetLanguage target, {
-    bool isWifiRequired = false,
-  }) async {
-    return downloadPairWithProgress(source, target,
-        isWifiRequired: isWifiRequired);
-  }
-
-  /// Downloads all missing manga translation models sequentially (id, en, ja, ko, zh).
-  Future<bool> downloadAllModelsWithProgress({
-    bool isWifiRequired = false,
-  }) async {
-    downloadProgressNotifier.value = const TranslationDownloadProgress(
-      isDownloading: false,
-      currentStep: 'Ready',
-      downloadedMb: 0.0,
-      totalMb: 0.0,
-      progress: 1.0,
-      isSuccess: true,
-    );
-    return true;
-  }
-
-  /// Downloads missing pair models with realistic smooth progress updates.
-  Future<bool> downloadPairWithProgress(
-    TranslationSourceLanguage source,
-    TranslationTargetLanguage target, {
-    bool isWifiRequired = false,
-  }) async {
-    downloadProgressNotifier.value = const TranslationDownloadProgress(
-      isDownloading: false,
-      currentStep: 'Ready',
-      downloadedMb: 0.0,
-      totalMb: 0.0,
-      progress: 1.0,
-      isSuccess: true,
-    );
-    return true;
-  }
-
-  /// Translates [text] from [source] language to [target] language using
-  /// the Local AI Server (LM Studio / Ollama).
   Future<String> translateText(
     String text, {
     required TranslationSourceLanguage source,
@@ -374,7 +120,6 @@ class MlKitTranslationEngine {
     return cleaned;
   }
 
-  /// Closes active [LmStudioTranslationEngine] instance.
   Future<void> dispose() async {
     await _lmStudioEngine.dispose();
   }

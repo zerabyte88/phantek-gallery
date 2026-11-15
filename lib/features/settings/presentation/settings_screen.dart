@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import '../../../core/services/translation/lm_studio_translation_engine.dart';
-import '../../../core/services/translation/translation_models.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/settings_model.dart';
@@ -661,56 +660,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             _SectionHeader(title: context.tr.mangaTranslation),
             _SettingsCard(
               children: [
-                _ModernTile(
-                  icon: Icons.language_rounded,
-                  title: context.tr.sourceLanguage,
-                  subtitle: switch (settings.translationSourceLanguage) {
-                    TranslationSourceLanguage.japanese =>
-                      context.tr.langJapanese,
-                    TranslationSourceLanguage.chinese => context.tr.langChinese,
-                    TranslationSourceLanguage.korean => context.tr.langKorean,
-                    TranslationSourceLanguage.auto => context.tr.autoDetect,
-                  },
-                  onTap: () async {
-                    final chosen = await _showModernOptionDialog<
-                        TranslationSourceLanguage>(
-                      context,
-                      title: context.tr.sourceLanguage,
-                      subtitle: context.tr.mangaTranslation,
-                      headerIcon: Icons.language_rounded,
-                      currentValue: settings.translationSourceLanguage,
-                      options: [
-                        _OptionItem(
-                          value: TranslationSourceLanguage.auto,
-                          title: context.tr.autoDetect,
-                          icon: Icons.auto_awesome_rounded,
-                        ),
-                        _OptionItem(
-                          value: TranslationSourceLanguage.japanese,
-                          title: context.tr.langJapanese,
-                          subtitle: 'JA → EN',
-                          icon: Icons.translate_rounded,
-                        ),
-                        _OptionItem(
-                          value: TranslationSourceLanguage.chinese,
-                          title: context.tr.langChinese,
-                          subtitle: 'ZH → EN',
-                          icon: Icons.translate_rounded,
-                        ),
-                        _OptionItem(
-                          value: TranslationSourceLanguage.korean,
-                          title: context.tr.langKorean,
-                          subtitle: 'KO → EN',
-                          icon: Icons.translate_rounded,
-                        ),
-                      ],
-                    );
-                    if (chosen != null) {
-                      patch((s) => s.copyWith(translationSourceLanguage: chosen));
-                    }
-                  },
-                ),
-                const _CardDivider(),
                 _ModernTile(
                   icon: Icons.dns_outlined,
                   title: context.tr.lmStudioConfigTitle,

@@ -30,7 +30,7 @@ class RawMangaTextBlock {
   });
 }
 
-/// Multi-script ML Kit OCR implementation with Korean, Chinese, Japanese, and Latin fallback.
+/// Multi-script ML Kit OCR detector with Korean, Chinese, and Latin fallback.
 class MlKitMangaTextDetector implements MangaTextDetector {
   final TextRecognitionScript script;
   final Map<TextRecognitionScript, TextRecognizer> _recognizers = {};
@@ -67,7 +67,7 @@ class MlKitMangaTextDetector implements MangaTextDetector {
       final recognized = await recognizer.processImage(inputImage);
       final blocks = _mapBlocks(recognized, script: targetScript);
 
-      // In auto mode, if initial script returns no blocks, try Korean and Chinese scripts
+      // Retry Korean and Chinese scripts if auto mode finds no blocks.
       if (language == TranslationSourceLanguage.auto && blocks.isEmpty) {
         for (final altScript in [
           TextRecognitionScript.korean,
@@ -93,7 +93,7 @@ class MlKitMangaTextDetector implements MangaTextDetector {
         return [];
       }
 
-      // Safe fallback to Latin script recognition if language-specific model fails
+      // Fall back to Latin script if the language model fails.
       try {
         debugPrint(
             'Attempting safe fallback to Latin script recognition for $imagePath');
@@ -101,7 +101,8 @@ class MlKitMangaTextDetector implements MangaTextDetector {
         final fallbackRecognizer = _getRecognizer(TextRecognitionScript.latin);
         final fallbackRecognized =
             await fallbackRecognizer.processImage(inputImage);
-        return _mapBlocks(fallbackRecognized, script: TextRecognitionScript.latin);
+        return _mapBlocks(fallbackRecognized,
+            script: TextRecognitionScript.latin);
       } catch (fallbackError) {
         debugPrint(
             'ML Kit Latin fallback OCR error on $imagePath: $fallbackError');
@@ -157,7 +158,8 @@ class MlKitMangaTextDetector implements MangaTextDetector {
         if (isVertical) {
           final sortedLines = List<TextLine>.from(lines);
           sortedLines.sort(
-            (a, b) => b.boundingBox.center.dx.compareTo(a.boundingBox.center.dx),
+            (a, b) =>
+                b.boundingBox.center.dx.compareTo(a.boundingBox.center.dx),
           );
           processedText = sortedLines
               .map((l) => l.text.trim())
@@ -196,7 +198,7 @@ class MlKitMangaTextDetector implements MangaTextDetector {
   }
 }
 
-/// Manga OCR service with speech bubble vs SFX classification and dimension resolution.
+/// Manga OCR service with block merging and speech-bubble classification.
 class MangaOcrService {
   final MangaTextDetector _detector;
 
@@ -215,11 +217,7 @@ class MangaOcrService {
     return mergeAdjacentBlocks(raw, language: language);
   }
 
-  /// Merges fragmented adjacent OCR text blocks belonging to the same speech bubble.
-  ///
-  /// Prevents multiple fragmented bubbles from being generated for a single speech bubble.
-  /// Clusters adjacent columns (vertical Japanese/Chinese text) or lines (horizontal text)
-  /// using connected components, unifies bounding boxes, and sorts text in proper reading order.
+  /// Merges fragmented adjacent OCR blocks belonging to the same speech bubble.
   static List<RawMangaTextBlock> mergeAdjacentBlocks(
     List<RawMangaTextBlock> blocks, {
     TranslationSourceLanguage language = TranslationSourceLanguage.auto,
@@ -228,8 +226,7 @@ class MangaOcrService {
       return blocks;
     }
 
-    // Estimated glyph size (short side divided by line count), so thresholds
-    // scale with page resolution instead of using fixed pixel gaps.
+    // Scale thresholds by estimated glyph size rather than fixed pixels.
     double charSize(RawMangaTextBlock b) {
       final n = math.max(
         1,
@@ -246,17 +243,16 @@ class MangaOcrService {
         return true;
       }
 
-      final ref = math.max(charSize(b1), charSize(b2));
-      if (b1.boundingBox.inflate(0.5 * ref).overlaps(b2.boundingBox)) {
-        return true;
+      final uni = b1.boundingBox.expandToInclude(b2.boundingBox);
+      final sumArea = b1.boundingBox.width * b1.boundingBox.height +
+          b2.boundingBox.width * b2.boundingBox.height;
+      if (uni.width * uni.height > 2.4 * sumArea) {
+        return false;
       }
 
-      final uni = b1.boundingBox.expandToInclude(b2.boundingBox);
-      if (uni.width * uni.height >
-          2.4 *
-              (b1.boundingBox.width * b1.boundingBox.height +
-                  b2.boundingBox.width * b2.boundingBox.height)) {
-        return false;
+      final ref = math.max(charSize(b1), charSize(b2));
+      if (b1.boundingBox.inflate(0.25 * ref).overlaps(b2.boundingBox)) {
+        return true;
       }
 
       final hGap = math.max(
@@ -270,7 +266,6 @@ class MangaOcrService {
             math.min(b1.boundingBox.bottom, b2.boundingBox.bottom),
       );
 
-      // Fast exit if separated too far
       if (hGap > 3.0 * ref || vGap > 3.0 * ref) {
         return false;
       }
@@ -289,31 +284,22 @@ class MangaOcrService {
       );
       final minW = math.min(b1.boundingBox.width, b2.boundingBox.width);
 
-      // Vertical manga columns: merge if hGap <= 75.0 AND (vOverlap > 0 || (b1.boundingBox.top - b2.boundingBox.top).abs() <= minH * 0.8 || vGap <= 25.0)
       if (hGap <= 2.5 * ref &&
-          (vOverlap > 0 ||
-              (b1.boundingBox.top - b2.boundingBox.top).abs() <= minH * 0.8 ||
-              vGap <= 0.85 * ref)) {
+          (vOverlap >= 0.35 * minH ||
+              (b1.boundingBox.top - b2.boundingBox.top).abs() <= minH * 0.35)) {
         return true;
       }
 
-      // Horizontal lines: merge if vGap <= 55.0 AND (hOverlap > 0 || (b1.boundingBox.left - b2.boundingBox.left).abs() <= minW * 0.8 || hGap <= 25.0)
       if (vGap <= 1.3 * ref &&
-          (hOverlap > 0 ||
-              (b1.boundingBox.left - b2.boundingBox.left).abs() <= minW * 0.8 ||
-              hGap <= 0.85 * ref)) {
-        return true;
-      }
-
-      // Proximity inside a bubble
-      if (hGap <= 1.2 * ref && vGap <= 0.9 * ref) {
+          (hOverlap >= 0.35 * minW ||
+              (b1.boundingBox.left - b2.boundingBox.left).abs() <=
+                  minW * 0.35)) {
         return true;
       }
 
       return false;
     }
 
-    // Connected components clustering using Disjoint Set Union (DSU)
     final parent = List<int>.generate(blocks.length, (i) => i);
     int find(int i) {
       if (parent[i] == i) return i;
@@ -347,10 +333,8 @@ class MangaOcrService {
     for (final cluster in clusters.values) {
       if (cluster.length == 1) {
         final b = cluster.first;
-        final lines = b.text
-            .split('\n')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty);
+        final lines =
+            b.text.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty);
         final List<String> distinctLines = [];
         for (final t in lines) {
           int replaceIdx = -1;
@@ -385,7 +369,6 @@ class MangaOcrService {
         continue;
       }
 
-      // Compute unified bounding box
       double left = cluster.first.boundingBox.left;
       double top = cluster.first.boundingBox.top;
       double right = cluster.first.boundingBox.right;
@@ -410,12 +393,11 @@ class MangaOcrService {
 
       final sortedCluster = List<RawMangaTextBlock>.from(cluster);
       if (isCjkLang && isVertical) {
-        // Vertical manga text: Right-to-Left column reading order
+        // Vertical CJK columns read right-to-left.
         sortedCluster.sort(
           (a, b) => b.boundingBox.center.dx.compareTo(a.boundingBox.center.dx),
         );
       } else {
-        // Horizontal text: Top-to-Bottom line reading order
         sortedCluster.sort((a, b) {
           final dy = a.boundingBox.top.compareTo(b.boundingBox.top);
           if (dy != 0) return dy;
@@ -423,13 +405,10 @@ class MangaOcrService {
         });
       }
 
-      // Deduplicate identical or substring lines, keeping the longer line
       final List<String> distinctLines = [];
       for (final b in sortedCluster) {
-        final lines = b.text
-            .split('\n')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty);
+        final lines =
+            b.text.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty);
         for (final t in lines) {
           int replaceIdx = -1;
           bool isDuplicate = false;
@@ -459,10 +438,8 @@ class MangaOcrService {
 
       final combinedText = distinctLines.join('\n');
 
-      final allLangs = sortedCluster
-          .expand((b) => b.recognizedLanguages)
-          .toSet()
-          .toList();
+      final allLangs =
+          sortedCluster.expand((b) => b.recognizedLanguages).toSet().toList();
 
       mergedList.add(RawMangaTextBlock(
         boundingBox: mergedRect,
@@ -474,7 +451,7 @@ class MangaOcrService {
     return mergedList;
   }
 
-  /// Reads actual image dimensions from file header if missing or zero.
+  /// Reads image dimensions from file header.
   static Future<Size> getImageDimensions(String imagePath) async {
     try {
       final file = File(imagePath);
@@ -493,7 +470,7 @@ class MangaOcrService {
     }
   }
 
-  /// Returns true if text block matches speech bubble geometry.
+  /// Returns true if block geometry matches a speech bubble rather than SFX.
   static bool classifyIsSpeechBubble(
       Rect boundingBox, String text, Size imageSize) {
     if (boundingBox.width <= 0 || boundingBox.height <= 0) return false;
@@ -503,18 +480,21 @@ class MangaOcrService {
 
     final aspectRatio = boundingBox.width / boundingBox.height;
 
-    // Extreme aspect ratio indicates SFX
     if (aspectRatio < 0.25 || aspectRatio > 4.2) {
-      return false;
+      if (aspectRatio < 0.04 || aspectRatio > 15.0) {
+        return false;
+      }
+      if (math.min(boundingBox.width, boundingBox.height) >= 80 &&
+          !RegExp(r'[\u4E00-\u9FFF\u3040-\u309F]').hasMatch(trimmed)) {
+        return false;
+      }
     }
 
-    // Single large character indicates SFX
     if (trimmed.length == 1 &&
         (boundingBox.width > 120 || boundingBox.height > 120)) {
       return false;
     }
 
-    // Full-page banner indicates SFX
     if (imageSize.width > 0 && boundingBox.width > imageSize.width * 0.75) {
       return false;
     }

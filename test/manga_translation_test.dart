@@ -236,29 +236,6 @@ void main() {
       );
     });
 
-    test('Language enum mapping to MangaLanguage', () {
-      expect(
-        MlKitTranslationEngine.mapSourceLanguage(
-            TranslationSourceLanguage.japanese),
-        MangaLanguage.japanese,
-      );
-      expect(
-        MlKitTranslationEngine.mapSourceLanguage(
-            TranslationSourceLanguage.korean),
-        MangaLanguage.korean,
-      );
-      expect(
-        MlKitTranslationEngine.mapSourceLanguage(
-            TranslationSourceLanguage.chinese),
-        MangaLanguage.chinese,
-      );
-      expect(
-        MlKitTranslationEngine.mapTargetLanguage(
-            TranslationTargetLanguage.english),
-        MangaLanguage.english,
-      );
-    });
-
     test('Punctuation and empty string handling without throwing', () async {
       final engine = MlKitTranslationEngine.instance;
       expect(
@@ -312,6 +289,26 @@ void main() {
           pageSize,
         ),
         isFalse,
+      );
+
+      // Single-column vertical dialogue/caption -> Speech bubble
+      expect(
+        MangaOcrService.classifyIsSpeechBubble(
+          const Rect.fromLTWH(800, 100, 24, 160),
+          '——最初の出会い',
+          pageSize,
+        ),
+        isTrue,
+      );
+
+      // Horizontal character name label above head -> Speech bubble
+      expect(
+        MangaOcrService.classifyIsSpeechBubble(
+          const Rect.fromLTWH(400, 200, 160, 26),
+          '月川 紗奈',
+          pageSize,
+        ),
+        isTrue,
       );
     });
 
@@ -661,7 +658,7 @@ void main() {
     });
 
     test(
-        'calculateBubbleRect preserves vertical speech bubble bounding box without 2.2x ballooning width',
+        'calculateBubbleRect preserves vertical speech bubble bounding box without expansion',
         () {
       const originalRect = Rect.fromLTWH(100, 100, 30, 150);
       final bubbleRect = MangaTranslationPainter.calculateBubbleRect(
@@ -670,11 +667,10 @@ void main() {
         screenSize: const Size(400, 800),
       );
 
-      // Original 30 x 150 vertical: padX = 0.15 * 30 = 4.5, padY = 0.05 * 150 = 7.5 -> 39 x 165.
-      // Must not balloon to 30 * 2.2 = 66 or minWidthForLength (80-140).
-      expect(bubbleRect.width, equals(39.0));
-      expect(bubbleRect.height, equals(165.0));
-      expect(bubbleRect.width, lessThan(50.0));
+      expect(bubbleRect.width, equals(30.0));
+      expect(bubbleRect.height, equals(150.0));
+      expect(bubbleRect.left, equals(100.0));
+      expect(bubbleRect.top, equals(100.0));
     });
 
     test('calculateBubbleRect preserves horizontal speech bubble bounding box',
@@ -686,11 +682,58 @@ void main() {
         screenSize: const Size(400, 800),
       );
 
-      // Original 150 x 80 horizontal: pad 0.04 * 80 = 3.2 gives 156.4 x 86.4
-      expect(bubbleRect.width, closeTo(156.4, 1e-9));
-      expect(bubbleRect.height, closeTo(86.4, 1e-9));
-      expect(bubbleRect.left, closeTo(46.8, 1e-9));
-      expect(bubbleRect.top, closeTo(96.8, 1e-9));
+      expect(bubbleRect.width, equals(150.0));
+      expect(bubbleRect.height, equals(80.0));
+      expect(bubbleRect.left, equals(50.0));
+      expect(bubbleRect.top, equals(100.0));
+    });
+
+    test(
+        'Long translation inside narrow 30x120 box fits strictly inside without expanding or rotating',
+        () {
+      const narrowRect = Rect.fromLTWH(100, 100, 30, 120);
+      const longText =
+          'There is no way that someone like you could possibly understand the heavy burden I have been carrying all these years through every single trial and battle we have had to endure together inside this cursed place!';
+
+      final bubbleRect = MangaTranslationPainter.calculateBubbleRect(
+        rect: narrowRect,
+        text: longText,
+        screenSize: const Size(400, 800),
+      );
+      expect(bubbleRect, equals(narrowRect));
+
+      final fitted = MangaTranslationPainter.debugFitSpeechBubbleText(
+        bubbleRect,
+        longText,
+      );
+      final fittedFontSize = (fitted.text! as TextSpan).style!.fontSize!;
+      expect(fittedFontSize, lessThan(4.5));
+      expect(fitted.width, lessThanOrEqualTo(30.0));
+      expect(fitted.height, lessThanOrEqualTo(120.0));
+
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      final painter = MangaTranslationPainter(
+        result: const TranslationResult(
+          imagePath: '/mock/narrow_long.jpg',
+          imageSize: Size(400, 800),
+          blocks: [
+            MangaTranslatedBlock(
+              boundingBox: narrowRect,
+              originalText: '長い縦書きセリフ',
+              translatedText: longText,
+              isSpeechBubble: true,
+            ),
+          ],
+        ),
+        mode: TranslationRenderMode.speechBubblesOnly,
+      );
+      expect(
+        () => painter.paint(canvas, const Size(400, 800)),
+        returnsNormally,
+      );
+      final picture = recorder.endRecording();
+      picture.dispose();
     });
 
     test(
@@ -842,113 +885,6 @@ void main() {
       expect(find.text('Manga Translation'), findsOneWidget);
       expect(find.text('Speech Bubbles Only'), findsOneWidget);
       expect(find.text('Full Page (with SFX)'), findsOneWidget);
-    });
-  });
-
-  group('MlKitTranslationEngine Status & Progress', () {
-    test('ModelPairStatus construction and properties', () {
-      const status = ModelPairStatus(
-        sourceDownloaded: true,
-        targetDownloaded: false,
-        sourceLangName: 'Japanese',
-        targetLangName: 'English',
-        totalNeededMb: 30.0,
-        isReady: false,
-      );
-      expect(status.sourceDownloaded, isTrue);
-      expect(status.targetDownloaded, isFalse);
-      expect(status.sourceLangName, 'Japanese');
-      expect(status.targetLangName, 'English');
-      expect(status.totalNeededMb, 30.0);
-      expect(status.isReady, isFalse);
-    });
-
-    test('TranslationDownloadProgress defaults and copyWith', () {
-      const progress = TranslationDownloadProgress();
-      expect(progress.isDownloading, isFalse);
-      expect(progress.downloadedMb, 0.0);
-      expect(progress.totalMb, 0.0);
-      expect(progress.progress, 0.0);
-      expect(progress.isSuccess, isFalse);
-      expect(progress.errorMessage, isNull);
-
-      final updated = progress.copyWith(
-        isDownloading: true,
-        currentStep: 'Downloading model...',
-        downloadedMb: 15.0,
-        totalMb: 30.0,
-        progress: 0.5,
-      );
-      expect(updated.isDownloading, isTrue);
-      expect(updated.currentStep, 'Downloading model...');
-      expect(updated.downloadedMb, 15.0);
-      expect(updated.totalMb, 30.0);
-      expect(updated.progress, 0.5);
-    });
-
-    test('getPairStatus returns correct pair metadata and size requirements',
-        () async {
-      final engine = MlKitTranslationEngine.instance;
-      final status = await engine.getPairStatus(
-        TranslationSourceLanguage.japanese,
-        TranslationTargetLanguage.english,
-      );
-      expect(status.sourceLangName, 'Japanese');
-      expect(status.targetLangName, 'English');
-      expect(status.totalNeededMb, anyOf(0.0, 30.0, 60.0));
-    });
-
-    test('allMangaLanguages defines all 4 required manga languages', () {
-      expect(
-        MlKitTranslationEngine.allMangaLanguages,
-        containsAllInOrder([
-          MangaLanguage.english,
-          MangaLanguage.japanese,
-          MangaLanguage.korean,
-          MangaLanguage.chinese,
-        ]),
-      );
-      expect(MlKitTranslationEngine.allMangaLanguages.length, 4);
-    });
-
-    test('AllModelsStatus construction and properties', () {
-      const status = AllModelsStatus(
-        missingLanguages: [MangaLanguage.japanese, MangaLanguage.korean],
-        downloadedLanguages: [
-          MangaLanguage.english,
-          MangaLanguage.chinese,
-        ],
-        totalNeededMb: 60.0,
-        isReady: false,
-      );
-      expect(status.missingLanguages.length, 2);
-      expect(status.downloadedLanguages.length, 2);
-      expect(status.totalNeededMb, 60.0);
-      expect(status.isReady, isFalse);
-    });
-
-    test('checkAllModelsStatus returns valid AllModelsStatus metadata',
-        () async {
-      final engine = MlKitTranslationEngine.instance;
-      final status = await engine.checkAllModelsStatus();
-      expect(status.missingLanguages.length + status.downloadedLanguages.length,
-          4);
-      expect(status.totalNeededMb, status.missingLanguages.length * 30.0);
-      expect(status.isReady, engine.lmStudioEngine.isReady);
-    });
-
-    test(
-        'appLocalizations download getter returns localized string without MB size',
-        () {
-      final en = AppLocalizations(const Locale('en'));
-      expect(en.download, 'Download');
-      expect(en.downloadModelPrompt, isNot(contains('30MB')));
-      expect(en.downloadModelPrompt, isNot(contains('30 MB')));
-
-      final id = AppLocalizations(const Locale('id'));
-      expect(id.download, 'Unduh');
-      expect(id.downloadModelPrompt, isNot(contains('30MB')));
-      expect(id.downloadModelPrompt, isNot(contains('30 MB')));
     });
   });
 
@@ -1153,6 +1089,39 @@ void main() {
       );
     });
 
+    test(
+        'cleanLlmOutput discards echoed CJK paragraphs/lines and strips CJK prefixes',
+        () {
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput('月川 紗奈\n\nSana Tsukikawa'),
+        'Sana Tsukikawa',
+      );
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput('えっ…\n\nHuh?...'),
+        'Huh?...',
+      );
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput('月川 紗奈\nSana Tsukikawa'),
+        'Sana Tsukikawa',
+      );
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput('えっ…\nHuh?...'),
+        'Huh?...',
+      );
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput('月川 紗奈 -> Sana Tsukikawa'),
+        'Sana Tsukikawa',
+      );
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput('月川 紗奈: Sana Tsukikawa'),
+        'Sana Tsukikawa',
+      );
+      expect(
+        LmStudioTranslationEngine.cleanLlmOutput('Sana Tsukikawa (月川 紗奈)'),
+        'Sana Tsukikawa',
+      );
+    });
+
     test('normalizeBaseUrl formats endpoints properly', () {
       expect(
         LmStudioTranslationEngine.normalizeBaseUrl('http://192.168.1.10:1234'),
@@ -1309,7 +1278,7 @@ void main() {
     });
 
     testWidgets(
-        'ImageViewerScreen Translation Sheet renders 3 dedicated manual language buttons & Otomatis',
+        'ImageViewerScreen Translation Sheet omits manual source language buttons and keeps render mode & status card',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
@@ -1353,24 +1322,36 @@ void main() {
       tester.widget<IconButton>(translateBtn).onPressed!();
       await tester.pumpAndSettle();
 
-      // Verify the 3 dedicated manual language buttons and their subtext
-      expect(find.text('Japanese'), findsOneWidget);
-      expect(find.text('JA → EN'), findsOneWidget);
-      expect(find.text('Chinese'), findsOneWidget);
-      expect(find.text('ZH → EN'), findsOneWidget);
-      expect(find.text('Korean'), findsOneWidget);
-      expect(find.text('KO → EN'), findsOneWidget);
-      expect(find.text('Auto Detect'), findsOneWidget);
+      // Verify manual source language buttons & header are NOT rendered
+      expect(find.text('Japanese'), findsNothing);
+      expect(find.text('JA → EN'), findsNothing);
+      expect(find.text('Chinese'), findsNothing);
+      expect(find.text('ZH → EN'), findsNothing);
+      expect(find.text('Korean'), findsNothing);
+      expect(find.text('KO → EN'), findsNothing);
+      expect(find.text('Auto Detect'), findsNothing);
+      expect(find.text('Source Language'), findsNothing);
 
-      // Tap Korean button
-      await tester.tap(find.text('Korean'));
+      // Verify status card and render mode options remain rendered & functional
+      expect(find.text('LM Studio'), findsOneWidget);
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.text('Speech Bubbles Only'), findsOneWidget);
+      expect(find.text('Full Page (with SFX)'), findsOneWidget);
+
+      await tester.tap(find.text('Speech Bubbles Only'));
+      await tester.pumpAndSettle();
+      expect(find.text('Speech Bubbles Only'), findsNothing);
+
+      tester.widget<IconButton>(translateBtn).onPressed!();
+      await tester.pumpAndSettle();
+      expect(find.text('Turn Off Translation'), findsOneWidget);
+
+      await tester.tap(find.text('Turn Off Translation'));
       await tester.pumpAndSettle();
 
-      // Verify settings updated and persisted
-      expect(
-        SettingsService.instance.settings.translationSourceLanguage,
-        TranslationSourceLanguage.korean,
-      );
+      // Drain feedback pill timer
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
     });
   });
 
@@ -1552,6 +1533,24 @@ void main() {
           hasLength(2),
         );
       }
+    });
+
+    test('mergeAdjacentBlocks keeps diagonal stair-step bubbles separate', () {
+      const upperBubble = RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(200, 100, 50, 120),
+        text: '上のセリフ',
+      );
+      const lowerDiagonalBubble = RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(124, 200, 50, 120),
+        text: '下のセリフ',
+      );
+
+      final merged = MangaOcrService.mergeAdjacentBlocks(
+        [upperBubble, lowerDiagonalBubble],
+        language: TranslationSourceLanguage.japanese,
+      );
+
+      expect(merged.length, 2);
     });
 
     test('mergeAdjacentBlocks deduplicates identical or contained text lines',
