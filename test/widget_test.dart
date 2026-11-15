@@ -2928,6 +2928,68 @@ void main() {
         service.getVideoPlaybackPosition(winPath),
         const Duration(milliseconds: 35000),
       );
+
+      // 10. Short videos (< 15s) use 500ms near-start and near-end thresholds
+      const shortVideo = '/storage/emulated/0/DCIM/Camera/VID_SHORT.mp4';
+      service.saveVideoPlaybackPosition(
+        shortVideo,
+        const Duration(milliseconds: 400),
+        const Duration(milliseconds: 5000),
+      );
+      expect(service.getVideoPlaybackPosition(shortVideo), isNull);
+
+      service.saveVideoPlaybackPosition(
+        shortVideo,
+        const Duration(milliseconds: 1200),
+        const Duration(milliseconds: 5000),
+      );
+      expect(
+        service.getVideoPlaybackPosition(shortVideo),
+        const Duration(milliseconds: 1200),
+      );
+
+      service.saveVideoPlaybackPosition(
+        shortVideo,
+        const Duration(milliseconds: 400),
+        const Duration(milliseconds: 5000),
+      );
+      expect(service.getVideoPlaybackPosition(shortVideo), isNull);
+
+      service.saveVideoPlaybackPosition(
+        shortVideo,
+        const Duration(milliseconds: 1200),
+        const Duration(milliseconds: 5000),
+      );
+      expect(
+        service.getVideoPlaybackPosition(shortVideo),
+        const Duration(milliseconds: 1200),
+      );
+
+      service.saveVideoPlaybackPosition(
+        shortVideo,
+        const Duration(milliseconds: 4700),
+        const Duration(milliseconds: 5000),
+      );
+      expect(service.getVideoPlaybackPosition(shortVideo), isNull);
+
+      service.saveVideoPlaybackPosition(
+        shortVideo,
+        const Duration(milliseconds: 1200),
+        const Duration(milliseconds: 5000),
+      );
+      expect(
+        service.getVideoPlaybackPosition(shortVideo),
+        const Duration(milliseconds: 1200),
+      );
+
+      await service.save(service.settings.copyWith(resumeVideoPlayback: false));
+      expect(service.getVideoPlaybackPosition(shortVideo), isNull);
+      service.saveVideoPlaybackPosition(
+        shortVideo,
+        const Duration(milliseconds: 1200),
+        const Duration(milliseconds: 5000),
+      );
+      expect(service.getVideoPlaybackPosition(shortVideo), isNull);
     });
 
     test('Double tap seek interval slider values step by 5 between 5s and 60s',

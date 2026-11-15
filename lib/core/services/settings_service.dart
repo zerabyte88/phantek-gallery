@@ -194,7 +194,7 @@ class SettingsService {
     final posMs = _prefs.getInt(key) ??
         _prefs.getInt('playback_pos_${normalized.hashCode}') ??
         _prefs.getInt('playback_pos_${path.hashCode}');
-    if (posMs != null && posMs > 2000) {
+    if (posMs != null && posMs > 500) {
       return Duration(milliseconds: posMs);
     }
     return null;
@@ -210,13 +210,16 @@ class SettingsService {
     final legacyKey = 'playback_pos_${normalized.hashCode}';
     final rawLegacyKey = 'playback_pos_${path.hashCode}';
     final durMs = duration.inMilliseconds;
-    if (durMs > 0 && durMs - posMs < 3000) {
+    final isShortVideo = durMs > 0 && durMs < 15000;
+    final minStartMs = isShortVideo ? 500 : 2000;
+    final nearEndMarginMs = isShortVideo ? 500 : 3000;
+    if (durMs > nearEndMarginMs && durMs - posMs < nearEndMarginMs) {
       _prefs.remove(key);
       _prefs.remove(legacyKey);
       _prefs.remove(rawLegacyKey);
-    } else if (posMs > 2000) {
+    } else if (posMs > minStartMs) {
       _prefs.setInt(key, posMs);
-    } else if (posMs > 0 && posMs <= 2000) {
+    } else if (posMs > 0 && posMs <= minStartMs) {
       _prefs.remove(key);
       _prefs.remove(legacyKey);
       _prefs.remove(rawLegacyKey);

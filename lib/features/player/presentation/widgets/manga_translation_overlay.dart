@@ -321,9 +321,7 @@ class MangaTranslationPainter extends CustomPainter {
     Rect? destRect,
     Size? screenSize,
   }) {
-    final trimmedText = text.trim();
-    final int wordCount =
-        trimmedText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+    final normalizedText = _normalizeLayoutText(text);
 
     final double screenW = screenSize?.width ?? destRect?.width ?? 400.0;
     final double screenH = screenSize?.height ?? destRect?.height ?? 800.0;
@@ -366,16 +364,18 @@ class MangaTranslationPainter extends CustomPainter {
         _computeTextBounds(bubbleRect);
 
     _getOrCreateFittedPainter(
-      trimmedText: trimmedText,
+      text: normalizedText,
       maxTextWidth: maxTextWidth,
       targetMaxHeight: targetMaxHeight,
-      wordCount: wordCount,
     );
 
     return bubbleRect;
   }
 
   static bool _shouldRotateVertical(Rect bubbleRect) => false;
+
+  static String _normalizeLayoutText(String text) =>
+      text.replaceAll(RegExp(r'\s+'), ' ').trim();
 
   static ({double maxTextWidth, double targetMaxHeight, bool isVertical})
       _computeTextBounds(Rect bubbleRect) {
@@ -393,16 +393,13 @@ class MangaTranslationPainter extends CustomPainter {
 
   @visibleForTesting
   static TextPainter debugFitSpeechBubbleText(Rect bubbleRect, String text) {
-    final trimmedText = text.trim();
-    final int wordCount =
-        trimmedText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+    final normalizedText = _normalizeLayoutText(text);
     final (:maxTextWidth, :targetMaxHeight, isVertical: _) =
         _computeTextBounds(bubbleRect);
     return _getOrCreateFittedPainter(
-      trimmedText: trimmedText,
+      text: normalizedText,
       maxTextWidth: maxTextWidth,
       targetMaxHeight: targetMaxHeight,
-      wordCount: wordCount,
     );
   }
 
@@ -413,12 +410,12 @@ class MangaTranslationPainter extends CustomPainter {
     Rect? destRect,
     Size? screenSize,
   ]) {
-    final trimmedText = text.trim();
-    if (trimmedText.isEmpty) return;
+    final normalizedText = _normalizeLayoutText(text);
+    if (normalizedText.isEmpty) return;
 
     final bubbleRect = calculateBubbleRect(
       rect: rect,
-      text: trimmedText,
+      text: normalizedText,
       destRect: destRect,
       screenSize: screenSize,
     );
@@ -426,14 +423,10 @@ class MangaTranslationPainter extends CustomPainter {
     final (:maxTextWidth, :targetMaxHeight, isVertical: _) =
         _computeTextBounds(bubbleRect);
 
-    final int wordCount =
-        trimmedText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
-
     final painter = _getOrCreateFittedPainter(
-      trimmedText: trimmedText,
+      text: normalizedText,
       maxTextWidth: maxTextWidth,
       targetMaxHeight: targetMaxHeight,
-      wordCount: wordCount,
     );
 
     final rrect =
@@ -477,8 +470,8 @@ class MangaTranslationPainter extends CustomPainter {
     String text, [
     Size? screenSize,
   ]) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) return;
+    final normalized = _normalizeLayoutText(text);
+    if (normalized.isEmpty) return;
 
     final double screenW = screenSize?.width ?? 400.0;
     final double screenH = screenSize?.height ?? 800.0;
@@ -520,73 +513,28 @@ class MangaTranslationPainter extends CustomPainter {
     final double maxTextWidth = math.max(6.0, pillRect.width - hPad);
     final double maxTextHeight = math.max(6.0, pillRect.height - vPad);
 
-    const double minFontSize = 1.5;
-    double fontSize = (pillRect.height * 0.35).clamp(7.0, 14.0);
-
-    TextStyle fillStyleFor(double size) => TextStyle(
-          color: Colors.white,
-          fontSize: size,
-          fontWeight: FontWeight.w900,
-          height: size <= 8.0 ? 1.08 : 1.15,
-          shadows: const [
-            Shadow(
-              offset: Offset(1.5, 1.5),
-              blurRadius: 3.0,
-              color: Colors.black87,
-            ),
-          ],
-        );
-
-    String longestWord = '';
-    for (final w in trimmed.split(RegExp(r'\s+'))) {
-      if (w.length > longestWord.length) longestWord = w;
-    }
-    bool longestWordFits(double size) {
-      if (longestWord.isEmpty) return true;
-      final wp = _buildTextPainter(
-        text: longestWord,
-        style: fillStyleFor(size),
-        maxWidth: double.infinity,
-        maxLines: 1,
-      );
-      return wp.width <= maxTextWidth;
-    }
-
-    TextPainter fillPainter = _buildTextPainter(
-      text: trimmed,
-      style: fillStyleFor(fontSize),
+    final (painter: fillPainter, :fontSize) = _fitTextPainterToBounds(
+      text: normalized,
       maxWidth: maxTextWidth,
-      maxLines: null,
+      maxHeight: maxTextHeight,
+      styleBuilder: (size) => TextStyle(
+        color: Colors.white,
+        fontSize: size,
+        fontWeight: FontWeight.w900,
+        height: size <= 8.0 ? 1.08 : 1.15,
+        shadows: const [
+          Shadow(
+            offset: Offset(1.5, 1.5),
+            blurRadius: 3.0,
+            color: Colors.black87,
+          ),
+        ],
+      ),
     );
-
-    while ((fillPainter.height > maxTextHeight ||
-            fillPainter.width > maxTextWidth ||
-            !longestWordFits(fontSize)) &&
-        fontSize > 5.0) {
-      fontSize = math.max(5.0, fontSize - 0.5);
-      fillPainter = _buildTextPainter(
-        text: trimmed,
-        style: fillStyleFor(fontSize),
-        maxWidth: maxTextWidth,
-        maxLines: null,
-      );
-    }
-
-    while ((fillPainter.height > maxTextHeight ||
-            fillPainter.width > maxTextWidth) &&
-        fontSize > minFontSize) {
-      fontSize = math.max(minFontSize, fontSize - 0.25);
-      fillPainter = _buildTextPainter(
-        text: trimmed,
-        style: fillStyleFor(fontSize),
-        maxWidth: maxTextWidth,
-        maxLines: null,
-      );
-    }
 
     final double strokeWidth = (fontSize * 0.25).clamp(0.6, 3.5);
     final strokePainter = _buildTextPainter(
-      text: trimmed,
+      text: normalized,
       style: TextStyle(
         fontSize: fontSize,
         fontWeight: FontWeight.w900,
@@ -654,6 +602,86 @@ class MangaTranslationPainter extends CustomPainter {
     return painter;
   }
 
+  static ({TextPainter painter, double fontSize}) _fitTextPainterToBounds({
+    required String text,
+    required double maxWidth,
+    required double maxHeight,
+    required TextStyle Function(double size) styleBuilder,
+    double minFontSize = 1.5,
+    double? maxFontSize,
+  }) {
+    final normalizedText = _normalizeLayoutText(text);
+    final double upperBound =
+        (maxFontSize ?? math.min(24.0, math.max(12.0, maxHeight * 0.72)))
+            .clamp(minFontSize, 24.0)
+            .toDouble();
+
+    String longestWord = '';
+    for (final w in normalizedText.split(' ')) {
+      if (w.length > longestWord.length) longestWord = w;
+    }
+
+    bool longestWordFits(double size) {
+      if (longestWord.isEmpty) return true;
+      final wp = _buildTextPainter(
+        text: longestWord,
+        style: styleBuilder(size),
+        maxWidth: double.infinity,
+        maxLines: 1,
+      );
+      return wp.width <= maxWidth;
+    }
+
+    TextPainter? tryFit(double size) {
+      if (!longestWordFits(size)) return null;
+      final candidate = _buildTextPainter(
+        text: normalizedText,
+        style: styleBuilder(size),
+        maxWidth: maxWidth,
+        maxLines: null,
+      );
+      if (candidate.height <= maxHeight && candidate.width <= maxWidth) {
+        return candidate;
+      }
+      return null;
+    }
+
+    final upperCandidate = tryFit(upperBound);
+    if (upperCandidate != null) {
+      return (painter: upperCandidate, fontSize: upperBound);
+    }
+
+    final minCandidate = tryFit(minFontSize);
+    if (minCandidate == null) {
+      final fallback = _buildTextPainter(
+        text: normalizedText,
+        style: styleBuilder(minFontSize),
+        maxWidth: maxWidth,
+        maxLines: null,
+      );
+      return (painter: fallback, fontSize: minFontSize);
+    }
+
+    double low = minFontSize;
+    double high = upperBound;
+    TextPainter bestPainter = minCandidate;
+    double bestSize = minFontSize;
+
+    while (high - low > 0.1) {
+      final double mid = (low + high) / 2.0;
+      final candidate = tryFit(mid);
+      if (candidate != null) {
+        bestPainter = candidate;
+        bestSize = mid;
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+
+    return (painter: bestPainter, fontSize: bestSize);
+  }
+
   @override
   bool shouldRepaint(covariant MangaTranslationPainter oldDelegate) {
     return oldDelegate.result != result ||
@@ -662,13 +690,13 @@ class MangaTranslationPainter extends CustomPainter {
   }
 
   static TextPainter _getOrCreateFittedPainter({
-    required String trimmedText,
+    required String text,
     required double maxTextWidth,
     required double targetMaxHeight,
-    required int wordCount,
   }) {
+    final normalizedText = _normalizeLayoutText(text);
     final key = _FittedTextPainterCacheKey(
-      text: trimmedText,
+      text: normalizedText,
       maxTextWidth: (maxTextWidth * 10).round() / 10,
       targetMaxHeight: (targetMaxHeight * 10).round() / 10,
     );
@@ -676,71 +704,17 @@ class MangaTranslationPainter extends CustomPainter {
     final cached = _fittedPainterCache[key];
     if (cached != null) return cached;
 
-    final double maxAllowedFontSize;
-    if (wordCount <= 4) {
-      maxAllowedFontSize = 11.5;
-    } else if (wordCount <= 12) {
-      maxAllowedFontSize = 10.5;
-    } else {
-      maxAllowedFontSize = 9.5;
-    }
-
-    String longestWord = '';
-    for (final w in trimmedText.split(RegExp(r'\s+'))) {
-      if (w.length > longestWord.length) longestWord = w;
-    }
-
-    const double minFontSize = 1.5;
-    double fontSize = maxAllowedFontSize;
-
-    TextStyle styleFor(double size) => TextStyle(
-          color: const Color(0xFF202124),
-          fontSize: size,
-          fontWeight: FontWeight.w500,
-          height: size <= 8.0 ? 1.08 : 1.18,
-        );
-
-    bool longestWordFits(double size) {
-      if (longestWord.isEmpty) return true;
-      final wp = _buildTextPainter(
-        text: longestWord,
-        style: styleFor(size),
-        maxWidth: double.infinity,
-        maxLines: 1,
-      );
-      return wp.width <= maxTextWidth;
-    }
-
-    TextPainter painter = _buildTextPainter(
-      text: trimmedText,
-      style: styleFor(fontSize),
+    final (:painter, fontSize: _) = _fitTextPainterToBounds(
+      text: normalizedText,
       maxWidth: maxTextWidth,
-      maxLines: null,
+      maxHeight: targetMaxHeight,
+      styleBuilder: (size) => TextStyle(
+        color: const Color(0xFF202124),
+        fontSize: size,
+        fontWeight: FontWeight.w500,
+        height: size <= 8.0 ? 1.08 : 1.18,
+      ),
     );
-
-    while ((painter.height > targetMaxHeight ||
-            painter.width > maxTextWidth ||
-            !longestWordFits(fontSize)) &&
-        fontSize > 5.0) {
-      fontSize = math.max(5.0, fontSize - 0.5);
-      painter = _buildTextPainter(
-        text: trimmedText,
-        style: styleFor(fontSize),
-        maxWidth: maxTextWidth,
-        maxLines: null,
-      );
-    }
-
-    while ((painter.height > targetMaxHeight || painter.width > maxTextWidth) &&
-        fontSize > minFontSize) {
-      fontSize = math.max(minFontSize, fontSize - 0.25);
-      painter = _buildTextPainter(
-        text: trimmedText,
-        style: styleFor(fontSize),
-        maxWidth: maxTextWidth,
-        maxLines: null,
-      );
-    }
 
     if (_fittedPainterCache.length >= 250) {
       _fittedPainterCache.remove(_fittedPainterCache.keys.first);

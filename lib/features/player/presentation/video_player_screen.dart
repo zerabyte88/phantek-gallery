@@ -190,6 +190,38 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
 
 class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     with WidgetsBindingObserver, TickerProviderStateMixin {
+  static Future<void>? _pendingControllerDispose;
+
+  static Future<void> _enqueueControllerDisposal(
+      VideoPlayerController controller) {
+    final prior = _pendingControllerDispose;
+    late final Future<void> future;
+    future = () async {
+      try {
+        if (prior != null) {
+          try {
+            await prior;
+          } catch (_) {}
+        }
+        try {
+          if (controller.value.isInitialized && controller.value.isPlaying) {
+            await controller.pause();
+          }
+        } catch (_) {}
+        try {
+          await controller.dispose();
+        } catch (_) {}
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+      } finally {
+        if (identical(_pendingControllerDispose, future)) {
+          _pendingControllerDispose = null;
+        }
+      }
+    }();
+    _pendingControllerDispose = future;
+    return future;
+  }
+
   VideoPlayerController? _controller;
   final ValueNotifier<bool> _isPlayingNotifier = ValueNotifier<bool>(false);
   bool get _isPlaying => _controller?.value.isPlaying ?? false;
@@ -225,6 +257,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   final Set<int> _activePointers = {};
   AnimationController? _zoomAnimController;
   bool _hasStartedPlaying = false;
+  bool _hasPreparedForExit = false;
+  bool _isVideoLoading = false;
+  bool _pendingManualPlay = false;
+  bool _userHasScrubbed = false;
+  Duration? _pendingResumePosition;
+  Duration? _pendingUserSeekTarget;
+  bool _isInitStateActive = false;
   bool _cropToFit = false;
   String? _activeLoadedVideoPath;
   Duration _lastPlaybackPosition = Duration.zero;
@@ -522,7 +561,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           _setDrag(Offset.zero);
         }
       });
+    _isInitStateActive = true;
     _initPlayer();
+    _isInitStateActive = false;
     final initialSettings = ref.read(settingsNotifierProvider);
     if (initialSettings.keepScreenOn) {
       ScreenKeeperService.setKeepScreenOn(true);
@@ -562,44 +603,144 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
   }
 
+  void _prepareForExit({bool fromDispose = false}) {
+    if (_hasPreparedForExit) return;
+    if (_videos.isNotEmpty &&
+        _current < _videos.length &&
+        _videos[_current].isVideo) {
+      _saveCurrentPosition(_activeLoadedVideoPath ?? _videos[_current].path);
+    }
+    _hasPreparedForExit = true;
+    _videoLoadDebounce?.cancel();
+    _videoLoadDebounce = null;
+    _videoLoadGeneration++;
+    _slideshowTimer?.cancel();
+    _slideshowTimer = null;
+    _isSlideshowPlaying = false;
+    _isDismissing.value = true;
+    _videoSurfaceVisible.value = false;
+    _isPlayingNotifier.value = false;
+    _pendingManualPlay = false;
+    if (!fromDispose && _videos.isNotEmpty && _current < _videos.length) {
+      _activeMediaNotifier?.state = _videos[_current].id;
+    }
+    final controllerToDispose = _controller;
+    _controller = null;
+    _activeLoadedVideoPath = null;
+    if (controllerToDispose != null) {
+      controllerToDispose.removeListener(_onControllerUpdate);
+      _enqueueControllerDisposal(controllerToDispose);
+    }
+    if (!fromDispose && mounted) {
+      setState(() {});
+    }
+  }
+
   void _onRouteAnimationStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed) {
       _routeTransitionComplete = true;
-      if (mounted && _controller != null && _controller!.value.isInitialized) {
+      if (mounted &&
+          !_hasPreparedForExit &&
+          _controller != null &&
+          _controller!.value.isInitialized) {
         _videoSurfaceVisible.value = true;
       }
       _startPlaybackAfterTransition();
     } else if (status == AnimationStatus.reverse) {
-      _videoSurfaceVisible.value = false;
+      _prepareForExit();
+    }
+  }
+
+  void _startPlaybackAfterTransition() {
+    if (!mounted || _hasPreparedForExit) return;
+    if (widget.startSlideshow && !_isSlideshowPlaying) {
+      _startSlideshow();
+      return;
+    }
+    if (_videos.isEmpty ||
+        _current >= _videos.length ||
+        !_videos[_current].isVideo) {
+      return;
+    }
+    final settings = ref.read(settingsNotifierProvider);
+    final shouldPlay = !_isSlideshowPlaying &&
+        !widget.startSlideshow &&
+        (settings.autoPlayVideo || _pendingManualPlay);
+    if (shouldPlay && !_isPlaying) {
+      unawaited(_requestPlay());
+    }
+  }
+
+  Future<void> _togglePlayPause() async {
+    if (_hasPreparedForExit || !mounted) return;
+    if (_controller != null &&
+        _controller!.value.isInitialized &&
+        _controller!.value.isPlaying) {
+      _pendingManualPlay = false;
+      await _controller!.pause();
       if (_videos.isNotEmpty &&
           _current < _videos.length &&
           _videos[_current].isVideo) {
         _saveCurrentPosition(_activeLoadedVideoPath ?? _videos[_current].path);
       }
-      if (_isPlaying) {
-        _controller?.pause();
-      }
+    } else {
+      await _requestPlay();
     }
   }
 
-  void _startPlaybackAfterTransition() {
-    if (!mounted) return;
-    if (widget.startSlideshow && !_isSlideshowPlaying) {
-      _startSlideshow();
+  Future<void> _requestPlay() async {
+    if (_hasPreparedForExit ||
+        !mounted ||
+        _videos.isEmpty ||
+        _current >= _videos.length ||
+        !_videos[_current].isVideo) {
       return;
     }
-    if (!_videos[_current].isVideo) return;
-    final settings = ref.read(settingsNotifierProvider);
-    final shouldPlay = !_isSlideshowPlaying &&
-        !widget.startSlideshow &&
-        settings.autoPlayVideo;
-    if (shouldPlay) {
-      if (!_isPlaying) {
-        _controller?.play();
+    if (_videoLoadDebounce?.isActive == true) {
+      _videoLoadDebounce?.cancel();
+      _videoLoadDebounce = null;
+      _pendingManualPlay = true;
+      unawaited(_openAndRestoreVideo(
+        _videos[_current].path,
+        autoPlay: true,
+        generation: ++_videoLoadGeneration,
+      ));
+      return;
+    }
+    final ctrl = _controller;
+    if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.hasError) {
+      _pendingManualPlay = true;
+      if (!_isVideoLoading) {
+        unawaited(_openAndRestoreVideo(
+          _videos[_current].path,
+          autoPlay: true,
+          generation: ++_videoLoadGeneration,
+        ));
       }
-      if (mounted && _routeTransitionComplete && !_videoSurfaceVisible.value) {
-        _videoSurfaceVisible.value = true;
+      return;
+    }
+    _pendingManualPlay = false;
+    final val = ctrl.value;
+    final isAtEnd = val.isCompleted ||
+        (val.duration > Duration.zero && val.position >= val.duration);
+    if (isAtEnd) {
+      _pendingResumePosition = null;
+      await ctrl.seekTo(Duration.zero);
+    } else if (_pendingResumePosition != null &&
+        _pendingResumePosition! > Duration.zero) {
+      if ((val.position - _pendingResumePosition!).abs() >
+          const Duration(milliseconds: 400)) {
+        await ctrl.seekTo(_pendingResumePosition!);
       }
+      _pendingResumePosition = null;
+    }
+    if (!mounted || _hasPreparedForExit || _controller != ctrl) return;
+    _videoSurfaceVisible.value = true;
+    await ctrl.play();
+    if (!mounted || _hasPreparedForExit || _controller != ctrl) return;
+    _isPlayingNotifier.value = true;
+    if (!_hasStartedPlaying) {
+      setState(() => _hasStartedPlaying = true);
     }
   }
 
@@ -806,212 +947,297 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     required int generation,
     bool allowDeferredAutoPlay = false,
   }) async {
-    final oldController = _controller;
-    _controller = null;
-    if (oldController != null) {
-      oldController.removeListener(_onControllerUpdate);
-      _videoSurfaceVisible.value = false;
-      if (mounted) setState(() {});
-      try {
-        await oldController.dispose();
-      } catch (_) {}
-      if (!mounted || generation != _videoLoadGeneration) return;
-      await Future.delayed(const Duration(milliseconds: 80));
-      if (!mounted || generation != _videoLoadGeneration) return;
+    if (!mounted || generation != _videoLoadGeneration || _hasPreparedForExit) {
+      return;
     }
+    _isVideoLoading = true;
+    try {
+      final settings = ref.read(settingsNotifierProvider);
+      final savedPos = settings.resumeVideoPlayback
+          ? SettingsService.instance.getVideoPlaybackPosition(path)
+          : null;
+      final knownDur =
+          _current < _videos.length ? _videos[_current].duration : null;
+      final effectiveStart = (savedPos != null &&
+              knownDur != null &&
+              knownDur > Duration.zero &&
+              savedPos >= knownDur)
+          ? null
+          : savedPos;
 
-    final savedPos = SettingsService.instance.getVideoPlaybackPosition(path);
-    final knownDur =
-        _current < _videos.length ? _videos[_current].duration : null;
-    final effectiveStart = (savedPos != null &&
-            knownDur != null &&
-            knownDur > Duration.zero &&
-            savedPos >= knownDur)
-        ? null
-        : savedPos;
+      _lastPlaybackPosition = effectiveStart ?? Duration.zero;
+      _pendingResumePosition = effectiveStart;
+      _pendingUserSeekTarget = null;
+      _lastPositionSaveTime = null;
 
-    _lastPlaybackPosition = effectiveStart ?? Duration.zero;
-    _lastPositionSaveTime = null;
+      final oldController = _controller;
+      _controller = null;
+      if (oldController != null) {
+        oldController.removeListener(_onControllerUpdate);
+        _videoSurfaceVisible.value = false;
+      }
+      if ((oldController != null || effectiveStart != null) &&
+          mounted &&
+          !_isInitStateActive) {
+        setState(() {});
+      }
+      if (oldController != null) {
+        await _enqueueControllerDisposal(oldController);
+      }
+      final pendingDispose = _pendingControllerDispose;
+      if (pendingDispose != null) {
+        try {
+          await pendingDispose;
+        } catch (_) {}
+      }
+      if (!mounted ||
+          generation != _videoLoadGeneration ||
+          _hasPreparedForExit) {
+        return;
+      }
 
-    final settings = ref.read(settingsNotifierProvider);
-    final playerOptions = VideoPlayerOptions(
-      mixWithOthers: false,
-      allowBackgroundPlayback: false,
-    );
+      final playerOptions = VideoPlayerOptions(
+        mixWithOthers: false,
+        allowBackgroundPlayback: false,
+      );
 
-    Future<VideoPlayerController?> tryInitCandidate(
-      VideoPlayerController Function() factory,
-      String stageLabel,
-    ) async {
-      VideoPlayerController? candidate;
-      try {
-        candidate = factory();
-        await candidate.initialize();
-        return candidate;
-      } catch (error) {
-        debugPrint(
-          '[VideoPlayer] $stageLabel init failed for $path: $error',
+      Future<VideoPlayerController?> tryInitCandidate(
+        VideoPlayerController Function() factory,
+        String stageLabel,
+      ) async {
+        VideoPlayerController? candidate;
+        try {
+          candidate = factory();
+          await candidate.initialize();
+          return candidate;
+        } catch (error) {
+          debugPrint(
+            '[VideoPlayer] $stageLabel init failed for $path: $error',
+          );
+          if (candidate != null) {
+            await _enqueueControllerDisposal(candidate);
+          }
+          return null;
+        }
+      }
+
+      // Stage 1: Primary textureView with file path.
+      VideoPlayerController? newController = await tryInitCandidate(
+        () => VideoPlayerController.file(
+          File(path),
+          viewType: VideoViewType.textureView,
+          videoPlayerOptions: playerOptions,
+        ),
+        'Stage 1 (textureView file)',
+      );
+      if (!mounted ||
+          generation != _videoLoadGeneration ||
+          _hasPreparedForExit) {
+        if (newController != null) {
+          _enqueueControllerDisposal(newController);
+        }
+        return;
+      }
+
+      // Stage 2: Retry textureView after allowing MediaCodec decoder release.
+      if (newController == null) {
+        await Future.delayed(const Duration(milliseconds: 150));
+        if (!mounted ||
+            generation != _videoLoadGeneration ||
+            _hasPreparedForExit) {
+          return;
+        }
+        newController = await tryInitCandidate(
+          () => VideoPlayerController.file(
+            File(path),
+            viewType: VideoViewType.textureView,
+            videoPlayerOptions: playerOptions,
+          ),
+          'Stage 2 (textureView retry)',
         );
-        try {
-          await candidate?.dispose();
-        } catch (_) {}
-        return null;
+        if (!mounted ||
+            generation != _videoLoadGeneration ||
+            _hasPreparedForExit) {
+          if (newController != null) {
+            _enqueueControllerDisposal(newController);
+          }
+          return;
+        }
       }
-    }
 
-    // Stage 1: Primary textureView with file path.
-    VideoPlayerController? newController = await tryInitCandidate(
-      () => VideoPlayerController.file(
-        File(path),
-        viewType: VideoViewType.textureView,
-        videoPlayerOptions: playerOptions,
-      ),
-      'Stage 1 (textureView file)',
-    );
-    if (!mounted || generation != _videoLoadGeneration) {
-      try {
-        await newController?.dispose();
-      } catch (_) {}
-      return;
-    }
+      // Stage 3: Android MediaStore contentUri fallback when numeric asset id exists.
+      if (newController == null &&
+          Platform.isAndroid &&
+          _current < _videos.length &&
+          int.tryParse(_videos[_current].id) != null) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (!mounted ||
+            generation != _videoLoadGeneration ||
+            _hasPreparedForExit) {
+          return;
+        }
+        final contentUri = Uri.parse(
+          'content://media/external/video/media/${_videos[_current].id}',
+        );
+        newController = await tryInitCandidate(
+          () => VideoPlayerController.contentUri(
+            contentUri,
+            viewType: VideoViewType.textureView,
+            videoPlayerOptions: playerOptions,
+          ),
+          'Stage 3 (textureView contentUri)',
+        );
+        if (!mounted ||
+            generation != _videoLoadGeneration ||
+            _hasPreparedForExit) {
+          if (newController != null) {
+            _enqueueControllerDisposal(newController);
+          }
+          return;
+        }
+      }
 
-    // Stage 2: Retry textureView after allowing MediaCodec decoder release.
-    if (newController == null) {
-      await Future.delayed(const Duration(milliseconds: 150));
-      if (!mounted || generation != _videoLoadGeneration) return;
-      newController = await tryInitCandidate(
-        () => VideoPlayerController.file(
-          File(path),
-          viewType: VideoViewType.textureView,
-          videoPlayerOptions: playerOptions,
-        ),
-        'Stage 2 (textureView retry)',
-      );
-      if (!mounted || generation != _videoLoadGeneration) {
-        try {
-          await newController?.dispose();
-        } catch (_) {}
+      // Stage 4: platformView fallback for devices rejecting textureView surfaces.
+      if (newController == null) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (!mounted ||
+            generation != _videoLoadGeneration ||
+            _hasPreparedForExit) {
+          return;
+        }
+        newController = await tryInitCandidate(
+          () => VideoPlayerController.file(
+            File(path),
+            viewType: VideoViewType.platformView,
+            videoPlayerOptions: playerOptions,
+          ),
+          'Stage 4 (platformView file)',
+        );
+        if (!mounted ||
+            generation != _videoLoadGeneration ||
+            _hasPreparedForExit) {
+          if (newController != null) {
+            _enqueueControllerDisposal(newController);
+          }
+          return;
+        }
+      }
+
+      if (newController == null) {
         return;
       }
-    }
 
-    // Stage 3: Android MediaStore contentUri fallback when numeric asset id exists.
-    if (newController == null &&
-        Platform.isAndroid &&
-        _current < _videos.length &&
-        int.tryParse(_videos[_current].id) != null) {
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (!mounted || generation != _videoLoadGeneration) return;
-      final contentUri = Uri.parse(
-        'content://media/external/video/media/${_videos[_current].id}',
-      );
-      newController = await tryInitCandidate(
-        () => VideoPlayerController.contentUri(
-          contentUri,
-          viewType: VideoViewType.textureView,
-          videoPlayerOptions: playerOptions,
-        ),
-        'Stage 3 (textureView contentUri)',
-      );
-      if (!mounted || generation != _videoLoadGeneration) {
-        try {
-          await newController?.dispose();
-        } catch (_) {}
+      _controller = newController;
+      _activeLoadedVideoPath = path;
+      newController.addListener(_onControllerUpdate);
+
+      final rawSize = newController.value.size;
+      if (rawSize.width > 0 &&
+          rawSize.height > 0 &&
+          _videos.isNotEmpty &&
+          _current < _videos.length) {
+        final size = resolveEffectiveVideoSize(
+          rawSize,
+          newController.value.rotationCorrection,
+        );
+        final currentItem = _videos[_current];
+        ThumbnailService.instance
+            .setThumbnailAspectRatio(currentItem.id, size.width / size.height);
+      }
+
+      if (mounted) setState(() {});
+
+      await newController.setLooping(_isLooping && !_isSlideshowPlaying);
+      await newController.setVolume(settings.startMuted ? 0.0 : 1.0);
+      if (_playbackSpeed != 1.0) {
+        await newController.setPlaybackSpeed(_playbackSpeed);
+      }
+
+      if (!mounted ||
+          generation != _videoLoadGeneration ||
+          _hasPreparedForExit) {
         return;
       }
-    }
 
-    // Stage 4: platformView fallback for devices rejecting textureView surfaces.
-    if (newController == null) {
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (!mounted || generation != _videoLoadGeneration) return;
-      newController = await tryInitCandidate(
-        () => VideoPlayerController.file(
-          File(path),
-          viewType: VideoViewType.platformView,
-          videoPlayerOptions: playerOptions,
-        ),
-        'Stage 4 (platformView file)',
-      );
-      if (!mounted || generation != _videoLoadGeneration) {
-        try {
-          await newController?.dispose();
-        } catch (_) {}
+      final actualDur = newController.value.duration;
+      final candidateResume = _userHasScrubbed ? null : effectiveStart;
+      final validResumePos = (candidateResume != null &&
+              candidateResume > Duration.zero &&
+              (actualDur <= Duration.zero || candidateResume < actualDur))
+          ? candidateResume
+          : null;
+      if (!_userHasScrubbed) {
+        _pendingResumePosition = validResumePos;
+        _lastPlaybackPosition = validResumePos ?? Duration.zero;
+      }
+
+      final targetSeek =
+          _userHasScrubbed ? _pendingUserSeekTarget : validResumePos;
+      if (targetSeek != null &&
+          targetSeek > Duration.zero &&
+          (actualDur <= Duration.zero || targetSeek < actualDur)) {
+        await newController.seekTo(targetSeek);
+      }
+
+      if (!mounted ||
+          generation != _videoLoadGeneration ||
+          _hasPreparedForExit) {
         return;
       }
-    }
 
-    if (newController == null) {
-      return;
-    }
+      final liveSettings = ref.read(settingsNotifierProvider);
+      final routeAnimCompleted =
+          ModalRoute.of(context)?.animation?.status == AnimationStatus.completed;
+      final shouldStartNow = autoPlay ||
+          _pendingManualPlay ||
+          (allowDeferredAutoPlay &&
+              resolveAutoPlayAfterInit(
+                capturedAutoPlay: autoPlay,
+                routeTransitionComplete: _routeTransitionComplete,
+                routeAnimationCompleted: routeAnimCompleted,
+                isSlideshowPlaying: _isSlideshowPlaying,
+                startSlideshow: widget.startSlideshow,
+                settingAutoPlayVideo: liveSettings.autoPlayVideo,
+              ));
 
-    _controller = newController;
-    _activeLoadedVideoPath = path;
-
-    await newController.setLooping(_isLooping && !_isSlideshowPlaying);
-    await newController.setVolume(settings.startMuted ? 0.0 : 1.0);
-    if (_playbackSpeed != 1.0) {
-      await newController.setPlaybackSpeed(_playbackSpeed);
-    }
-
-    if (effectiveStart != null && effectiveStart > Duration.zero) {
-      await newController.seekTo(effectiveStart);
-    }
-
-    if (!mounted || generation != _videoLoadGeneration) return;
-
-    newController.addListener(_onControllerUpdate);
-
-    final rawSize = newController.value.size;
-    if (rawSize.width > 0 &&
-        rawSize.height > 0 &&
-        _videos.isNotEmpty &&
-        _current < _videos.length) {
-      final size = resolveEffectiveVideoSize(
-        rawSize,
-        newController.value.rotationCorrection,
-      );
-      final currentItem = _videos[_current];
-      ThumbnailService.instance
-          .setThumbnailAspectRatio(currentItem.id, size.width / size.height);
-    }
-
-    final liveSettings = ref.read(settingsNotifierProvider);
-    final routeAnimCompleted =
-        ModalRoute.of(context)?.animation?.status == AnimationStatus.completed;
-    final shouldStartNow = autoPlay ||
-        (allowDeferredAutoPlay &&
-            resolveAutoPlayAfterInit(
-              capturedAutoPlay: autoPlay,
-              routeTransitionComplete: _routeTransitionComplete,
-              routeAnimationCompleted: routeAnimCompleted,
-              isSlideshowPlaying: _isSlideshowPlaying,
-              startSlideshow: widget.startSlideshow,
-              settingAutoPlayVideo: liveSettings.autoPlayVideo,
-            ));
-
-    if (shouldStartNow) {
-      _routeTransitionComplete = true;
-      await newController.play();
-      if (!mounted || generation != _videoLoadGeneration) return;
-      _hasStartedPlaying = true;
-      _isPlayingNotifier.value = true;
-    }
-
-    _precacheAdjacentVideos(_current);
-
-    if (mounted) {
-      setState(() {});
-      if (_routeTransitionComplete ||
+      if (shouldStartNow) {
+        _pendingManualPlay = false;
+        _pendingResumePosition = null;
+        _routeTransitionComplete = true;
+        _videoSurfaceVisible.value = true;
+        await newController.play();
+        if (!mounted ||
+            generation != _videoLoadGeneration ||
+            _hasPreparedForExit) {
+          return;
+        }
+        _hasStartedPlaying = true;
+        _isPlayingNotifier.value = true;
+      } else if (_routeTransitionComplete ||
           _routeAnimation == null ||
           _routeAnimation?.isCompleted == true) {
         _videoSurfaceVisible.value = true;
+      }
+
+      _precacheAdjacentVideos(_current);
+
+      if (mounted) {
+        setState(() {});
+      }
+    } finally {
+      if (generation == _videoLoadGeneration) {
+        _isVideoLoading = false;
       }
     }
   }
 
   void _onControllerUpdate() {
-    if (!mounted || _controller == null) return;
+    if (!mounted ||
+        _controller == null ||
+        _hasPreparedForExit ||
+        _isDismissing.value) {
+      return;
+    }
     final val = _controller!.value;
 
     if (val.hasError) {
@@ -1023,7 +1249,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         final curPath = _videos[_current].path;
         final retryGen = ++_videoLoadGeneration;
         Future.delayed(const Duration(milliseconds: 200), () {
-          if (!mounted || retryGen != _videoLoadGeneration) return;
+          if (!mounted ||
+              _hasPreparedForExit ||
+              retryGen != _videoLoadGeneration) {
+            return;
+          }
           _openAndRestoreVideo(curPath, autoPlay: true, generation: retryGen);
         });
       }
@@ -1055,6 +1285,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         });
       }
     } else if (!isPlaying &&
+        (_hasStartedPlaying || _userHasScrubbed) &&
         _videos.isNotEmpty &&
         _current < _videos.length &&
         _videos[_current].isVideo &&
@@ -1063,8 +1294,16 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
 
     final pos = val.position;
+    if (_pendingUserSeekTarget != null &&
+        pos > Duration.zero &&
+        (_pendingUserSeekTarget! - pos).abs() <=
+            const Duration(milliseconds: 500)) {
+      _pendingUserSeekTarget = null;
+    }
     if (pos > Duration.zero) {
-      _lastPlaybackPosition = pos;
+      if (_pendingUserSeekTarget == null) {
+        _lastPlaybackPosition = pos;
+      }
       if (mounted &&
           _videos.isNotEmpty &&
           _current < _videos.length &&
@@ -1092,6 +1331,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         _videos[_current].isVideo) {
       _lastPlaybackPosition = Duration.zero;
       _lastPositionSaveTime = null;
+      _pendingResumePosition = null;
+      _pendingUserSeekTarget = null;
       SettingsService.instance
           .clearVideoPlaybackPosition(_videos[_current].path);
     }
@@ -1106,10 +1347,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   }
 
   void _saveCurrentPosition(String path) {
-    if (_videos.isEmpty) return;
+    if (_videos.isEmpty || _hasPreparedForExit) return;
+    if (!_hasStartedPlaying && !_userHasScrubbed) return;
     final statePos = _controller?.value.position ?? Duration.zero;
-    final pos = statePos > Duration.zero ? statePos : _lastPlaybackPosition;
-    if (pos <= const Duration(seconds: 2)) return;
+    final pos = _pendingUserSeekTarget ??
+        (statePos >= _lastPlaybackPosition ? statePos : _lastPlaybackPosition);
+    if (pos <= Duration.zero) return;
     final activeDur = _controller?.value.duration ?? Duration.zero;
     final dur = activeDur > Duration.zero
         ? activeDur
@@ -1121,12 +1364,18 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   void _changeToVideo(int index) {
     if (index == _current) return;
-    if (_videos.isNotEmpty && _current < _videos.length) {
+    if (_videos.isNotEmpty &&
+        _current < _videos.length &&
+        _videos[_current].isVideo) {
       _saveCurrentPosition(_activeLoadedVideoPath ?? _videos[_current].path);
     }
     _activeLoadedVideoPath = null;
     _lastPlaybackPosition = Duration.zero;
     _lastPositionSaveTime = null;
+    _pendingManualPlay = false;
+    _userHasScrubbed = false;
+    _pendingResumePosition = null;
+    _pendingUserSeekTarget = null;
     _videoLoadDebounce?.cancel();
     final thisGen = ++_videoLoadGeneration;
     _errorRetryCount = 0;
@@ -1149,17 +1398,17 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     });
 
     if (prevController != null) {
-      try {
-        prevController.removeListener(_onControllerUpdate);
-        prevController.pause().catchError((_) {});
-        prevController.dispose().catchError((_) {});
-      } catch (_) {}
+      prevController.removeListener(_onControllerUpdate);
+      _enqueueControllerDisposal(prevController);
     }
 
     if (nextItem.isVideo) {
       // Debounce native player initialization for fluid swipes.
       _videoLoadDebounce = Timer(const Duration(milliseconds: 250), () async {
-        if (!mounted || _current != index || thisGen != _videoLoadGeneration) {
+        if (!mounted ||
+            _hasPreparedForExit ||
+            _current != index ||
+            thisGen != _videoLoadGeneration) {
           return;
         }
         try {
@@ -1172,6 +1421,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
             generation: thisGen,
           );
           if (!mounted ||
+              _hasPreparedForExit ||
               _current != index ||
               thisGen != _videoLoadGeneration) {
             return;
@@ -1207,12 +1457,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_hasPreparedForExit) return;
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
       _stopSlideshow();
-      if (_videos.isNotEmpty && _current < _videos.length) {
+      if (_videos.isNotEmpty &&
+          _current < _videos.length &&
+          _videos[_current].isVideo) {
         _saveCurrentPosition(_activeLoadedVideoPath ?? _videos[_current].path);
       }
       if (_isPlaying) {
@@ -1237,6 +1490,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
 
   @override
   void dispose() {
+    _prepareForExit(fromDispose: true);
     _stopSlideshow();
     final notifier = _activeMediaNotifier;
     if (notifier != null) {
@@ -1248,9 +1502,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
     _routeAnimation?.removeStatusListener(_onRouteAnimationStatus);
     _videoLoadDebounce?.cancel();
-    if (_videos.isNotEmpty && _current < _videos.length) {
-      _saveCurrentPosition(_activeLoadedVideoPath ?? _videos[_current].path);
-    }
     _activeLoadedVideoPath = null;
     ScreenKeeperService.setKeepScreenOn(false);
     if (_didSetMaxBrightness) {
@@ -1267,11 +1518,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _feedbackToastNotifier.dispose();
     _transformationController.dispose();
     _isPlayingNotifier.dispose();
-    try {
-      _controller?.removeListener(_onControllerUpdate);
-      _controller?.dispose();
-    } catch (_) {}
-    _controller = null;
     _pageController.dispose();
     _exitFullscreen();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -2150,14 +2396,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 _pageController.page!.round().clamp(0, _videos.length - 1);
             _current = snapped;
           }
-          _isDismissing.value = true;
-          _activeMediaNotifier?.state = _videos[_current].id;
-          if (_videos.isNotEmpty &&
-              _current < _videos.length &&
-              _videos[_current].isVideo) {
-            _saveCurrentPosition(
-                _activeLoadedVideoPath ?? _videos[_current].path);
-          }
+          _prepareForExit();
         } else if (_isFullscreen) {
           _exitFullscreen();
         }
@@ -2334,16 +2573,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                       _current = targetIndex;
                       _pageController.jumpToPage(_current);
                     }
-                    _isDismissing.value = true;
-                    _videoSurfaceVisible.value = false;
-                    if (_videos.isNotEmpty &&
-                        _current < _videos.length &&
-                        _videos[_current].isVideo) {
-                      _saveCurrentPosition(
-                          _activeLoadedVideoPath ?? _videos[_current].path);
-                    }
-                    _controller?.pause();
-                    _activeMediaNotifier?.state = _videos[_current].id;
+                    _prepareForExit();
                     Navigator.of(context).pop();
                   } else if (d != Offset.zero) {
                     _springBack(vy);
@@ -2705,28 +2935,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                       return const SizedBox.shrink();
                                     }
                                     return BouncyTap(
-                                      onTap: () {
-                                        if (_videoLoadDebounce?.isActive ==
-                                            true) {
-                                          _videoLoadDebounce?.cancel();
-                                          final curPath =
-                                              _videos[_current].path;
-                                          final thisGen =
-                                              ++_videoLoadGeneration;
-                                          _openAndRestoreVideo(curPath,
-                                              autoPlay: true,
-                                              generation: thisGen);
-                                        } else {
-                                          _controller?.play();
-                                          if (!_videoSurfaceVisible.value) {
-                                            _videoSurfaceVisible.value = true;
-                                          }
-                                        }
-                                        if (!_hasStartedPlaying) {
-                                          setState(
-                                              () => _hasStartedPlaying = true);
-                                        }
-                                      },
+                                      onTap: _requestPlay,
                                       child: Container(
                                         width: 72,
                                         height: 72,
@@ -2785,18 +2994,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     }
                                     _pageController.jumpToPage(_current);
                                   }
-                                  _isDismissing.value = true;
-                                  _videoSurfaceVisible.value = false;
-                                  if (_videos.isNotEmpty &&
-                                      _current < _videos.length &&
-                                      _videos[_current].isVideo) {
-                                    _saveCurrentPosition(
-                                        _activeLoadedVideoPath ??
-                                            _videos[_current].path);
-                                  }
-                                  _controller?.pause();
-                                  _activeMediaNotifier?.state =
-                                      _videos[_current].id;
+                                  _prepareForExit();
                                   Navigator.of(context).pop();
                                 }
                               },
@@ -2828,6 +3026,15 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                               onToggleFullscreen: _toggleFullscreen,
                               onToggleLoop: _toggleLoop,
                               onSelectSpeed: _showPlaybackSpeedSheet,
+                              onTogglePlayPause: _togglePlayPause,
+                              initialPosition: _lastPlaybackPosition,
+                              onUserSeek: (target) {
+                                _userHasScrubbed = true;
+                                _pendingResumePosition = null;
+                                _pendingUserSeekTarget = target;
+                                _lastPlaybackPosition = target;
+                                if (mounted) setState(() {});
+                              },
                               onDelete: _deleteItem,
                               onRename: _renameCurrentItem,
                               onToggleOrientation: _toggleOrientation,
@@ -3450,6 +3657,9 @@ class _BottomBar extends StatefulWidget {
     required this.onSelectSpeed,
     required this.onDelete,
     required this.onToggleOrientation,
+    this.onTogglePlayPause,
+    this.initialPosition = Duration.zero,
+    this.onUserSeek,
     this.cropToFit = false,
     this.onToggleCropToFit,
     this.isTrash = false,
@@ -3475,6 +3685,9 @@ class _BottomBar extends StatefulWidget {
   final VoidCallback onSelectSpeed;
   final VoidCallback onDelete;
   final VoidCallback onToggleOrientation;
+  final VoidCallback? onTogglePlayPause;
+  final Duration initialPosition;
+  final ValueChanged<Duration>? onUserSeek;
   final bool isTrash;
   final VoidCallback? onRestore;
   final VoidCallback? onRename;
@@ -3740,6 +3953,7 @@ class _BottomBarState extends State<_BottomBar> {
     final target = Duration(
       milliseconds: (v * dur.inMilliseconds).round(),
     );
+    widget.onUserSeek?.call(target);
     widget.controller?.seekTo(target);
     if (_wasPlayingBeforeDrag) {
       widget.controller?.play();
@@ -4085,7 +4299,12 @@ class _BottomBarState extends State<_BottomBar> {
           listenable: widget.controller ?? ChangeNotifier(),
           builder: (_, __) {
             final val = widget.controller?.value;
-            final pos = val?.position ?? Duration.zero;
+            final rawPos = val?.position ?? Duration.zero;
+            final pos = (rawPos == Duration.zero &&
+                    !(val?.isPlaying ?? false) &&
+                    widget.initialPosition > Duration.zero)
+                ? widget.initialPosition
+                : rawPos;
             final dur = (val != null && val.duration > Duration.zero)
                 ? val.duration
                 : (widget.item.duration ?? Duration.zero);
@@ -4139,17 +4358,7 @@ class _BottomBarState extends State<_BottomBar> {
                 builder: (_, __) {
                   final playing = widget.controller?.value.isPlaying ?? false;
                   return BouncyTap(
-                    onTap: () {
-                      if (playing) {
-                        widget.controller?.pause();
-                      } else {
-                        widget.controller?.play();
-                        if (widget.videoSurfaceVisible != null &&
-                            !widget.videoSurfaceVisible!.value) {
-                          widget.videoSurfaceVisible!.value = true;
-                        }
-                      }
-                    },
+                    onTap: () => widget.onTogglePlayPause?.call(),
                     child: Padding(
                       padding: const EdgeInsets.all(6),
                       child: Icon(
@@ -4492,7 +4701,12 @@ class _BottomBarState extends State<_BottomBar> {
           listenable: widget.controller ?? ChangeNotifier(),
           builder: (_, __) {
             final val = widget.controller?.value;
-            final pos = val?.position ?? Duration.zero;
+            final rawPos = val?.position ?? Duration.zero;
+            final pos = (rawPos == Duration.zero &&
+                    !(val?.isPlaying ?? false) &&
+                    widget.initialPosition > Duration.zero)
+                ? widget.initialPosition
+                : rawPos;
             final dur = (val != null && val.duration > Duration.zero)
                 ? val.duration
                 : (widget.item.duration ?? Duration.zero);
@@ -4674,17 +4888,7 @@ class _BottomBarState extends State<_BottomBar> {
                           size: 24,
                         ),
                         label: playing ? context.tr.pause : context.tr.play,
-                        onTap: () {
-                          if (playing) {
-                            widget.controller?.pause();
-                          } else {
-                            widget.controller?.play();
-                            if (widget.videoSurfaceVisible != null &&
-                                !widget.videoSurfaceVisible!.value) {
-                              widget.videoSurfaceVisible!.value = true;
-                            }
-                          }
-                        },
+                        onTap: () => widget.onTogglePlayPause?.call(),
                       );
                     },
                   ),

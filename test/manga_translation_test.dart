@@ -765,6 +765,41 @@ void main() {
       final picture = recorder.endRecording();
       picture.dispose();
     });
+
+    test(
+        'Roomy 180x140 speech bubble scales text above 13pt without artificial low cap',
+        () {
+      const roomyRect = Rect.fromLTWH(0, 0, 180, 140);
+      const dialogue =
+          'Wait a minute! Did you really think we could get out of here without a fight?';
+
+      final fitted = MangaTranslationPainter.debugFitSpeechBubbleText(
+        roomyRect,
+        dialogue,
+      );
+      final fittedFontSize = (fitted.text! as TextSpan).style!.fontSize!;
+
+      expect(fittedFontSize, greaterThanOrEqualTo(13.0));
+      expect(fitted.width, lessThanOrEqualTo(180.0));
+      expect(fitted.height, lessThanOrEqualTo(140.0));
+    });
+
+    test(
+        'Wide 160x70 speech bubble reflows newline-fragmented text to fit cleanly above 12pt',
+        () {
+      const wideRect = Rect.fromLTWH(0, 0, 160, 70);
+      const fragmentedDialogue = "Wait\na\nminute!\nDon't\ngo\nin\nthere!";
+
+      final fitted = MangaTranslationPainter.debugFitSpeechBubbleText(
+        wideRect,
+        fragmentedDialogue,
+      );
+      final fittedFontSize = (fitted.text! as TextSpan).style!.fontSize!;
+
+      expect(fittedFontSize, greaterThanOrEqualTo(12.0));
+      expect(fitted.width, lessThanOrEqualTo(160.0));
+      expect(fitted.height, lessThanOrEqualTo(70.0));
+    });
   });
 
   group('ImageViewerScreen Manga Translation Button & Sheet Integration', () {
