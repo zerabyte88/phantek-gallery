@@ -22,6 +22,7 @@ import '../../../core/services/share_service.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/bouncy_tap.dart';
+import '../../../core/widgets/styled_popup_menu.dart';
 import 'widgets/media_info_sheet.dart';
 import 'widgets/rename_dialog.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
@@ -299,6 +300,36 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
     if (!force && _psdLoadError[path] == true) return;
 
+    if (!force) {
+      final cachedLayers = PsdService.instance.getCachedLayersSync(path);
+      if (cachedLayers != null && !_psdLayersCache.containsKey(path)) {
+        _psdLayersCache[path] = cachedLayers;
+      }
+
+      final cachedRender =
+          PsdService.instance.getCachedRenderedPreviewSync(path);
+      if (cachedRender != null && cachedRender.isNotEmpty) {
+        _psdRenderedBytes[path] = cachedRender;
+        _psdRenderComplete[path] = true;
+        _psdRendering[path] = false;
+        _psdLoadError[path] = false;
+        final savedHidden = PsdService.instance.getSavedLayerVisibility(path);
+        if (savedHidden != null) {
+          _psdHiddenLayers[path] = Set<int>.from(savedHidden);
+        }
+        if (!_psdLayersCache.containsKey(path)) {
+          PsdService.instance.getLayers(path).then((layers) {
+            if (mounted) {
+              setState(() {
+                _psdLayersCache[path] = layers;
+              });
+            }
+          });
+        }
+        return;
+      }
+    }
+
     _psdRendering[path] = true;
     _psdLoadError[path] = false;
     _psdLoadStatus[path] = 'Reading Photoshop document...';
@@ -498,6 +529,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
         );
       }
     }
+    if (!mounted) return;
     final settings = ref.read(settingsNotifierProvider);
     if (!settings.keepScreenOn) {
       ScreenKeeperService.setKeepScreenOn(false);
@@ -876,12 +908,13 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           _current < _videos.length &&
           _videos[_current].isVideo &&
           (_controller == null || !_controller!.value.isInitialized);
-      for (final offset in const [-1, 1]) {
+      for (final offset in const [0, -1, 1, -2, 2]) {
         final target = index + offset;
         if (target >= 0 && target < _videos.length) {
           final item = _videos[target];
           if (_precachedMediaPaths.contains(item.path)) continue;
           if (item.isVideo) {
+            if (offset.abs() != 1) continue;
             final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
             if (mem != null && mounted) {
               _precachedMediaPaths.add(item.path);
@@ -904,12 +937,20 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
             }
           } else {
             _precachedMediaPaths.add(item.path);
-            final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
-            if (mem != null && mounted) {
-              precacheImage(MemoryImage(mem), context);
-            }
-            if (item.path.isNotEmpty && mounted) {
-              precacheImage(screenDisplayImage(item.path), context);
+            if (PsdService.isPsd(item.path)) {
+              unawaited(PsdService.instance.prewarmPsdDocument(item.path));
+            } else {
+              final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
+              if (mem != null && mounted) {
+                precacheImage(MemoryImage(mem), context);
+              }
+              if (item.path.isNotEmpty && mounted) {
+                unawaited(ThumbnailService.instance.prewarmPhotoPreview(
+                  item.path,
+                  assetId: item.id,
+                ));
+                precacheImage(screenDisplayImage(item.path), context);
+              }
             }
           }
         }
@@ -1491,7 +1532,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   @override
   void dispose() {
     _prepareForExit(fromDispose: true);
-    _stopSlideshow();
     final notifier = _activeMediaNotifier;
     if (notifier != null) {
       Future.microtask(() {
@@ -1519,7 +1559,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _transformationController.dispose();
     _isPlayingNotifier.dispose();
     _pageController.dispose();
-    _exitFullscreen();
+    _exitFullscreen(fromDispose: true);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
@@ -1604,7 +1644,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     setState(() => _isFullscreen = true);
   }
 
-  void _exitFullscreen() {
+  void _exitFullscreen({bool fromDispose = false}) {
     if (_isVideoZoomed || !_transformationController.value.isIdentity()) {
       _zoomAnimController?.stop();
       _transformationController.value = Matrix4.identity();
@@ -1627,7 +1667,11 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     } else {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     }
-    setState(() => _isFullscreen = false);
+    if (!fromDispose && mounted) {
+      setState(() => _isFullscreen = false);
+    } else {
+      _isFullscreen = false;
+    }
   }
 
   void _toggleFullscreen() {
@@ -2773,6 +2817,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                                       flightDirection:
                                                           flightDirection,
                                                       item: _videos[index],
+                                                      psdFallbackBytes:
+                                                          _psdRenderedBytes[
+                                                                  _videos[index]
+                                                                      .path] ??
+                                                              PsdService.instance
+                                                                  .getCachedRenderedPreviewSync(
+                                                                      _videos[index]
+                                                                          .path),
                                                       fallbackChild:
                                                           flightDirection ==
                                                                   HeroFlightDirection
@@ -4157,14 +4209,10 @@ class _BottomBarState extends State<_BottomBar> {
                         label: context.tr.delete,
                         onTap: widget.onDelete,
                       ),
-                      PopupMenuButton<String>(
+                      StyledMoreMenuButton<String>(
                         tooltip: context.tr.moreOptions,
-                        color: const Color(0xFF222222),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        constraints:
-                            const BoxConstraints(minWidth: 130, maxWidth: 195),
+                        placement: StyledMenuPlacement.bottomBar,
+                        forceDark: true,
                         onSelected: (value) {
                           if (value == 'slideshow') {
                             if (widget.isSlideshowPlaying) {
@@ -4178,78 +4226,26 @@ class _BottomBarState extends State<_BottomBar> {
                             ShareService.setAsWallpaper(widget.item.path);
                           }
                         },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
+                        actions: [
+                          StyledMenuAction(
                             value: 'slideshow',
-                            height: 40,
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  widget.isSlideshowPlaying
-                                      ? Icons.pause_circle_outline_rounded
-                                      : Icons.slideshow_rounded,
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    widget.isSlideshowPlaying
-                                        ? context.tr.pause
-                                        : context.tr.slideshow,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 13.5),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
+                            icon: widget.isSlideshowPlaying
+                                ? Icons.pause_circle_outline_rounded
+                                : Icons.slideshow_rounded,
+                            label: widget.isSlideshowPlaying
+                                ? context.tr.pause
+                                : context.tr.slideshow,
                           ),
                           if (widget.onRename != null)
-                            PopupMenuItem(
+                            StyledMenuAction(
                               value: 'rename',
-                              height: 40,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 14),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.edit_outlined,
-                                      size: 18, color: Colors.white),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      context.tr.rename,
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 13.5),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              icon: Icons.edit_outlined,
+                              label: context.tr.rename,
                             ),
-                          PopupMenuItem(
+                          StyledMenuAction(
                             value: 'wallpaper',
-                            height: 40,
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.wallpaper_outlined,
-                                    size: 18, color: Colors.white),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    context.tr.setAsWallpaper,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 13.5),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
+                            icon: Icons.wallpaper_outlined,
+                            label: context.tr.setAsWallpaper,
                           ),
                         ],
                         child: _ViewerActionButton(
@@ -4451,238 +4447,94 @@ class _BottomBarState extends State<_BottomBar> {
                   const SizedBox(width: 4),
                   // More (⋮)
                   Consumer(
-                    builder: (context, ref, _) => PopupMenuButton<String>(
-                      tooltip: context.tr.moreOptions,
-                      color: const Color(0xFF222222),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      constraints:
-                          const BoxConstraints(minWidth: 130, maxWidth: 195),
-                      offset: const Offset(0, 36),
-                      onSelected: (value) {
-                        if (value == 'restore') {
-                          widget.onRestore?.call();
-                        } else if (value == 'delete') {
-                          widget.onDelete();
-                        } else if (value == 'slideshow') {
-                          if (widget.isSlideshowPlaying) {
-                            widget.onStopSlideshow?.call();
-                          } else {
-                            widget.onStartSlideshow?.call();
-                          }
-                        } else if (value == 'favorite') {
-                          HapticFeedback.lightImpact();
-                          final currentFavs = Set<String>.from(
-                            ref.read(settingsNotifierProvider).favoriteIds,
+                    builder: (context, ref, _) {
+                      final isFav = !widget.isTrash &&
+                          ref.watch(
+                            settingsNotifierProvider.select(
+                              (s) => s.favoriteIds.contains(widget.item.id),
+                            ),
                           );
-                          if (currentFavs.contains(widget.item.id)) {
-                            currentFavs.remove(widget.item.id);
-                          } else {
-                            currentFavs.add(widget.item.id);
+                      return StyledMoreMenuButton<String>(
+                        tooltip: context.tr.moreOptions,
+                        placement: StyledMenuPlacement.bottomBar,
+                        forceDark: true,
+                        onSelected: (value) {
+                          if (value == 'restore') {
+                            widget.onRestore?.call();
+                          } else if (value == 'delete') {
+                            widget.onDelete();
+                          } else if (value == 'favorite') {
+                            HapticFeedback.lightImpact();
+                            final currentFavs = Set<String>.from(
+                              ref.read(settingsNotifierProvider).favoriteIds,
+                            );
+                            if (currentFavs.contains(widget.item.id)) {
+                              currentFavs.remove(widget.item.id);
+                            } else {
+                              currentFavs.add(widget.item.id);
+                            }
+                            ref.read(settingsNotifierProvider.notifier).update(
+                                  (s) => s.copyWith(
+                                      favoriteIds: currentFavs.toList()),
+                                );
+                          } else if (value == 'share') {
+                            ShareService.shareSingle(widget.item.path,
+                                isVideo: true);
+                          } else if (value == 'rename') {
+                            widget.onRename?.call();
                           }
-                          ref.read(settingsNotifierProvider.notifier).update(
-                                (s) => s.copyWith(
-                                    favoriteIds: currentFavs.toList()),
-                              );
-                        } else if (value == 'share') {
-                          ShareService.shareSingle(widget.item.path,
-                              isVideo: true);
-                        } else if (value == 'rename') {
-                          widget.onRename?.call();
-                        }
-                      },
-                      itemBuilder: (context) {
-                        if (widget.isTrash) {
-                          return [
-                            PopupMenuItem(
-                              value: 'restore',
-                              height: 40,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 14),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.restore,
-                                      size: 18, color: Colors.white),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      context.tr.restore,
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 13.5),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'delete',
-                              height: 40,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 14),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.delete_forever,
-                                      size: 18, color: Colors.redAccent),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      context.tr.delete,
-                                      style: const TextStyle(
-                                          color: Colors.redAccent,
-                                          fontSize: 13.5),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ];
-                        }
-                        final isFav = ref.watch(
-                          settingsNotifierProvider.select(
-                            (s) => s.favoriteIds.contains(widget.item.id),
-                          ),
-                        );
-                        return [
-                          PopupMenuItem(
-                            value: 'slideshow',
-                            height: 40,
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  widget.isSlideshowPlaying
-                                      ? Icons.pause_circle_outline_rounded
-                                      : Icons.slideshow_rounded,
-                                  size: 18,
-                                  color: Colors.white,
+                        },
+                        actions: widget.isTrash
+                            ? [
+                                StyledMenuAction(
+                                  value: 'restore',
+                                  icon: Icons.restore,
+                                  label: context.tr.restore,
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    widget.isSlideshowPlaying
-                                        ? context.tr.pause
-                                        : context.tr.slideshow,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 13.5),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                StyledMenuAction(
+                                  value: 'delete',
+                                  icon: Icons.delete_forever,
+                                  label: context.tr.delete,
+                                  isDestructive: true,
                                 ),
-                              ],
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'favorite',
-                            height: 40,
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  isFav
+                              ]
+                            : [
+                                StyledMenuAction(
+                                  value: 'favorite',
+                                  icon: isFav
                                       ? Icons.favorite
                                       : Icons.favorite_border,
-                                  size: 18,
-                                  color:
-                                      isFav ? Colors.redAccent : Colors.white,
+                                  label: context.tr.favorite,
+                                  color: isFav ? Colors.redAccent : null,
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    context.tr.favorite,
-                                    style: TextStyle(
-                                      color: isFav
-                                          ? Colors.redAccent
-                                          : Colors.white,
-                                      fontSize: 13.5,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                StyledMenuAction(
+                                  value: 'share',
+                                  icon: Icons.share_outlined,
+                                  label: context.tr.share,
                                 ),
-                              ],
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'share',
-                            height: 40,
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.share_outlined,
-                                    size: 18, color: Colors.white),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    context.tr.share,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 13.5),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                if (widget.onRename != null)
+                                  StyledMenuAction(
+                                    value: 'rename',
+                                    icon: Icons.edit_outlined,
+                                    label: context.tr.rename,
                                   ),
+                                StyledMenuAction(
+                                  value: 'delete',
+                                  icon: Icons.delete_outline,
+                                  label: context.tr.delete,
+                                  isDestructive: true,
                                 ),
                               ],
-                            ),
+                        child: const Padding(
+                          padding: EdgeInsets.all(6),
+                          child: Icon(
+                            Icons.more_vert_rounded,
+                            color: Colors.white,
+                            size: 22,
                           ),
-                          if (widget.onRename != null)
-                            PopupMenuItem(
-                              value: 'rename',
-                              height: 40,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 14),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.edit_outlined,
-                                      size: 18, color: Colors.white),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      context.tr.rename,
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 13.5),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            height: 40,
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.delete_outline,
-                                    size: 18, color: Colors.white),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    context.tr.delete,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 13.5),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ];
-                      },
-                      child: const Padding(
-                        padding: EdgeInsets.all(6),
-                        child: Icon(
-                          Icons.more_vert_rounded,
-                          color: Colors.white,
-                          size: 22,
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -4900,14 +4752,10 @@ class _BottomBarState extends State<_BottomBar> {
                     onTap: widget.onDelete,
                   ),
                   // 5. More (Popup menu)
-                  PopupMenuButton<String>(
+                  StyledMoreMenuButton<String>(
                     tooltip: context.tr.moreOptions,
-                    color: const Color(0xFF222222),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    constraints:
-                        const BoxConstraints(minWidth: 130, maxWidth: 200),
+                    placement: StyledMenuPlacement.bottomBar,
+                    forceDark: true,
                     onSelected: (value) {
                       if (value == 'slideshow') {
                         if (widget.isSlideshowPlaying) {
@@ -4923,111 +4771,35 @@ class _BottomBarState extends State<_BottomBar> {
                         widget.onRename?.call();
                       }
                     },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
+                    actions: [
+                      StyledMenuAction(
                         value: 'slideshow',
-                        height: 40,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Row(
-                          children: [
-                            Icon(
-                              widget.isSlideshowPlaying
-                                  ? Icons.pause_circle_outline_rounded
-                                  : Icons.slideshow_rounded,
-                              size: 18,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                widget.isSlideshowPlaying
-                                    ? context.tr.pause
-                                    : context.tr.slideshow,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 13.5),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
+                        icon: widget.isSlideshowPlaying
+                            ? Icons.pause_circle_outline_rounded
+                            : Icons.slideshow_rounded,
+                        label: widget.isSlideshowPlaying
+                            ? context.tr.pause
+                            : context.tr.slideshow,
                       ),
-                      PopupMenuItem(
+                      StyledMenuAction(
                         value: 'speed',
-                        height: 40,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.speed,
-                                size: 18, color: Colors.white),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 13.5),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
+                        icon: Icons.speed,
+                        label:
+                            '${context.tr.speed} (${widget.playbackSpeed == 1.0 ? context.tr.normal : '${widget.playbackSpeed}x'})',
                       ),
-                      PopupMenuItem(
+                      StyledMenuAction(
                         value: 'loop',
-                        height: 40,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Row(
-                          children: [
-                            Icon(
-                              widget.isLooping
-                                  ? Icons.repeat_one
-                                  : Icons.repeat,
-                              size: 18,
-                              color: widget.isLooping
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Colors.white,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                widget.isLooping
-                                    ? context.tr.loopOn
-                                    : context.tr.loopOff,
-                                style: TextStyle(
-                                  color: widget.isLooping
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Colors.white,
-                                  fontSize: 13.5,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
+                        icon: widget.isLooping ? Icons.repeat_one : Icons.repeat,
+                        label: widget.isLooping
+                            ? context.tr.loopOn
+                            : context.tr.loopOff,
+                        isActive: widget.isLooping,
                       ),
                       if (widget.onRename != null)
-                        PopupMenuItem(
+                        StyledMenuAction(
                           value: 'rename',
-                          height: 40,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.edit_outlined,
-                                  size: 18, color: Colors.white),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  context.tr.rename,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 13.5),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
+                          icon: Icons.edit_outlined,
+                          label: context.tr.rename,
                         ),
                     ],
                     child: _ViewerActionButton(

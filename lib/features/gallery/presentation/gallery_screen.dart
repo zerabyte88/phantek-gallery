@@ -22,6 +22,7 @@ import '../../../app/router.dart';
 import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/animated_flame_title.dart';
 import '../../../core/widgets/bouncy_tap.dart';
+import '../../../core/widgets/styled_popup_menu.dart';
 import '../../../core/widgets/theme_header_background.dart';
 import 'widgets/album_grid_item.dart';
 import 'widgets/filter_sort_bar.dart';
@@ -966,15 +967,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             onPressed: _openSearch,
           ),
         ),
-        PopupMenuButton<String>(
+        StyledMoreMenuButton<String>(
           splashRadius: 20,
           tooltip: context.tr.moreOptions,
-          color: const Color(0xFF222222),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          constraints: const BoxConstraints(minWidth: 130, maxWidth: 195),
-          offset: const Offset(0, 48),
+          placement: StyledMenuPlacement.topBar,
+          icon: const Icon(Icons.more_vert),
           onSelected: (value) {
             if (value == 'slideshow') {
               final items = _currentTabItems;
@@ -1003,114 +1000,33 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               Navigator.of(context).openSettings();
             }
           },
-          itemBuilder: (context) => [
-            PopupMenuItem(
+          actions: [
+            StyledMenuAction(
               value: 'slideshow',
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                children: [
-                  const Icon(Icons.slideshow_rounded,
-                      size: 18, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      context.tr.slideshow,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 13.5),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+              icon: Icons.slideshow_rounded,
+              label: context.tr.slideshow,
             ),
-            PopupMenuItem(
+            StyledMenuAction(
               value: 'manga',
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                children: [
-                  const Icon(Icons.auto_stories_rounded,
-                      size: 18, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      context.tr.readAsManga,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 13.5),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+              icon: Icons.auto_stories_rounded,
+              label: context.tr.readAsManga,
             ),
-            PopupMenuItem(
+            StyledMenuAction(
               value: 'select',
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                children: [
-                  const Icon(Icons.checklist_rounded,
-                      size: 18, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      context.tr.select,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 13.5),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+              icon: Icons.checklist_rounded,
+              label: context.tr.select,
             ),
-            PopupMenuItem(
+            StyledMenuAction(
               value: 'trash',
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                children: [
-                  const Icon(Icons.delete_sweep_outlined,
-                      size: 18, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      context.tr.trashBin,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 13.5),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+              icon: Icons.delete_sweep_outlined,
+              label: context.tr.trashBin,
             ),
-            PopupMenuItem(
+            StyledMenuAction(
               value: 'settings',
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                children: [
-                  const Icon(Icons.settings_outlined,
-                      size: 18, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      context.tr.settings,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 13.5),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+              icon: Icons.settings_outlined,
+              label: context.tr.settings,
             ),
           ],
-          icon: const Icon(Icons.more_vert),
         ),
       ],
     );

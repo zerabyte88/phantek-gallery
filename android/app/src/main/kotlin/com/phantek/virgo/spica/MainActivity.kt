@@ -208,7 +208,7 @@ class MainActivity : FlutterFragmentActivity() {
         val canonicalPath = try { file?.canonicalPath ?: cleanPath } catch (_: Throwable) { cleanPath }
 
         // 1. Android Q+ (API 29+) MediaStore contentResolver.loadThumbnail (Fastest system cache)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (targetSize <= 512 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 var id: Long? = assetId?.toLongOrNull()
                 if (id == null && file != null) {
@@ -269,7 +269,11 @@ class MainActivity : FlutterFragmentActivity() {
 
                     val decodeOptions = android.graphics.BitmapFactory.Options().apply {
                         inSampleSize = sampleSize
-                        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+                        inPreferredConfig = if (targetSize > 512) {
+                            android.graphics.Bitmap.Config.ARGB_8888
+                        } else {
+                            android.graphics.Bitmap.Config.RGB_565
+                        }
                     }
                     val decoded = android.graphics.BitmapFactory.decodeFile(cleanPath, decodeOptions)
                     if (decoded != null) {
@@ -314,7 +318,8 @@ class MainActivity : FlutterFragmentActivity() {
         if (bitmap == null) return null
 
         val stream = java.io.ByteArrayOutputStream()
-        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, stream)
+        val jpegQuality = if (targetSize > 512) 90 else 85
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, jpegQuality, stream)
         val bytes = stream.toByteArray()
         if (!bitmap.isRecycled) {
             bitmap.recycle()

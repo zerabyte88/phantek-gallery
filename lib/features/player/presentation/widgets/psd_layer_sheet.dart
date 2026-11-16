@@ -58,7 +58,6 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
   late Set<int> _hidden;
   late Map<int, Uint8List> _thumbnails;
   final Set<int> _collapsedFolders = <int>{};
-  bool _isApplying = false;
   Timer? _debounceTimer;
 
   @override
@@ -103,16 +102,9 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
 
   void _scheduleUpdate() {
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 200), () async {
+    _debounceTimer = Timer(const Duration(milliseconds: 200), () {
       if (!mounted) return;
-      setState(() => _isApplying = true);
-      try {
-        await widget.onVisibilityChanged(_hidden);
-      } finally {
-        if (mounted) {
-          setState(() => _isApplying = false);
-        }
-      }
+      widget.onVisibilityChanged(_hidden);
     });
   }
 
@@ -265,86 +257,78 @@ class _PsdLayerSheetState extends State<PsdLayerSheet> {
 
             // Header: Title & Actions
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Row(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.layers_outlined,
-                    size: 20,
-                    color: colorScheme.onSurface,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'Photoshop layers (${widget.layers.length})',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: colorScheme.onSurface,
-                              fontSize: 15,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.layers_outlined,
+                        size: 20,
+                        color: colorScheme.onSurface,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Photoshop layers (${widget.layers.length})',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.onSurface,
+                            fontSize: 15,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        if (_isApplying) ...[
-                          const SizedBox(width: 8),
-                          const SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF31A8FF)),
+                      ),
+                    ],
+                  ),
+                  if (widget.layers.length > 1 || widget.filePath != null) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        if (widget.layers.length > 1) ...[
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              foregroundColor: colorScheme.primary,
                             ),
+                            onPressed: _showAll,
+                            child: const Text('Show all'),
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Applying...',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontSize: 11,
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              foregroundColor: colorScheme.onSurfaceVariant,
                             ),
+                            onPressed: _hideAll,
+                            child: const Text('Hide all'),
                           ),
                         ],
+                        if (widget.filePath != null)
+                          FilledButton.tonalIcon(
+                            style: FilledButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 0),
+                            ),
+                            icon: const Icon(Icons.save_rounded, size: 16),
+                            label: Text(context.tr.save),
+                            onPressed: _saveLayerState,
+                          ),
                       ],
-                    ),
-                  ),
-                  if (widget.layers.length > 1) ...[
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        foregroundColor: colorScheme.primary,
-                      ),
-                      onPressed: _showAll,
-                      child: const Text('Show all'),
-                    ),
-                    const SizedBox(width: 4),
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        foregroundColor: colorScheme.onSurfaceVariant,
-                      ),
-                      onPressed: _hideAll,
-                      child: const Text('Hide all'),
-                    ),
-                  ],
-                  if (widget.filePath != null) ...[
-                    const SizedBox(width: 6),
-                    FilledButton.tonalIcon(
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 0),
-                      ),
-                      icon: const Icon(Icons.save_rounded, size: 16),
-                      label: Text(context.tr.save),
-                      onPressed: _saveLayerState,
                     ),
                   ],
                 ],

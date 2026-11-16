@@ -20,6 +20,7 @@ import '../../../core/services/thumbnail_service.dart';
 import '../../../core/services/psd_service.dart';
 import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/bouncy_tap.dart';
+import '../../../core/widgets/styled_popup_menu.dart';
 import 'widgets/media_info_sheet.dart';
 import 'widgets/psd_layer_sheet.dart';
 import 'widgets/rename_dialog.dart';
@@ -41,13 +42,23 @@ ImageProvider displayImage(String path, {int maxDimension = 4096}) =>
     );
 
 /// Screen-fit provider (~1440px) for smooth page swiping.
-ImageProvider screenDisplayImage(String path, [int maxDim = 1440]) =>
-    ResizeImage(
-      FileImage(File(path)),
-      width: maxDim,
-      height: maxDim,
-      policy: ResizeImagePolicy.fit,
-    );
+ImageProvider screenDisplayImage(String path, [int maxDim = 1440]) {
+  final mem =
+      ThumbnailService.instance.getMemoryPreview(path, maxDimension: maxDim);
+  if (mem != null) return MemoryImage(mem);
+  final cachedFile =
+      ThumbnailService.instance.getCachedPreviewFile(path, maxDimension: maxDim);
+  if (cachedFile != null) return FileImage(cachedFile);
+  unawaited(
+    ThumbnailService.instance.prewarmPhotoPreview(path, maxDimension: maxDim),
+  );
+  return ResizeImage(
+    FileImage(File(path)),
+    width: maxDim,
+    height: maxDim,
+    policy: ResizeImagePolicy.fit,
+  );
+}
 
 /// Cached thumbnail, shown instantly while the full image decodes.
 Widget _thumb(String id, [String? path, Uint8List? psdFallbackBytes]) {
@@ -221,6 +232,36 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
       return;
     }
     if (!force && _psdLoadError[path] == true) return;
+
+    if (!force) {
+      final cachedLayers = PsdService.instance.getCachedLayersSync(path);
+      if (cachedLayers != null && !_psdLayersCache.containsKey(path)) {
+        _psdLayersCache[path] = cachedLayers;
+      }
+
+      final cachedRender =
+          PsdService.instance.getCachedRenderedPreviewSync(path);
+      if (cachedRender != null && cachedRender.isNotEmpty) {
+        _psdRenderedBytes[path] = cachedRender;
+        _psdRenderComplete[path] = true;
+        _psdRendering[path] = false;
+        _psdLoadError[path] = false;
+        final savedHidden = PsdService.instance.getSavedLayerVisibility(path);
+        if (savedHidden != null) {
+          _psdHiddenLayers[path] = Set<int>.from(savedHidden);
+        }
+        if (!_psdLayersCache.containsKey(path)) {
+          PsdService.instance.getLayers(path).then((layers) {
+            if (mounted) {
+              setState(() {
+                _psdLayersCache[path] = layers;
+              });
+            }
+          });
+        }
+        return;
+      }
+    }
 
     _psdRendering[path] = true;
     _psdLoadError[path] = false;
@@ -472,18 +513,26 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // Pre-cache immediate and upcoming neighbor images (±2 window).
-      for (final offset in const [-1, 1, -2, 2]) {
+      // Pre-cache current and upcoming neighbor images (±2 window).
+      for (final offset in const [0, -1, 1, -2, 2]) {
         final target = index + offset;
         if (target >= 0 && target < widget.items.length) {
           final item = widget.items[target];
-          if (item.isVideo || PsdService.isPsd(item.path)) continue;
+          if (item.isVideo) continue;
           if (_precachedImagePaths.add(item.path)) {
-            final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
-            if (mem != null) {
-              precacheImage(MemoryImage(mem), context);
+            if (PsdService.isPsd(item.path)) {
+              unawaited(PsdService.instance.prewarmPsdDocument(item.path));
+            } else {
+              final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
+              if (mem != null) {
+                precacheImage(MemoryImage(mem), context);
+              }
+              unawaited(ThumbnailService.instance.prewarmPhotoPreview(
+                item.path,
+                assetId: item.id,
+              ));
+              precacheImage(screenDisplayImage(item.path), context);
             }
-            precacheImage(screenDisplayImage(item.path), context);
           }
         }
       }
@@ -2205,7 +2254,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                                         it.path,
                                                                     psdFallbackBytes:
                                                                         _psdRenderedBytes[
-                                                                            it.path],
+                                                                                it.path] ??
+                                                                            PsdService.instance.getCachedRenderedPreviewSync(it.path),
                                                                     fallbackChild: flightDirection ==
                                                                             HeroFlightDirection
                                                                                 .push
@@ -2701,14 +2751,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       label: context.tr.delete,
                                       onTap: _deleteCurrentItem,
                                     ),
-                                    PopupMenuButton<String>(
+                                    StyledMoreMenuButton<String>(
                                       tooltip: context.tr.moreOptions,
-                                      color: const Color(0xFF222222),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      constraints: const BoxConstraints(
-                                          minWidth: 130, maxWidth: 195),
+                                      placement: StyledMenuPlacement.bottomBar,
+                                      forceDark: true,
                                       onSelected: (value) async {
                                         if (value == 'slideshow') {
                                           if (_isSlideshowPlaying) {
@@ -2732,122 +2778,34 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                           _toggleMangaMode();
                                         }
                                       },
-                                      itemBuilder: (context) => [
+                                      actions: [
                                         if (!item.isVideo &&
                                             !PsdService.isPsd(item.path))
-                                          PopupMenuItem(
+                                          StyledMenuAction(
                                             value: 'manga',
-                                            height: 40,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 14),
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  Icons.auto_stories_rounded,
-                                                  size: 18,
-                                                  color: _isMangaMode
-                                                      ? Theme.of(context)
-                                                          .colorScheme
-                                                          .primary
-                                                      : Colors.white,
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Flexible(
-                                                  child: Text(
-                                                    context.tr.mangaMode,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 13.5),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                                            icon: Icons.auto_stories_rounded,
+                                            label: context.tr.mangaMode,
+                                            isActive: _isMangaMode,
                                           ),
-                                        PopupMenuItem(
+                                        StyledMenuAction(
                                           value: 'slideshow',
-                                          height: 40,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 14),
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                _isSlideshowPlaying
-                                                    ? Icons
-                                                        .pause_circle_outline_rounded
-                                                    : Icons.slideshow_rounded,
-                                                size: 18,
-                                                color: Colors.white,
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Flexible(
-                                                child: Text(
-                                                  _isSlideshowPlaying
-                                                      ? context.tr.pause
-                                                      : context.tr.slideshow,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 13.5),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                          icon: _isSlideshowPlaying
+                                              ? Icons
+                                                  .pause_circle_outline_rounded
+                                              : Icons.slideshow_rounded,
+                                          label: _isSlideshowPlaying
+                                              ? context.tr.pause
+                                              : context.tr.slideshow,
                                         ),
-                                        PopupMenuItem(
+                                        StyledMenuAction(
                                           value: 'rename',
-                                          height: 40,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 14),
-                                          child: Row(
-                                            children: [
-                                              const Icon(Icons.edit_outlined,
-                                                  size: 18,
-                                                  color: Colors.white),
-                                              const SizedBox(width: 10),
-                                              Flexible(
-                                                child: Text(
-                                                  context.tr.rename,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 13.5),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                          icon: Icons.edit_outlined,
+                                          label: context.tr.rename,
                                         ),
-                                        PopupMenuItem(
+                                        StyledMenuAction(
                                           value: 'wallpaper',
-                                          height: 40,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 14),
-                                          child: Row(
-                                            children: [
-                                              const Icon(
-                                                  Icons.wallpaper_outlined,
-                                                  size: 18,
-                                                  color: Colors.white),
-                                              const SizedBox(width: 10),
-                                              Flexible(
-                                                child: Text(
-                                                  context.tr.setAsWallpaper,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 13.5),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                          icon: Icons.wallpaper_outlined,
+                                          label: context.tr.setAsWallpaper,
                                         ),
                                       ],
                                       child: _ViewerActionButton(

@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -29,15 +31,19 @@ class ThumbnailService {
   static const int _thumbnailQuality = 90;
   static const int _maxMemoryEntries = 500;
   static const int _maxConcurrent = 6;
+  static const int defaultPreviewMaxDim = 1440;
+  static const int _maxPreviewMemoryEntries = 40;
   static const MethodChannel _nativeChannel =
       MethodChannel('com.phantek.gallery/thumbnail');
 
   final Map<String, Uint8List> _memoryCache = {};
   final Map<String, Uint8List> _highResVideoCache = {};
+  final Map<String, Uint8List> _previewMemoryCache = {};
   final Map<String, double> _thumbnailAspectRatioCache = {};
   final Map<String, Uint8List> _videoFrameCache = {};
   final Map<String, Completer<Uint8List?>> _inFlight = {};
   final Map<String, Completer<Uint8List?>> _highResInFlight = {};
+  final Map<String, Completer<Uint8List?>> _previewInFlight = {};
   final Map<String, AssetEntity> _entityCache = {};
   final Queue<_ThumbnailRequest> _queue = Queue();
   final Set<String> _diskCachedFileNames = {};
@@ -59,8 +65,11 @@ class ThumbnailService {
             in dir.list(recursive: false, followLinks: false)) {
           if (entity is File) {
             final name = p.basename(entity.path);
-            if ((name.startsWith('thumb_') || name.startsWith('hr_')) &&
-                name.endsWith('.bin')) {
+            if (name.endsWith('.bin') &&
+                (name.startsWith('thumb_') ||
+                    name.startsWith('hr_') ||
+                    name.startsWith('prev_') ||
+                    name.startsWith('psd_prev_'))) {
               _diskCachedFileNames.add(name);
             }
           }
@@ -106,6 +115,158 @@ class ThumbnailService {
   void registerEntities(Iterable<AssetEntity> entities) {
     for (final e in entities) {
       _entityCache[e.id] = e;
+    }
+  }
+
+  String? get cacheDirPathSync => _cacheDirPath ?? _cacheDir?.path;
+
+  Future<Directory> getCacheDirectory() => _getCacheDirectory();
+
+  void registerDiskCacheFileName(String fileName) =>
+      _diskCachedFileNames.add(fileName);
+
+  void unregisterDiskCacheFileNamesByPrefix(String prefix) =>
+      _diskCachedFileNames.removeWhere((name) => name.startsWith(prefix));
+
+  bool hasDiskCacheFileName(String fileName) =>
+      _diskCachedFileNames.contains(fileName);
+
+  String? _previewCacheFileName(
+    String filePath, {
+    int maxDimension = defaultPreviewMaxDim,
+  }) {
+    if (filePath.isEmpty) return null;
+    try {
+      final file = File(filePath);
+      if (!file.existsSync()) return null;
+      final stat = file.statSync();
+      final sig =
+          '${filePath}_${stat.size}_${stat.modified.millisecondsSinceEpoch}_$maxDimension';
+      final safe = p
+          .basenameWithoutExtension(filePath)
+          .replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+      return 'prev_${sig.hashCode.abs()}_${maxDimension}_$safe.bin';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Fast synchronous lookup in the in-memory screen-fit preview cache (0ms).
+  Uint8List? getMemoryPreview(
+    String filePath, {
+    int maxDimension = defaultPreviewMaxDim,
+  }) {
+    final fileName =
+        _previewCacheFileName(filePath, maxDimension: maxDimension);
+    if (fileName == null) return null;
+    final bytes = _previewMemoryCache.remove(fileName);
+    if (bytes == null) return null;
+    _previewMemoryCache[fileName] = bytes;
+    return bytes;
+  }
+
+  /// Synchronously returns the cached screen-fit preview File on disk if it exists.
+  File? getCachedPreviewFile(
+    String filePath, {
+    int maxDimension = defaultPreviewMaxDim,
+  }) {
+    final fileName =
+        _previewCacheFileName(filePath, maxDimension: maxDimension);
+    final dirPath = cacheDirPathSync;
+    if (fileName == null || dirPath == null) return null;
+    final file = File(p.join(dirPath, fileName));
+    if (file.existsSync()) {
+      _diskCachedFileNames.add(fileName);
+      return file;
+    }
+    return null;
+  }
+
+  void _putPreviewInMemory(String fileName, Uint8List bytes) {
+    _previewMemoryCache.remove(fileName);
+    while (_previewMemoryCache.length >= _maxPreviewMemoryEntries) {
+      _previewMemoryCache.remove(_previewMemoryCache.keys.first);
+    }
+    _previewMemoryCache[fileName] = bytes;
+  }
+
+  /// Pre-decodes and persists a screen-fit JPEG preview for a photo file.
+  Future<Uint8List?> prewarmPhotoPreview(
+    String filePath, {
+    String? assetId,
+    int maxDimension = defaultPreviewMaxDim,
+  }) async {
+    if (filePath.isEmpty ||
+        PsdService.isPsd(filePath) ||
+        MediaScannerService.isSupportedVideo(filePath)) {
+      return null;
+    }
+    final fileName =
+        _previewCacheFileName(filePath, maxDimension: maxDimension);
+    if (fileName == null) return null;
+
+    final mem = getMemoryPreview(filePath, maxDimension: maxDimension);
+    if (mem != null) return mem;
+
+    final inFlight = _previewInFlight[fileName];
+    if (inFlight != null) return inFlight.future;
+
+    final completer = Completer<Uint8List?>();
+    _previewInFlight[fileName] = completer;
+
+    try {
+      final dir = await _getCacheDirectory();
+      final diskFile = File(p.join(dir.path, fileName));
+      if (await diskFile.exists()) {
+        try {
+          final diskBytes = await diskFile.readAsBytes();
+          if (diskBytes.isNotEmpty) {
+            _putPreviewInMemory(fileName, diskBytes);
+            _diskCachedFileNames.add(fileName);
+            completer.complete(diskBytes);
+            return diskBytes;
+          }
+        } catch (_) {}
+      }
+
+      Uint8List? bytes;
+      try {
+        bytes = await _nativeChannel.invokeMethod<Uint8List>(
+          'getImageThumbnail',
+          {'path': filePath, 'assetId': assetId, 'size': maxDimension},
+        );
+      } catch (_) {}
+
+      if (bytes == null || bytes.isEmpty) {
+        bytes = await compute(
+          _isolateDecodePhotoPreview,
+          _PhotoPreviewParams(filePath, maxDimension),
+        );
+      }
+
+      if (bytes != null && bytes.isNotEmpty) {
+        _putPreviewInMemory(fileName, bytes);
+        await _writeBytesAtomic(dir, fileName, bytes);
+        _diskCachedFileNames.add(fileName);
+        if (!completer.isCompleted) {
+          completer.complete(bytes);
+        }
+        return bytes;
+      }
+
+      if (!completer.isCompleted) {
+        completer.complete(null);
+      }
+      return null;
+    } catch (e) {
+      debugPrint(
+          '[ThumbnailService] prewarmPhotoPreview error for $filePath: $e');
+      if (!completer.isCompleted) {
+        completer.complete(null);
+      }
+      return null;
+    } finally {
+      _previewInFlight.remove(fileName);
     }
   }
 
@@ -567,6 +728,7 @@ class ThumbnailService {
             req.filePath!,
             maxDimension: _thumbnailSize,
           );
+          unawaited(PsdService.instance.prewarmPsdDocument(req.filePath!));
         } catch (e) {
           debugPrint(
               '[ThumbnailService] Error decoding PSD thumbnail for ${req.filePath}: $e');
@@ -680,52 +842,53 @@ class ThumbnailService {
     req.completer.complete(bytes);
   }
 
+  Future<void> _writeBytesAtomic(
+      Directory dir, String fileName, Uint8List bytes) async {
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    final targetPath = p.join(dir.path, fileName);
+    final targetFile = File(targetPath);
+    final tmpFile =
+        File('$targetPath.${DateTime.now().microsecondsSinceEpoch}.tmp');
+    await tmpFile.writeAsBytes(bytes, flush: true);
+    try {
+      if (await targetFile.exists()) {
+        await targetFile.delete();
+      }
+      await tmpFile.rename(targetPath);
+    } catch (_) {
+      // Fallback if atomic rename encounters filesystem locking.
+      await targetFile.writeAsBytes(bytes, flush: true);
+      try {
+        if (await tmpFile.exists()) await tmpFile.delete();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> writeDiskCacheBytes(String fileName, Uint8List bytes) async {
+    final dir = await _getCacheDirectory();
+    await _writeBytesAtomic(dir, fileName, bytes);
+    registerDiskCacheFileName(fileName);
+  }
+
   void _saveToDisk(String assetId, Uint8List bytes) async {
-    _diskCachedFileNames.add(_cacheFileName(assetId));
+    final fileName = _cacheFileName(assetId);
+    _diskCachedFileNames.add(fileName);
     try {
       final dir = await _getCacheDirectory();
-      final targetPath = p.join(dir.path, _cacheFileName(assetId));
-      final targetFile = File(targetPath);
-      final tmpFile =
-          File('$targetPath.${DateTime.now().microsecondsSinceEpoch}.tmp');
-      await tmpFile.writeAsBytes(bytes, flush: true);
-      try {
-        if (await targetFile.exists()) {
-          await targetFile.delete();
-        }
-        await tmpFile.rename(targetPath);
-      } catch (_) {
-        // Fallback if atomic rename encounters filesystem locking.
-        await targetFile.writeAsBytes(bytes, flush: true);
-        try {
-          if (await tmpFile.exists()) await tmpFile.delete();
-        } catch (_) {}
-      }
+      await _writeBytesAtomic(dir, fileName, bytes);
     } catch (e) {
       debugPrint('[ThumbnailService] Failed to persist thumbnail $assetId: $e');
     }
   }
 
   void _saveHighResToDisk(String assetId, Uint8List bytes) async {
-    _diskCachedFileNames.add(_highResCacheFileName(assetId));
+    final fileName = _highResCacheFileName(assetId);
+    _diskCachedFileNames.add(fileName);
     try {
       final dir = await _getCacheDirectory();
-      final targetPath = p.join(dir.path, _highResCacheFileName(assetId));
-      final targetFile = File(targetPath);
-      final tmpFile =
-          File('$targetPath.${DateTime.now().microsecondsSinceEpoch}.tmp');
-      await tmpFile.writeAsBytes(bytes, flush: true);
-      try {
-        if (await targetFile.exists()) {
-          await targetFile.delete();
-        }
-        await tmpFile.rename(targetPath);
-      } catch (_) {
-        await targetFile.writeAsBytes(bytes, flush: true);
-        try {
-          if (await tmpFile.exists()) await tmpFile.delete();
-        } catch (_) {}
-      }
+      await _writeBytesAtomic(dir, fileName, bytes);
     } catch (e) {
       debugPrint(
           '[ThumbnailService] Failed to persist high-res thumbnail $assetId: $e');
@@ -771,8 +934,10 @@ class ThumbnailService {
   void trimMemory() {
     _memoryCache.clear();
     _highResVideoCache.clear();
+    _previewMemoryCache.clear();
     _thumbnailAspectRatioCache.clear();
     _videoFrameCache.clear();
+    PsdService.instance.clearMemoryCache();
   }
 
   /// Wipes both in-memory cache and persistent disk cache.
@@ -780,10 +945,13 @@ class ThumbnailService {
     _diskCachedFileNames.clear();
     _memoryCache.clear();
     _highResVideoCache.clear();
+    _previewMemoryCache.clear();
     _thumbnailAspectRatioCache.clear();
     _videoFrameCache.clear();
     _inFlight.clear();
+    _previewInFlight.clear();
     _entityCache.clear();
+    await PsdService.instance.clearCache();
     try {
       final dir = await _getCacheDirectory();
       if (await dir.exists()) {
@@ -823,5 +991,39 @@ class ThumbnailService {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+}
+
+class _PhotoPreviewParams {
+  const _PhotoPreviewParams(this.filePath, this.maxDimension);
+  final String filePath;
+  final int maxDimension;
+}
+
+Uint8List? _isolateDecodePhotoPreview(_PhotoPreviewParams params) {
+  try {
+    final file = File(params.filePath);
+    if (!file.existsSync()) return null;
+    final raw = file.readAsBytesSync();
+    if (raw.isEmpty) return null;
+
+    final decoded = img.decodeImage(raw);
+    if (decoded == null) return null;
+
+    final baked = img.bakeOrientation(decoded);
+    final maxEdge = math.max(baked.width, baked.height);
+    final resized = (params.maxDimension > 0 && maxEdge > params.maxDimension)
+        ? img.copyResize(
+            baked,
+            width: baked.width >= baked.height ? params.maxDimension : null,
+            height: baked.height > baked.width ? params.maxDimension : null,
+            maintainAspect: true,
+            interpolation: img.Interpolation.linear,
+          )
+        : baked;
+
+    return Uint8List.fromList(img.encodeJpg(resized, quality: 90));
+  } catch (_) {
+    return null;
   }
 }

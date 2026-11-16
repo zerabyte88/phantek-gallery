@@ -16,6 +16,7 @@ import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/bouncy_tap.dart';
+import '../../../core/widgets/styled_popup_menu.dart';
 import 'widgets/album_grid_item.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
@@ -353,15 +354,11 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                 ),
               ),
             if (!_selecting)
-              PopupMenuButton<String>(
+              StyledMoreMenuButton<String>(
                 splashRadius: 20,
                 tooltip: context.tr.moreOptions,
-                color: const Color(0xFF222222),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                constraints: const BoxConstraints(minWidth: 130, maxWidth: 195),
-                offset: const Offset(0, 48),
+                placement: StyledMenuPlacement.topBar,
+                icon: const Icon(Icons.more_vert),
                 onSelected: (value) {
                   if (value == 'manga') {
                     final mangaItems = filteredItems
@@ -404,74 +401,25 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                     });
                   }
                 },
-                itemBuilder: (context) => [
+                actions: [
                   if (sortedItems.isNotEmpty) ...[
-                    PopupMenuItem(
+                    StyledMenuAction(
                       value: 'manga',
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.auto_stories_rounded,
-                              size: 18, color: Colors.white),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              context.tr.readAsManga,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 13.5),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
+                      icon: Icons.auto_stories_rounded,
+                      label: context.tr.readAsManga,
                     ),
-                    PopupMenuItem(
+                    StyledMenuAction(
                       value: 'slideshow',
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.slideshow_rounded,
-                              size: 18, color: Colors.white),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              context.tr.slideshow,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 13.5),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
+                      icon: Icons.slideshow_rounded,
+                      label: context.tr.slideshow,
                     ),
                   ],
-                  PopupMenuItem(
+                  StyledMenuAction(
                     value: 'select',
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.checklist_rounded,
-                            size: 18, color: Colors.white),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            context.tr.select,
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 13.5),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
+                    icon: Icons.checklist_rounded,
+                    label: context.tr.select,
                   ),
                 ],
-                icon: const Icon(Icons.more_vert),
               ),
             if (_selecting) ...[
               BouncyTap(

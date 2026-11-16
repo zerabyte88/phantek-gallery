@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../features/gallery/presentation/gallery_screen.dart';
 import '../features/gallery/presentation/album_detail_screen.dart';
@@ -6,6 +7,8 @@ import '../features/player/presentation/video_player_screen.dart';
 import '../features/trash/presentation/trash_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../core/models/media_item.dart';
+import '../core/services/psd_service.dart';
+import '../core/services/thumbnail_service.dart';
 
 /// Global navigator key allowing overlays and dialogs to be shown from anywhere.
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -121,6 +124,25 @@ class _ViewerArgs {
   final bool initialMangaMode;
 }
 
+void _prewarmOnOpen(BuildContext context, List<MediaItem> items, int index) {
+  if (items.isEmpty) return;
+  for (final offset in const [0, -1, 1]) {
+    final target = index + offset;
+    if (target < 0 || target >= items.length) continue;
+    final item = items[target];
+    if (item.path.isEmpty) continue;
+    if (PsdService.isPsd(item.path)) {
+      unawaited(PsdService.instance.prewarmPsdDocument(item.path));
+    } else if (!item.isVideo) {
+      unawaited(ThumbnailService.instance.prewarmPhotoPreview(
+        item.path,
+        assetId: item.id,
+      ));
+      precacheImage(screenDisplayImage(item.path), context);
+    }
+  }
+}
+
 /// Helper extension on [NavigatorState] so call sites are clean.
 extension AppNav on NavigatorState {
   Future<void> openImage(
@@ -129,33 +151,37 @@ extension AppNav on NavigatorState {
     bool isTrash = false,
     bool startSlideshow = false,
     bool initialMangaMode = false,
-  }) =>
-      pushNamed(
-        AppRoutes.image,
-        arguments: _ViewerArgs(
-          items: items,
-          initialIndex: index,
-          isTrash: isTrash,
-          startSlideshow: startSlideshow,
-          initialMangaMode: initialMangaMode,
-        ),
-      );
+  }) {
+    _prewarmOnOpen(context, items, index);
+    return pushNamed(
+      AppRoutes.image,
+      arguments: _ViewerArgs(
+        items: items,
+        initialIndex: index,
+        isTrash: isTrash,
+        startSlideshow: startSlideshow,
+        initialMangaMode: initialMangaMode,
+      ),
+    );
+  }
 
   Future<void> openVideo(
     List<MediaItem> items,
     int index, {
     bool isTrash = false,
     bool startSlideshow = false,
-  }) =>
-      pushNamed(
-        AppRoutes.video,
-        arguments: _ViewerArgs(
-          items: items,
-          initialIndex: index,
-          isTrash: isTrash,
-          startSlideshow: startSlideshow,
-        ),
-      );
+  }) {
+    _prewarmOnOpen(context, items, index);
+    return pushNamed(
+      AppRoutes.video,
+      arguments: _ViewerArgs(
+        items: items,
+        initialIndex: index,
+        isTrash: isTrash,
+        startSlideshow: startSlideshow,
+      ),
+    );
+  }
 
   Future<void> openSingleVideo(MediaItem item) =>
       pushNamed(AppRoutes.video, arguments: item);

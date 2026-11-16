@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 zerabyte88
 
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -252,6 +253,172 @@ void main() {
 
       // Secret Child is visible again
       expect(find.text('Secret Child'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Photoshop layers header sits centered above centered Show all, Hide all, and Save buttons without truncating',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(() => tester.view.reset());
+
+      const layers = [
+        PsdLayerInfo(
+            index: 0,
+            name: 'Background',
+            isVisible: true,
+            opacity: 255,
+            isFolder: false),
+        PsdLayerInfo(
+            index: 1,
+            name: 'Layer 1',
+            isVisible: true,
+            opacity: 255,
+            isFolder: false),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PsdLayerSheet(
+              layers: layers,
+              hiddenIndices: const {},
+              filePath: '/tmp/sample.psd',
+              onVisibilityChanged: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final titleFinder = find.text('Photoshop layers (2)');
+      final showAllFinder = find.text('Show all');
+      final hideAllFinder = find.text('Hide all');
+      final saveFinder = find.text('Save');
+
+      expect(titleFinder, findsOneWidget);
+      expect(showAllFinder, findsOneWidget);
+      expect(hideAllFinder, findsOneWidget);
+      expect(saveFinder, findsOneWidget);
+
+      final titleWidget = tester.widget<Text>(titleFinder);
+      final titleSize = tester.getSize(titleFinder);
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: titleWidget.data,
+          style: DefaultTextStyle.of(tester.element(titleFinder))
+              .style
+              .merge(titleWidget.style),
+        ),
+        maxLines: 1,
+        textDirection: TextDirection.ltr,
+      )..layout();
+      expect(titleSize.width, greaterThanOrEqualTo(textPainter.width - 0.5));
+
+      final titleBottom = tester.getBottomLeft(titleFinder).dy;
+      expect(titleBottom, lessThanOrEqualTo(tester.getTopLeft(showAllFinder).dy));
+      expect(titleBottom, lessThanOrEqualTo(tester.getTopLeft(hideAllFinder).dy));
+      expect(titleBottom, lessThanOrEqualTo(tester.getTopLeft(saveFinder).dy));
+
+      final sheetCenter = tester.getRect(find.byType(PsdLayerSheet)).center.dx;
+      final iconRect = tester.getRect(find.byIcon(Icons.layers_outlined));
+      final titleRect = tester.getRect(titleFinder);
+      final titleRowCenter = (iconRect.left + titleRect.right) / 2;
+      expect((titleRowCenter - sheetCenter).abs(), lessThanOrEqualTo(16.0));
+
+      final showAllButton = find.ancestor(
+        of: showAllFinder,
+        matching: find.bySubtype<ButtonStyleButton>(),
+      );
+      final hideAllButton = find.ancestor(
+        of: hideAllFinder,
+        matching: find.bySubtype<ButtonStyleButton>(),
+      );
+      final saveButton = find.ancestor(
+        of: saveFinder,
+        matching: find.bySubtype<ButtonStyleButton>(),
+      );
+      final actionRects = [
+        tester.getRect(showAllButton),
+        tester.getRect(hideAllButton),
+        tester.getRect(saveButton),
+      ];
+      final rows = <List<Rect>>[];
+      for (final rect in actionRects) {
+        final existing = rows.where(
+          (row) => (row.first.center.dy - rect.center.dy).abs() <= 4.0,
+        );
+        if (existing.isNotEmpty) {
+          existing.first.add(rect);
+        } else {
+          rows.add([rect]);
+        }
+      }
+      for (final row in rows) {
+        final rowLeft =
+            row.map((r) => r.left).reduce((a, b) => a < b ? a : b);
+        final rowRight =
+            row.map((r) => r.right).reduce((a, b) => a > b ? a : b);
+        final actionsMid = (rowLeft + rowRight) / 2;
+        expect((actionsMid - sheetCenter).abs(), lessThanOrEqualTo(8.0));
+      }
+    });
+
+    testWidgets(
+        'Toggling a layer does not render Applying indicator inside PsdLayerSheet',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(() => tester.view.reset());
+
+      final completer = Completer<void>();
+      const layers = [
+        PsdLayerInfo(
+            index: 0,
+            name: 'Background',
+            isVisible: true,
+            opacity: 255,
+            isFolder: false),
+        PsdLayerInfo(
+            index: 1,
+            name: 'Layer 1',
+            isVisible: true,
+            opacity: 255,
+            isFolder: false),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PsdLayerSheet(
+              layers: layers,
+              hiddenIndices: const {},
+              filePath: '/tmp/sample.psd',
+              onVisibilityChanged: (_) => completer.future,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.visibility_rounded).first);
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final sheetFinder = find.byType(PsdLayerSheet);
+      expect(
+        find.descendant(of: sheetFinder, matching: find.text('Applying...')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: sheetFinder,
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsNothing,
+      );
+
+      completer.complete();
+      await tester.pump(const Duration(milliseconds: 50));
     });
   });
 }

@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'settings_service.dart';
+import 'thumbnail_service.dart';
 
 /// Representation of an individual Adobe Photoshop (.psd) layer.
 class PsdLayerInfo {
@@ -110,8 +111,13 @@ class _RawLayerRecord {
 class PsdService {
   PsdService._();
   static final PsdService instance = PsdService._();
+  static const int _maxMemoryRenderedPreviews = 20;
   final _AsyncGate _renderGate = _AsyncGate(1);
   final _AsyncGate _thumbGate = _AsyncGate(1);
+  final Map<String, Uint8List> _renderedPreviewCache = {};
+  final Map<String, ({int size, int mtimeMs, List<PsdLayerInfo> layers})>
+      _layersMemoryCache = {};
+  final Map<String, Future<Uint8List?>> _renderInFlight = {};
 
   /// Returns true if [pathOrExt] has a .psd extension (case-insensitive).
   static bool isPsd(String pathOrExt) {
@@ -759,24 +765,42 @@ class PsdService {
   /// For smaller files (< 80MB), falls back to isolate layer decoding if streaming
   /// yields no layers.
   Future<List<PsdLayerInfo>> getLayers(String filePath) async {
+    final cached = getCachedLayersSync(filePath);
+    if (cached != null) return cached;
+
     try {
       final file = File(filePath);
       if (!await file.exists()) return [];
 
+      void cacheLayers(List<PsdLayerInfo> layers) {
+        if (layers.isEmpty) return;
+        try {
+          final stat = file.statSync();
+          _layersMemoryCache[filePath] = (
+            size: stat.size,
+            mtimeMs: stat.modified.millisecondsSinceEpoch,
+            layers: layers,
+          );
+        } catch (_) {}
+      }
+
       // 1. Fast streaming layer records directly from disk (< 5ms, 0 MB memory overhead)
       final streamedLayers = await _streamLayerRecords(filePath);
       if (streamedLayers.isNotEmpty) {
+        cacheLayers(streamedLayers);
         return streamedLayers;
       }
 
       // 2. Fallback to isolate decoder only for files < 80MB if streaming didn't find layers
       final fileSize = await file.length();
       if (fileSize < 80 * 1024 * 1024) {
-        return await _renderGate.run(() => compute(
+        final isolateLayers = await _renderGate.run(() => compute(
               _isolateGetLayers,
               filePath,
             ).timeout(const Duration(seconds: 12),
                 onTimeout: () => <PsdLayerInfo>[]));
+        cacheLayers(isolateLayers);
+        return isolateLayers;
       }
 
       return [];
@@ -826,6 +850,118 @@ class PsdService {
   }) =>
       getLayerThumbnails(filePath, maxThumbDim: maxThumbDim);
 
+  String? _psdCacheFileName(
+    String filePath, {
+    Set<int>? hiddenLayerIndices,
+    int maxDimension = 2048,
+  }) {
+    if (filePath.isEmpty) return null;
+    try {
+      final file = File(filePath);
+      if (!file.existsSync()) return null;
+      final stat = file.statSync();
+      final effectiveHidden =
+          hiddenLayerIndices ?? getSavedLayerVisibility(filePath);
+      final hiddenSig = effectiveHidden == null
+          ? 'default'
+          : (effectiveHidden.toList()..sort()).join(',');
+      final sig =
+          '${filePath}_${stat.size}_${stat.modified.millisecondsSinceEpoch}_${maxDimension}_$hiddenSig';
+      final safe = p
+          .basenameWithoutExtension(filePath)
+          .replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+      return 'psd_prev_${sig.hashCode.abs()}_$safe.bin';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Synchronously returns cached layers if file metadata matches on disk.
+  List<PsdLayerInfo>? getCachedLayersSync(String filePath) {
+    final cached = _layersMemoryCache[filePath];
+    if (cached == null) return null;
+    try {
+      final file = File(filePath);
+      if (!file.existsSync()) {
+        _layersMemoryCache.remove(filePath);
+        return null;
+      }
+      final stat = file.statSync();
+      if (cached.size == stat.size &&
+          cached.mtimeMs == stat.modified.millisecondsSinceEpoch) {
+        return cached.layers;
+      }
+      _layersMemoryCache.remove(filePath);
+    } catch (_) {}
+    return null;
+  }
+
+  void _putRenderedPreviewInMemory(String fileName, Uint8List bytes) {
+    _renderedPreviewCache.remove(fileName);
+    while (_renderedPreviewCache.length >= _maxMemoryRenderedPreviews) {
+      _renderedPreviewCache.remove(_renderedPreviewCache.keys.first);
+    }
+    _renderedPreviewCache[fileName] = bytes;
+  }
+
+  /// Synchronously returns cached rendered PSD preview bytes from memory or disk.
+  Uint8List? getCachedRenderedPreviewSync(
+    String filePath, {
+    Set<int>? hiddenLayerIndices,
+    int? maxDimension,
+  }) {
+    final dims = maxDimension != null ? [maxDimension] : const [1600, 2048];
+    for (final dim in dims) {
+      final fileName = _psdCacheFileName(
+        filePath,
+        hiddenLayerIndices: hiddenLayerIndices,
+        maxDimension: dim,
+      );
+      if (fileName == null) return null;
+
+      final mem = _renderedPreviewCache.remove(fileName);
+      if (mem != null) {
+        _renderedPreviewCache[fileName] = mem;
+        return mem;
+      }
+
+      final dirPath = ThumbnailService.instance.cacheDirPathSync;
+      if (dirPath != null) {
+        try {
+          final file = File(p.join(dirPath, fileName));
+          if (file.existsSync()) {
+            final bytes = file.readAsBytesSync();
+            if (bytes.isNotEmpty) {
+              _putRenderedPreviewInMemory(fileName, bytes);
+              ThumbnailService.instance.registerDiskCacheFileName(fileName);
+              return bytes;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+    return null;
+  }
+
+  Future<void> _storeRenderedPreview(
+    String filePath,
+    Uint8List bytes, {
+    Set<int>? hiddenLayerIndices,
+    required int maxDimension,
+  }) async {
+    if (bytes.isEmpty) return;
+    final fileName = _psdCacheFileName(
+      filePath,
+      hiddenLayerIndices: hiddenLayerIndices,
+      maxDimension: maxDimension,
+    );
+    if (fileName == null) return;
+    _putRenderedPreviewInMemory(fileName, bytes);
+    try {
+      await ThumbnailService.instance.writeDiskCacheBytes(fileName, bytes);
+    } catch (_) {}
+  }
+
   /// Renders the PSD document with custom layer visibility in an isolate.
   ///
   /// When [hiddenLayerIndices] is empty, attempts streaming Section 5 merged
@@ -835,9 +971,79 @@ class PsdService {
     required Set<int> hiddenLayerIndices,
     int maxDimension = 2048,
   }) async {
+    final cached = getCachedRenderedPreviewSync(
+      filePath,
+      hiddenLayerIndices: hiddenLayerIndices,
+      maxDimension: maxDimension,
+    );
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+
+    final cacheFileName = _psdCacheFileName(
+      filePath,
+      hiddenLayerIndices: hiddenLayerIndices,
+      maxDimension: maxDimension,
+    );
+    final inFlightKey =
+        cacheFileName != null ? 'render:$cacheFileName' : null;
+    if (inFlightKey != null) {
+      final existing = _renderInFlight[inFlightKey];
+      if (existing != null) return existing;
+    }
+
+    final future = _computeAndStoreRenderWithLayers(
+      filePath,
+      hiddenLayerIndices: hiddenLayerIndices,
+      maxDimension: maxDimension,
+    );
+    if (inFlightKey != null) {
+      _renderInFlight[inFlightKey] = future;
+    }
+    try {
+      return await future;
+    } finally {
+      if (inFlightKey != null &&
+          identical(_renderInFlight[inFlightKey], future)) {
+        _renderInFlight.remove(inFlightKey);
+      }
+    }
+  }
+
+  Future<Uint8List?> _computeAndStoreRenderWithLayers(
+    String filePath, {
+    required Set<int> hiddenLayerIndices,
+    int maxDimension = 2048,
+  }) async {
     try {
       final file = File(filePath);
       if (!await file.exists()) return null;
+
+      try {
+        await ThumbnailService.instance.getCacheDirectory();
+      } catch (_) {}
+
+      final diskCached = getCachedRenderedPreviewSync(
+        filePath,
+        hiddenLayerIndices: hiddenLayerIndices,
+        maxDimension: maxDimension,
+      );
+      if (diskCached != null && diskCached.isNotEmpty) {
+        return diskCached;
+      }
+
+      Future<Uint8List?> cacheAndReturn(Uint8List? bytes) async {
+        if (bytes != null && bytes.isNotEmpty) {
+          await _storeRenderedPreview(
+            filePath,
+            bytes,
+            hiddenLayerIndices: hiddenLayerIndices,
+            maxDimension: maxDimension,
+          );
+          return bytes;
+        }
+        return null;
+      }
 
       // 1. Primary execution path: streaming renderer for custom layer visibility
       try {
@@ -850,7 +1056,7 @@ class PsdService {
               ),
             ).timeout(const Duration(seconds: 30), onTimeout: () => null));
         if (streamed != null && streamed.isNotEmpty) {
-          return streamed;
+          return await cacheAndReturn(streamed);
         }
       } catch (e) {
         debugPrint('[PsdService] _isolateStreamRenderWithLayers error: $e');
@@ -867,7 +1073,7 @@ class PsdService {
           ).timeout(const Duration(seconds: 30), onTimeout: () => null));
 
       if (result != null && result.isNotEmpty) {
-        return result;
+        return await cacheAndReturn(result);
       }
 
       // 3. Last-resort fallback when both renderers return null and all layers are visible
@@ -881,9 +1087,11 @@ class PsdService {
             maxDimension: maxDimension,
           );
           if (composite != null && composite.isNotEmpty) {
-            return composite;
+            return await cacheAndReturn(composite);
           }
-          return await decodeThumbnail(filePath, maxDimension: maxDimension);
+          final thumb =
+              await decodeThumbnail(filePath, maxDimension: maxDimension);
+          return await cacheAndReturn(thumb);
         }
       }
 
@@ -900,9 +1108,25 @@ class PsdService {
             maxDimension: maxDimension,
           );
           if (composite != null && composite.isNotEmpty) {
+            await _storeRenderedPreview(
+              filePath,
+              composite,
+              hiddenLayerIndices: hiddenLayerIndices,
+              maxDimension: maxDimension,
+            );
             return composite;
           }
-          return await decodeThumbnail(filePath, maxDimension: maxDimension);
+          final thumb =
+              await decodeThumbnail(filePath, maxDimension: maxDimension);
+          if (thumb != null && thumb.isNotEmpty) {
+            await _storeRenderedPreview(
+              filePath,
+              thumb,
+              hiddenLayerIndices: hiddenLayerIndices,
+              maxDimension: maxDimension,
+            );
+          }
+          return thumb;
         }
       }
       return null;
@@ -929,6 +1153,21 @@ class PsdService {
       // Check if user has saved custom layer visibility
       final savedHidden = getSavedLayerVisibility(filePath);
       if (savedHidden != null) {
+        final cachedSaved = getCachedRenderedPreviewSync(
+              filePath,
+              hiddenLayerIndices: savedHidden,
+              maxDimension: maxDimension,
+            ) ??
+            (maxDimension >= 1600 && maxDimension != 1600
+                ? getCachedRenderedPreviewSync(
+                    filePath,
+                    hiddenLayerIndices: savedHidden,
+                    maxDimension: 1600,
+                  )
+                : null);
+        if (cachedSaved != null && cachedSaved.isNotEmpty) {
+          return cachedSaved;
+        }
         final rendered = await renderWithLayers(
           filePath,
           hiddenLayerIndices: savedHidden,
@@ -939,47 +1178,162 @@ class PsdService {
         }
       }
 
-      // Tier 1: Merged composite from Section 5
-      try {
-        final composite = await extractMergedComposite(
-          filePath,
-          maxDimension: maxDimension,
-        );
-        if (composite != null && composite.isNotEmpty) {
-          return composite;
-        }
-      } catch (e) {
-        debugPrint('[PsdService] Tier 1 extractMergedComposite failed: $e');
+      final cachedDefault = getCachedRenderedPreviewSync(
+        filePath,
+        hiddenLayerIndices: savedHidden,
+        maxDimension: maxDimension,
+      );
+      if (cachedDefault != null && cachedDefault.isNotEmpty) {
+        return cachedDefault;
       }
 
-      // Tier 2: Embedded high-resolution thumbnail (for files saved without Maximize Compatibility)
-      try {
-        final thumbnail = await extractEmbeddedThumbnail(filePath);
-        if (thumbnail != null && thumbnail.isNotEmpty) {
-          return thumbnail;
-        }
-      } catch (e) {
-        debugPrint('[PsdService] Tier 2 extractEmbeddedThumbnail failed: $e');
+      final cacheFileName = _psdCacheFileName(
+        filePath,
+        hiddenLayerIndices: savedHidden,
+        maxDimension: maxDimension,
+      );
+      final inFlightKey =
+          cacheFileName != null ? 'load:$cacheFileName' : null;
+      if (inFlightKey != null) {
+        final existing = _renderInFlight[inFlightKey];
+        if (existing != null) return await existing;
       }
 
-      // Tier 3: Render composite with all layers
-      try {
-        final rendered = await renderWithLayers(
-          filePath,
-          hiddenLayerIndices: const {},
-          maxDimension: maxDimension,
-        );
-        if (rendered != null && rendered.isNotEmpty) {
-          return rendered;
-        }
-      } catch (e) {
-        debugPrint('[PsdService] Tier 3 renderWithLayers failed: $e');
+      final future = _computeAndStoreLoadPsdDocument(
+        filePath,
+        savedHidden: savedHidden,
+        maxDimension: maxDimension,
+      );
+      if (inFlightKey != null) {
+        _renderInFlight[inFlightKey] = future;
       }
-
-      return null;
+      try {
+        return await future;
+      } finally {
+        if (inFlightKey != null &&
+            identical(_renderInFlight[inFlightKey], future)) {
+          _renderInFlight.remove(inFlightKey);
+        }
+      }
     } catch (e) {
       debugPrint('[PsdService] loadPsdDocument error for $filePath: $e');
       return null;
+    }
+  }
+
+  Future<Uint8List?> _computeAndStoreLoadPsdDocument(
+    String filePath, {
+    required Set<int>? savedHidden,
+    required int maxDimension,
+  }) async {
+    try {
+      await ThumbnailService.instance.getCacheDirectory();
+    } catch (_) {}
+
+    final diskCached = getCachedRenderedPreviewSync(
+      filePath,
+      hiddenLayerIndices: savedHidden,
+      maxDimension: maxDimension,
+    );
+    if (diskCached != null && diskCached.isNotEmpty) {
+      return diskCached;
+    }
+
+    Future<Uint8List?> cacheAndReturn(Uint8List? bytes) async {
+      if (bytes != null && bytes.isNotEmpty) {
+        await _storeRenderedPreview(
+          filePath,
+          bytes,
+          hiddenLayerIndices: savedHidden,
+          maxDimension: maxDimension,
+        );
+        return bytes;
+      }
+      return null;
+    }
+
+    // Tier 1: Merged composite from Section 5
+    try {
+      final composite = await extractMergedComposite(
+        filePath,
+        maxDimension: maxDimension,
+      );
+      if (composite != null && composite.isNotEmpty) {
+        return await cacheAndReturn(composite);
+      }
+    } catch (e) {
+      debugPrint('[PsdService] Tier 1 extractMergedComposite failed: $e');
+    }
+
+    // Tier 2: Embedded high-resolution thumbnail (for files saved without Maximize Compatibility)
+    try {
+      final thumbnail = await extractEmbeddedThumbnail(filePath);
+      if (thumbnail != null && thumbnail.isNotEmpty) {
+        return await cacheAndReturn(thumbnail);
+      }
+    } catch (e) {
+      debugPrint('[PsdService] Tier 2 extractEmbeddedThumbnail failed: $e');
+    }
+
+    // Tier 3: Render composite with all layers
+    try {
+      final rendered = await renderWithLayers(
+        filePath,
+        hiddenLayerIndices: const {},
+        maxDimension: maxDimension,
+      );
+      if (rendered != null && rendered.isNotEmpty) {
+        return await cacheAndReturn(rendered);
+      }
+    } catch (e) {
+      debugPrint('[PsdService] Tier 3 renderWithLayers failed: $e');
+    }
+
+    return null;
+  }
+
+  /// Pre-parses layer metadata and renders a cached PSD preview in the background.
+  Future<Uint8List?> prewarmPsdDocument(String filePath) async {
+    if (filePath.isEmpty || !isPsd(filePath)) return null;
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) return null;
+      await getLayers(filePath);
+      final maxDim = getSavedLayerVisibility(filePath) != null ? 1600 : 2048;
+      return await loadPsdDocument(filePath, maxDimension: maxDim);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Clears in-memory PSD rendered preview and layer metadata caches.
+  void clearMemoryCache() {
+    _renderedPreviewCache.clear();
+    _layersMemoryCache.clear();
+  }
+
+  /// Clears both in-memory PSD caches and persisted PSD preview files on disk.
+  Future<void> clearCache() async {
+    clearMemoryCache();
+    ThumbnailService.instance
+        .unregisterDiskCacheFileNamesByPrefix('psd_prev_');
+    try {
+      final dir = await ThumbnailService.instance.getCacheDirectory();
+      if (await dir.exists()) {
+        await for (final entity
+            in dir.list(recursive: false, followLinks: false)) {
+          if (entity is File) {
+            final name = p.basename(entity.path);
+            if (name.startsWith('psd_prev_') && name.endsWith('.bin')) {
+              try {
+                await entity.delete();
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[PsdService] Error clearing cache: $e');
     }
   }
 
