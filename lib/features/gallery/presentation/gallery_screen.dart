@@ -1254,16 +1254,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           return;
         }
         if (item.isVideo) {
-          final videos = items.where((e) => e.isVideo).toList();
-          final idx = videos.indexOf(item);
-          Navigator.of(context).openVideo(
-            videos,
-            idx >= 0 ? idx : 0,
-          );
+          Navigator.of(context).openVideo(items, index);
         } else {
-          final photos = items.where((e) => !e.isVideo).toList();
-          final idx = photos.indexOf(item);
-          Navigator.of(context).openImage(photos, idx >= 0 ? idx : 0);
+          Navigator.of(context).openImage(items, index);
         }
       },
       onLongPress: () {

@@ -377,13 +377,32 @@ class MangaTranslationPainter extends CustomPainter {
   static String _normalizeLayoutText(String text) =>
       text.replaceAll(RegExp(r'\s+'), ' ').trim();
 
+  static double _safeCornerInset(double extent) => extent <= 12.0
+      ? math.min(4.0, extent * 0.12)
+      : (extent * 0.12).clamp(6.0, 12.0);
+
+  static double _computeFitScale(
+    double contentW,
+    double contentH,
+    double maxW,
+    double maxH,
+  ) {
+    if (contentW <= maxW && contentH <= maxH) return 1.0;
+    return math
+        .min(
+          maxW / math.max(1.0, contentW),
+          maxH / math.max(1.0, contentH),
+        )
+        .clamp(0.01, 1.0);
+  }
+
   static ({double maxTextWidth, double targetMaxHeight, bool isVertical})
       _computeTextBounds(Rect bubbleRect) {
     final bool isVertical = _shouldRotateVertical(bubbleRect);
-    final double hPad = math.min(4.0, bubbleRect.width * 0.06);
-    final double vPad = math.min(4.0, bubbleRect.height * 0.06);
-    final double availW = math.max(6.0, bubbleRect.width - hPad);
-    final double availH = math.max(6.0, bubbleRect.height - vPad);
+    final double hPad = _safeCornerInset(bubbleRect.width);
+    final double vPad = _safeCornerInset(bubbleRect.height);
+    final double availW = math.max(4.0, bubbleRect.width - hPad);
+    final double availH = math.max(4.0, bubbleRect.height - vPad);
     return (
       maxTextWidth: isVertical ? availH : availW,
       targetMaxHeight: isVertical ? availW : availH,
@@ -435,15 +454,12 @@ class MangaTranslationPainter extends CustomPainter {
     // Opaque patch hides the source text inside the bubble.
     canvas.drawRRect(rrect, Paint()..color = Colors.white);
 
-    final double fitScale =
-        (painter.width > maxTextWidth || painter.height > targetMaxHeight)
-            ? math
-                .min(
-                  maxTextWidth / math.max(1.0, painter.width),
-                  targetMaxHeight / math.max(1.0, painter.height),
-                )
-                .clamp(0.1, 1.0)
-            : 1.0;
+    final double fitScale = _computeFitScale(
+      painter.width,
+      painter.height,
+      maxTextWidth,
+      targetMaxHeight,
+    );
 
     canvas.save();
     canvas.clipRRect(rrect);
@@ -508,10 +524,13 @@ class MangaTranslationPainter extends CustomPainter {
     final pillRRect =
         RRect.fromRectAndRadius(pillRect, const Radius.circular(6.0));
 
-    final double hPad = math.min(4.0, pillRect.width * 0.06);
-    final double vPad = math.min(4.0, pillRect.height * 0.06);
-    final double maxTextWidth = math.max(6.0, pillRect.width - hPad);
-    final double maxTextHeight = math.max(6.0, pillRect.height - vPad);
+    const double strokeMargin = 4.0;
+    final double hPad = _safeCornerInset(pillRect.width) +
+        (pillRect.width > 16.0 ? strokeMargin : 0.0);
+    final double vPad = _safeCornerInset(pillRect.height) +
+        (pillRect.height > 16.0 ? strokeMargin : 0.0);
+    final double maxTextWidth = math.max(4.0, pillRect.width - hPad);
+    final double maxTextHeight = math.max(4.0, pillRect.height - vPad);
 
     final (painter: fillPainter, :fontSize) = _fitTextPainterToBounds(
       text: normalized,
@@ -549,15 +568,12 @@ class MangaTranslationPainter extends CustomPainter {
       maxLines: null,
     );
 
-    final double fitScale =
-        (fillPainter.width > maxTextWidth || fillPainter.height > maxTextHeight)
-            ? math
-                .min(
-                  maxTextWidth / math.max(1.0, fillPainter.width),
-                  maxTextHeight / math.max(1.0, fillPainter.height),
-                )
-                .clamp(0.1, 1.0)
-            : 1.0;
+    final double fitScale = _computeFitScale(
+      fillPainter.width + strokeWidth,
+      fillPainter.height + strokeWidth,
+      math.max(1.0, pillRect.width - 2.0),
+      math.max(1.0, pillRect.height - 2.0),
+    );
 
     canvas.save();
     canvas.clipRRect(pillRRect);

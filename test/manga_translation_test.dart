@@ -800,6 +800,68 @@ void main() {
       expect(fitted.width, lessThanOrEqualTo(160.0));
       expect(fitted.height, lessThanOrEqualTo(70.0));
     });
+
+    test('Speech bubble fitting reserves safe corner inset inside rounded bubble',
+        () {
+      const bubbleRect = Rect.fromLTWH(0, 0, 80, 50);
+      const dialogue = 'Wait a second, do not move from there!';
+
+      final fitted = MangaTranslationPainter.debugFitSpeechBubbleText(
+        bubbleRect,
+        dialogue,
+      );
+
+      expect(fitted.width, lessThanOrEqualTo(80.0 - 8.0));
+      expect(fitted.height, lessThanOrEqualTo(50.0 - 6.0));
+    });
+
+    test('Narrow text column and SFX/caption pill paint cleanly within bounds',
+        () {
+      const narrowColumnRect = Rect.fromLTWH(20, 20, 24, 90);
+      const sfxRect = Rect.fromLTWH(60, 20, 90, 22);
+      const columnText = 'Wait up! Hold on right there!';
+      const sfxText = 'WHOOSH!';
+
+      final fittedColumn = MangaTranslationPainter.debugFitSpeechBubbleText(
+        narrowColumnRect,
+        columnText,
+      );
+      // Inset bounds: hPad = (24 * 0.12).clamp(6.0, 12.0) = 6.0,
+      // vPad = (90 * 0.12).clamp(6.0, 12.0) = 10.8.
+      expect(fittedColumn.width, lessThanOrEqualTo(24.0 - 6.0));
+      expect(fittedColumn.height, lessThanOrEqualTo(90.0 - 10.8));
+
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      final painter = MangaTranslationPainter(
+        result: const TranslationResult(
+          imagePath: '/mock/narrow_and_sfx.jpg',
+          imageSize: Size(400, 800),
+          blocks: [
+            MangaTranslatedBlock(
+              boundingBox: narrowColumnRect,
+              originalText: '待ってくれ！',
+              translatedText: columnText,
+              isSpeechBubble: true,
+            ),
+            MangaTranslatedBlock(
+              boundingBox: sfxRect,
+              originalText: 'ゴゴゴ',
+              translatedText: sfxText,
+              isSpeechBubble: false,
+            ),
+          ],
+        ),
+        mode: TranslationRenderMode.fullImageWithSfx,
+      );
+
+      expect(
+        () => painter.paint(canvas, const Size(400, 800)),
+        returnsNormally,
+      );
+      final picture = recorder.endRecording();
+      picture.dispose();
+    });
   });
 
   group('ImageViewerScreen Manga Translation Button & Sheet Integration', () {

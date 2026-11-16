@@ -330,4 +330,86 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
   });
+
+  testWidgets(
+      'StyledMoreMenuButton animates top-to-bottom on topBar and bottom-to-top on bottomBar',
+      (tester) async {
+    tester.view.physicalSize = const Size(500, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.reset());
+
+    Future<void> verifyAnimationDirection(StyledMenuPlacement placement) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: Scaffold(
+            body: Align(
+              alignment: placement == StyledMenuPlacement.topBar
+                  ? Alignment.topRight
+                  : Alignment.bottomRight,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: StyledMoreMenuButton<String>(
+                  placement: placement,
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (_) {},
+                  actions: const [
+                    StyledMenuAction(
+                      value: 'one',
+                      icon: Icons.star_border,
+                      label: 'First',
+                    ),
+                    StyledMenuAction(
+                      value: 'two',
+                      icon: Icons.share_outlined,
+                      label: 'Second',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final menuMaterialFinder = find.ancestor(
+        of: find.text('First'),
+        matching: find.byWidgetPredicate(
+          (w) => w is Material && w.shape is RoundedRectangleBorder,
+        ),
+      );
+      expect(menuMaterialFinder, findsOneWidget);
+
+      final midRect = tester.getRect(menuMaterialFinder);
+      await tester.pumpAndSettle();
+      final finalRect = tester.getRect(menuMaterialFinder);
+
+      if (placement == StyledMenuPlacement.topBar) {
+        expect(
+          midRect.top,
+          lessThan(finalRect.top),
+          reason:
+              'Menu ($placement) should animate downward from top to bottom during opening',
+        );
+      } else {
+        expect(
+          midRect.top,
+          greaterThan(finalRect.top),
+          reason:
+              'Menu ($placement) should animate upward from bottom to top during opening',
+        );
+      }
+
+      // Dismiss menu before next placement check.
+      await tester.tapAt(const Offset(10, 400));
+      await tester.pumpAndSettle();
+    }
+
+    await verifyAnimationDirection(StyledMenuPlacement.bottomBar);
+    await verifyAnimationDirection(StyledMenuPlacement.topBar);
+  });
 }
