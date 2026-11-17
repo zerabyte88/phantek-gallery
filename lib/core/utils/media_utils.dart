@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 
 /// Lightweight helpers for formatting media metadata.
@@ -103,4 +104,52 @@ class MediaUtils {
     final ideal = rowTop - (viewportHeight - tileSize) / 2.0;
     return ideal.clamp(0.0, maxScrollExtent);
   }
+}
+
+/// Computes a clamped focal zoom [Matrix4] from [currentMatrix] to [targetScale],
+/// keeping [localFocal] anchored within [viewportSize].
+Matrix4 computeClampedFocalZoomMatrix({
+  required Matrix4 currentMatrix,
+  required Offset localFocal,
+  required Size viewportSize,
+  required double targetScale,
+}) {
+  if (targetScale <= 1.05 ||
+      viewportSize.width <= 0 ||
+      viewportSize.height <= 0) {
+    return Matrix4.identity();
+  }
+  final clampedX = localFocal.dx.clamp(0.0, viewportSize.width);
+  final clampedY = localFocal.dy.clamp(0.0, viewportSize.height);
+  final rawScale = currentMatrix.getMaxScaleOnAxis();
+  final currentScale = rawScale > 0 ? rawScale : 1.0;
+  final sceneX = (clampedX - currentMatrix.storage[12]) / currentScale;
+  final sceneY = (clampedY - currentMatrix.storage[13]) / currentScale;
+  final minTx = -viewportSize.width * (targetScale - 1.0);
+  final minTy = -viewportSize.height * (targetScale - 1.0);
+  final tx = (clampedX - sceneX * targetScale).clamp(minTx, 0.0);
+  final ty = (clampedY - sceneY * targetScale).clamp(minTy, 0.0);
+  return Matrix4.translationValues(tx, ty, 0.0)
+    ..scaleByDouble(targetScale, targetScale, 1.0, 1.0);
+}
+
+/// Resolves the focal point in [viewerKey]-local coordinates and its viewport size,
+/// falling back to [fallbackLocalPos] and [fallbackSize] if unavailable.
+(Offset localFocal, Size viewportSize) resolveViewerFocalAndSize({
+  required GlobalKey? viewerKey,
+  required Offset fallbackLocalPos,
+  required Size fallbackSize,
+  Offset? globalPos,
+}) {
+  final renderObj = viewerKey?.currentContext?.findRenderObject();
+  if (renderObj is RenderBox &&
+      renderObj.hasSize &&
+      renderObj.size.width > 0 &&
+      renderObj.size.height > 0) {
+    final localFocal = globalPos != null
+        ? renderObj.globalToLocal(globalPos)
+        : fallbackLocalPos;
+    return (localFocal, renderObj.size);
+  }
+  return (fallbackLocalPos, fallbackSize);
 }

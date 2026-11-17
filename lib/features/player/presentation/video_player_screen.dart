@@ -258,6 +258,9 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   bool _isPinching = false;
   bool _isMultiTouch = false;
   final Set<int> _activePointers = {};
+  final Map<String, GlobalKey> _viewerKeys = {};
+  GlobalKey _viewerKeyFor(String id) =>
+      _viewerKeys.putIfAbsent(id, GlobalKey.new);
   AnimationController? _zoomAnimController;
   bool _hasStartedPlaying = false;
   bool _hasPreparedForExit = false;
@@ -855,7 +858,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     _zoomAnimController!.forward();
   }
 
-  void _zoomToPosition(Offset tapPos) {
+  void _zoomToPosition(Offset tapPos, {Offset? globalPos}) {
     _zoomAnimController?.stop();
     _zoomAnimController?.dispose();
 
@@ -866,11 +869,21 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (isZoomed) {
       endMatrix = Matrix4.identity();
     } else {
-      const double targetScale = 2.5;
-      endMatrix = Matrix4.identity()
-        ..translateByDouble(tapPos.dx, tapPos.dy, 0.0, 1.0)
-        ..scaleByDouble(targetScale, targetScale, 1.0, 1.0)
-        ..translateByDouble(-tapPos.dx, -tapPos.dy, 0.0, 1.0);
+      const double targetScale = 3.0;
+      final activeId =
+          (_videos.isNotEmpty && _current < _videos.length) ? _videos[_current].id : '';
+      final (localFocal, viewportSize) = resolveViewerFocalAndSize(
+        viewerKey: activeId.isNotEmpty ? _viewerKeys[activeId] : null,
+        fallbackLocalPos: tapPos,
+        fallbackSize: context.size ?? MediaQuery.sizeOf(context),
+        globalPos: globalPos,
+      );
+      endMatrix = computeClampedFocalZoomMatrix(
+        currentMatrix: _transformationController.value,
+        localFocal: localFocal,
+        viewportSize: viewportSize,
+        targetScale: targetScale,
+      );
     }
 
     _zoomAnimController = AnimationController(
@@ -1999,6 +2012,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           aspectRatio: ar,
           child: content,
         );
+      } else {
+        content = SizedBox.expand(child: content);
       }
       return content;
     }
@@ -2099,6 +2114,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
   void _handleDoubleTap() {
     if (_doubleTapDetails == null) return;
     final pos = _doubleTapDetails!.localPosition;
+    final globalPos = _doubleTapDetails!.globalPosition;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final settings = ref.read(settingsNotifierProvider);
 
@@ -2129,7 +2145,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
       switch (settings.videoDoubleTapAction) {
         case VideoDoubleTapAction.zoomOnly:
           HapticFeedback.lightImpact();
-          _zoomToPosition(pos);
+          _zoomToPosition(pos, globalPos: globalPos);
           return;
 
         case VideoDoubleTapAction.seekOnly:
@@ -2153,7 +2169,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     }
 
     HapticFeedback.lightImpact();
-    _zoomToPosition(pos);
+    _zoomToPosition(pos, globalPos: globalPos);
   }
 
   void _showPlaybackSpeedSheet() {
@@ -2760,9 +2776,12 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     child: Center(
                                       child: ClipRect(
                                         child: isCur
-                                            ? InteractiveViewer(
-                                                key: ValueKey(
-                                                    'iv_${_videos[index].id}'),
+                                            ? KeyedSubtree(
+                                                key: _viewerKeyFor(
+                                                    _videos[index].id),
+                                                child: InteractiveViewer(
+                                                  key: ValueKey(
+                                                      'iv_${_videos[index].id}'),
                                                 transformationController:
                                                     _transformationController,
                                                 minScale: 1.0,
@@ -2806,42 +2825,41 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                                     }
                                                   }
                                                 },
-                                                child: Center(
-                                                  child: Hero(
-                                                    tag: _videos[index].id,
-                                                    flightShuttleBuilder: (
-                                                      flightContext,
-                                                      animation,
-                                                      flightDirection,
-                                                      fromHeroContext,
-                                                      toHeroContext,
-                                                    ) =>
-                                                        _buildHeroShuttle(
-                                                      animation: animation,
-                                                      flightDirection:
-                                                          flightDirection,
-                                                      item: _videos[index],
-                                                      psdFallbackBytes:
-                                                          _psdRenderedBytes[
-                                                                  _videos[index]
-                                                                      .path] ??
-                                                              PsdService.instance
-                                                                  .getCachedRenderedPreviewSync(
-                                                                      _videos[index]
-                                                                          .path),
-                                                      fallbackChild:
-                                                          flightDirection ==
-                                                                  HeroFlightDirection
-                                                                      .push
-                                                              ? toHeroContext
-                                                                  .widget
-                                                              : fromHeroContext
-                                                                  .widget,
-                                                    ),
-                                                    child:
-                                                        _buildVideoPage(index),
+                                                child: Hero(
+                                                  tag: _videos[index].id,
+                                                  flightShuttleBuilder: (
+                                                    flightContext,
+                                                    animation,
+                                                    flightDirection,
+                                                    fromHeroContext,
+                                                    toHeroContext,
+                                                  ) =>
+                                                      _buildHeroShuttle(
+                                                    animation: animation,
+                                                    flightDirection:
+                                                        flightDirection,
+                                                    item: _videos[index],
+                                                    psdFallbackBytes:
+                                                        _psdRenderedBytes[
+                                                                _videos[index]
+                                                                    .path] ??
+                                                            PsdService.instance
+                                                                .getCachedRenderedPreviewSync(
+                                                                    _videos[index]
+                                                                        .path),
+                                                    fallbackChild:
+                                                        flightDirection ==
+                                                                HeroFlightDirection
+                                                                    .push
+                                                            ? toHeroContext
+                                                                .widget
+                                                            : fromHeroContext
+                                                                .widget,
                                                   ),
+                                                  child:
+                                                      _buildVideoPage(index),
                                                 ),
+                                              ),
                                               )
                                             : Center(
                                                 child: _buildVideoPage(index),

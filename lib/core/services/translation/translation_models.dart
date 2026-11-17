@@ -27,6 +27,14 @@ enum TranslationEngineType {
   lmStudio,
 }
 
+/// Visual style preset for manga translation overlays.
+enum TranslationOverlayStyle {
+  googleLens,
+  classicManga,
+  darkContrast,
+  translucent,
+}
+
 /// Translated text block on a manga page.
 class MangaTranslatedBlock {
   final Rect boundingBox;

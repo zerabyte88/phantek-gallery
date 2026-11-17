@@ -13,12 +13,15 @@ import '../../../core/enums/startup_screen.dart';
 import '../../../core/enums/video_double_tap_action.dart';
 import '../../../core/providers/media_provider.dart';
 import '../../../core/providers/settings_provider.dart';
+import '../../../core/services/app_lock_service.dart';
 import '../../../core/services/folder_picker_service.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/services/thumbnail_service.dart';
+import '../../../core/services/translation/translation_models.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import 'widgets/developer_about_card.dart';
 import 'widgets/modern_theme_grid.dart';
+import 'widgets/translation_overlay_preview.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -30,6 +33,11 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen>
     with WidgetsBindingObserver {
   String _cacheSizeStr = 'Calculating...';
+  CacheSizeBreakdown _cacheBreakdown = const CacheSizeBreakdown(
+    thumbnailBytes: 0,
+    previewBytes: 0,
+    psdBytes: 0,
+  );
   bool _hasManageStorage = false;
 
   @override
@@ -63,9 +71,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Future<void> _loadCacheSize() async {
-    final sizeStr = await ThumbnailService.instance.getFormattedCacheSize();
+    final breakdown = await ThumbnailService.instance.getCacheSizeBreakdown();
+    final sizeStr = ThumbnailService.formatBytes(breakdown.totalBytes);
     if (mounted) {
-      setState(() => _cacheSizeStr = sizeStr);
+      setState(() {
+        _cacheBreakdown = breakdown;
+        _cacheSizeStr = sizeStr;
+      });
     }
   }
 
@@ -599,13 +611,66 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               color: dCs.onSurface,
                             ),
                           ),
-                          content: Text(
-                            '${context.tr.clearCacheConfirm}\n\n${context.tr.diskSize(_cacheSizeStr)}',
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              color: dCs.onSurfaceVariant,
-                              height: 1.4,
-                            ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                context.tr.clearCacheConfirm,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  color: dCs.onSurfaceVariant,
+                                  height: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: dCs.surfaceContainerHighest
+                                      .withValues(alpha: dIsDark ? 0.35 : 0.55),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: dCs.outlineVariant
+                                        .withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _CacheBreakdownRow(
+                                      label: context.tr.cacheThumbnails,
+                                      sizeText: ThumbnailService.formatBytes(
+                                          _cacheBreakdown.thumbnailBytes),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    _CacheBreakdownRow(
+                                      label: context.tr.cacheScreenPreviews,
+                                      sizeText: ThumbnailService.formatBytes(
+                                          _cacheBreakdown.previewBytes),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    _CacheBreakdownRow(
+                                      label: context.tr.cachePsdPreviews,
+                                      sizeText: ThumbnailService.formatBytes(
+                                          _cacheBreakdown.psdBytes),
+                                    ),
+                                    Divider(
+                                      height: 16,
+                                      thickness: 1,
+                                      color: dCs.outlineVariant
+                                          .withValues(alpha: 0.25),
+                                    ),
+                                    _CacheBreakdownRow(
+                                      label: context.tr.cacheTotal,
+                                      sizeText: ThumbnailService.formatBytes(
+                                          _cacheBreakdown.totalBytes),
+                                      bold: true,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                           actionsAlignment: MainAxisAlignment.spaceBetween,
                           actionsPadding: const EdgeInsets.symmetric(
@@ -669,11 +734,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   onTap: () =>
                       _showLmStudioConfigDialog(context, ref, settings),
                 ),
+                const _CardDivider(),
+                _ModernTile(
+                  icon: Icons.subtitles_outlined,
+                  title: context.tr.translationOverlaySettings,
+                  subtitle:
+                      '${context.tr.overlayStyleLabel(settings.translationOverlayStyle)} · ${(settings.translationFontScale * 100).round()}%',
+                  onTap: () => _showTranslationOverlayDialog(context, ref),
+                ),
               ],
             ),
             _SectionHeader(title: context.tr.privacyAndSecurity),
             _SettingsCard(
               children: [
+                _ModernSwitchTile(
+                  icon: Icons.fingerprint_rounded,
+                  title: context.tr.appLock,
+                  subtitle: context.tr.appLockDesc,
+                  value: settings.appLockEnabled,
+                  onChanged: (v) async {
+                    if (v) {
+                      final available =
+                          await AppLockService.instance.isDeviceAuthAvailable();
+                      if (!available) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                context.tr.appLockUnavailable,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          );
+                        }
+                        return;
+                      }
+                    }
+                    if (!context.mounted) return;
+                    final ok = await AppLockService.instance.authenticate(
+                      title: context.tr.appLockTitle,
+                      subtitle: context.tr.appLockToggleReason,
+                    );
+                    if (ok) {
+                      patch((s) => s.copyWith(appLockEnabled: v));
+                    }
+                  },
+                ),
+                const _CardDivider(),
                 _ModernSwitchTile(
                   icon: Icons.security_rounded,
                   title: context.tr.secureScreen,
@@ -1340,6 +1447,200 @@ Future<void> _showLmStudioConfigDialog(
                   Navigator.pop(ctx);
                 },
                 child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+class _CacheBreakdownRow extends StatelessWidget {
+  const _CacheBreakdownRow({
+    required this.label,
+    required this.sizeText,
+    this.bold = false,
+  });
+
+  final String label;
+  final String sizeText;
+  final bool bold;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
+            color: bold ? cs.onSurface : cs.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          sizeText,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+            color: bold ? cs.primary : cs.onSurface,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Future<void> _showTranslationOverlayDialog(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) {
+      return Consumer(
+        builder: (ctx, dialogRef, _) {
+          final dTheme = Theme.of(ctx);
+          final cs = dTheme.colorScheme;
+          final isDark = dTheme.brightness == Brightness.dark;
+          final settings = dialogRef.watch(settingsNotifierProvider);
+          final currentScale = settings.translationFontScale;
+          final currentStyle = settings.translationOverlayStyle;
+
+          void updateOverlay({
+            double? fontScale,
+            TranslationOverlayStyle? overlayStyle,
+          }) {
+            dialogRef.read(settingsNotifierProvider.notifier).update(
+                  (s) => s.copyWith(
+                    translationFontScale: fontScale,
+                    translationOverlayStyle: overlayStyle,
+                  ),
+                );
+          }
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+                width: 1,
+              ),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(Icons.subtitles_outlined,
+                      color: cs.primary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    ctx.tr.translationOverlaySettings,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TranslationOverlayPreview(
+                      fontScale: currentScale,
+                      overlayStyle: currentStyle,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      ctx.tr.translationOverlayStyle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: TranslationOverlayStyle.values.map((style) {
+                        final selected = currentStyle == style;
+                        return ChoiceChip(
+                          label: Text(ctx.tr.overlayStyleLabel(style)),
+                          selected: selected,
+                          onSelected: (_) {
+                            HapticFeedback.selectionClick();
+                            updateOverlay(overlayStyle: style);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          ctx.tr.translationTextSize,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        Text(
+                          '${(currentScale * 100).round()}%',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: cs.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Slider(
+                      value: currentScale,
+                      min: 0.8,
+                      max: 1.3,
+                      divisions: 10,
+                      label: '${(currentScale * 100).round()}%',
+                      onChanged: (v) {
+                        final snapped = (v * 20).round() / 20.0;
+                        updateOverlay(fontScale: snapped);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actionsAlignment: MainAxisAlignment.spaceBetween,
+            actionsPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  updateOverlay(
+                    fontScale: 1.0,
+                    overlayStyle: TranslationOverlayStyle.googleLens,
+                  );
+                },
+                child: Text(ctx.tr.resetToDefault),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(ctx.tr.save),
               ),
             ],
           );

@@ -51,6 +51,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   late final AnimationController _searchAnimController;
   final FocusNode _searchFocusNode = FocusNode();
   late int _currentPage;
+  bool _isTabTapTransition = false;
+  int? _pendingTapTargetPage;
+  Timer? _tabTapTimer;
   final Set<String> _selected = {};
   bool _selecting = false;
   bool _isSearching = false;
@@ -78,10 +81,24 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   List<MediaItem> _memoizedVideos = const [];
   List<Album> _memoizedAlbums = const [];
 
+  Map<String, int> _memoizedAllIndex = const {};
+  Map<String, int> _memoizedPhotosIndex = const {};
+  Map<String, int> _memoizedVideosIndex = const {};
+
   final Map<FilterOption, List<MediaItem>> _cachedGroupItems = {};
   final Map<FilterOption, TimelineGrouping> _cachedGroupTimelineGrouping = {};
   final Map<FilterOption, int> _cachedGroupDay = {};
   final Map<FilterOption, Map<String, List<int>>> _cachedGroupResult = {};
+  final Map<FilterOption, Map<String, Map<String, int>>> _cachedGroupIndexMaps =
+      {};
+
+  static Map<String, int> _buildIndexMap(List<MediaItem> items) {
+    final map = <String, int>{};
+    for (var i = 0; i < items.length; i++) {
+      map[items[i].id] = i;
+    }
+    return map;
+  }
 
   void _updateMemoizedTabs(List<MediaItem> allItems, SettingsModel settings) {
     if (identical(_cachedAllItemsRef, allItems) &&
@@ -134,6 +151,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         filter: FilterOption.videosOnly,
       ),
     );
+    _memoizedAllIndex = _buildIndexMap(_memoizedAll);
+    _memoizedPhotosIndex = _buildIndexMap(_memoizedPhotos);
+    _memoizedVideosIndex = _buildIndexMap(_memoizedVideos);
     _memoizedAlbums = _filterAlbumsBySearch(
       groupMediaIntoAlbums(
         filteredItems,
@@ -208,6 +228,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tabTapTimer?.cancel();
     _mediaChangeSub?.cancel();
     try {
       PhotoManager.stopChangeNotify();
@@ -313,29 +334,46 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   void _onTabSelected(FilterOption f) {
     final targetIdx = _tabs.indexOf(f);
     if (targetIdx != -1 && targetIdx != _currentPage) {
-      if (_selected.isNotEmpty) {
-        setState(() {
+      final oldPage = _currentPage;
+      final distance = (targetIdx - oldPage).abs();
+      _tabTapTimer?.cancel();
+      setState(() {
+        _currentPage = targetIdx;
+        _isTabTapTransition = true;
+        _pendingTapTargetPage = targetIdx;
+        if (_selected.isNotEmpty) {
           _selected.clear();
           _selecting = false;
-        });
-      }
-      if (_pageController.hasClients) {
-        final distance = (targetIdx - _currentPage).abs();
-        final duration = Duration(milliseconds: distance > 1 ? 300 : 260);
-        _pageController.animateToPage(
-          targetIdx,
-          duration: duration,
-          curve: Curves.easeOutCubic,
-        );
-      } else {
+        }
+      });
+      _tabTapTimer = Timer(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
         setState(() {
-          _currentPage = targetIdx;
+          _isTabTapTransition = false;
+          _pendingTapTargetPage = null;
         });
+      });
+      if (_pageController.hasClients) {
+        if (distance > 1) {
+          _pageController.jumpToPage(targetIdx);
+        } else {
+          _pageController.animateToPage(
+            targetIdx,
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+          );
+        }
       }
     }
   }
 
   void _onPageChanged(int index) {
+    if (_pendingTapTargetPage != null && index != _pendingTapTargetPage) {
+      return;
+    }
+    if (index == _pendingTapTargetPage) {
+      _pendingTapTargetPage = null;
+    }
     if (_currentPage != index) {
       setState(() {
         _currentPage = index;
@@ -776,6 +814,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             currentFilter: _tabs[_currentPage],
             onFilterChanged: _onTabSelected,
             pageController: _pageController,
+            isDirectTabTransition: _isTabTapTransition,
           ),
         ),
         body: Builder(
@@ -800,48 +839,62 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
 
             _updateMemoizedTabs(allItems, settings);
 
-            return PageView.builder(
-              controller: _pageController,
-              physics: _selecting
-                  ? const NeverScrollableScrollPhysics()
-                  : const PageScrollPhysics(),
-              onPageChanged: _onPageChanged,
-              itemCount: _tabs.length,
-              itemBuilder: (context, index) {
-                final tab = _tabs[index];
-                if (tab == FilterOption.albums) {
+            return NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification is ScrollStartNotification &&
+                    notification.dragDetails != null &&
+                    (_isTabTapTransition || _pendingTapTargetPage != null)) {
+                  _tabTapTimer?.cancel();
+                  setState(() {
+                    _isTabTapTransition = false;
+                    _pendingTapTargetPage = null;
+                  });
+                }
+                return false;
+              },
+              child: PageView.builder(
+                controller: _pageController,
+                physics: _selecting
+                    ? const NeverScrollableScrollPhysics()
+                    : const PageScrollPhysics(),
+                onPageChanged: _onPageChanged,
+                itemCount: _tabs.length,
+                itemBuilder: (context, index) {
+                  final tab = _tabs[index];
+                  if (tab == FilterOption.albums) {
+                    return _KeepAlivePage(
+                      child: _buildAlbumsGrid(
+                        albums: _memoizedAlbums,
+                        settings: settings,
+                        storageKey: 'gallery_tab_albums',
+                      ),
+                    );
+                  }
+                  final List<MediaItem> tabItems;
+                  switch (tab) {
+                    case FilterOption.photosOnly:
+                      tabItems = _memoizedPhotos;
+                      break;
+                    case FilterOption.videosOnly:
+                      tabItems = _memoizedVideos;
+                      break;
+                    default:
+                      tabItems = _memoizedAll;
+                      break;
+                  }
                   return _KeepAlivePage(
-                    child: _buildAlbumsGrid(
-                      albums: _memoizedAlbums,
-                      settings: settings,
-                      storageKey: 'gallery_tab_albums',
+                    child: HeroMode(
+                      enabled: _currentPage == index,
+                      child: _buildMediaGrid(
+                        items: tabItems,
+                        tab: tab,
+                        settings: settings,
+                        storageKey: 'gallery_tab_${tab.name}',
+                      ),
                     ),
                   );
-                }
-                final List<MediaItem> tabItems;
-                switch (tab) {
-                  case FilterOption.photosOnly:
-                    tabItems = _memoizedPhotos;
-                    break;
-                  case FilterOption.videosOnly:
-                    tabItems = _memoizedVideos;
-                    break;
-                  default:
-                    tabItems = _memoizedAll;
-                    break;
-                }
-                return _KeepAlivePage(
-                  child: HeroMode(
-                    enabled: _currentPage == index,
-                    child: _buildMediaGrid(
-                      items: tabItems,
-                      tab: tab,
-                      settings: settings,
-                      storageKey: 'gallery_tab_${tab.name}',
-                    ),
-                  ),
-                );
-              },
+                },
+              ),
             );
           },
         ),
@@ -1082,6 +1135,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         settings.thumbnailCropStyle == ThumbnailCropStyle.adaptive ? 0.8 : 1.0;
 
     if (settings.timelineGrouping == TimelineGrouping.continuous) {
+      final indexMap = switch (tab) {
+        FilterOption.photosOnly => _memoizedPhotosIndex,
+        FilterOption.videosOnly => _memoizedVideosIndex,
+        _ => _memoizedAllIndex,
+      };
       return _PinchZoomGridListener(
         child: RefreshIndicator(
           onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
@@ -1099,9 +1157,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             itemCount: items.length,
             findChildIndexCallback: (Key key) {
               if (key is ValueKey<String>) {
-                final id = key.value;
-                final idx = items.indexWhere((e) => e.id == id);
-                return idx >= 0 ? idx : null;
+                return indexMap[key.value];
               }
               return null;
             },
@@ -1111,24 +1167,38 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       );
     }
 
-    final today = DateTime.now().day;
+    final now = DateTime.now();
+    final todayDate = DateTime(now.year, now.month, now.day);
+    final todayKey = now.year * 10000 + now.month * 100 + now.day;
     Map<String, List<int>> groups;
+    Map<String, Map<String, int>> groupIndexMaps;
     if (identical(_cachedGroupItems[tab], items) &&
         _cachedGroupTimelineGrouping[tab] == settings.timelineGrouping &&
-        _cachedGroupDay[tab] == today &&
-        _cachedGroupResult[tab] != null) {
+        _cachedGroupDay[tab] == todayKey &&
+        _cachedGroupResult[tab] != null &&
+        _cachedGroupIndexMaps[tab] != null) {
       groups = _cachedGroupResult[tab]!;
+      groupIndexMaps = _cachedGroupIndexMaps[tab]!;
     } else {
       groups = <String, List<int>>{};
+      groupIndexMaps = <String, Map<String, int>>{};
       for (var i = 0; i < items.length; i++) {
-        final key =
-            _formatTimelineGroupKey(items[i].date, settings.timelineGrouping);
-        groups.putIfAbsent(key, () => []).add(i);
+        final item = items[i];
+        final key = _formatTimelineGroupKey(
+          item.date,
+          settings.timelineGrouping,
+          today: todayDate,
+        );
+        final list = groups.putIfAbsent(key, () => []);
+        final idMap = groupIndexMaps.putIfAbsent(key, () => {});
+        idMap[item.id] = list.length;
+        list.add(i);
       }
       _cachedGroupItems[tab] = items;
       _cachedGroupTimelineGrouping[tab] = settings.timelineGrouping;
-      _cachedGroupDay[tab] = today;
+      _cachedGroupDay[tab] = todayKey;
       _cachedGroupResult[tab] = groups;
+      _cachedGroupIndexMaps[tab] = groupIndexMaps;
     }
 
     final cs = Theme.of(context).colorScheme;
@@ -1175,10 +1245,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                     childCount: entry.value.length,
                     findChildIndexCallback: (Key key) {
                       if (key is ValueKey<String>) {
-                        final id = key.value;
-                        final idx = entry.value.indexWhere(
-                            (itemIdx) => items[itemIdx].id == id);
-                        return idx >= 0 ? idx : null;
+                        return groupIndexMaps[entry.key]?[key.value];
                       }
                       return null;
                     },
@@ -1193,7 +1260,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     );
   }
 
-  String _formatTimelineGroupKey(DateTime date, TimelineGrouping grouping) {
+  String _formatTimelineGroupKey(
+    DateTime date,
+    TimelineGrouping grouping, {
+    DateTime? today,
+  }) {
     if (grouping == TimelineGrouping.monthly) {
       const months = [
         'Jan',
@@ -1211,10 +1282,13 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       ];
       return '${months[date.month - 1]} ${date.year}';
     }
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final effectiveToday = today ??
+        () {
+          final now = DateTime.now();
+          return DateTime(now.year, now.month, now.day);
+        }();
     final target = DateTime(date.year, date.month, date.day);
-    final diff = today.difference(target).inDays;
+    final diff = effectiveToday.difference(target).inDays;
     if (diff == 0) return context.tr.today;
     if (diff == 1) return context.tr.yesterday;
     const months = [

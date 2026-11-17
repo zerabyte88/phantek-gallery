@@ -9,11 +9,15 @@ import '../../../../core/services/translation/translation_models.dart';
 class MangaTranslationOverlay extends StatelessWidget {
   final TranslationResult result;
   final TranslationRenderMode mode;
+  final double fontScale;
+  final TranslationOverlayStyle overlayStyle;
 
   const MangaTranslationOverlay({
     super.key,
     required this.result,
     required this.mode,
+    this.fontScale = 1.0,
+    this.overlayStyle = TranslationOverlayStyle.googleLens,
   });
 
   @override
@@ -31,6 +35,8 @@ class MangaTranslationOverlay extends StatelessWidget {
             result: result,
             mode: mode,
             viewportSize: size,
+            fontScale: fontScale,
+            overlayStyle: overlayStyle,
           ),
         );
       },
@@ -65,6 +71,8 @@ class MangaTranslationPainter extends CustomPainter {
   final TranslationResult result;
   final TranslationRenderMode mode;
   final Size? viewportSize;
+  final double fontScale;
+  final TranslationOverlayStyle overlayStyle;
 
   List<MangaSpeechBubbleCluster>? _precomputedClusters;
   List<({Rect rect, String text})>? _precomputedSfx;
@@ -82,6 +90,8 @@ class MangaTranslationPainter extends CustomPainter {
     required this.result,
     required this.mode,
     this.viewportSize,
+    this.fontScale = 1.0,
+    this.overlayStyle = TranslationOverlayStyle.googleLens,
   }) {
     if (viewportSize != null &&
         viewportSize!.width > 0 &&
@@ -98,7 +108,14 @@ class MangaTranslationPainter extends CustomPainter {
     List<MangaSpeechBubbleCluster> bubbles,
     List<({Rect rect, String text})> sfx
   }) _getOrComputeClusters(Size size) {
-    final key = _ClusterCacheKey(result, mode, size.width, size.height);
+    final key = _ClusterCacheKey(
+      result,
+      mode,
+      size.width,
+      size.height,
+      fontScale,
+      overlayStyle,
+    );
     final existing = _clusterCache[key];
     if (existing != null) return existing;
 
@@ -320,6 +337,8 @@ class MangaTranslationPainter extends CustomPainter {
     required String text,
     Rect? destRect,
     Size? screenSize,
+    double fontScale = 1.0,
+    TranslationOverlayStyle overlayStyle = TranslationOverlayStyle.googleLens,
   }) {
     final normalizedText = _normalizeLayoutText(text);
 
@@ -361,12 +380,14 @@ class MangaTranslationPainter extends CustomPainter {
 
     final Rect bubbleRect = Rect.fromLTWH(left, top, width, height);
     final (:maxTextWidth, :targetMaxHeight, isVertical: _) =
-        _computeTextBounds(bubbleRect);
+        _computeTextBounds(bubbleRect, fontScale: fontScale);
 
     _getOrCreateFittedPainter(
       text: normalizedText,
       maxTextWidth: maxTextWidth,
       targetMaxHeight: targetMaxHeight,
+      fontScale: fontScale,
+      overlayStyle: overlayStyle,
     );
 
     return bubbleRect;
@@ -398,10 +419,13 @@ class MangaTranslationPainter extends CustomPainter {
   }
 
   static ({double maxTextWidth, double targetMaxHeight, bool isVertical})
-      _computeTextBounds(Rect bubbleRect) {
+      _computeTextBounds(Rect bubbleRect, {double fontScale = 1.0}) {
     final bool isVertical = _shouldRotateVertical(bubbleRect);
-    final double hPad = _safeCornerInset(bubbleRect.width);
-    final double vPad = _safeCornerInset(bubbleRect.height);
+    final double padFactor = fontScale > 1.0
+        ? 1.0 - ((fontScale - 1.0) / 0.3).clamp(0.0, 1.0) * 0.45
+        : 1.0;
+    final double hPad = _safeCornerInset(bubbleRect.width) * padFactor;
+    final double vPad = _safeCornerInset(bubbleRect.height) * padFactor;
     final double availW = math.max(4.0, bubbleRect.width - hPad);
     final double availH = math.max(4.0, bubbleRect.height - vPad);
     return (
@@ -412,14 +436,21 @@ class MangaTranslationPainter extends CustomPainter {
   }
 
   @visibleForTesting
-  static TextPainter debugFitSpeechBubbleText(Rect bubbleRect, String text) {
+  static TextPainter debugFitSpeechBubbleText(
+    Rect bubbleRect,
+    String text, {
+    double fontScale = 1.0,
+    TranslationOverlayStyle overlayStyle = TranslationOverlayStyle.googleLens,
+  }) {
     final normalizedText = _normalizeLayoutText(text);
     final (:maxTextWidth, :targetMaxHeight, isVertical: _) =
-        _computeTextBounds(bubbleRect);
+        _computeTextBounds(bubbleRect, fontScale: fontScale);
     return _getOrCreateFittedPainter(
       text: normalizedText,
       maxTextWidth: maxTextWidth,
       targetMaxHeight: targetMaxHeight,
+      fontScale: fontScale,
+      overlayStyle: overlayStyle,
     );
   }
 
@@ -438,15 +469,19 @@ class MangaTranslationPainter extends CustomPainter {
       text: normalizedText,
       destRect: destRect,
       screenSize: screenSize,
+      fontScale: fontScale,
+      overlayStyle: overlayStyle,
     );
 
     final (:maxTextWidth, :targetMaxHeight, :isVertical) =
-        _computeTextBounds(bubbleRect);
+        _computeTextBounds(bubbleRect, fontScale: fontScale);
 
     final painter = _getOrCreateFittedPainter(
       text: normalizedText,
       maxTextWidth: maxTextWidth,
       targetMaxHeight: targetMaxHeight,
+      fontScale: fontScale,
+      overlayStyle: overlayStyle,
     );
 
     final double screenW = screenSize?.width ?? destRect?.width ?? 400.0;
@@ -465,14 +500,14 @@ class MangaTranslationPainter extends CustomPainter {
     final RRect eraseRRect =
         RRect.fromRectAndRadius(eraseRect, Radius.circular(cornerRadius));
 
-    // Opaque patch with Google Lens-style border hides source text cleanly.
-    canvas.drawRRect(eraseRRect, Paint()..color = const Color(0xFFFDFDFD));
+    final palette = _OverlayStylePalette.fromStyle(overlayStyle);
+    canvas.drawRRect(eraseRRect, Paint()..color = palette.bubbleFill);
     canvas.drawRRect(
       eraseRRect,
       Paint()
-        ..color = const Color(0xFF5F6368)
+        ..color = palette.bubbleBorder
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.1,
+        ..strokeWidth = palette.bubbleBorderWidth,
     );
 
     final double fitScale = _computeFitScale(
@@ -557,19 +592,25 @@ class MangaTranslationPainter extends CustomPainter {
         RRect.fromRectAndRadius(eraseRect, const Radius.circular(4.0));
 
     const double strokeMargin = 4.0;
-    final double hPad = _safeCornerInset(pillRect.width) +
+    final double padFactor = fontScale > 1.0
+        ? 1.0 - ((fontScale - 1.0) / 0.3).clamp(0.0, 1.0) * 0.45
+        : 1.0;
+    final double hPad = _safeCornerInset(pillRect.width) * padFactor +
         (pillRect.width > 16.0 ? strokeMargin : 0.0);
-    final double vPad = _safeCornerInset(pillRect.height) +
+    final double vPad = _safeCornerInset(pillRect.height) * padFactor +
         (pillRect.height > 16.0 ? strokeMargin : 0.0);
     final double maxTextWidth = math.max(4.0, pillRect.width - hPad);
     final double maxTextHeight = math.max(4.0, pillRect.height - vPad);
+
+    final palette = _OverlayStylePalette.fromStyle(overlayStyle);
 
     final (painter: fillPainter, :fontSize) = _fitTextPainterToBounds(
       text: normalized,
       maxWidth: maxTextWidth,
       maxHeight: maxTextHeight,
+      fontScale: fontScale,
       styleBuilder: (size) => TextStyle(
-        color: const Color(0xFF202124),
+        color: palette.sfxText,
         fontSize: size,
         fontWeight: FontWeight.w700,
         height: size <= 8.0 ? 1.08 : 1.15,
@@ -587,7 +628,7 @@ class MangaTranslationPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = strokeWidth
           ..strokeJoin = StrokeJoin.round
-          ..color = Colors.white,
+          ..color = palette.sfxStroke,
       ),
       maxWidth: maxTextWidth,
       maxLines: null,
@@ -603,13 +644,13 @@ class MangaTranslationPainter extends CustomPainter {
     canvas.drawRRect(
       eraseRRect,
       Paint()
-        ..color = Colors.white.withValues(alpha: 0.94)
+        ..color = palette.sfxFill
         ..style = PaintingStyle.fill,
     );
     canvas.drawRRect(
       eraseRRect,
       Paint()
-        ..color = const Color(0xFFDADCE0)
+        ..color = palette.sfxBorder
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.9,
     );
@@ -659,11 +700,13 @@ class MangaTranslationPainter extends CustomPainter {
     required TextStyle Function(double size) styleBuilder,
     double minFontSize = 1.5,
     double? maxFontSize,
+    double fontScale = 1.0,
   }) {
     final normalizedText = _normalizeLayoutText(text);
+    final double effectiveCap = (24.0 * fontScale).clamp(10.0, 34.0);
     final double upperBound =
-        (maxFontSize ?? math.min(24.0, math.max(12.0, maxHeight * 0.72)))
-            .clamp(minFontSize, 24.0)
+        (maxFontSize ?? math.min(effectiveCap, math.max(12.0 * fontScale, maxHeight * 0.72)))
+            .clamp(minFontSize, effectiveCap)
             .toDouble();
 
     String longestWord = '';
@@ -696,37 +739,54 @@ class MangaTranslationPainter extends CustomPainter {
       return null;
     }
 
+    TextPainter bestPainter;
+    double bestSize;
+
     final upperCandidate = tryFit(upperBound);
     if (upperCandidate != null) {
-      return (painter: upperCandidate, fontSize: upperBound);
+      bestPainter = upperCandidate;
+      bestSize = upperBound;
+    } else {
+      final minCandidate = tryFit(minFontSize);
+      if (minCandidate == null) {
+        final fallback = _buildTextPainter(
+          text: normalizedText,
+          style: styleBuilder(minFontSize),
+          maxWidth: maxWidth,
+          maxLines: null,
+        );
+        bestPainter = fallback;
+        bestSize = minFontSize;
+      } else {
+        double low = minFontSize;
+        double high = upperBound;
+        bestPainter = minCandidate;
+        bestSize = minFontSize;
+
+        while (high - low > 0.1) {
+          final double mid = (low + high) / 2.0;
+          final candidate = tryFit(mid);
+          if (candidate != null) {
+            bestPainter = candidate;
+            bestSize = mid;
+            low = mid;
+          } else {
+            high = mid;
+          }
+        }
+      }
     }
 
-    final minCandidate = tryFit(minFontSize);
-    if (minCandidate == null) {
-      final fallback = _buildTextPainter(
+    if (fontScale < 1.0) {
+      final scaledSize =
+          (bestSize * fontScale).clamp(minFontSize, effectiveCap).toDouble();
+      final scaledPainter = _buildTextPainter(
         text: normalizedText,
-        style: styleBuilder(minFontSize),
+        style: styleBuilder(scaledSize),
         maxWidth: maxWidth,
         maxLines: null,
       );
-      return (painter: fallback, fontSize: minFontSize);
-    }
-
-    double low = minFontSize;
-    double high = upperBound;
-    TextPainter bestPainter = minCandidate;
-    double bestSize = minFontSize;
-
-    while (high - low > 0.1) {
-      final double mid = (low + high) / 2.0;
-      final candidate = tryFit(mid);
-      if (candidate != null) {
-        bestPainter = candidate;
-        bestSize = mid;
-        low = mid;
-      } else {
-        high = mid;
-      }
+      return (painter: scaledPainter, fontSize: scaledSize);
     }
 
     return (painter: bestPainter, fontSize: bestSize);
@@ -736,30 +796,39 @@ class MangaTranslationPainter extends CustomPainter {
   bool shouldRepaint(covariant MangaTranslationPainter oldDelegate) {
     return oldDelegate.result != result ||
         oldDelegate.mode != mode ||
-        oldDelegate.viewportSize != viewportSize;
+        oldDelegate.viewportSize != viewportSize ||
+        oldDelegate.fontScale != fontScale ||
+        oldDelegate.overlayStyle != overlayStyle;
   }
 
   static TextPainter _getOrCreateFittedPainter({
     required String text,
     required double maxTextWidth,
     required double targetMaxHeight,
+    double fontScale = 1.0,
+    TranslationOverlayStyle overlayStyle = TranslationOverlayStyle.googleLens,
   }) {
     final normalizedText = _normalizeLayoutText(text);
     final key = _FittedTextPainterCacheKey(
       text: normalizedText,
       maxTextWidth: (maxTextWidth * 10).round() / 10,
       targetMaxHeight: (targetMaxHeight * 10).round() / 10,
+      fontScale: (fontScale * 100).round() / 100,
+      overlayStyle: overlayStyle,
     );
 
     final cached = _fittedPainterCache[key];
     if (cached != null) return cached;
 
+    final palette = _OverlayStylePalette.fromStyle(overlayStyle);
+
     final (:painter, fontSize: _) = _fitTextPainterToBounds(
       text: normalizedText,
       maxWidth: maxTextWidth,
       maxHeight: targetMaxHeight,
+      fontScale: fontScale,
       styleBuilder: (size) => TextStyle(
-        color: const Color(0xFF202124),
+        color: palette.textColor,
         fontSize: size,
         fontWeight: FontWeight.w500,
         height: size <= 8.0 ? 1.08 : 1.18,
@@ -774,15 +843,86 @@ class MangaTranslationPainter extends CustomPainter {
   }
 }
 
+class _OverlayStylePalette {
+  const _OverlayStylePalette({
+    required this.bubbleFill,
+    required this.bubbleBorder,
+    required this.bubbleBorderWidth,
+    required this.textColor,
+    required this.sfxFill,
+    required this.sfxBorder,
+    required this.sfxText,
+    required this.sfxStroke,
+  });
+
+  final Color bubbleFill;
+  final Color bubbleBorder;
+  final double bubbleBorderWidth;
+  final Color textColor;
+  final Color sfxFill;
+  final Color sfxBorder;
+  final Color sfxText;
+  final Color sfxStroke;
+
+  factory _OverlayStylePalette.fromStyle(TranslationOverlayStyle style) {
+    return switch (style) {
+      TranslationOverlayStyle.googleLens => _OverlayStylePalette(
+          bubbleFill: const Color(0xFFFDFDFD),
+          bubbleBorder: const Color(0xFF5F6368),
+          bubbleBorderWidth: 1.1,
+          textColor: const Color(0xFF202124),
+          sfxFill: Colors.white.withValues(alpha: 0.94),
+          sfxBorder: const Color(0xFFDADCE0),
+          sfxText: const Color(0xFF202124),
+          sfxStroke: Colors.white,
+        ),
+      TranslationOverlayStyle.classicManga => const _OverlayStylePalette(
+          bubbleFill: Color(0xFFFFFFFF),
+          bubbleBorder: Color(0xFF111111),
+          bubbleBorderWidth: 1.5,
+          textColor: Color(0xFF000000),
+          sfxFill: Colors.white,
+          sfxBorder: Color(0xFF111111),
+          sfxText: Color(0xFF000000),
+          sfxStroke: Colors.white,
+        ),
+      TranslationOverlayStyle.darkContrast => const _OverlayStylePalette(
+          bubbleFill: Color(0xF218181B),
+          bubbleBorder: Color(0xFF71717A),
+          bubbleBorderWidth: 1.1,
+          textColor: Color(0xFFF4F4F5),
+          sfxFill: Color(0xEE18181B),
+          sfxBorder: Color(0xFF52525B),
+          sfxText: Color(0xFFF4F4F5),
+          sfxStroke: Color(0xFF09090B),
+        ),
+      TranslationOverlayStyle.translucent => const _OverlayStylePalette(
+          bubbleFill: Color(0xC7111318),
+          bubbleBorder: Colors.white38,
+          bubbleBorderWidth: 1.0,
+          textColor: Color(0xFFFFFFFF),
+          sfxFill: Color(0xBD111318),
+          sfxBorder: Colors.white30,
+          sfxText: Color(0xFFFFFFFF),
+          sfxStroke: Color(0xFF000000),
+        ),
+    };
+  }
+}
+
 class _FittedTextPainterCacheKey {
   final String text;
   final double maxTextWidth;
   final double targetMaxHeight;
+  final double fontScale;
+  final TranslationOverlayStyle overlayStyle;
 
   const _FittedTextPainterCacheKey({
     required this.text,
     required this.maxTextWidth,
     required this.targetMaxHeight,
+    required this.fontScale,
+    required this.overlayStyle,
   });
 
   @override
@@ -792,10 +932,18 @@ class _FittedTextPainterCacheKey {
           runtimeType == other.runtimeType &&
           text == other.text &&
           maxTextWidth == other.maxTextWidth &&
-          targetMaxHeight == other.targetMaxHeight;
+          targetMaxHeight == other.targetMaxHeight &&
+          fontScale == other.fontScale &&
+          overlayStyle == other.overlayStyle;
 
   @override
-  int get hashCode => Object.hash(text, maxTextWidth, targetMaxHeight);
+  int get hashCode => Object.hash(
+        text,
+        maxTextWidth,
+        targetMaxHeight,
+        fontScale,
+        overlayStyle,
+      );
 }
 
 class _ClusterCacheKey {
@@ -803,9 +951,17 @@ class _ClusterCacheKey {
   final TranslationRenderMode mode;
   final double width;
   final double height;
+  final double fontScale;
+  final TranslationOverlayStyle overlayStyle;
 
   const _ClusterCacheKey(
-      this.resultIdentity, this.mode, this.width, this.height);
+    this.resultIdentity,
+    this.mode,
+    this.width,
+    this.height,
+    this.fontScale,
+    this.overlayStyle,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -815,9 +971,17 @@ class _ClusterCacheKey {
           identical(resultIdentity, other.resultIdentity) &&
           mode == other.mode &&
           width == other.width &&
-          height == other.height;
+          height == other.height &&
+          fontScale == other.fontScale &&
+          overlayStyle == other.overlayStyle;
 
   @override
-  int get hashCode =>
-      Object.hash(identityHashCode(resultIdentity), mode, width, height);
+  int get hashCode => Object.hash(
+        identityHashCode(resultIdentity),
+        mode,
+        width,
+        height,
+        fontScale,
+        overlayStyle,
+      );
 }

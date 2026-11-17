@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:phantek_gallery/app/theme.dart';
 import 'package:phantek_gallery/core/enums/filter_option.dart';
 import 'package:phantek_gallery/core/enums/sort_option.dart';
+import 'package:phantek_gallery/core/enums/timeline_grouping.dart';
 import 'package:phantek_gallery/core/enums/video_double_tap_action.dart';
 import 'package:phantek_gallery/core/models/album.dart';
 import 'package:phantek_gallery/core/models/media_item.dart';
@@ -26,6 +27,7 @@ import 'package:phantek_gallery/core/models/trash_item.dart';
 import 'package:phantek_gallery/core/utils/media_utils.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/album_grid_item.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/media_grid_item.dart';
+import 'package:phantek_gallery/features/gallery/presentation/widgets/shimmer_loading_tile.dart';
 import 'package:phantek_gallery/features/gallery/presentation/album_detail_screen.dart';
 import 'package:phantek_gallery/features/gallery/presentation/gallery_screen.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/filter_sort_bar.dart';
@@ -48,6 +50,10 @@ import 'package:phantek_gallery/core/providers/settings_provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:phantek_gallery/core/localization/app_language.dart';
 import 'package:phantek_gallery/core/localization/app_localizations.dart';
+import 'package:phantek_gallery/core/services/app_lock_service.dart';
+import 'package:phantek_gallery/core/services/translation/translation_models.dart';
+import 'package:phantek_gallery/features/settings/presentation/widgets/translation_overlay_preview.dart';
+import 'package:phantek_gallery/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -1331,14 +1337,14 @@ void main() {
     });
 
     test(
-        'Photo InteractiveViewer focal point matrix scales to 2.5x and returns cleanly to identity',
+        'Photo InteractiveViewer focal point matrix scales to 3.0x and returns cleanly to identity',
         () {
       final controller = TransformationController();
       expect(controller.value.getMaxScaleOnAxis(), 1.0);
       expect(controller.value.isIdentity(), isTrue);
 
       const tapPos = Offset(250.0, 450.0);
-      const double targetScale = 2.5;
+      const double targetScale = 3.0;
 
       // Zoom in to focal point
       final endMatrix = Matrix4.identity()
@@ -1347,7 +1353,7 @@ void main() {
         ..translateByDouble(-tapPos.dx, -tapPos.dy, 0.0, 1.0);
 
       controller.value = endMatrix;
-      expect(controller.value.getMaxScaleOnAxis(), 2.5);
+      expect(controller.value.getMaxScaleOnAxis(), 3.0);
       expect(controller.value.getMaxScaleOnAxis() > 1.05, isTrue);
 
       // The focal point transformed by the matrix should stay at tapPos
@@ -2144,7 +2150,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final clearTile = find.text('Clear Thumbnail Cache');
+      final clearTile = find.text('Clear Thumbnail & Preview Cache');
       await tester.scrollUntilVisible(clearTile, 200);
       await tester.pumpAndSettle();
       expect(clearTile, findsOneWidget);
@@ -3491,6 +3497,1181 @@ void main() {
 
       await tester.pump(const Duration(seconds: 1));
     });
+
+    test(
+        'computeClampedFocalZoomMatrix preserves interior focal points and clamps viewport boundaries',
+        () {
+      const viewport = Size(300.0, 600.0);
+      const scale = 3.0;
+
+      for (final focal in const [
+        Offset(150.0, 300.0),
+        Offset(42.0, 125.0),
+        Offset(265.0, 520.0),
+        Offset(10.0, 10.0),
+      ]) {
+        final matrix = computeClampedFocalZoomMatrix(
+          currentMatrix: Matrix4.identity(),
+          localFocal: focal,
+          viewportSize: viewport,
+          targetScale: scale,
+        );
+        expect(matrix.getMaxScaleOnAxis(), closeTo(scale, 0.001));
+        final transformed = MatrixUtils.transformPoint(matrix, focal);
+        expect(transformed.dx, closeTo(focal.dx, 0.5));
+        expect(transformed.dy, closeTo(focal.dy, 0.5));
+        expect(matrix.storage[12],
+            inInclusiveRange(-viewport.width * (scale - 1.0), 0.0));
+        expect(matrix.storage[13],
+            inInclusiveRange(-viewport.height * (scale - 1.0), 0.0));
+      }
+
+      // Out-of-bounds focal coordinates clamp strictly to [-(w*(s-1)), 0]
+      final topLeftClamped = computeClampedFocalZoomMatrix(
+        currentMatrix: Matrix4.identity(),
+        localFocal: const Offset(-100.0, -50.0),
+        viewportSize: viewport,
+        targetScale: scale,
+      );
+      expect(topLeftClamped.storage[12], closeTo(0.0, 0.001));
+      expect(topLeftClamped.storage[13], closeTo(0.0, 0.001));
+
+      final bottomRightClamped = computeClampedFocalZoomMatrix(
+        currentMatrix: Matrix4.identity(),
+        localFocal: const Offset(500.0, 900.0),
+        viewportSize: viewport,
+        targetScale: scale,
+      );
+      expect(bottomRightClamped.storage[12],
+          closeTo(-viewport.width * (scale - 1.0), 0.001));
+      expect(bottomRightClamped.storage[13],
+          closeTo(-viewport.height * (scale - 1.0), 0.001));
+
+      // Reset / degenerate viewport returns identity
+      expect(
+        computeClampedFocalZoomMatrix(
+          currentMatrix: topLeftClamped,
+          localFocal: const Offset(100.0, 100.0),
+          viewportSize: viewport,
+          targetScale: 1.0,
+        ).isIdentity(),
+        isTrue,
+      );
+      expect(
+        computeClampedFocalZoomMatrix(
+          currentMatrix: Matrix4.identity(),
+          localFocal: const Offset(100.0, 100.0),
+          viewportSize: Size.zero,
+          targetScale: 3.0,
+        ).isIdentity(),
+        isTrue,
+      );
+    });
+
+    testWidgets(
+        'Standard photo ImageViewerScreen double-tap zoom cycles 1.0x -> 3.0x -> 1.0x',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final photoItem = MediaItem(
+        id: 'std_photo_1',
+        path: '/mock/std_photo_1.jpg',
+        name: 'std_photo_1.jpg',
+        date: DateTime(2026, 1, 1),
+        size: 1024,
+        isVideo: false,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: ImageViewerScreen(
+              items: [photoItem],
+              initialIndex: 0,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final ivFinder = find.byType(InteractiveViewer);
+      expect(ivFinder, findsOneWidget);
+      final controller =
+          tester.widget<InteractiveViewer>(ivFinder).transformationController!;
+      expect(controller.value.getMaxScaleOnAxis(), closeTo(1.0, 0.01));
+
+      final center = tester.getCenter(find.byType(PageView));
+
+      // Double-tap 1 -> 3.0x
+      await tester.tapAt(center);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(center);
+      await tester.pumpAndSettle();
+      expect(controller.value.getMaxScaleOnAxis(), closeTo(3.0, 0.01));
+
+      // Double-tap 2 -> 1.0x (never 4.0x)
+      await tester.tapAt(center);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(center);
+      await tester.pumpAndSettle();
+      expect(controller.value.getMaxScaleOnAxis(), closeTo(1.0, 0.01));
+      expect(controller.value.isIdentity(), isTrue);
+    });
+
+    testWidgets(
+        'Letterboxed ImageViewerScreen converts globalPosition to InteractiveViewer local coordinates and zooms onto exact focal point',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      // Portrait 1:2 image inside 800x600 screen -> letterboxed 300x600 at x=250..550
+      final portraitPhoto = MediaItem(
+        id: 'letterbox_photo_1',
+        path: '/mock/letterbox_photo_1.jpg',
+        name: 'letterbox_photo_1.jpg',
+        date: DateTime(2026, 1, 1),
+        size: 1024,
+        isVideo: false,
+        width: 400,
+        height: 800,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: ImageViewerScreen(
+              items: [portraitPhoto],
+              initialIndex: 0,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final ivFinder = find.byType(InteractiveViewer);
+      expect(ivFinder, findsOneWidget);
+      final ivBox = tester.renderObject<RenderBox>(ivFinder);
+      expect(ivBox.size.width, closeTo(300.0, 0.5));
+      expect(ivBox.size.height, closeTo(600.0, 0.5));
+      final ivTopLeft = ivBox.localToGlobal(Offset.zero);
+      expect(ivTopLeft.dx, closeTo(250.0, 0.5));
+
+      // Tap asymmetric interior point inside the letterboxed image
+      const screenTap = Offset(310.0, 180.0);
+      final expectedLocalFocal = ivBox.globalToLocal(screenTap);
+      expect(expectedLocalFocal.dx, closeTo(60.0, 0.5));
+      expect(expectedLocalFocal.dy, closeTo(180.0, 0.5));
+
+      await tester.tapAt(screenTap);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(screenTap);
+      await tester.pumpAndSettle();
+
+      final controller =
+          tester.widget<InteractiveViewer>(ivFinder).transformationController!;
+      expect(controller.value.getMaxScaleOnAxis(), closeTo(3.0, 0.01));
+
+      final transformed =
+          MatrixUtils.transformPoint(controller.value, expectedLocalFocal);
+      expect(transformed.dx, closeTo(expectedLocalFocal.dx, 0.5));
+      expect(transformed.dy, closeTo(expectedLocalFocal.dy, 0.5));
+      expect(controller.value.storage[12], closeTo(-120.0, 0.5));
+      expect(controller.value.storage[13], closeTo(-360.0, 0.5));
+
+      // Second double-tap resets to 1.0x
+      await tester.tapAt(screenTap);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(screenTap);
+      await tester.pumpAndSettle();
+      expect(controller.value.isIdentity(), isTrue);
+    });
+
+    testWidgets(
+        'Letterboxed VideoPlayerScreen converts globalPosition to InteractiveViewer local coordinates, zooms 1.0x <-> 3.0x, and clamps viewport bounds',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      // Portrait 1:2 video inside 800x600 screen -> letterboxed 300x600 at x=250..550
+      final portraitVideo = MediaItem(
+        id: 'letterbox_video_1',
+        path: '/mock/letterbox_video_1.mp4',
+        name: 'letterbox_video_1.mp4',
+        date: DateTime(2026, 1, 1),
+        size: 2048,
+        isVideo: true,
+        width: 400,
+        height: 800,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsNotifierProvider.overrideWith(
+              () => _TestSettingsNotifier(
+                const SettingsModel(
+                  videoDoubleTapAction: VideoDoubleTapAction.zoomOnly,
+                  autoPlayVideo: false,
+                ),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: VideoPlayerScreen(
+              items: [portraitVideo],
+              initialIndex: 0,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final ivFinder = find.byType(InteractiveViewer);
+      expect(ivFinder, findsOneWidget);
+      final ivBox = tester.renderObject<RenderBox>(ivFinder);
+      expect(ivBox.size.width, closeTo(300.0, 0.5));
+      expect(ivBox.size.height, closeTo(600.0, 0.5));
+      expect(ivBox.localToGlobal(Offset.zero).dx, closeTo(250.0, 0.5));
+
+      const screenTap = Offset(310.0, 180.0);
+      final expectedLocalFocal = ivBox.globalToLocal(screenTap);
+
+      await tester.tapAt(screenTap);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(screenTap);
+      await tester.pumpAndSettle();
+
+      final controller =
+          tester.widget<InteractiveViewer>(ivFinder).transformationController!;
+      expect(controller.value.getMaxScaleOnAxis(), closeTo(3.0, 0.01));
+
+      final transformed =
+          MatrixUtils.transformPoint(controller.value, expectedLocalFocal);
+      expect(transformed.dx, closeTo(expectedLocalFocal.dx, 0.5));
+      expect(transformed.dy, closeTo(expectedLocalFocal.dy, 0.5));
+      expect(controller.value.storage[12], closeTo(-120.0, 0.5));
+      expect(controller.value.storage[13], closeTo(-360.0, 0.5));
+
+      // Second double-tap resets to 1.0x
+      await tester.tapAt(screenTap);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(screenTap);
+      await tester.pumpAndSettle();
+      expect(controller.value.isIdentity(), isTrue);
+
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets(
+        'GalleryScreen direct tab jump from All to Albums switches cleanly and manual drag updates FilterSortBar',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+          ],
+          child: const MaterialApp(
+            home: GalleryScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final pageViewFinder = find.byType(PageView);
+      final barFinder = find.byType(FilterSortBar);
+      expect(pageViewFinder, findsOneWidget);
+      expect(barFinder, findsOneWidget);
+
+      // Tap Albums (index 3) from All (index 0): jumps directly without building intermediate pages
+      await tester.tap(find.text('Albums'));
+      await tester.pump();
+
+      final PageView jumpedPageView = tester.widget(pageViewFinder);
+      expect(jumpedPageView.controller?.page, 3.0);
+
+      final FilterSortBar directBar = tester.widget(barFinder);
+      expect(directBar.currentFilter, FilterOption.albums);
+      expect(directBar.isDirectTabTransition, isTrue);
+
+      // After the 300ms transition window, direct flag settles back to false
+      await tester.pump(const Duration(milliseconds: 350));
+      final FilterSortBar settledBar = tester.widget(barFinder);
+      expect(settledBar.isDirectTabTransition, isFalse);
+
+      // Manual horizontal drag back to Videos (index 2) updates FilterSortBar
+      await tester.drag(pageViewFinder, const Offset(500, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final PageView draggedPageView = tester.widget(pageViewFinder);
+      expect(draggedPageView.controller?.page?.round(), 2);
+      final FilterSortBar draggedBar = tester.widget(barFinder);
+      expect(draggedBar.currentFilter, FilterOption.videosOnly);
+
+      // Tapping adjacent tab (Photos, index 1) activates direct transition, and dragging cancels it immediately
+      await tester.tap(find.text('Photos'));
+      await tester.pump();
+      expect(
+          tester.widget<FilterSortBar>(barFinder).isDirectTabTransition, isTrue);
+
+      final gesture = await tester.startGesture(const Offset(200, 400));
+      await gesture.moveBy(const Offset(40, 0));
+      await tester.pump();
+      expect(tester.widget<FilterSortBar>(barFinder).isDirectTabTransition,
+          isFalse);
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 500));
+    });
+
+    testWidgets(
+        'FilterSortBar with PageController uses AnimatedAlign when isDirectTabTransition is true',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final pageController = PageController(initialPage: 0);
+      addTearDown(pageController.dispose);
+
+      Widget buildHarness(bool isDirect) {
+        return ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              appBar: PreferredSize(
+                preferredSize: const Size.fromHeight(96),
+                child: FilterSortBar(
+                  pageController: pageController,
+                  currentFilter: FilterOption.albums,
+                  isDirectTabTransition: isDirect,
+                ),
+              ),
+              body: PageView(
+                controller: pageController,
+                children: const [
+                  Text('Page All'),
+                  Text('Page Photos'),
+                  Text('Page Videos'),
+                  Text('Page Albums'),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildHarness(false));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byType(FilterSortBar),
+          matching: find.byType(AnimatedAlign),
+        ),
+        findsNothing,
+      );
+
+      await tester.pumpWidget(buildHarness(true));
+      await tester.pump();
+
+      expect(
+        find.descendant(
+          of: find.byType(FilterSortBar),
+          matching: find.byType(AnimatedAlign),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(FilterSortBar),
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is AnimatedDefaultTextStyle &&
+                w.duration == const Duration(milliseconds: 280),
+          ),
+        ),
+        findsNWidgets(4),
+      );
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets(
+        'SortBottomSheet animates sliding pill, defers onSortChanged, and flushes pending sort on immediate close',
+        (tester) async {
+      final delivered = <SortOption>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SortBottomSheet(
+              currentSort: SortOption.newest,
+              onSortChanged: delivered.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Sliding pill AnimatedAlign exists for all 5 sort criteria
+      expect(find.byType(AnimatedAlign), findsNWidgets(5));
+      expect(
+        find.descendant(
+          of: find.byType(SortBottomSheet),
+          matching: find.byType(RepaintBoundary),
+        ),
+        findsAtLeastNWidgets(1),
+      );
+
+      // Tap "By name": selection animates for 200ms before delivering callback
+      await tester.tap(find.text('By name'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(delivered, isEmpty);
+
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(delivered, [SortOption.nameAZ]);
+
+      // Toggle direction arrow on "By name" (index 2: shootingTime=0, timeAdded=1, name=2)
+      await tester.tap(find.byIcon(Icons.arrow_downward).at(2));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(delivered, [SortOption.nameAZ]);
+
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(delivered, [SortOption.nameAZ, SortOption.nameZA]);
+
+      // Test immediate close via showSortBottomSheet before 200ms elapses
+      final modalDelivered = <SortOption>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () {
+                  showSortBottomSheet(
+                    context,
+                    currentSort: SortOption.newest,
+                    onSortChanged: modalDelivered.add,
+                  );
+                },
+                child: const Text('Open Sort'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Sort'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('By size'));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(modalDelivered, isEmpty);
+
+      // Close immediately before 200ms finishes
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      expect(modalDelivered, [SortOption.sizeDesc]);
+    });
+
+    test(
+        'ThumbnailService.getIndexedDiskFile returns indexed file without disk check and evictDiskCacheIndex removes it',
+        () async {
+      await ThumbnailService.init();
+      final service = ThumbnailService.instance;
+      const assetId = 'indexed_disk_test_asset';
+
+      service.evictDiskCacheIndex(assetId);
+      expect(service.getIndexedDiskFile(assetId), isNull);
+
+      final fileName = service.debugCacheFileName(assetId);
+      service.registerDiskCacheFileName(fileName);
+
+      final indexedFile = service.getIndexedDiskFile(assetId);
+      expect(indexedFile, isNotNull);
+      expect(indexedFile!.path.endsWith(fileName), isTrue);
+      expect(indexedFile.existsSync(), isFalse);
+
+      service.evictDiskCacheIndex(assetId);
+      expect(service.hasDiskCache(assetId), isFalse);
+      expect(service.getIndexedDiskFile(assetId), isNull);
+    });
+
+    testWidgets(
+        'Multiple ShimmerLoadingTile widgets share one ticker and dispose cleanly',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                SizedBox(width: 80, height: 80, child: ShimmerLoadingTile()),
+                SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: ShimmerLoadingTile(isVideo: true),
+                ),
+                SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: ShimmerLoadingTile(icon: Icons.photo_library_rounded),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(ShimmerLoadingTile.debugActiveMountCount, 3);
+      expect(ShimmerLoadingTile.debugHasActiveTicker, isTrue);
+
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.byType(ShimmerLoadingTile), findsNWidgets(3));
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                SizedBox(width: 80, height: 80, child: ShimmerLoadingTile()),
+                SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: ShimmerLoadingTile(isVideo: true),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(ShimmerLoadingTile.debugActiveMountCount, 2);
+      expect(ShimmerLoadingTile.debugHasActiveTicker, isTrue);
+
+      await tester.pumpWidget(Container());
+      expect(ShimmerLoadingTile.debugActiveMountCount, 0);
+      expect(ShimmerLoadingTile.debugHasActiveTicker, isFalse);
+    });
+
+    testWidgets(
+        'GalleryScreen continuous and timeline-grouped grids resolve findChildIndexCallback after item updates and reordering',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final now = DateTime.now();
+      final todayMorning = DateTime(now.year, now.month, now.day, 10, 0);
+      final todayNoon = DateTime(now.year, now.month, now.day, 12, 0);
+      final yesterday1 = DateTime(now.year, now.month, now.day, 10, 0)
+          .subtract(const Duration(days: 1));
+      final yesterday2 = DateTime(now.year, now.month, now.day, 8, 0)
+          .subtract(const Duration(days: 1));
+
+      final initialItems = [
+        MediaItem(
+          id: 'c_item_1',
+          path: '/mock/1.jpg',
+          name: '1.jpg',
+          date: todayNoon,
+          size: 100,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'c_item_2',
+          path: '/mock/2.jpg',
+          name: '2.jpg',
+          date: todayMorning,
+          size: 200,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'c_item_3',
+          path: '/mock/3.jpg',
+          name: '3.jpg',
+          date: yesterday1,
+          size: 300,
+          isVideo: false,
+        ),
+      ];
+
+      final notifier = _MutableMockMediaNotifier(initialItems);
+
+      // 1. Continuous mode
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsNotifierProvider.overrideWith(
+              () => _TestSettingsNotifier(
+                const SettingsModel(
+                  timelineGrouping: TimelineGrouping.continuous,
+                  defaultSort: SortOption.newest,
+                ),
+              ),
+            ),
+            mediaListProvider.overrideWith(() => notifier),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            home: GalleryScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      GridView continuousGrid = tester.widget<GridView>(find.byType(GridView));
+      SliverChildBuilderDelegate continuousDelegate =
+          continuousGrid.childrenDelegate as SliverChildBuilderDelegate;
+      expect(
+        continuousDelegate.findChildIndexCallback!(
+            const ValueKey<String>('c_item_1')),
+        0,
+      );
+      expect(
+        continuousDelegate.findChildIndexCallback!(
+            const ValueKey<String>('c_item_2')),
+        1,
+      );
+      expect(
+        continuousDelegate.findChildIndexCallback!(
+            const ValueKey<String>('c_item_3')),
+        2,
+      );
+      expect(
+        continuousDelegate.findChildIndexCallback!(
+            const ValueKey<String>('missing')),
+        isNull,
+      );
+
+      // Reorder & update items (c_item_3 promoted to newest, c_item_2 removed, c_item_4 added)
+      notifier.setItems([
+        MediaItem(
+          id: 'c_item_3',
+          path: '/mock/3.jpg',
+          name: '3.jpg',
+          date: todayNoon.add(const Duration(hours: 2)),
+          size: 300,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'c_item_1',
+          path: '/mock/1.jpg',
+          name: '1.jpg',
+          date: todayNoon,
+          size: 100,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'c_item_4',
+          path: '/mock/4.jpg',
+          name: '4.jpg',
+          date: yesterday2,
+          size: 400,
+          isVideo: false,
+        ),
+      ]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      continuousGrid = tester.widget<GridView>(find.byType(GridView));
+      continuousDelegate =
+          continuousGrid.childrenDelegate as SliverChildBuilderDelegate;
+      expect(
+        continuousDelegate.findChildIndexCallback!(
+            const ValueKey<String>('c_item_3')),
+        0,
+      );
+      expect(
+        continuousDelegate.findChildIndexCallback!(
+            const ValueKey<String>('c_item_1')),
+        1,
+      );
+      expect(
+        continuousDelegate.findChildIndexCallback!(
+            const ValueKey<String>('c_item_4')),
+        2,
+      );
+      expect(
+        continuousDelegate.findChildIndexCallback!(
+            const ValueKey<String>('c_item_2')),
+        isNull,
+      );
+
+      // 2. Timeline-grouped (daily) mode
+      final groupedNotifier = _MutableMockMediaNotifier([
+        MediaItem(
+          id: 'g_today_1',
+          path: '/mock/t1.jpg',
+          name: 't1.jpg',
+          date: todayNoon,
+          size: 100,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'g_today_2',
+          path: '/mock/t2.jpg',
+          name: 't2.jpg',
+          date: todayMorning,
+          size: 100,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'g_yest_1',
+          path: '/mock/y1.jpg',
+          name: 'y1.jpg',
+          date: yesterday1,
+          size: 100,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'g_yest_2',
+          path: '/mock/y2.jpg',
+          name: 'y2.jpg',
+          date: yesterday2,
+          size: 100,
+          isVideo: false,
+        ),
+      ]);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          key: const ValueKey('grouped_scope'),
+          overrides: [
+            settingsNotifierProvider.overrideWith(
+              () => _TestSettingsNotifier(
+                const SettingsModel(
+                  timelineGrouping: TimelineGrouping.daily,
+                  defaultSort: SortOption.newest,
+                ),
+              ),
+            ),
+            mediaListProvider.overrideWith(() => groupedNotifier),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            home: GalleryScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      var sliverGrids =
+          tester.widgetList<SliverGrid>(find.byType(SliverGrid)).toList();
+      expect(sliverGrids.length, 2);
+
+      var todayDelegate = sliverGrids[0].delegate as SliverChildBuilderDelegate;
+      var yestDelegate = sliverGrids[1].delegate as SliverChildBuilderDelegate;
+      expect(
+        todayDelegate.findChildIndexCallback!(
+            const ValueKey<String>('g_today_1')),
+        0,
+      );
+      expect(
+        todayDelegate.findChildIndexCallback!(
+            const ValueKey<String>('g_today_2')),
+        1,
+      );
+      expect(
+        todayDelegate.findChildIndexCallback!(
+            const ValueKey<String>('g_yest_1')),
+        isNull,
+      );
+      expect(
+        yestDelegate.findChildIndexCallback!(
+            const ValueKey<String>('g_yest_1')),
+        0,
+      );
+      expect(
+        yestDelegate.findChildIndexCallback!(
+            const ValueKey<String>('g_yest_2')),
+        1,
+      );
+
+      // Reorder within both groups
+      groupedNotifier.setItems([
+        MediaItem(
+          id: 'g_today_2',
+          path: '/mock/t2.jpg',
+          name: 't2.jpg',
+          date: todayNoon.add(const Duration(hours: 1)),
+          size: 100,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'g_today_1',
+          path: '/mock/t1.jpg',
+          name: 't1.jpg',
+          date: todayMorning,
+          size: 100,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'g_yest_2',
+          path: '/mock/y2.jpg',
+          name: 'y2.jpg',
+          date: yesterday1.add(const Duration(hours: 1)),
+          size: 100,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'g_yest_1',
+          path: '/mock/y1.jpg',
+          name: 'y1.jpg',
+          date: yesterday2,
+          size: 100,
+          isVideo: false,
+        ),
+      ]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      sliverGrids =
+          tester.widgetList<SliverGrid>(find.byType(SliverGrid)).toList();
+      todayDelegate = sliverGrids[0].delegate as SliverChildBuilderDelegate;
+      yestDelegate = sliverGrids[1].delegate as SliverChildBuilderDelegate;
+
+      expect(
+        todayDelegate.findChildIndexCallback!(
+            const ValueKey<String>('g_today_2')),
+        0,
+      );
+      expect(
+        todayDelegate.findChildIndexCallback!(
+            const ValueKey<String>('g_today_1')),
+        1,
+      );
+      expect(
+        yestDelegate.findChildIndexCallback!(
+            const ValueKey<String>('g_yest_2')),
+        0,
+      );
+      expect(
+        yestDelegate.findChildIndexCallback!(
+            const ValueKey<String>('g_yest_1')),
+        1,
+      );
+    });
+
+    test(
+        'SettingsModel & SettingsService round-trip appLockEnabled, translationFontScale, and translationOverlayStyle',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      const defaults = SettingsModel();
+      expect(defaults.appLockEnabled, isFalse);
+      expect(defaults.translationFontScale, 1.0);
+      expect(
+          defaults.translationOverlayStyle, TranslationOverlayStyle.googleLens);
+
+      final updated = defaults.copyWith(
+        appLockEnabled: true,
+        translationFontScale: 1.25,
+        translationOverlayStyle: TranslationOverlayStyle.darkContrast,
+      );
+      expect(updated.appLockEnabled, isTrue);
+      expect(updated.translationFontScale, 1.25);
+      expect(updated.translationOverlayStyle,
+          TranslationOverlayStyle.darkContrast);
+
+      // Serialization round-trip
+      final revived = SettingsModel.fromMap(updated.toMap());
+      expect(revived, equals(updated));
+
+      // Clamping out-of-range font scale
+      final clampedLow = defaults.copyWith(translationFontScale: 0.4);
+      expect(clampedLow.translationFontScale, 0.8);
+      final clampedHigh = defaults.copyWith(translationFontScale: 2.0);
+      expect(clampedHigh.translationFontScale, 1.3);
+
+      await SettingsService.instance.save(updated);
+      final reloaded = SettingsService.instance.settings;
+      expect(reloaded.appLockEnabled, isTrue);
+      expect(reloaded.translationFontScale, 1.25);
+      expect(reloaded.translationOverlayStyle,
+          TranslationOverlayStyle.darkContrast);
+    });
+
+    test(
+        'AppLockService handles mock MethodChannel canAuthenticate and authenticate',
+        () async {
+      final calls = <MethodCall>[];
+      bool nextAuthResult = true;
+      bool nextCanAuth = true;
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('com.phantek.gallery/app_lock'),
+        (call) async {
+          calls.add(call);
+          if (call.method == 'canAuthenticate') return nextCanAuth;
+          if (call.method == 'authenticate') return nextAuthResult;
+          return null;
+        },
+      );
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+          const MethodChannel('com.phantek.gallery/app_lock'),
+          null,
+        );
+      });
+
+      expect(await AppLockService.instance.isDeviceAuthAvailable(), isTrue);
+      nextCanAuth = false;
+      expect(await AppLockService.instance.isDeviceAuthAvailable(), isFalse);
+
+      expect(AppLockService.instance.isPromptActive, isFalse);
+      final ok = await AppLockService.instance.authenticate(
+        title: 'Unlock',
+        subtitle: 'Verify identity',
+      );
+      expect(ok, isTrue);
+      expect(AppLockService.instance.isPromptActive, isFalse);
+
+      nextAuthResult = false;
+      final fail = await AppLockService.instance.authenticate(
+        title: 'Unlock',
+        subtitle: 'Verify identity',
+      );
+      expect(fail, isFalse);
+      expect(calls.map((c) => c.method).toList(),
+          ['canAuthenticate', 'canAuthenticate', 'authenticate', 'authenticate']);
+    });
+
+    testWidgets(
+        'PhantekGalleryApp shows AppLockOverlay when appLockEnabled is true and unlocks on auth success',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({'appLockEnabled': true});
+      await SettingsService.init();
+      await tester.runAsync(() => ThumbnailService.init());
+
+      var shouldUnlock = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('com.phantek.gallery/app_lock'),
+        (call) async {
+          if (call.method == 'canAuthenticate') return true;
+          if (call.method == 'authenticate') return shouldUnlock;
+          return null;
+        },
+      );
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+          const MethodChannel('com.phantek.gallery/app_lock'),
+          null,
+        );
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+          ],
+          child: const PhantekGalleryApp(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byKey(const ValueKey('app_lock_overlay')), findsOneWidget);
+      expect(find.text('Unlock'), findsOneWidget);
+
+      // Now allow authentication to succeed and tap Unlock button.
+      shouldUnlock = true;
+      await tester.tap(find.text('Unlock'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byKey(const ValueKey('app_lock_overlay')), findsNothing);
+    });
+
+    test(
+        'ThumbnailService.getCacheSizeBreakdown classifies thumb_, prev_, and psd_prev_ files accurately',
+        () async {
+      await ThumbnailService.init();
+      await ThumbnailService.instance.clearAll();
+      final dir = await ThumbnailService.instance.getCacheDirectory();
+
+      final thumbFile = File('${dir.path}${Platform.pathSeparator}thumb_test1.bin');
+      final hrFile = File('${dir.path}${Platform.pathSeparator}hr_test2.bin');
+      final prevFile = File('${dir.path}${Platform.pathSeparator}prev_test3.bin');
+      final psdFile =
+          File('${dir.path}${Platform.pathSeparator}psd_prev_test4.bin');
+
+      await thumbFile.writeAsBytes(Uint8List(120));
+      await hrFile.writeAsBytes(Uint8List(80));
+      await prevFile.writeAsBytes(Uint8List(350));
+      await psdFile.writeAsBytes(Uint8List(500));
+
+      final breakdown = await ThumbnailService.instance.getCacheSizeBreakdown();
+      expect(breakdown.thumbnailBytes, 200);
+      expect(breakdown.previewBytes, 350);
+      expect(breakdown.psdBytes, 500);
+      expect(breakdown.totalBytes, 1050);
+
+      await ThumbnailService.instance.clearAll();
+    });
+
+    testWidgets(
+        'SettingsScreen renders App Lock toggle, Cache Breakdown dialog, and Translation Overlay Style & Size dialog with JP->EN preview',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+      await tester.runAsync(() async {
+        await ThumbnailService.init();
+        await ThumbnailService.instance.clearAll();
+        final dir = await ThumbnailService.instance.getCacheDirectory();
+        await File('${dir.path}${Platform.pathSeparator}thumb_s1.bin')
+            .writeAsBytes(Uint8List(1024));
+        await File('${dir.path}${Platform.pathSeparator}prev_s1.bin')
+            .writeAsBytes(Uint8List(2048));
+        await File('${dir.path}${Platform.pathSeparator}psd_prev_s1.bin')
+            .writeAsBytes(Uint8List(4096));
+      });
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('com.phantek.gallery/app_lock'),
+        (call) async {
+          if (call.method == 'canAuthenticate') return true;
+          if (call.method == 'authenticate') return true;
+          return null;
+        },
+      );
+      addTearDown(() async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+          const MethodChannel('com.phantek.gallery/app_lock'),
+          null,
+        );
+        await tester.runAsync(() => ThumbnailService.instance.clearAll());
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: AppLanguage.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: const SettingsScreen(),
+          ),
+        ),
+      );
+      for (var i = 0; i < 20; i++) {
+        await tester.pump();
+        if (find.textContaining('7.0 KB').evaluate().isNotEmpty) break;
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 25)));
+      }
+      await tester.pumpAndSettle();
+
+      // 1. Cache Breakdown in Clear Cache dialog
+      final clearTile = find.text('Clear Thumbnail & Preview Cache');
+      await tester.scrollUntilVisible(clearTile, 200);
+      await tester.pumpAndSettle();
+      await tester.tap(clearTile);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Thumbnails'), findsOneWidget);
+      expect(find.text('Screen Previews'), findsOneWidget);
+      expect(find.text('PSD Previews'), findsOneWidget);
+      expect(find.text('Total'), findsOneWidget);
+      expect(find.text('1.0 KB'), findsOneWidget);
+      expect(find.text('2.0 KB'), findsOneWidget);
+      expect(find.text('4.0 KB'), findsOneWidget);
+      expect(find.text('7.0 KB'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+
+      // 2. Translation Overlay Style & Text Size dialog with JP -> EN preview
+      final overlayTile = find.text('Overlay Style & Text Size');
+      await tester.scrollUntilVisible(overlayTile, 200);
+      await tester.pumpAndSettle();
+      await tester.tap(overlayTile);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TranslationOverlayPreview), findsOneWidget);
+      expect(find.text('JP'), findsOneWidget);
+      expect(find.text('EN'), findsOneWidget);
+
+      // Select Dark Contrast style
+      await tester.tap(find.text('Dark Contrast'));
+      await tester.pumpAndSettle();
+      expect(SettingsService.instance.settings.translationOverlayStyle,
+          TranslationOverlayStyle.darkContrast);
+
+      // Adjust slider inside overlay dialog
+      final slider = tester.widget<Slider>(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(Slider),
+        ),
+      );
+      slider.onChanged?.call(1.2);
+      await tester.pumpAndSettle();
+      expect(SettingsService.instance.settings.translationFontScale,
+          closeTo(1.2, 0.01));
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      // 3. App Lock toggle under Privacy & Security
+      final appLockTile = find.text('App Lock');
+      await tester.scrollUntilVisible(appLockTile, 200);
+      await tester.pumpAndSettle();
+      await tester.tap(appLockTile);
+      await tester.pumpAndSettle();
+      expect(SettingsService.instance.settings.appLockEnabled, isTrue);
+    });
   });
 }
 
@@ -3570,5 +4751,23 @@ class _SpecificMockMediaNotifier extends MediaListNotifier {
   @override
   Future<void> refresh() async {
     state = AsyncData(items);
+  }
+}
+
+class _MutableMockMediaNotifier extends MediaListNotifier {
+  List<MediaItem> _items;
+  _MutableMockMediaNotifier(this._items);
+
+  @override
+  Future<List<MediaItem>> build() async => _items;
+
+  void setItems(List<MediaItem> next) {
+    _items = next;
+    state = AsyncData(next);
+  }
+
+  @override
+  Future<void> refresh() async {
+    state = AsyncData(_items);
   }
 }

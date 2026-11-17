@@ -39,11 +39,14 @@ class _K {
   static const filterSmallImages = 'filterSmallImages';
   static const showHiddenFiles = 'showHiddenFiles';
   static const secureScreen = 'secureScreen';
+  static const appLockEnabled = 'appLockEnabled';
   static const lmStudioServerUrl = 'lmStudioServerUrl';
   static const lmStudioApiKey = 'lmStudioApiKey';
   static const lmStudioModel = 'lmStudioModel';
   static const translationEngineType = 'translationEngineType';
   static const translationSourceLanguage = 'translationSourceLanguage';
+  static const translationFontScale = 'translationFontScale';
+  static const translationOverlayStyle = 'translationOverlayStyle';
 }
 
 /// Typed SharedPreferences wrapper; call [SettingsService.init()] before use.
@@ -108,6 +111,7 @@ class SettingsService {
       filterSmallImages: _prefs.getBool(_K.filterSmallImages) ?? false,
       showHiddenFiles: _prefs.getBool(_K.showHiddenFiles) ?? false,
       secureScreen: _prefs.getBool(_K.secureScreen) ?? false,
+      appLockEnabled: _prefs.getBool(_K.appLockEnabled) ?? false,
       lmStudioServerUrl: _prefs.getString(_K.lmStudioServerUrl) ??
           'http://192.168.1.2:1234/v1',
       lmStudioApiKey: _prefs.getString(_K.lmStudioApiKey) ?? '',
@@ -121,6 +125,13 @@ class SettingsService {
         _K.translationSourceLanguage,
         TranslationSourceLanguage.values,
         TranslationSourceLanguage.japanese,
+      ),
+      translationFontScale:
+          (_prefs.getDouble(_K.translationFontScale) ?? 1.0).clamp(0.8, 1.3),
+      translationOverlayStyle: _readEnum(
+        _K.translationOverlayStyle,
+        TranslationOverlayStyle.values,
+        TranslationOverlayStyle.googleLens,
       ),
     );
   }
@@ -156,6 +167,7 @@ class SettingsService {
       _prefs.setBool(_K.filterSmallImages, model.filterSmallImages),
       _prefs.setBool(_K.showHiddenFiles, model.showHiddenFiles),
       _prefs.setBool(_K.secureScreen, model.secureScreen),
+      _prefs.setBool(_K.appLockEnabled, model.appLockEnabled),
       _prefs.setString(_K.lmStudioServerUrl, model.lmStudioServerUrl),
       _prefs.setString(_K.lmStudioApiKey, model.lmStudioApiKey),
       _prefs.setString(_K.lmStudioModel, model.lmStudioModel),
@@ -163,6 +175,10 @@ class SettingsService {
           _K.translationEngineType, model.translationEngineType.name),
       _prefs.setString(
           _K.translationSourceLanguage, model.translationSourceLanguage.name),
+      _prefs.setDouble(
+          _K.translationFontScale, model.translationFontScale.clamp(0.8, 1.3)),
+      _prefs.setString(
+          _K.translationOverlayStyle, model.translationOverlayStyle.name),
     ]);
   }
 

@@ -12,6 +12,21 @@ import 'package:photo_manager/photo_manager.dart';
 import 'media_scanner_service.dart';
 import 'psd_service.dart';
 
+/// Itemized disk cache breakdown across thumbnails, screen previews, and PSD previews.
+class CacheSizeBreakdown {
+  const CacheSizeBreakdown({
+    required this.thumbnailBytes,
+    required this.previewBytes,
+    required this.psdBytes,
+  });
+
+  final int thumbnailBytes;
+  final int previewBytes;
+  final int psdBytes;
+
+  int get totalBytes => thumbnailBytes + previewBytes + psdBytes;
+}
+
 /// Queued thumbnail fetch request for uncached items.
 class _ThumbnailRequest {
   _ThumbnailRequest(this.id, this.completer,
@@ -54,6 +69,10 @@ class ThumbnailService {
 
   /// Pre-initializes the persistent cache directory at application launch.
   static Future<void> init() async {
+    if (instance._cacheDir == null) {
+      // Clear any uncompleted future captured by an earlier disposed test zone.
+      instance._cacheDirFuture = null;
+    }
     final dir = await instance._getCacheDirectory();
     await instance._populateDiskCacheIndex(dir);
   }
@@ -88,12 +107,26 @@ class ThumbnailService {
   bool hasDiskHighResCache(String assetId) =>
       _diskCachedFileNames.contains(_highResCacheFileName(assetId));
 
-  /// Synchronously returns the cached File on disk if it already exists, or null.
-  File? getCachedFile(String assetId) {
+  /// Synchronously returns the indexed cache [File] on disk without performing
+  /// a blocking `existsSync()` call on the UI thread.
+  File? getIndexedDiskFile(String assetId) {
     if (!hasDiskCache(assetId)) return null;
     final dirPath = _cacheDirPath ?? _cacheDir?.path;
     if (dirPath == null) return null;
-    final file = File(p.join(dirPath, _cacheFileName(assetId)));
+    return File(p.join(dirPath, _cacheFileName(assetId)));
+  }
+
+  /// Removes [assetId] from the in-memory disk cache index (e.g., if evicted on disk).
+  void evictDiskCacheIndex(String assetId) =>
+      _diskCachedFileNames.remove(_cacheFileName(assetId));
+
+  @visibleForTesting
+  String debugCacheFileName(String assetId) => _cacheFileName(assetId);
+
+  /// Synchronously returns the cached File on disk if it already exists, or null.
+  File? getCachedFile(String assetId) {
+    final file = getIndexedDiskFile(assetId);
+    if (file == null) return null;
     return file.existsSync() ? file : null;
   }
 
@@ -507,7 +540,9 @@ class ThumbnailService {
 
   Future<Directory> _getCacheDirectory() {
     if (_cacheDir != null) return Future.value(_cacheDir!);
-    return _cacheDirFuture ??= _initCacheDirectory();
+    return _cacheDirFuture ??= _initCacheDirectory().whenComplete(() {
+      _cacheDirFuture = null;
+    });
   }
 
   Future<Directory> _initCacheDirectory() async {
@@ -967,30 +1002,55 @@ class ThumbnailService {
     }
   }
 
-  /// Calculates total size of persistent thumbnail cache on disk in bytes.
-  Future<int> getCacheSizeBytes() async {
+  /// Calculates an itemized size breakdown of the persistent disk cache.
+  Future<CacheSizeBreakdown> getCacheSizeBreakdown() async {
+    int thumbBytes = 0;
+    int previewBytes = 0;
+    int psdBytes = 0;
     try {
       final dir = await _getCacheDirectory();
-      if (!await dir.exists()) return 0;
-      int total = 0;
-      await for (final file in dir.list(recursive: false, followLinks: false)) {
-        if (file is File) {
-          total += await file.length();
+      if (await dir.exists()) {
+        await for (final entity
+            in dir.list(recursive: false, followLinks: false)) {
+          if (entity is File) {
+            final len = await entity.length();
+            final name = p.basename(entity.path);
+            if (name.startsWith('psd_prev_')) {
+              psdBytes += len;
+            } else if (name.startsWith('prev_')) {
+              previewBytes += len;
+            } else {
+              thumbBytes += len;
+            }
+          }
         }
       }
-      return total;
-    } catch (_) {
-      return 0;
-    }
+    } catch (_) {}
+    return CacheSizeBreakdown(
+      thumbnailBytes: thumbBytes,
+      previewBytes: previewBytes,
+      psdBytes: psdBytes,
+    );
+  }
+
+  /// Calculates total size of persistent thumbnail and preview cache on disk in bytes.
+  Future<int> getCacheSizeBytes() async {
+    final breakdown = await getCacheSizeBreakdown();
+    return breakdown.totalBytes;
+  }
+
+  /// Formats a byte count into a human-readable cache size string.
+  static String formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   /// Returns a human-readable cache size string (e.g. "14.2 MB", "850 KB", "0 B").
   Future<String> getFormattedCacheSize() async {
     final bytes = await getCacheSizeBytes();
-    if (bytes <= 0) return '0 B';
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return formatBytes(bytes);
   }
 }
 

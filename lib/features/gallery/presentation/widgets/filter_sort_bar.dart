@@ -19,6 +19,7 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
     this.currentSort,
     this.onSortChanged,
     this.pageController,
+    this.isDirectTabTransition = false,
   });
 
   final bool isAlbumDetail;
@@ -27,6 +28,7 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
   final SortOption? currentSort;
   final ValueChanged<SortOption>? onSortChanged;
   final PageController? pageController;
+  final bool isDirectTabTransition;
 
   @override
   Size get preferredSize => const Size.fromHeight(96);
@@ -54,6 +56,8 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
     final alignmentX = options.length > 1
         ? -1.0 + (2.0 * selectedIndex / (options.length - 1))
         : 0.0;
+    final bool useDirectAnimation =
+        pageController == null || isDirectTabTransition;
 
     final capsuleIndicator = FractionallySizedBox(
       widthFactor: 1.0 / options.length,
@@ -85,7 +89,14 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                       padding: const EdgeInsets.all(3),
                       child: Stack(
                         children: [
-                          if (pageController != null)
+                          if (useDirectAnimation)
+                            AnimatedAlign(
+                              duration: const Duration(milliseconds: 280),
+                              curve: Curves.easeOutCubic,
+                              alignment: Alignment(alignmentX, 0.0),
+                              child: capsuleIndicator,
+                            )
+                          else
                             AnimatedBuilder(
                               animation: pageController!,
                               builder: (context, _) {
@@ -102,13 +113,6 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                                   child: capsuleIndicator,
                                 );
                               },
-                            )
-                          else
-                            AnimatedAlign(
-                              duration: const Duration(milliseconds: 280),
-                              curve: Curves.easeOutCubic,
-                              alignment: Alignment(alignmentX, 0.0),
-                              child: capsuleIndicator,
                             ),
                           Row(
                             children: options.asMap().entries.map((entry) {
@@ -116,7 +120,28 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                               final f = entry.value;
 
                               Widget labelChild;
-                              if (pageController != null) {
+                              if (useDirectAnimation) {
+                                final selected = activeFilter == f;
+                                labelChild = AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 280),
+                                  curve: Curves.easeOutCubic,
+                                  style: TextStyle(
+                                    color: selected
+                                        ? cs.onPrimary
+                                        : cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                    fontWeight: selected
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                  ),
+                                  child: Text(
+                                    f.localizedLabel(context),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                );
+                              } else {
                                 labelChild = AnimatedBuilder(
                                   animation: pageController!,
                                   builder: (context, _) {
@@ -142,27 +167,6 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                                       ),
                                     );
                                   },
-                                );
-                              } else {
-                                final selected = activeFilter == f;
-                                labelChild = AnimatedDefaultTextStyle(
-                                  duration: const Duration(milliseconds: 280),
-                                  curve: Curves.easeOutCubic,
-                                  style: TextStyle(
-                                    color: selected
-                                        ? cs.onPrimary
-                                        : cs.onSurfaceVariant,
-                                    fontSize: 13,
-                                    fontWeight: selected
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                  ),
-                                  child: Text(
-                                    f.localizedLabel(context),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                  ),
                                 );
                               }
 
@@ -234,33 +238,37 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                                 horizontal: 10,
                                 vertical: 5,
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    activeSort.direction ==
-                                            SortDirection.ascending
-                                        ? Icons.arrow_upward
-                                        : Icons.arrow_downward,
-                                    size: 14,
-                                    color: cs.primary,
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    activeSort.localizedBarLabel(context),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: cs.onSurface,
-                                      fontWeight: FontWeight.w500,
+                              child: AnimatedSize(
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOutCubic,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      activeSort.direction ==
+                                              SortDirection.ascending
+                                          ? Icons.arrow_upward
+                                          : Icons.arrow_downward,
+                                      size: 14,
+                                      color: cs.primary,
                                     ),
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Icon(
-                                    Icons.keyboard_arrow_down,
-                                    size: 16,
-                                    color: cs.onSurfaceVariant,
-                                  ),
-                                ],
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      activeSort.localizedBarLabel(context),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: cs.onSurface,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Icon(
+                                      Icons.keyboard_arrow_down,
+                                      size: 16,
+                                      color: cs.onSurfaceVariant,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -284,7 +292,7 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
   ) {
     return RepaintBoundary(
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(borderRadius),

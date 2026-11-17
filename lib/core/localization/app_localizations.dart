@@ -6,6 +6,7 @@ import '../enums/timeline_grouping.dart';
 import '../enums/trash_cleanup_interval.dart';
 import '../enums/startup_screen.dart';
 import '../enums/video_double_tap_action.dart';
+import '../services/translation/translation_models.dart';
 import 'translations/translations.dart';
 
 /// Lightweight, type-safe localization dictionary for Phantek Gallery.
@@ -237,6 +238,29 @@ class AppLocalizations {
   String get privacyAndSecurity => _t('privacyAndSecurity');
   String get secureScreen => _t('secureScreen');
   String get secureScreenDesc => _t('secureScreenDesc');
+  String get appLock => _t('appLock');
+  String get appLockDesc => _t('appLockDesc');
+  String get appLockTitle => _t('appLockTitle');
+  String get appLockAuthReason => _t('appLockAuthReason');
+  String get appLockToggleReason => _t('appLockToggleReason');
+  String get appLockUnavailable => _t('appLockUnavailable');
+  String get unlock => _t('unlock');
+  String get translationOverlaySettings => _t('translationOverlaySettings');
+  String get translationTextSize => _t('translationTextSize');
+  String get translationOverlayStyle => _t('translationOverlayStyle');
+  String overlayStyleLabel(TranslationOverlayStyle style) => switch (style) {
+        TranslationOverlayStyle.googleLens => _t('overlayStyleGoogleLens'),
+        TranslationOverlayStyle.classicManga => _t('overlayStyleClassicManga'),
+        TranslationOverlayStyle.darkContrast => _t('overlayStyleDarkContrast'),
+        TranslationOverlayStyle.translucent => _t('overlayStyleTranslucent'),
+      };
+  String get overlayOriginalBadge => _t('overlayOriginalBadge');
+  String get overlayTranslatedBadge => _t('overlayTranslatedBadge');
+  String get resetToDefault => _t('resetToDefault');
+  String get cacheThumbnails => _t('cacheThumbnails');
+  String get cacheScreenPreviews => _t('cacheScreenPreviews');
+  String get cachePsdPreviews => _t('cachePsdPreviews');
+  String get cacheTotal => _t('cacheTotal');
   String get today => _t('today');
   String get yesterday => _t('yesterday');
   String get deleted => _t('deleted');

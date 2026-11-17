@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/settings_model.dart';
@@ -26,20 +27,50 @@ class ThemeHeaderBackground extends ConsumerStatefulWidget {
 
 class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
     with SingleTickerProviderStateMixin {
+  static const int _minFrameIntervalMs = 33; // ~30fps ambient header throttle
+
   late final AnimationController _controller;
+  late final ValueNotifier<double> _throttledProgress;
+  late final _AmoledHeaderPainter _amoledPainter;
+  late final _SakuraHeaderPainter _sakuraPainter;
+  late final _DarkHeaderPainter _darkPainter;
+  late final _LightHeaderPainter _lightPainter;
+  Duration? _lastPaintElapsed;
 
   @override
   void initState() {
     super.initState();
+    _throttledProgress = ValueNotifier<double>(0.0);
+    _amoledPainter =
+        _AmoledHeaderPainter(progressListenable: _throttledProgress);
+    _sakuraPainter =
+        _SakuraHeaderPainter(progressListenable: _throttledProgress);
+    _darkPainter = _DarkHeaderPainter(progressListenable: _throttledProgress);
+    _lightPainter = _LightHeaderPainter(progressListenable: _throttledProgress);
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
-    )..repeat();
+    )
+      ..addListener(_onTick)
+      ..repeat();
+  }
+
+  void _onTick() {
+    final elapsed = _controller.lastElapsedDuration;
+    if (elapsed == null ||
+        _lastPaintElapsed == null ||
+        elapsed < _lastPaintElapsed! ||
+        (elapsed - _lastPaintElapsed!).inMilliseconds >= _minFrameIntervalMs) {
+      _lastPaintElapsed = elapsed;
+      _throttledProgress.value = _controller.value;
+    }
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onTick);
     _controller.dispose();
+    _throttledProgress.dispose();
     super.dispose();
   }
 
@@ -63,6 +94,7 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
     if (isStatic) {
       if (_controller.isAnimating) {
         _controller.stop();
+        _lastPaintElapsed = null;
       }
       return const SizedBox.shrink();
     } else {
@@ -71,28 +103,21 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
       }
     }
 
-    return IgnorePointer(
-      child: ClipRect(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) {
-            final progress = _controller.value;
-            final painter = switch (effectiveMode) {
-              AppThemeMode.amoledMidnight =>
-                _AmoledHeaderPainter(progress: progress),
-              AppThemeMode.amoledSakura =>
-                _SakuraHeaderPainter(progress: progress),
-              AppThemeMode.amoledSnowfall =>
-                _DarkHeaderPainter(progress: progress),
-              AppThemeMode.light => _LightHeaderPainter(progress: progress),
-              _ => _AmoledHeaderPainter(progress: progress),
-            };
+    final CustomPainter painter = switch (effectiveMode) {
+      AppThemeMode.amoledMidnight => _amoledPainter,
+      AppThemeMode.amoledSakura => _sakuraPainter,
+      AppThemeMode.amoledSnowfall => _darkPainter,
+      AppThemeMode.light => _lightPainter,
+      _ => _amoledPainter,
+    };
 
-            return CustomPaint(
-              painter: painter,
-              size: Size.infinite,
-            );
-          },
+    return RepaintBoundary(
+      child: IgnorePointer(
+        child: ClipRect(
+          child: CustomPaint(
+            painter: painter,
+            size: Size.infinite,
+          ),
         ),
       ),
     );
@@ -120,9 +145,10 @@ class _StarData {
 }
 
 class _AmoledHeaderPainter extends CustomPainter {
-  final double progress;
+  final ValueListenable<double> progressListenable;
 
-  _AmoledHeaderPainter({required this.progress});
+  _AmoledHeaderPainter({required this.progressListenable})
+      : super(repaint: progressListenable);
 
   static final List<_StarData> _stars = [
     const _StarData(0.06, 0.28, 1.4, 2.0, 0.1),
@@ -147,6 +173,7 @@ class _AmoledHeaderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final progress = progressListenable.value;
     // 1. OLED Pitch Black Background
     canvas.drawRect(
       Offset.zero & size,
@@ -330,7 +357,7 @@ class _AmoledHeaderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _AmoledHeaderPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+      oldDelegate.progressListenable != progressListenable;
 }
 
 /// Sakura theme painter featuring cherry tree branches and falling petals.
@@ -358,9 +385,10 @@ class _PetalData {
 }
 
 class _SakuraHeaderPainter extends CustomPainter {
-  final double progress;
+  final ValueListenable<double> progressListenable;
 
-  _SakuraHeaderPainter({required this.progress});
+  _SakuraHeaderPainter({required this.progressListenable})
+      : super(repaint: progressListenable);
 
   static final List<_PetalData> _petals = [
     const _PetalData(0.88, 0.1, 6.5, 1.0, 2.0, 22.0, 2.0, 0.0),
@@ -381,6 +409,7 @@ class _SakuraHeaderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final progress = progressListenable.value;
     // 1. OLED Pitch Black Background
     canvas.drawRect(
       Offset.zero & size,
@@ -650,7 +679,7 @@ class _SakuraHeaderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SakuraHeaderPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+      oldDelegate.progressListenable != progressListenable;
 }
 
 /// Dark theme painter featuring a snow-covered winter village.
@@ -680,9 +709,10 @@ class _SnowParticleData {
 }
 
 class _DarkHeaderPainter extends CustomPainter {
-  final double progress;
+  final ValueListenable<double> progressListenable;
 
-  _DarkHeaderPainter({required this.progress});
+  _DarkHeaderPainter({required this.progressListenable})
+      : super(repaint: progressListenable);
 
   static const List<_SnowParticleData> _snowParticles = [
     _SnowParticleData(
@@ -1029,6 +1059,7 @@ class _DarkHeaderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final progress = progressListenable.value;
     // 1. OLED Pitch Black Background (#000000)
     canvas.drawRect(
       Offset.zero & size,
@@ -1355,6 +1386,7 @@ class _DarkHeaderPainter extends CustomPainter {
     required bool hasChimney,
     bool isDistant = false,
   }) {
+    final progress = progressListenable.value;
     final bodyHeight = height * 0.58;
     final bodyRect = Rect.fromLTWH(
       base.dx - width / 2,
@@ -1518,7 +1550,7 @@ class _DarkHeaderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _DarkHeaderPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+      oldDelegate.progressListenable != progressListenable;
 }
 
 /// Light theme painter featuring pastel silk waves and prism bubbles.
@@ -1554,9 +1586,10 @@ class _PrismSparkleData {
 }
 
 class _LightHeaderPainter extends CustomPainter {
-  final double progress;
+  final ValueListenable<double> progressListenable;
 
-  _LightHeaderPainter({required this.progress});
+  _LightHeaderPainter({required this.progressListenable})
+      : super(repaint: progressListenable);
 
   static final List<_GlassOrbData> _orbs = [
     const _GlassOrbData(0.12, 0.70, 7.5, 1.0, 2.0, 14.0, 0.4),
@@ -1582,6 +1615,7 @@ class _LightHeaderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final progress = progressListenable.value;
     final w = size.width;
     final h = size.height;
 
@@ -1773,5 +1807,5 @@ class _LightHeaderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LightHeaderPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+      oldDelegate.progressListenable != progressListenable;
 }

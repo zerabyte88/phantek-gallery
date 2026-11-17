@@ -15,9 +15,26 @@ class MainActivity : FlutterFragmentActivity() {
 
     private var pendingFolderPickerResult: MethodChannel.Result? = null
     private val REQUEST_CODE_PICK_FOLDER = 9921
+    private var pendingAppLockResult: MethodChannel.Result? = null
+    private val REQUEST_CODE_APP_LOCK = 9922
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.phantek.gallery/app_lock"
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "canAuthenticate" -> result.success(canAuthenticateDevice())
+                "authenticate" -> {
+                    val title = call.argument<String>("title") ?: "Unlock"
+                    val subtitle = call.argument<String>("subtitle") ?: ""
+                    authenticateDevice(title, subtitle, result)
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -799,6 +816,109 @@ class MainActivity : FlutterFragmentActivity() {
         startActivity(chooser)
     }
 
+    private fun canAuthenticateDevice(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                val bm = getSystemService(android.hardware.biometrics.BiometricManager::class.java)
+                val status = bm?.canAuthenticate(
+                    android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                        android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                )
+                if (status == android.hardware.biometrics.BiometricManager.BIOMETRIC_SUCCESS) {
+                    return true
+                }
+            } catch (_: Throwable) {}
+            val km = getSystemService(android.app.KeyguardManager::class.java)
+            return km?.isDeviceSecure == true
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val km = getSystemService(android.app.KeyguardManager::class.java)
+            return km?.isDeviceSecure == true
+        }
+        val km = getSystemService(android.content.Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+        @Suppress("DEPRECATION")
+        return km?.isKeyguardSecure == true
+    }
+
+    private fun finishAppLock(success: Boolean) {
+        val res = pendingAppLockResult ?: return
+        pendingAppLockResult = null
+        runOnUiThread {
+            res.success(success)
+        }
+    }
+
+    private fun authenticateDevice(
+        title: String,
+        subtitle: String,
+        result: MethodChannel.Result
+    ) {
+        if (pendingAppLockResult != null) {
+            result.error("BUSY", "Authentication is already in progress", null)
+            return
+        }
+        pendingAppLockResult = result
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val builder = android.hardware.biometrics.BiometricPrompt.Builder(this)
+                    .setTitle(title)
+                if (subtitle.isNotEmpty()) {
+                    builder.setSubtitle(subtitle)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    builder.setAllowedAuthenticators(
+                        android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                            android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    builder.setDeviceCredentialAllowed(true)
+                }
+                val prompt = builder.build()
+                val cancellationSignal = android.os.CancellationSignal()
+                prompt.authenticate(
+                    cancellationSignal,
+                    mainExecutor,
+                    object : android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+                        override fun onAuthenticationSucceeded(
+                            authResult: android.hardware.biometrics.BiometricPrompt.AuthenticationResult
+                        ) {
+                            finishAppLock(true)
+                        }
+
+                        override fun onAuthenticationError(
+                            errorCode: Int,
+                            errString: CharSequence
+                        ) {
+                            finishAppLock(false)
+                        }
+
+                        override fun onAuthenticationFailed() {
+                            // Ignored: user may retry; onAuthenticationError fires on cancel/lockout.
+                        }
+                    }
+                )
+                return
+            } catch (_: Throwable) {
+                // Fall through to KeyguardManager credential intent fallback.
+            }
+        }
+
+        try {
+            val km = getSystemService(android.content.Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+            @Suppress("DEPRECATION")
+            val intent = km?.createConfirmDeviceCredentialIntent(title, subtitle)
+            if (intent != null) {
+                startActivityForResult(intent, REQUEST_CODE_APP_LOCK)
+            } else {
+                finishAppLock(false)
+            }
+        } catch (_: Throwable) {
+            finishAppLock(false)
+        }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_CODE_PICK_FOLDER) {
@@ -823,6 +943,8 @@ class MainActivity : FlutterFragmentActivity() {
             } else {
                 result.success(null)
             }
+        } else if (requestCode == REQUEST_CODE_APP_LOCK) {
+            finishAppLock(resultCode == Activity.RESULT_OK)
         }
     }
 }

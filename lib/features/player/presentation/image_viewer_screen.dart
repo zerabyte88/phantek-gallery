@@ -190,6 +190,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   bool _isMultiTouch = false;
   final Set<int> _activePointers = {};
   final ValueNotifier<bool> _isSwipingPage = ValueNotifier<bool>(false);
+  final Map<String, GlobalKey> _viewerKeys = {};
+  GlobalKey _viewerKeyFor(String id) =>
+      _viewerKeys.putIfAbsent(id, GlobalKey.new);
   late bool _isMangaMode;
   late final PageController _mangaPageController;
 
@@ -1074,10 +1077,18 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                   result.blocks.isEmpty) {
                                 return const SizedBox.shrink();
                               }
-                              return MangaTranslationOverlay(
-                                result: result,
-                                mode: _translationMode!,
-                              );
+                               return MangaTranslationOverlay(
+                                 result: result,
+                                 mode: _translationMode!,
+                                 fontScale: ref.watch(
+                                   settingsNotifierProvider
+                                       .select((s) => s.translationFontScale),
+                                 ),
+                                 overlayStyle: ref.watch(
+                                   settingsNotifierProvider.select(
+                                       (s) => s.translationOverlayStyle),
+                                 ),
+                               );
                             },
                           ),
                         ),
@@ -1093,8 +1104,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                     );
                   }
 
-                  return InteractiveViewer(
-                    key: ValueKey('manga_iv_${it.id}'),
+                  return KeyedSubtree(
+                    key: _viewerKeyFor('manga_${it.id}'),
+                    child: InteractiveViewer(
+                      key: ValueKey('manga_iv_${it.id}'),
                     transformationController: _transformationController,
                     minScale: 1.0,
                     maxScale: 6.0,
@@ -1135,6 +1148,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       }
                     },
                     child: pageContent,
+                    ),
                   );
                 },
               ),
@@ -1248,19 +1262,26 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _zoomAnimController!.forward();
   }
 
-  Matrix4 _clampedFocalMatrix(Offset focal, double targetScale) {
-    if (targetScale <= 1.05) return Matrix4.identity();
-    final currentMatrix = _transformationController.value;
-    final currentScale = currentMatrix.getMaxScaleOnAxis();
-    final viewportSize = context.size ?? MediaQuery.sizeOf(context);
-    final sceneX = (focal.dx - currentMatrix.storage[12]) / currentScale;
-    final sceneY = (focal.dy - currentMatrix.storage[13]) / currentScale;
-    final minTx = -viewportSize.width * (targetScale - 1.0);
-    final minTy = -viewportSize.height * (targetScale - 1.0);
-    final tx = (focal.dx - sceneX * targetScale).clamp(minTx, 0.0);
-    final ty = (focal.dy - sceneY * targetScale).clamp(minTy, 0.0);
-    return Matrix4.translationValues(tx, ty, 0.0)
-      ..scaleByDouble(targetScale, targetScale, 1.0, 1.0);
+  GlobalKey _activeViewerKey() {
+    if (_isMangaMode && _mangaItems.isNotEmpty) {
+      final idx =
+          _activeMangaPageNotifier.value.clamp(0, _mangaItems.length - 1);
+      return _viewerKeyFor('manga_${_mangaItems[idx].id}');
+    }
+    return _viewerKeyFor('photo_${_currentItem.id}');
+  }
+
+  Matrix4 _clampedFocalMatrix(
+    Offset focal,
+    double targetScale, {
+    Size? viewportSize,
+  }) {
+    return computeClampedFocalZoomMatrix(
+      currentMatrix: _transformationController.value,
+      localFocal: focal,
+      viewportSize: viewportSize ?? (context.size ?? MediaQuery.sizeOf(context)),
+      targetScale: targetScale,
+    );
   }
 
   void _animateZoomToScale(
@@ -1304,18 +1325,21 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _zoomAnimController!.forward();
   }
 
-  void _zoomToPosition(Offset tapPos) {
+  void _zoomToPosition(Offset tapPos, {Offset? globalPos}) {
     final currentScale = _transformationController.value.getMaxScaleOnAxis();
-    final double targetScale;
-    if (currentScale < 1.8) {
-      targetScale = 2.5;
-    } else if (currentScale < 3.3) {
-      targetScale = 4.0;
-    } else {
-      targetScale = 1.0;
-    }
+    final double targetScale = currentScale > 1.05 ? 1.0 : 3.0;
 
-    final Matrix4 endMatrix = _clampedFocalMatrix(tapPos, targetScale);
+    final (localFocal, viewportSize) = resolveViewerFocalAndSize(
+      viewerKey: _activeViewerKey(),
+      fallbackLocalPos: tapPos,
+      fallbackSize: context.size ?? MediaQuery.sizeOf(context),
+      globalPos: globalPos,
+    );
+    final Matrix4 endMatrix = _clampedFocalMatrix(
+      localFocal,
+      targetScale,
+      viewportSize: viewportSize,
+    );
     HapticFeedback.lightImpact();
     _animateZoomToScale(endMatrix, targetScale);
   }
@@ -1330,9 +1354,17 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     }
     if ((targetScale - currentScale).abs() < 0.01) return;
 
-    final viewportSize = context.size ?? MediaQuery.sizeOf(context);
+    final (_, viewportSize) = resolveViewerFocalAndSize(
+      viewerKey: _activeViewerKey(),
+      fallbackLocalPos: Offset.zero,
+      fallbackSize: context.size ?? MediaQuery.sizeOf(context),
+    );
     final focal = Offset(viewportSize.width / 2.0, viewportSize.height / 2.0);
-    final Matrix4 endMatrix = _clampedFocalMatrix(focal, targetScale);
+    final Matrix4 endMatrix = _clampedFocalMatrix(
+      focal,
+      targetScale,
+      viewportSize: viewportSize,
+    );
     HapticFeedback.selectionClick();
     _animateZoomToScale(
       endMatrix,
@@ -1391,7 +1423,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   void _handleDoubleTap() {
     if (_doubleTapDetails == null || _currentItem.isVideo) return;
-    _zoomToPosition(_doubleTapDetails!.localPosition);
+    _zoomToPosition(
+      _doubleTapDetails!.localPosition,
+      globalPos: _doubleTapDetails!.globalPosition,
+    );
   }
 
   Widget _buildPhotoPage(MediaItem it, {bool isCurrent = false}) {
@@ -1721,6 +1756,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         aspectRatio: ar,
         child: content,
       );
+    } else {
+      content = SizedBox.expand(child: content);
     }
 
     return content;
@@ -2230,9 +2267,13 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                               child: Center(
                                                 child: ClipRect(
                                                   child: isCur
-                                                      ? InteractiveViewer(
-                                                          key: ValueKey(
-                                                              'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
+                                                      ? KeyedSubtree(
+                                                          key: _viewerKeyFor(
+                                                              'photo_${it.id}'),
+                                                          child:
+                                                              InteractiveViewer(
+                                                            key: ValueKey(
+                                                                'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
                                                           transformationController:
                                                               _transformationController,
                                                           minScale: 1.0,
@@ -2312,41 +2353,38 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                             alignment: Alignment
                                                                 .center,
                                                             children: [
-                                                              Center(
-                                                                child: Hero(
-                                                                  tag: it.id,
-                                                                  flightShuttleBuilder: (
-                                                                    flightContext,
-                                                                    animation,
-                                                                    flightDirection,
-                                                                    fromHeroContext,
-                                                                    toHeroContext,
-                                                                  ) =>
-                                                                      _buildHeroShuttle(
-                                                                    animation:
-                                                                        animation,
-                                                                    flightDirection:
-                                                                        flightDirection,
-                                                                    id: it.id,
-                                                                    path:
-                                                                        it.path,
-                                                                    psdFallbackBytes:
-                                                                        _psdRenderedBytes[
-                                                                                it.path] ??
-                                                                            PsdService.instance.getCachedRenderedPreviewSync(it.path),
-                                                                    fallbackChild: flightDirection ==
-                                                                            HeroFlightDirection
-                                                                                .push
-                                                                        ? toHeroContext
-                                                                            .widget
-                                                                        : fromHeroContext
-                                                                            .widget,
-                                                                  ),
-                                                                  child: _buildPhotoPage(
-                                                                      it,
-                                                                      isCurrent:
-                                                                          true),
+                                                              Hero(
+                                                                tag: it.id,
+                                                                flightShuttleBuilder: (
+                                                                  flightContext,
+                                                                  animation,
+                                                                  flightDirection,
+                                                                  fromHeroContext,
+                                                                  toHeroContext,
+                                                                ) =>
+                                                                    _buildHeroShuttle(
+                                                                  animation:
+                                                                      animation,
+                                                                  flightDirection:
+                                                                      flightDirection,
+                                                                  id: it.id,
+                                                                  path: it.path,
+                                                                  psdFallbackBytes:
+                                                                      _psdRenderedBytes[
+                                                                              it.path] ??
+                                                                          PsdService.instance.getCachedRenderedPreviewSync(it.path),
+                                                                  fallbackChild: flightDirection ==
+                                                                          HeroFlightDirection
+                                                                              .push
+                                                                      ? toHeroContext
+                                                                          .widget
+                                                                      : fromHeroContext
+                                                                          .widget,
                                                                 ),
+                                                                child: _buildPhotoPage(
+                                                                    it,
+                                                                    isCurrent:
+                                                                        true),
                                                               ),
                                                               if (_translationMode !=
                                                                       null &&
@@ -2379,12 +2417,21 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                                             result,
                                                                         mode:
                                                                             _translationMode!,
+                                                                        fontScale: ref.watch(
+                                                                          settingsNotifierProvider.select(
+                                                                              (s) => s.translationFontScale),
+                                                                        ),
+                                                                        overlayStyle: ref.watch(
+                                                                          settingsNotifierProvider.select(
+                                                                              (s) => s.translationOverlayStyle),
+                                                                        ),
                                                                       );
                                                                     },
                                                                   ),
                                                                 ),
                                                             ],
                                                           ),
+                                                        ),
                                                         )
                                                       : Center(
                                                           child:

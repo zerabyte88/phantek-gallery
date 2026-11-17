@@ -154,80 +154,90 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
         ),
     };
 
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final progress = _controller.value;
-        final iconColor = Color.lerp(
-          iconStartColor,
-          iconEndColor,
-          (math.sin(progress * 2 * math.pi) + 1) / 2,
-        );
+    final staticText = Text(
+      widget.title,
+      style: TextStyle(
+        fontSize: 14.5,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
+        color: theme.colorScheme.onSurface,
+      ),
+    );
 
-        return FittedBox(
-          fit: BoxFit.scaleDown,
-          child: CustomPaint(
-            painter: _FlameBorderPainter(
-              progress: progress,
-              colors: colors,
+    return RepaintBoundary(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: CustomPaint(
+          painter: _FlameBorderPainter(
+            progress: _controller,
+            colors: colors,
+          ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              color: theme.colorScheme.surface.withValues(alpha: 0.85),
             ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                color: theme.colorScheme.surface.withValues(alpha: 0.85),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    icon,
-                    size: 17,
-                    color: iconColor,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    widget.title,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.2,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
-                ],
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, _) {
+                    final iconColor = Color.lerp(
+                      iconStartColor,
+                      iconEndColor,
+                      (math.sin(_controller.value * 2 * math.pi) + 1) / 2,
+                    );
+                    return Icon(
+                      icon,
+                      size: 17,
+                      color: iconColor,
+                    );
+                  },
+                ),
+                const SizedBox(width: 6),
+                staticText,
+              ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
 class _FlameBorderPainter extends CustomPainter {
-  final double progress;
+  final Animation<double> progress;
   final List<Color> colors;
+  final List<Color> _glowColors;
+
+  static const MaskFilter _glowMaskFilter =
+      MaskFilter.blur(BlurStyle.normal, 3.0);
+  static const Radius _rrectRadius = Radius.circular(18);
 
   _FlameBorderPainter({
     required this.progress,
     required this.colors,
-  });
+  })  : _glowColors =
+            colors.map((c) => c.withValues(alpha: 0.48)).toList(growable: false),
+        super(repaint: progress);
 
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(18));
+    final rrect = RRect.fromRectAndRadius(rect, _rrectRadius);
+    final rotation = GradientRotation(progress.value * 2 * math.pi);
 
     // 1. Vibrant outer glow
     final glowPaint = Paint()
       ..shader = SweepGradient(
-        colors: colors.map((c) => c.withValues(alpha: 0.48)).toList(),
-        transform: GradientRotation(progress * 2 * math.pi),
+        colors: _glowColors,
+        transform: rotation,
       ).createShader(rect)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.5
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0);
+      ..maskFilter = _glowMaskFilter;
 
     canvas.drawRRect(rrect, glowPaint);
 
@@ -235,7 +245,7 @@ class _FlameBorderPainter extends CustomPainter {
     final borderPaint = Paint()
       ..shader = SweepGradient(
         colors: colors,
-        transform: GradientRotation(progress * 2 * math.pi),
+        transform: rotation,
       ).createShader(rect)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8;
@@ -245,6 +255,6 @@ class _FlameBorderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _FlameBorderPainter oldDelegate) {
-    return oldDelegate.progress != progress;
+    return oldDelegate.progress != progress || oldDelegate.colors != colors;
   }
 }

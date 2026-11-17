@@ -246,7 +246,7 @@ void main() {
     });
 
     testWidgets(
-        'Manga Mode double-tap zoom cycles 1.0x -> 2.5x -> 4.0x -> 1.0x without popping',
+        'Manga Mode double-tap zoom cycles 1.0x -> 3.0x -> 1.0x without popping',
         (tester) async {
       await tester.pumpWidget(buildViewer(mangaMode: true));
       await tester.pump(const Duration(milliseconds: 350));
@@ -256,25 +256,17 @@ void main() {
 
       final center = tester.getCenter(find.byType(PageView));
 
-      // Double-tap 1 -> 2.5x
+      // Double-tap 1 -> 3.0x
       await tester.tapAt(center);
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tapAt(center);
       await tester.pumpAndSettle();
 
       expect(find.byType(ImageViewerScreen), findsOneWidget);
-      expect(find.text('2.5x'), findsOneWidget);
+      expect(find.text('3.0x'), findsOneWidget);
+      expect(find.text('4.0x'), findsNothing);
 
-      // Double-tap 2 -> 4.0x
-      await tester.tapAt(center);
-      await tester.pump(const Duration(milliseconds: 60));
-      await tester.tapAt(center);
-      await tester.pumpAndSettle();
-
-      expect(find.byType(ImageViewerScreen), findsOneWidget);
-      expect(find.text('4.0x'), findsOneWidget);
-
-      // Double-tap 3 -> reset back to 1.0x
+      // Double-tap 2 -> reset back to 1.0x (never zooms beyond 3.0x)
       await tester.tapAt(center);
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tapAt(center);

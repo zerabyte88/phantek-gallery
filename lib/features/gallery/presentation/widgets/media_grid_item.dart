@@ -89,23 +89,27 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
     if (mem != null) {
       return Image.memory(
         mem,
+        cacheWidth: 288,
         fit: fit,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
+        filterQuality: FilterQuality.low,
       );
     }
 
-    // 2. Disk cache lookup.
-    final diskFile = ThumbnailService.instance.hasDiskCache(widget.item.id)
-        ? ThumbnailService.instance.getCachedFile(widget.item.id)
-        : null;
+    // 2. Disk cache lookup (zero synchronous existsSync on UI thread).
+    final diskFile =
+        ThumbnailService.instance.getIndexedDiskFile(widget.item.id);
     if (diskFile != null) {
       return Image.file(
         diskFile,
+        cacheWidth: 288,
         fit: fit,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
-        errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
+        filterQuality: FilterQuality.low,
+        errorBuilder: (_, __, ___) {
+          ThumbnailService.instance.evictDiskCacheIndex(widget.item.id);
+          return _buildPlaceholder(cs);
+        },
       );
     }
 
@@ -122,9 +126,10 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
         if (snap.data != null && snap.data!.isNotEmpty) {
           return Image.memory(
             snap.data!,
+            cacheWidth: 288,
             fit: fit,
             gaplessPlayback: true,
-            filterQuality: FilterQuality.medium,
+            filterQuality: FilterQuality.low,
           );
         }
         if (snap.connectionState == ConnectionState.done) {
@@ -133,37 +138,39 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
           if (currentMem != null) {
             return Image.memory(
               currentMem,
+              cacheWidth: 288,
               fit: fit,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.medium,
+              filterQuality: FilterQuality.low,
             );
           }
           final currentDisk =
-              ThumbnailService.instance.hasDiskCache(widget.item.id)
-                  ? ThumbnailService.instance.getCachedFile(widget.item.id)
-                  : null;
+              ThumbnailService.instance.getIndexedDiskFile(widget.item.id);
           if (currentDisk != null) {
             return Image.file(
               currentDisk,
+              cacheWidth: 288,
               fit: fit,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.medium,
-              errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
+              filterQuality: FilterQuality.low,
+              errorBuilder: (_, __, ___) {
+                ThumbnailService.instance.evictDiskCacheIndex(widget.item.id);
+                return _buildPlaceholder(cs);
+              },
             );
           }
 
-          if (!widget.item.isVideo && !PsdService.isPsd(widget.item.path)) {
-            final file = File(widget.item.path);
-            if (file.existsSync()) {
-              return Image.file(
-                file,
-                cacheWidth: 512,
-                fit: fit,
-                gaplessPlayback: true,
-                filterQuality: FilterQuality.medium,
-                errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
-              );
-            }
+          if (!widget.item.isVideo &&
+              !PsdService.isPsd(widget.item.path) &&
+              widget.item.path.isNotEmpty) {
+            return Image.file(
+              File(widget.item.path),
+              cacheWidth: 288,
+              fit: fit,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.low,
+              errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
+            );
           }
         }
         return ShimmerLoadingTile(isVideo: widget.item.isVideo);
@@ -175,19 +182,22 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return GestureDetector(
-      onTap: widget.onTap,
-      onLongPress: widget.onLongPress,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Hero(
-              tag: widget.item.id,
-              child: _buildThumbnail(cs),
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            RepaintBoundary(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Hero(
+                  tag: widget.item.id,
+                  child: _buildThumbnail(cs),
+                ),
+              ),
             ),
-          ),
           if (widget.item.isVideo && widget.showBadges)
             Positioned(
               bottom: 4,
@@ -266,7 +276,8 @@ class _MediaGridItemState extends ConsumerState<MediaGridItem> {
                       ),
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }

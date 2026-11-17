@@ -12,6 +12,7 @@ import 'core/localization/app_language.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/models/settings_model.dart';
 import 'core/providers/settings_provider.dart';
+import 'core/services/app_lock_service.dart';
 import 'core/services/license_service.dart';
 import 'core/services/screen_keeper_service.dart';
 import 'core/services/settings_service.dart';
@@ -53,16 +54,65 @@ class PhantekGalleryApp extends ConsumerStatefulWidget {
 
 class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
     with WidgetsBindingObserver {
+  late bool _isLocked;
+  DateTime? _backgroundedAt;
+  bool _authInProgress = false;
+
   @override
   void initState() {
     super.initState();
+    _isLocked = ref.read(settingsNotifierProvider).appLockEnabled;
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final settings = ref.read(settingsNotifierProvider);
       if (settings.secureScreen) {
         ScreenKeeperService.setSecure(true);
       }
+      if (_isLocked) {
+        _promptUnlock();
+      }
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final appLockEnabled = ref.read(settingsNotifierProvider).appLockEnabled;
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      if (appLockEnabled && !AppLockService.instance.isPromptActive) {
+        _backgroundedAt ??= DateTime.now();
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (appLockEnabled) {
+        final bgAt = _backgroundedAt;
+        if (bgAt != null &&
+            DateTime.now().difference(bgAt).inSeconds >= 2 &&
+            !AppLockService.instance.isPromptActive &&
+            !_isLocked) {
+          setState(() => _isLocked = true);
+          _promptUnlock();
+        }
+      }
+      _backgroundedAt = null;
+    }
+  }
+
+  Future<void> _promptUnlock() async {
+    if (_authInProgress || !mounted) return;
+    _authInProgress = true;
+    try {
+      final locale =
+          ref.read(settingsNotifierProvider).language.locale ?? const Locale('en');
+      final loc = AppLocalizations(locale);
+      final authenticated = await AppLockService.instance.authenticate(
+        title: loc.appLockTitle,
+        subtitle: loc.appLockAuthReason,
+      );
+      if (authenticated && mounted) {
+        setState(() => _isLocked = false);
+      }
+    } finally {
+      _authInProgress = false;
+    }
   }
 
   @override
@@ -84,12 +134,23 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
       settingsNotifierProvider.select((s) => s.secureScreen),
       (_, secure) => ScreenKeeperService.setSecure(secure),
     );
+    ref.listen<bool>(
+      settingsNotifierProvider.select((s) => s.appLockEnabled),
+      (_, enabled) {
+        if (!enabled && _isLocked) {
+          setState(() => _isLocked = false);
+        }
+      },
+    );
 
     final themeMode = ref.watch(
       settingsNotifierProvider.select((s) => s.themeMode),
     );
     final language = ref.watch(
       settingsNotifierProvider.select((s) => s.language),
+    );
+    final appLockEnabled = ref.watch(
+      settingsNotifierProvider.select((s) => s.appLockEnabled),
     );
 
     final darkTheme = switch (themeMode) {
@@ -137,11 +198,100 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
       themeMode: flutterThemeMode,
       onGenerateRoute: generateRoute,
       initialRoute: AppRoutes.gallery,
-      builder: (context, child) => AnimatedTheme(
-        data: Theme.of(context),
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-        child: child ?? const SizedBox.shrink(),
+      builder: (context, child) {
+        final showLock = _isLocked && appLockEnabled;
+        return AnimatedTheme(
+          data: Theme.of(context),
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+          child: Stack(
+            children: [
+              child ?? const SizedBox.shrink(),
+              if (showLock)
+                Positioned.fill(
+                  child: _AppLockOverlay(
+                    key: const ValueKey('app_lock_overlay'),
+                    onUnlock: _promptUnlock,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AppLockOverlay extends StatelessWidget {
+  const _AppLockOverlay({
+    super.key,
+    required this.onUnlock,
+  });
+
+  final VoidCallback onUnlock;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Material(
+      color: theme.scaffoldBackgroundColor,
+      child: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.14),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.lock_rounded,
+                    size: 34,
+                    color: cs.primary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Phantek Gallery',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  context.tr.appLockAuthReason,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                FilledButton.icon(
+                  onPressed: onUnlock,
+                  icon: const Icon(Icons.fingerprint_rounded),
+                  label: Text(context.tr.unlock),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

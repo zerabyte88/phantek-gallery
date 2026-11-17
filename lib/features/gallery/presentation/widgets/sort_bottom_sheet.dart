@@ -17,9 +17,15 @@ class SortBottomSheet extends StatefulWidget {
   State<SortBottomSheet> createState() => _SortBottomSheetState();
 }
 
-class _SortBottomSheetState extends State<SortBottomSheet> {
+class _SortBottomSheetState extends State<SortBottomSheet>
+    with SingleTickerProviderStateMixin {
+  static const _animDuration = Duration(milliseconds: 200);
+  static const _animCurve = Curves.easeOutCubic;
+
   late SortCriterion _criterion;
   late Map<SortCriterion, SortDirection> _directions;
+  late final AnimationController _selectionSyncController;
+  SortOption? _pendingSort;
 
   @override
   void initState() {
@@ -34,6 +40,32 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
     };
     // Initialize active criterion with current sort direction.
     _directions[_criterion] = widget.currentSort.direction;
+    _selectionSyncController = AnimationController(
+      vsync: this,
+      duration: _animDuration,
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          _flushPendingSort();
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    final pending = _pendingSort;
+    _pendingSort = null;
+    _selectionSyncController.dispose();
+    if (pending != null) {
+      Future.microtask(() => widget.onSortChanged(pending));
+    }
+    super.dispose();
+  }
+
+  void _flushPendingSort() {
+    final pending = _pendingSort;
+    if (pending == null) return;
+    _pendingSort = null;
+    widget.onSortChanged(pending);
   }
 
   void _update(SortCriterion criterion, SortDirection direction) {
@@ -41,9 +73,8 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
       _criterion = criterion;
       _directions[criterion] = direction;
     });
-    final newOption =
-        SortOption.fromCriterionAndDirection(criterion, direction);
-    widget.onSortChanged(newOption);
+    _pendingSort = SortOption.fromCriterionAndDirection(criterion, direction);
+    _selectionSyncController.forward(from: 0);
   }
 
   void _toggleDirection(SortCriterion criterion) {
@@ -64,208 +95,235 @@ class _SortBottomSheetState extends State<SortBottomSheet> {
             : cs.surface);
     final accentColor = cs.primary;
 
-    return Container(
-      decoration: BoxDecoration(
+    return RepaintBoundary(
+      child: Material(
         color: bgColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 8, 4),
-              child: Row(
-                children: [
-                  const SizedBox(width: 36),
-                  Expanded(
-                    child: Text(
-                      context.tr.sort,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
+        clipBehavior: Clip.antiAlias,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 8, 4),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 36),
+                    Expanded(
+                      child: Text(
+                        context.tr.sort,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            ...SortCriterion.values.map((c) {
-              final isSelected = _criterion == c;
-              final currentDirection = _directions[c] ?? c.defaultDirection;
-              final isAscending = currentDirection == SortDirection.ascending;
+              const SizedBox(height: 4),
+              ...SortCriterion.values.map((c) {
+                final isSelected = _criterion == c;
+                final currentDirection = _directions[c] ?? c.defaultDirection;
+                final isAscending =
+                    currentDirection == SortDirection.ascending;
 
-              return InkWell(
-                onTap: () {
-                  if (isSelected) {
-                    _toggleDirection(c);
-                  } else {
-                    _update(c, currentDirection);
-                  }
-                },
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 22,
-                        height: 22,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected
-                                ? accentColor
-                                : (isDark ? Colors.white38 : Colors.black38),
-                            width: isSelected ? 4 : 2,
+                return InkWell(
+                  onTap: () {
+                    if (isSelected) {
+                      _toggleDirection(c);
+                    } else {
+                      _update(c, currentDirection);
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
+                    child: Row(
+                      children: [
+                        AnimatedContainer(
+                          duration: _animDuration,
+                          curve: _animCurve,
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isSelected
+                                  ? accentColor
+                                  : (isDark ? Colors.white38 : Colors.black38),
+                              width: isSelected ? 4 : 2,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              c.localizedLabel(context),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              c.localizedDirectionLabel(
-                                  context, currentDirection),
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isSelected
-                                    ? (isDark ? Colors.white70 : Colors.black87)
-                                    : (isDark
-                                        ? Colors.white38
-                                        : Colors.black45),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? (isDark
-                                  ? Colors.white.withValues(alpha: 0.14)
-                                  : Colors.black.withValues(alpha: 0.08))
-                              : (isDark
-                                  ? Colors.white.withValues(alpha: 0.08)
-                                  : Colors.black.withValues(alpha: 0.04)),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        padding: const EdgeInsets.all(2),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => _update(c, SortDirection.ascending),
-                              child: Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: isAscending
-                                      ? (isDark
-                                          ? Colors.white.withValues(alpha: 0.28)
-                                          : Colors.black
-                                              .withValues(alpha: 0.18))
-                                      : Colors.transparent,
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AnimatedDefaultTextStyle(
+                                duration: _animDuration,
+                                curve: _animCurve,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                  color: cs.onSurface,
                                 ),
-                                child: Icon(
-                                  Icons.arrow_upward,
-                                  size: 16,
-                                  color: isAscending
-                                      ? (isDark ? Colors.white : Colors.black)
+                                child: Text(c.localizedLabel(context)),
+                              ),
+                              const SizedBox(height: 3),
+                              AnimatedDefaultTextStyle(
+                                duration: _animDuration,
+                                curve: _animCurve,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isSelected
+                                      ? (isDark
+                                          ? Colors.white70
+                                          : Colors.black87)
                                       : (isDark
                                           ? Colors.white38
-                                          : Colors.black38),
+                                          : Colors.black45),
+                                ),
+                                child: Text(
+                                  c.localizedDirectionLabel(
+                                      context, currentDirection),
                                 ),
                               ),
-                            ),
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => _update(c, SortDirection.descending),
-                              child: Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: !isAscending
-                                      ? (isDark
-                                          ? Colors.white.withValues(alpha: 0.28)
-                                          : Colors.black
-                                              .withValues(alpha: 0.18))
-                                      : Colors.transparent,
-                                ),
-                                child: Icon(
-                                  Icons.arrow_downward,
-                                  size: 16,
-                                  color: !isAscending
-                                      ? (isDark ? Colors.white : Colors.black)
-                                      : (isDark
-                                          ? Colors.white38
-                                          : Colors.black38),
-                                ),
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
+                        AnimatedContainer(
+                          duration: _animDuration,
+                          curve: _animCurve,
+                          width: 68,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? (isDark
+                                    ? Colors.white.withValues(alpha: 0.14)
+                                    : Colors.black.withValues(alpha: 0.08))
+                                : (isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.04)),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          padding: const EdgeInsets.all(2),
+                          child: Stack(
+                            children: [
+                              AnimatedAlign(
+                                duration: _animDuration,
+                                curve: _animCurve,
+                                alignment: isAscending
+                                    ? Alignment.centerLeft
+                                    : Alignment.centerRight,
+                                child: Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isDark
+                                        ? Colors.white.withValues(alpha: 0.28)
+                                        : Colors.black.withValues(alpha: 0.18),
+                                  ),
+                                ),
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () =>
+                                        _update(c, SortDirection.ascending),
+                                    child: SizedBox(
+                                      width: 32,
+                                      height: 32,
+                                      child: Icon(
+                                        Icons.arrow_upward,
+                                        size: 16,
+                                        color: isAscending
+                                            ? (isDark
+                                                ? Colors.white
+                                                : Colors.black)
+                                            : (isDark
+                                                ? Colors.white38
+                                                : Colors.black38),
+                                      ),
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () =>
+                                        _update(c, SortDirection.descending),
+                                    child: SizedBox(
+                                      width: 32,
+                                      height: 32,
+                                      child: Icon(
+                                        Icons.arrow_downward,
+                                        size: 16,
+                                        color: !isAscending
+                                            ? (isDark
+                                                ? Colors.white
+                                                : Colors.black)
+                                            : (isDark
+                                                ? Colors.white38
+                                                : Colors.black38),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 20),
+                child: Center(
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: accentColor,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _directions = {
+                          SortCriterion.shootingTime: SortDirection.descending,
+                          SortCriterion.timeAdded: SortDirection.descending,
+                          SortCriterion.name: SortDirection.ascending,
+                          SortCriterion.size: SortDirection.descending,
+                          SortCriterion.album: SortDirection.ascending,
+                        };
+                      });
+                      _update(SortCriterion.timeAdded, SortDirection.descending);
+                    },
+                    child: Text(
+                      context.tr.restoreDefaults,
+                      style: TextStyle(
+                        color: accentColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 20),
-              child: Center(
-                child: TextButton(
-                  style: TextButton.styleFrom(
-                    foregroundColor: accentColor,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _directions = {
-                        SortCriterion.shootingTime: SortDirection.descending,
-                        SortCriterion.timeAdded: SortDirection.descending,
-                        SortCriterion.name: SortDirection.ascending,
-                        SortCriterion.size: SortDirection.descending,
-                      };
-                    });
-                    _update(SortCriterion.timeAdded, SortDirection.descending);
-                  },
-                  child: Text(
-                    context.tr.restoreDefaults,
-                    style: TextStyle(
-                      color: accentColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -282,6 +340,12 @@ Future<void> showSortBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    sheetAnimationStyle: const AnimationStyle(
+      duration: Duration(milliseconds: 260),
+      reverseDuration: Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    ),
     builder: (ctx) => SortBottomSheet(
       currentSort: currentSort,
       onSortChanged: onSortChanged,

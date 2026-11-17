@@ -38,11 +38,14 @@ class SettingsModel extends Equatable {
     this.filterSmallImages = false,
     this.showHiddenFiles = false,
     this.secureScreen = false,
+    this.appLockEnabled = false,
     this.lmStudioServerUrl = 'http://192.168.1.2:1234/v1',
     this.lmStudioApiKey = '',
     this.lmStudioModel = '',
     this.translationEngineType = TranslationEngineType.lmStudio,
     this.translationSourceLanguage = TranslationSourceLanguage.japanese,
+    this.translationFontScale = 1.0,
+    this.translationOverlayStyle = TranslationOverlayStyle.googleLens,
   });
 
   final AppThemeMode themeMode;
@@ -117,6 +120,9 @@ class SettingsModel extends Equatable {
   /// Prevent screenshots and hide app previews in recent tasks (FLAG_SECURE).
   final bool secureScreen;
 
+  /// Require biometric or device PIN authentication on app launch/resume.
+  final bool appLockEnabled;
+
   /// Server URL for OpenAI-compatible Local AI / LM Studio translation server.
   final String lmStudioServerUrl;
 
@@ -131,6 +137,12 @@ class SettingsModel extends Equatable {
 
   /// Default source language for manga translation (Japanese, Chinese, Korean, Auto).
   final TranslationSourceLanguage translationSourceLanguage;
+
+  /// Font scale multiplier for manga translation overlay text (0.8 to 1.3).
+  final double translationFontScale;
+
+  /// Visual theme style for manga translation overlay speech bubbles and SFX.
+  final TranslationOverlayStyle translationOverlayStyle;
 
   Map<String, dynamic> toMap() => {
         'themeMode': themeMode.name,
@@ -159,11 +171,14 @@ class SettingsModel extends Equatable {
         'filterSmallImages': filterSmallImages,
         'showHiddenFiles': showHiddenFiles,
         'secureScreen': secureScreen,
+        'appLockEnabled': appLockEnabled,
         'lmStudioServerUrl': lmStudioServerUrl,
         'lmStudioApiKey': lmStudioApiKey,
         'lmStudioModel': lmStudioModel,
         'translationEngineType': translationEngineType.name,
         'translationSourceLanguage': translationSourceLanguage.name,
+        'translationFontScale': translationFontScale,
+        'translationOverlayStyle': translationOverlayStyle.name,
       };
 
   Map<String, dynamic> toJson() => toMap();
@@ -227,6 +242,7 @@ class SettingsModel extends Equatable {
       filterSmallImages: map['filterSmallImages'] as bool? ?? false,
       showHiddenFiles: map['showHiddenFiles'] as bool? ?? false,
       secureScreen: map['secureScreen'] as bool? ?? false,
+      appLockEnabled: map['appLockEnabled'] as bool? ?? false,
       lmStudioServerUrl:
           map['lmStudioServerUrl'] as String? ?? 'http://192.168.1.2:1234/v1',
       lmStudioApiKey: map['lmStudioApiKey'] as String? ?? '',
@@ -235,6 +251,13 @@ class SettingsModel extends Equatable {
       translationSourceLanguage: TranslationSourceLanguage.values.firstWhere(
         (e) => e.name == map['translationSourceLanguage'],
         orElse: () => TranslationSourceLanguage.japanese,
+      ),
+      translationFontScale:
+          ((map['translationFontScale'] as num?)?.toDouble() ?? 1.0)
+              .clamp(0.8, 1.3),
+      translationOverlayStyle: TranslationOverlayStyle.values.firstWhere(
+        (e) => e.name == map['translationOverlayStyle'],
+        orElse: () => TranslationOverlayStyle.googleLens,
       ),
     );
   }
@@ -266,11 +289,14 @@ class SettingsModel extends Equatable {
     bool? filterSmallImages,
     bool? showHiddenFiles,
     bool? secureScreen,
+    bool? appLockEnabled,
     String? lmStudioServerUrl,
     String? lmStudioApiKey,
     String? lmStudioModel,
     TranslationEngineType? translationEngineType,
     TranslationSourceLanguage? translationSourceLanguage,
+    double? translationFontScale,
+    TranslationOverlayStyle? translationOverlayStyle,
   }) {
     return SettingsModel(
       themeMode: themeMode ?? this.themeMode,
@@ -300,6 +326,7 @@ class SettingsModel extends Equatable {
       filterSmallImages: filterSmallImages ?? this.filterSmallImages,
       showHiddenFiles: showHiddenFiles ?? this.showHiddenFiles,
       secureScreen: secureScreen ?? this.secureScreen,
+      appLockEnabled: appLockEnabled ?? this.appLockEnabled,
       lmStudioServerUrl: lmStudioServerUrl ?? this.lmStudioServerUrl,
       lmStudioApiKey: lmStudioApiKey ?? this.lmStudioApiKey,
       lmStudioModel: lmStudioModel ?? this.lmStudioModel,
@@ -307,6 +334,10 @@ class SettingsModel extends Equatable {
           translationEngineType ?? this.translationEngineType,
       translationSourceLanguage:
           translationSourceLanguage ?? this.translationSourceLanguage,
+      translationFontScale:
+          (translationFontScale ?? this.translationFontScale).clamp(0.8, 1.3),
+      translationOverlayStyle:
+          translationOverlayStyle ?? this.translationOverlayStyle,
     );
   }
 
@@ -338,11 +369,14 @@ class SettingsModel extends Equatable {
         filterSmallImages,
         showHiddenFiles,
         secureScreen,
+        appLockEnabled,
         lmStudioServerUrl,
         lmStudioApiKey,
         lmStudioModel,
         translationEngineType,
         translationSourceLanguage,
+        translationFontScale,
+        translationOverlayStyle,
       ];
 }
 

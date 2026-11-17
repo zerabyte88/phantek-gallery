@@ -1860,5 +1860,70 @@ void main() {
         findsOneWidget,
       );
     });
+
+    test(
+        'MangaTranslationPainter fontScale 0.8 produces smaller font than 1.3 within bounds and paints all 4 overlay styles',
+        () {
+      const bubbleRect = Rect.fromLTWH(20, 20, 160, 110);
+      const dialogue =
+          'Wait a minute! Did you really think we could get out of here without a fight?';
+
+      final smallPainter = MangaTranslationPainter.debugFitSpeechBubbleText(
+        bubbleRect,
+        dialogue,
+        fontScale: 0.8,
+      );
+      final normalPainter = MangaTranslationPainter.debugFitSpeechBubbleText(
+        bubbleRect,
+        dialogue,
+        fontScale: 1.0,
+      );
+      final largePainter = MangaTranslationPainter.debugFitSpeechBubbleText(
+        bubbleRect,
+        dialogue,
+        fontScale: 1.3,
+      );
+
+      final smallSize = (smallPainter.text! as TextSpan).style!.fontSize!;
+      final normalSize = (normalPainter.text! as TextSpan).style!.fontSize!;
+      final largeSize = (largePainter.text! as TextSpan).style!.fontSize!;
+
+      expect(smallSize, lessThan(normalSize));
+      expect(largeSize, greaterThanOrEqualTo(normalSize));
+      expect(largeSize, greaterThan(smallSize));
+      expect(largePainter.width, lessThanOrEqualTo(bubbleRect.width));
+      expect(largePainter.height, lessThanOrEqualTo(bubbleRect.height));
+
+      for (final style in TranslationOverlayStyle.values) {
+        final recorder = PictureRecorder();
+        final canvas = Canvas(recorder);
+        final painter = MangaTranslationPainter(
+          result: const TranslationResult(
+            imagePath: '/mock/style_test.jpg',
+            imageSize: Size(400, 600),
+            blocks: [
+              MangaTranslatedBlock(
+                boundingBox: Rect.fromLTWH(40, 40, 160, 100),
+                originalText: 'おはよう！',
+                translatedText: 'Good morning!',
+                isSpeechBubble: true,
+              ),
+              MangaTranslatedBlock(
+                boundingBox: Rect.fromLTWH(220, 200, 120, 40),
+                originalText: 'ドキッ',
+                translatedText: 'THUMP!',
+                isSpeechBubble: false,
+              ),
+            ],
+          ),
+          mode: TranslationRenderMode.fullImageWithSfx,
+          fontScale: 1.15,
+          overlayStyle: style,
+        );
+        expect(() => painter.paint(canvas, const Size(400, 600)), returnsNormally);
+        final pic = recorder.endRecording();
+        pic.dispose();
+      }
+    });
   });
 }

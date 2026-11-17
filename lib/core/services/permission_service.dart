@@ -31,7 +31,11 @@ class PermissionService {
 
   /// Check whether Manage External Storage is granted.
   Future<bool> hasManageStoragePermission() async {
-    return Permission.manageExternalStorage.isGranted;
+    try {
+      return await Permission.manageExternalStorage.isGranted;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Ensures All Files Access is granted if on Android, requesting it if needed.

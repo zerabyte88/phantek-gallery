@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../../core/models/album.dart';
+import '../../../../core/services/psd_service.dart';
 import '../../../../core/services/thumbnail_service.dart';
 import 'shimmer_loading_tile.dart';
 
@@ -49,8 +50,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
     if (ThumbnailService.instance
                 .getMemoryThumbnail(widget.album.coverItem.id) !=
             null ||
-        ThumbnailService.instance.getCachedFile(widget.album.coverItem.id) !=
-            null) {
+        ThumbnailService.instance.hasDiskCache(widget.album.coverItem.id)) {
       _thumbFuture = null;
       return;
     }
@@ -78,21 +78,27 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
     if (mem != null) {
       return Image.memory(
         mem,
+        cacheWidth: 320,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
+        filterQuality: FilterQuality.low,
       );
     }
 
     final diskFile =
-        ThumbnailService.instance.getCachedFile(widget.album.coverItem.id);
+        ThumbnailService.instance.getIndexedDiskFile(widget.album.coverItem.id);
     if (diskFile != null) {
       return Image.file(
         diskFile,
+        cacheWidth: 320,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
-        errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
+        filterQuality: FilterQuality.low,
+        errorBuilder: (_, __, ___) {
+          ThumbnailService.instance
+              .evictDiskCacheIndex(widget.album.coverItem.id);
+          return _buildPlaceholder(cs);
+        },
       );
     }
 
@@ -108,9 +114,10 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
         if (snap.data != null && snap.data!.isNotEmpty) {
           return Image.memory(
             snap.data!,
+            cacheWidth: 320,
             fit: BoxFit.cover,
             gaplessPlayback: true,
-            filterQuality: FilterQuality.medium,
+            filterQuality: FilterQuality.low,
           );
         }
         if (snap.connectionState == ConnectionState.done) {
@@ -119,34 +126,39 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
           if (currentMem != null) {
             return Image.memory(
               currentMem,
+              cacheWidth: 320,
               fit: BoxFit.cover,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.medium,
+              filterQuality: FilterQuality.low,
             );
           }
           final currentDisk = ThumbnailService.instance
-              .getCachedFile(widget.album.coverItem.id);
+              .getIndexedDiskFile(widget.album.coverItem.id);
           if (currentDisk != null) {
             return Image.file(
               currentDisk,
+              cacheWidth: 320,
               fit: BoxFit.cover,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.medium,
-              errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
+              filterQuality: FilterQuality.low,
+              errorBuilder: (_, __, ___) {
+                ThumbnailService.instance
+                    .evictDiskCacheIndex(widget.album.coverItem.id);
+                return _buildPlaceholder(cs);
+              },
             );
           }
-          if (!widget.album.coverItem.isVideo) {
-            final file = File(widget.album.coverItem.path);
-            if (file.existsSync()) {
-              return Image.file(
-                file,
-                cacheWidth: 256,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                filterQuality: FilterQuality.medium,
-                errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
-              );
-            }
+          if (!widget.album.coverItem.isVideo &&
+              !PsdService.isPsd(widget.album.coverItem.path) &&
+              widget.album.coverItem.path.isNotEmpty) {
+            return Image.file(
+              File(widget.album.coverItem.path),
+              cacheWidth: 320,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.low,
+              errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
+            );
           }
         }
         return const ShimmerLoadingTile(icon: Icons.photo_library_rounded);
@@ -158,17 +170,19 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return InkWell(
-      onTap: widget.onTap,
-      onLongPress: widget.onLongPress,
-      borderRadius: BorderRadius.circular(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Stack(
+    return RepaintBoundary(
+      child: InkWell(
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        borderRadius: BorderRadius.circular(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: RepaintBoundary(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
                 fit: StackFit.expand,
                 children: [
                   _buildCover(cs),
@@ -230,7 +244,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
                               ),
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -255,7 +270,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
               color: cs.onSurfaceVariant.withValues(alpha: 0.85),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
