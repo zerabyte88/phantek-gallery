@@ -689,7 +689,7 @@ void main() {
     });
 
     test(
-        'Long translation inside narrow 30x120 box fits strictly inside without expanding or rotating',
+        'Long translation inside narrow 30x120 box rotates 90 degrees and fits strictly inside without expanding',
         () {
       const narrowRect = Rect.fromLTWH(100, 100, 30, 120);
       const longText =
@@ -708,8 +708,8 @@ void main() {
       );
       final fittedFontSize = (fitted.text! as TextSpan).style!.fontSize!;
       expect(fittedFontSize, lessThan(4.5));
-      expect(fitted.width, lessThanOrEqualTo(30.0));
-      expect(fitted.height, lessThanOrEqualTo(120.0));
+      expect(fitted.width, lessThanOrEqualTo(120.0));
+      expect(fitted.height, lessThanOrEqualTo(30.0));
 
       final recorder = PictureRecorder();
       final canvas = Canvas(recorder);
@@ -801,7 +801,8 @@ void main() {
       expect(fitted.height, lessThanOrEqualTo(70.0));
     });
 
-    test('Speech bubble fitting reserves safe corner inset inside rounded bubble',
+    test(
+        'Speech bubble fitting reserves safe corner inset inside rounded bubble',
         () {
       const bubbleRect = Rect.fromLTWH(0, 0, 80, 50);
       const dialogue = 'Wait a second, do not move from there!';
@@ -826,10 +827,11 @@ void main() {
         narrowColumnRect,
         columnText,
       );
-      // Inset bounds: hPad = (24 * 0.12).clamp(6.0, 12.0) = 6.0,
-      // vPad = (90 * 0.12).clamp(6.0, 12.0) = 10.8.
-      expect(fittedColumn.width, lessThanOrEqualTo(24.0 - 6.0));
-      expect(fittedColumn.height, lessThanOrEqualTo(90.0 - 10.8));
+      // 90-degree vertical rotation swaps inset bounds:
+      // hPad = (24 * 0.12).clamp(6.0, 12.0) = 6.0 -> targetMaxHeight = 24.0 - 6.0,
+      // vPad = (90 * 0.12).clamp(6.0, 12.0) = 10.8 -> maxTextWidth = 90.0 - 10.8.
+      expect(fittedColumn.width, lessThanOrEqualTo(90.0 - 10.8));
+      expect(fittedColumn.height, lessThanOrEqualTo(24.0 - 6.0));
 
       final recorder = PictureRecorder();
       final canvas = Canvas(recorder);
@@ -861,6 +863,24 @@ void main() {
       );
       final picture = recorder.endRecording();
       picture.dispose();
+    });
+
+    test(
+        'MangaTranslationPainter.debugFitSpeechBubbleText rotates tall 40x150 vertical box for readable >= 8pt font',
+        () {
+      const tallRect = Rect.fromLTWH(0, 0, 40, 150);
+      const dialogue = 'Yume, wake up! We are going to be late for school!';
+
+      final fitted = MangaTranslationPainter.debugFitSpeechBubbleText(
+        tallRect,
+        dialogue,
+      );
+      final fittedFontSize = (fitted.text! as TextSpan).style!.fontSize!;
+
+      expect(fittedFontSize, greaterThanOrEqualTo(8.0));
+      expect(fitted.width, greaterThan(40.0));
+      expect(fitted.width, lessThanOrEqualTo(150.0 - 12.0));
+      expect(fitted.height, lessThanOrEqualTo(40.0 - 6.0));
     });
   });
 
@@ -1673,6 +1693,78 @@ void main() {
       expect(merged.length, 1);
       // 'こんにちは世界' is kept, duplicates and substrings are dropped
       expect(merged.first.text, 'こんにちは世界');
+    });
+
+    test(
+        'mergeAdjacentBlocks does not merge vertical box with adjacent horizontal label',
+        () {
+      const verticalBox = RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(200, 100, 80, 220),
+        text: '縦書きのナレーション',
+      );
+      const horizontalLabel = RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(120, 100, 60, 24),
+        text: '次の日',
+      );
+
+      final merged = MangaOcrService.mergeAdjacentBlocks(
+        [verticalBox, horizontalLabel],
+        language: TranslationSourceLanguage.japanese,
+      );
+
+      expect(merged.length, 2);
+      expect(
+        merged.map((b) => b.text),
+        containsAll(['縦書きのナレーション', '次の日']),
+      );
+    });
+
+    test(
+        'mergeAdjacentBlocks does not merge three horizontal labels on the same Y row side-by-side',
+        () {
+      const label1 = RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(50, 100, 90, 24),
+        text: 'リセット！！',
+      );
+      const label2 = RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(160, 100, 90, 24),
+        text: 'リセット！！',
+      );
+      const label3 = RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(270, 100, 90, 24),
+        text: 'リセット！！',
+      );
+
+      final merged = MangaOcrService.mergeAdjacentBlocks(
+        [label1, label2, label3],
+        language: TranslationSourceLanguage.japanese,
+      );
+
+      expect(merged.length, 3);
+      expect(merged.every((b) => b.text == 'リセット！！'), isTrue);
+    });
+
+    test(
+        'mergeAdjacentBlocks merges tall vertical column with short trailing vertical column across 24px gap',
+        () {
+      const tallColumn = RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(200, 100, 22, 120),
+        text: '結芽ー、起きな',
+      );
+      // Left edge of tallColumn is 200; right edge of shortColumn is 156 + 20 = 176 -> 24px gap.
+      const shortColumn = RawMangaTextBlock(
+        boundingBox: Rect.fromLTWH(156, 100, 20, 55),
+        text: 'さーい',
+      );
+
+      final merged = MangaOcrService.mergeAdjacentBlocks(
+        [shortColumn, tallColumn],
+        language: TranslationSourceLanguage.japanese,
+      );
+
+      expect(merged.length, 1);
+      expect(merged.first.boundingBox, const Rect.fromLTWH(156, 100, 66, 120));
+      expect(merged.first.text, '結芽ー、起きな\nさーい');
     });
 
     test(

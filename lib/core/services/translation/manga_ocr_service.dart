@@ -243,10 +243,27 @@ class MangaOcrService {
         return true;
       }
 
+      final isVert1 = b1.boundingBox.height > b1.boundingBox.width * 1.3;
+      final isVert2 = b2.boundingBox.height > b2.boundingBox.width * 1.3;
+      final isHoriz1 = b1.boundingBox.width > b1.boundingBox.height * 1.15;
+      final isHoriz2 = b2.boundingBox.width > b2.boundingBox.height * 1.15;
+
+      if ((isVert1 && isHoriz2) || (isHoriz1 && isVert2)) {
+        return false;
+      }
+
       final uni = b1.boundingBox.expandToInclude(b2.boundingBox);
       final sumArea = b1.boundingBox.width * b1.boundingBox.height +
           b2.boundingBox.width * b2.boundingBox.height;
-      if (uni.width * uni.height > 2.4 * sumArea) {
+      final vOverlap = math.max(
+        0.0,
+        math.min(b1.boundingBox.bottom, b2.boundingBox.bottom) -
+            math.max(b1.boundingBox.top, b2.boundingBox.top),
+      );
+      final minH = math.min(b1.boundingBox.height, b2.boundingBox.height);
+      final double maxAreaRatio =
+          (isVert1 && isVert2 && vOverlap >= 0.5 * minH) ? 3.6 : 2.4;
+      if (uni.width * uni.height > maxAreaRatio * sumArea) {
         return false;
       }
 
@@ -270,13 +287,6 @@ class MangaOcrService {
         return false;
       }
 
-      final vOverlap = math.max(
-        0.0,
-        math.min(b1.boundingBox.bottom, b2.boundingBox.bottom) -
-            math.max(b1.boundingBox.top, b2.boundingBox.top),
-      );
-      final minH = math.min(b1.boundingBox.height, b2.boundingBox.height);
-
       final hOverlap = math.max(
         0.0,
         math.min(b1.boundingBox.right, b2.boundingBox.right) -
@@ -284,7 +294,8 @@ class MangaOcrService {
       );
       final minW = math.min(b1.boundingBox.width, b2.boundingBox.width);
 
-      if (hGap <= 2.5 * ref &&
+      if (!(isHoriz1 && isHoriz2) &&
+          hGap <= 2.5 * ref &&
           (vOverlap >= 0.35 * minH ||
               (b1.boundingBox.top - b2.boundingBox.top).abs() <= minH * 0.35)) {
         return true;

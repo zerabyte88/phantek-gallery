@@ -177,6 +177,7 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
     this.initialIndex = 0,
     this.isTrash = false,
     this.startSlideshow = false,
+    this.forceAutoPlay = false,
   }) : assert(item != null || (items != null && items.length > 0));
 
   final MediaItem? item;
@@ -184,6 +185,7 @@ class VideoPlayerScreen extends ConsumerStatefulWidget {
   final int initialIndex;
   final bool isTrash;
   final bool startSlideshow;
+  final bool forceAutoPlay;
 
   @override
   ConsumerState<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
@@ -593,6 +595,7 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
           _setDrag(Offset.zero);
         }
       });
+    _pendingManualPlay = widget.forceAutoPlay;
     _isInitStateActive = true;
     _initPlayer();
     _isInitStateActive = false;
@@ -964,7 +967,8 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
     if (currentItem.isVideo) {
       final currentPath = currentItem.path;
       final settings = ref.read(settingsNotifierProvider);
-      final shouldPlay = !widget.startSlideshow && settings.autoPlayVideo;
+      final shouldPlay = !widget.startSlideshow &&
+          (widget.forceAutoPlay || settings.autoPlayVideo);
       await _openAndRestoreVideo(
         currentPath,
         autoPlay: _routeTransitionComplete && shouldPlay,

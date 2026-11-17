@@ -31,6 +31,7 @@ import '../../../core/services/translation/mlkit_translation_engine.dart';
 import '../../../core/services/translation/translation_isolate_coordinator.dart';
 import 'widgets/manga_translation_overlay.dart';
 import '../../../core/services/settings_service.dart';
+import 'video_player_screen.dart';
 
 // 4096px cap fits imageCache while staying sharp up to 3x zoom.
 ImageProvider displayImage(String path, {int maxDimension = 4096}) =>
@@ -205,6 +206,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   late final TranslationIsolateCoordinator _translationCoordinator;
   Timer? _slideshowTimer;
   bool _isSlideshowPlaying = false;
+  Timer? _videoHandoffTimer;
+  bool _didHandoffToVideo = false;
   bool _didSetMaxBrightness = false;
   final Set<String> _precachedImagePaths = {};
 
@@ -549,6 +552,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   @override
   void dispose() {
+    _videoHandoffTimer?.cancel();
+    _videoHandoffTimer = null;
     _activeMangaPageNotifier.dispose();
     _translationCoordinator.dispose();
     _mangaPageController.dispose();
@@ -1336,8 +1341,56 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     );
   }
 
+  void _scheduleVideoHandoff() {
+    _videoHandoffTimer?.cancel();
+    if (!mounted ||
+        _didHandoffToVideo ||
+        _isMangaMode ||
+        _isSlideshowPlaying ||
+        _isDraggingDown.value ||
+        _isDismissing.value) {
+      return;
+    }
+    if (_current < 0 || _current >= widget.items.length) return;
+    if (!widget.items[_current].isVideo) return;
+    _videoHandoffTimer = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted || _isSlideshowPlaying) return;
+      _handoffToVideoPlayer(forcePlay: false);
+    });
+  }
+
+  void _handoffToVideoPlayer({required bool forcePlay}) {
+    if (!mounted ||
+        _didHandoffToVideo ||
+        _isMangaMode ||
+        _isDismissing.value) {
+      return;
+    }
+    if (_current < 0 || _current >= widget.items.length) return;
+    final current = widget.items[_current];
+    if (!current.isVideo) return;
+    _videoHandoffTimer?.cancel();
+    _didHandoffToVideo = true;
+    _activeMediaNotifier?.state = current.id;
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.transparent,
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: const Duration(milliseconds: 300),
+        pageBuilder: (_, __, ___) => VideoPlayerScreen(
+          items: widget.items,
+          initialIndex: _current,
+          isTrash: widget.isTrash,
+          startSlideshow: _isSlideshowPlaying,
+          forceAutoPlay: forcePlay,
+        ),
+      ),
+    );
+  }
+
   void _handleDoubleTap() {
-    if (_doubleTapDetails == null) return;
+    if (_doubleTapDetails == null || _currentItem.isVideo) return;
     _zoomToPosition(_doubleTapDetails!.localPosition);
   }
 
@@ -1348,8 +1401,24 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
           alignment: Alignment.center,
           children: [
             _thumb(it.id, it.path),
-            const Icon(Icons.play_circle_fill_rounded,
-                size: 64, color: Colors.white70),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: isCurrent
+                  ? () => _handoffToVideoPlayer(forcePlay: true)
+                  : null,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withValues(alpha: 0.35),
+                ),
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Icons.play_circle_fill_rounded,
+                  size: 64,
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+            ),
           ],
         ),
       );
@@ -2028,10 +2097,12 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                       _toggleBars();
                     }
                   },
-                  onDoubleTapDown: (details) {
-                    _doubleTapDetails = details;
-                  },
-                  onDoubleTap: _handleDoubleTap,
+                  onDoubleTapDown: item.isVideo
+                      ? null
+                      : (details) {
+                          _doubleTapDetails = details;
+                        },
+                  onDoubleTap: item.isVideo ? null : _handleDoubleTap,
                   child: Stack(
                     children: [
                       Positioned.fill(
@@ -2093,6 +2164,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                         is ScrollStartNotification) {
                                       if (notification.dragDetails != null) {
                                         _isSwipingPage.value = true;
+                                        _videoHandoffTimer?.cancel();
                                       }
                                     } else if (notification
                                         is ScrollEndNotification) {
@@ -2100,6 +2172,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       _precacheAdjacent(_current);
                                       _activeMediaNotifier?.state =
                                           widget.items[_current].id;
+                                      _scheduleVideoHandoff();
                                     }
                                     return false;
                                   },
@@ -2108,6 +2181,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                     dragStartBehavior: DragStartBehavior.down,
                                     itemCount: widget.items.length,
                                     onPageChanged: (i) {
+                                      _videoHandoffTimer?.cancel();
                                       setState(() {
                                         _current = i;
                                         _isPhotoZoomed = false;
@@ -2125,6 +2199,7 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       if (_translationMode != null) {
                                         _triggerMangaTranslationForActivePage();
                                       }
+                                      _scheduleVideoHandoff();
                                     },
                                     physics: (_isCurrentlyZoomed ||
                                             _isPinching ||
@@ -2163,19 +2238,22 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                           minScale: 1.0,
                                                           maxScale: 8.0,
                                                           panEnabled:
-                                                              _isCurrentlyZoomed &&
+                                                              !it.isVideo &&
+                                                                  _isCurrentlyZoomed &&
                                                                   (_psdLoadError[
                                                                           it.path] !=
                                                                       true),
-                                                          scaleEnabled: (!PsdService
-                                                                  .isPsd(it
-                                                                      .path) ||
-                                                              (_psdRenderedBytes[it
-                                                                          .path] !=
-                                                                      null &&
-                                                                  _psdRenderedBytes[
-                                                                          it.path]!
-                                                                      .isNotEmpty)),
+                                                          scaleEnabled: !it
+                                                                  .isVideo &&
+                                                              (!PsdService
+                                                                      .isPsd(it
+                                                                          .path) ||
+                                                                  (_psdRenderedBytes[it
+                                                                              .path] !=
+                                                                          null &&
+                                                                      _psdRenderedBytes[
+                                                                              it.path]!
+                                                                          .isNotEmpty)),
                                                           clipBehavior:
                                                               Clip.hardEdge,
                                                           onInteractionStart:

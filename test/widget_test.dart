@@ -35,6 +35,7 @@ import 'package:phantek_gallery/features/player/presentation/image_viewer_screen
     show displayImage, screenDisplayImage, ImageViewerScreen;
 import 'package:phantek_gallery/features/player/presentation/video_player_screen.dart'
     show
+        VideoPlayerScreen,
         resolveEffectiveVideoSize,
         computeNormalizedVideoLayoutSize,
         resolveAutoPlayAfterInit;
@@ -3383,6 +3384,112 @@ void main() {
         ),
         isTrue,
       );
+    });
+
+    testWidgets(
+        'Swiping from photo to video in ImageViewerScreen hands off to VideoPlayerScreen',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final photoItem = MediaItem(
+        id: 'photo_1',
+        path: '/mock/photo_1.jpg',
+        name: 'photo_1.jpg',
+        date: DateTime(2026, 1, 1),
+        size: 1024,
+        isVideo: false,
+      );
+      final videoItem = MediaItem(
+        id: 'video_1',
+        path: '/mock/video_1.mp4',
+        name: 'video_1.mp4',
+        date: DateTime(2026, 1, 2),
+        size: 2048,
+        isVideo: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: ImageViewerScreen(
+              items: [photoItem, videoItem],
+              initialIndex: 0,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(VideoPlayerScreen), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets(
+        'Tapping play button on video slide inside ImageViewerScreen immediately opens VideoPlayerScreen with forceAutoPlay',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final photoItem = MediaItem(
+        id: 'photo_1',
+        path: '/mock/photo_1.jpg',
+        name: 'photo_1.jpg',
+        date: DateTime(2026, 1, 1),
+        size: 1024,
+        isVideo: false,
+      );
+      final videoItem = MediaItem(
+        id: 'video_1',
+        path: '/mock/video_1.mp4',
+        name: 'video_1.mp4',
+        date: DateTime(2026, 1, 2),
+        size: 2048,
+        isVideo: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: ImageViewerScreen(
+              items: [photoItem, videoItem],
+              initialIndex: 1,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.play_circle_fill_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(VideoPlayerScreen), findsOneWidget);
+      expect(
+        tester.widget<VideoPlayerScreen>(find.byType(VideoPlayerScreen)).forceAutoPlay,
+        isTrue,
+      );
+
+      await tester.pump(const Duration(seconds: 1));
     });
   });
 }

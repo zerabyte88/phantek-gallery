@@ -372,7 +372,8 @@ class MangaTranslationPainter extends CustomPainter {
     return bubbleRect;
   }
 
-  static bool _shouldRotateVertical(Rect bubbleRect) => false;
+  static bool _shouldRotateVertical(Rect bubbleRect) =>
+      bubbleRect.height > bubbleRect.width * 1.45;
 
   static String _normalizeLayoutText(String text) =>
       text.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -439,7 +440,7 @@ class MangaTranslationPainter extends CustomPainter {
       screenSize: screenSize,
     );
 
-    final (:maxTextWidth, :targetMaxHeight, isVertical: _) =
+    final (:maxTextWidth, :targetMaxHeight, :isVertical) =
         _computeTextBounds(bubbleRect);
 
     final painter = _getOrCreateFittedPainter(
@@ -448,11 +449,31 @@ class MangaTranslationPainter extends CustomPainter {
       targetMaxHeight: targetMaxHeight,
     );
 
-    final rrect =
-        RRect.fromRectAndRadius(bubbleRect, const Radius.circular(8.0));
+    final double screenW = screenSize?.width ?? destRect?.width ?? 400.0;
+    final double screenH = screenSize?.height ?? destRect?.height ?? 800.0;
+    final Rect safeViewport = Rect.fromLTWH(
+      4.0,
+      4.0,
+      math.max(20.0, screenW - 8.0),
+      math.max(20.0, screenH - 8.0),
+    );
+    final Rect eraseRect = bubbleRect.inflate(3.5).intersect(safeViewport);
+    final double cornerRadius =
+        (isVertical || math.min(bubbleRect.width, bubbleRect.height) < 55.0)
+            ? 3.5
+            : 8.0;
+    final RRect eraseRRect =
+        RRect.fromRectAndRadius(eraseRect, Radius.circular(cornerRadius));
 
-    // Opaque patch hides the source text inside the bubble.
-    canvas.drawRRect(rrect, Paint()..color = Colors.white);
+    // Opaque patch with Google Lens-style border hides source text cleanly.
+    canvas.drawRRect(eraseRRect, Paint()..color = const Color(0xFFFDFDFD));
+    canvas.drawRRect(
+      eraseRRect,
+      Paint()
+        ..color = const Color(0xFF5F6368)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.1,
+    );
 
     final double fitScale = _computeFitScale(
       painter.width,
@@ -462,8 +483,18 @@ class MangaTranslationPainter extends CustomPainter {
     );
 
     canvas.save();
-    canvas.clipRRect(rrect);
-    if (fitScale < 1.0) {
+    canvas.clipRRect(eraseRRect);
+    if (isVertical) {
+      canvas.translate(bubbleRect.center.dx, bubbleRect.center.dy);
+      canvas.rotate(math.pi / 2);
+      if (fitScale < 1.0) {
+        canvas.scale(fitScale);
+      }
+      painter.paint(
+        canvas,
+        Offset(-painter.width / 2.0, -painter.height / 2.0),
+      );
+    } else if (fitScale < 1.0) {
       canvas.translate(bubbleRect.center.dx, bubbleRect.center.dy);
       canvas.scale(fitScale);
       painter.paint(
@@ -521,8 +552,9 @@ class MangaTranslationPainter extends CustomPainter {
     if (pillTop < safeViewport.top) pillTop = safeViewport.top;
 
     final pillRect = Rect.fromLTWH(pillLeft, pillTop, pillWidth, pillHeight);
-    final pillRRect =
-        RRect.fromRectAndRadius(pillRect, const Radius.circular(6.0));
+    final Rect eraseRect = pillRect.inflate(2.5).intersect(safeViewport);
+    final RRect eraseRRect =
+        RRect.fromRectAndRadius(eraseRect, const Radius.circular(4.0));
 
     const double strokeMargin = 4.0;
     final double hPad = _safeCornerInset(pillRect.width) +
@@ -537,32 +569,25 @@ class MangaTranslationPainter extends CustomPainter {
       maxWidth: maxTextWidth,
       maxHeight: maxTextHeight,
       styleBuilder: (size) => TextStyle(
-        color: Colors.white,
+        color: const Color(0xFF202124),
         fontSize: size,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w700,
         height: size <= 8.0 ? 1.08 : 1.15,
-        shadows: const [
-          Shadow(
-            offset: Offset(1.5, 1.5),
-            blurRadius: 3.0,
-            color: Colors.black87,
-          ),
-        ],
       ),
     );
 
-    final double strokeWidth = (fontSize * 0.25).clamp(0.6, 3.5);
+    final double strokeWidth = (fontSize * 0.22).clamp(0.8, 2.5);
     final strokePainter = _buildTextPainter(
       text: normalized,
       style: TextStyle(
         fontSize: fontSize,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w700,
         height: fontSize <= 8.0 ? 1.08 : 1.15,
         foreground: Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = strokeWidth
           ..strokeJoin = StrokeJoin.round
-          ..color = Colors.black,
+          ..color = Colors.white,
       ),
       maxWidth: maxTextWidth,
       maxLines: null,
@@ -575,13 +600,22 @@ class MangaTranslationPainter extends CustomPainter {
       math.max(1.0, pillRect.height - 2.0),
     );
 
-    canvas.save();
-    canvas.clipRRect(pillRRect);
+    canvas.drawRRect(
+      eraseRRect,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.94)
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawRRect(
+      eraseRRect,
+      Paint()
+        ..color = const Color(0xFFDADCE0)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.9,
+    );
 
-    final bgPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.65)
-      ..style = PaintingStyle.fill;
-    canvas.drawRRect(pillRRect, bgPaint);
+    canvas.save();
+    canvas.clipRRect(eraseRRect);
 
     if (fitScale < 1.0) {
       canvas.translate(pillRect.center.dx, pillRect.center.dy);
