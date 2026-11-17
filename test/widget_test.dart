@@ -3498,6 +3498,117 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
 
+    testWidgets(
+        'ImageViewerScreen video slide expands thumbnail to full viewport aspect ratio without stretching play icon',
+        (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      const videoId = 'video_full_width_test';
+      final tinyPng = Uint8List.fromList(const <int>[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82,
+      ]);
+
+      await tester.runAsync(() async {
+        await ThumbnailService.init();
+        await ThumbnailService.instance.clearAll();
+        final dir = await ThumbnailService.instance.getCacheDirectory();
+        final fileName = ThumbnailService.instance.debugCacheFileName(videoId);
+        await File('${dir.path}${Platform.pathSeparator}$fileName')
+            .writeAsBytes(tinyPng);
+        ThumbnailService.instance.registerDiskCacheFileName(fileName);
+      });
+      addTearDown(() async {
+        await tester.runAsync(() => ThumbnailService.instance.clearAll());
+      });
+
+      final photoItem = MediaItem(
+        id: 'photo_1',
+        path: '/mock/photo_1.jpg',
+        name: 'photo_1.jpg',
+        date: DateTime(2026, 1, 1),
+        size: 1024,
+        isVideo: false,
+      );
+      final videoItem = MediaItem(
+        id: videoId,
+        path: '/mock/video_16_9.mp4',
+        name: 'video_16_9.mp4',
+        date: DateTime(2026, 1, 2),
+        size: 2048,
+        width: 1920,
+        height: 1080,
+        isVideo: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: ImageViewerScreen(
+              items: [photoItem, videoItem],
+              initialIndex: 1,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final aspectFinder = find.descendant(
+        of: find.byType(PageView),
+        matching: find.byType(AspectRatio),
+      );
+      expect(aspectFinder, findsOneWidget);
+      final aspectSize = tester.getSize(aspectFinder);
+      expect(aspectSize.width, closeTo(400.0, 0.5));
+      expect(aspectSize.height, closeTo(225.0, 0.5));
+
+      final thumbImageFinder = find.descendant(
+        of: aspectFinder,
+        matching: find.byType(Image),
+      );
+      expect(thumbImageFinder, findsOneWidget);
+      final thumbSize = tester.getSize(thumbImageFinder);
+      expect(thumbSize.width, closeTo(400.0, 0.5));
+      expect(thumbSize.height, closeTo(225.0, 0.5));
+
+      final playIconFinder = find.byIcon(Icons.play_circle_fill_rounded);
+      expect(playIconFinder, findsOneWidget);
+      final playGestureFinder = find.ancestor(
+        of: playIconFinder,
+        matching: find.byType(GestureDetector),
+      ).first;
+      final playButtonSize = tester.getSize(playGestureFinder);
+      expect(playButtonSize.width, closeTo(72.0, 0.5));
+      expect(playButtonSize.height, closeTo(72.0, 0.5));
+
+      final aspectCenter = tester.getCenter(aspectFinder);
+      final playCenter = tester.getCenter(playGestureFinder);
+      expect(playCenter.dx, closeTo(aspectCenter.dx, 0.5));
+      expect(playCenter.dy, closeTo(aspectCenter.dy, 0.5));
+    });
+
     test(
         'computeClampedFocalZoomMatrix preserves interior focal points and clamps viewport boundaries',
         () {
@@ -3850,7 +3961,7 @@ void main() {
     });
 
     testWidgets(
-        'FilterSortBar with PageController uses AnimatedAlign when isDirectTabTransition is true',
+        'FilterSortBar with PageController smoothly animates capsule when isDirectTabTransition becomes true',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
@@ -3858,7 +3969,7 @@ void main() {
       final pageController = PageController(initialPage: 0);
       addTearDown(pageController.dispose);
 
-      Widget buildHarness(bool isDirect) {
+      Widget buildHarness(FilterOption filter, bool isDirect) {
         return ProviderScope(
           child: MaterialApp(
             home: Scaffold(
@@ -3866,7 +3977,7 @@ void main() {
                 preferredSize: const Size.fromHeight(96),
                 child: FilterSortBar(
                   pageController: pageController,
-                  currentFilter: FilterOption.albums,
+                  currentFilter: filter,
                   isDirectTabTransition: isDirect,
                 ),
               ),
@@ -3884,39 +3995,33 @@ void main() {
         );
       }
 
-      await tester.pumpWidget(buildHarness(false));
+      await tester.pumpWidget(buildHarness(FilterOption.all, false));
       await tester.pumpAndSettle();
 
+      final capsuleAlignFinder = find.descendant(
+        of: find.byType(FilterSortBar),
+        matching: find.byType(Align),
+      );
+      expect(capsuleAlignFinder, findsOneWidget);
       expect(
-        find.descendant(
-          of: find.byType(FilterSortBar),
-          matching: find.byType(AnimatedAlign),
-        ),
-        findsNothing,
+        (tester.widget<Align>(capsuleAlignFinder).alignment as Alignment).x,
+        closeTo(-1.0, 0.001),
       );
 
-      await tester.pumpWidget(buildHarness(true));
+      await tester.pumpWidget(buildHarness(FilterOption.albums, true));
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 140));
 
-      expect(
-        find.descendant(
-          of: find.byType(FilterSortBar),
-          matching: find.byType(AnimatedAlign),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: find.byType(FilterSortBar),
-          matching: find.byWidgetPredicate(
-            (w) =>
-                w is AnimatedDefaultTextStyle &&
-                w.duration == const Duration(milliseconds: 280),
-          ),
-        ),
-        findsNWidgets(4),
-      );
+      final midAlignX =
+          (tester.widget<Align>(capsuleAlignFinder).alignment as Alignment).x;
+      expect(midAlignX, greaterThan(-1.0));
+      expect(midAlignX, lessThan(1.0));
+
       await tester.pumpAndSettle();
+      expect(
+        (tester.widget<Align>(capsuleAlignFinder).alignment as Alignment).x,
+        closeTo(1.0, 0.001),
+      );
     });
 
     testWidgets(

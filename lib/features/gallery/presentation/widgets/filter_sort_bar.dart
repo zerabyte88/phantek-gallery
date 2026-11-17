@@ -10,7 +10,7 @@ import 'sort_bottom_sheet.dart';
 
 /// Modern, responsive unified filter and sort bar.
 /// Features an elegant segmented capsule controller for tabs and a compact sort chip.
-class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
+class FilterSortBar extends ConsumerStatefulWidget implements PreferredSizeWidget {
   const FilterSortBar({
     super.key,
     this.isAlbumDetail = false,
@@ -34,30 +34,115 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(96);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FilterSortBar> createState() => _FilterSortBarState();
+}
+
+class _FilterSortBarState extends ConsumerState<FilterSortBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _tapAnimController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 280),
+  );
+  Animation<double>? _tapAnimation;
+  late double _lastVisualPage;
+
+  List<FilterOption> get _options => widget.isAlbumDetail
+      ? [
+          FilterOption.all,
+          FilterOption.photosOnly,
+          FilterOption.videosOnly,
+        ]
+      : FilterOption.values;
+
+  @override
+  void initState() {
+    super.initState();
+    final options = _options;
+    final initialFilter = widget.currentFilter ?? FilterOption.all;
+    _lastVisualPage =
+        options.indexOf(initialFilter).clamp(0, options.length - 1).toDouble();
+  }
+
+  @override
+  void didUpdateWidget(covariant FilterSortBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final options = _options;
+    final oldIdx = options
+        .indexOf(oldWidget.currentFilter ?? FilterOption.all)
+        .clamp(0, options.length - 1);
+    final newIdx = options
+        .indexOf(widget.currentFilter ?? FilterOption.all)
+        .clamp(0, options.length - 1);
+
+    if (widget.isDirectTabTransition &&
+        (!oldWidget.isDirectTabTransition || oldIdx != newIdx)) {
+      final double beginPage;
+      if (_tapAnimController.isAnimating && _tapAnimation != null) {
+        beginPage = _tapAnimation!.value;
+      } else if (!oldWidget.isDirectTabTransition) {
+        beginPage = _lastVisualPage;
+      } else {
+        beginPage = oldIdx.toDouble();
+      }
+      _tapAnimation = Tween<double>(
+        begin: beginPage,
+        end: newIdx.toDouble(),
+      ).animate(
+        CurvedAnimation(
+          parent: _tapAnimController,
+          curve: Curves.easeOutCubic,
+        ),
+      );
+      _tapAnimController.forward(from: 0.0);
+    } else if (!widget.isDirectTabTransition &&
+        oldWidget.isDirectTabTransition) {
+      _tapAnimController.stop();
+      _tapAnimation = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _tapAnimController.dispose();
+    super.dispose();
+  }
+
+  void _onTapFilter(FilterOption f) {
+    if (widget.onFilterChanged != null) {
+      widget.onFilterChanged!(f);
+    } else {
+      ref
+          .read(settingsNotifierProvider.notifier)
+          .update((s) => s.copyWith(defaultFilter: f));
+    }
+  }
+
+  Widget _buildTabItem(FilterOption f, Widget labelChild) {
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _onTapFilter(f),
+        child: Center(child: labelChild),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.watch(settingsNotifierProvider);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    final activeFilter = currentFilter ?? settings.defaultFilter;
-    final activeSort = currentSort ?? settings.defaultSort;
-
-    final options = isAlbumDetail
-        ? [
-            FilterOption.all,
-            FilterOption.photosOnly,
-            FilterOption.videosOnly,
-          ]
-        : FilterOption.values;
+    final activeFilter = widget.currentFilter ?? settings.defaultFilter;
+    final activeSort = widget.currentSort ?? settings.defaultSort;
+    final options = _options;
 
     final selectedIndex =
         options.indexOf(activeFilter).clamp(0, options.length - 1);
     final alignmentX = options.length > 1
         ? -1.0 + (2.0 * selectedIndex / (options.length - 1))
         : 0.0;
-    final bool useDirectAnimation =
-        pageController == null || isDirectTabTransition;
 
     final capsuleIndicator = FractionallySizedBox(
       widthFactor: 1.0 / options.length,
@@ -87,112 +172,110 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                     ),
                     Padding(
                       padding: const EdgeInsets.all(3),
-                      child: Stack(
-                        children: [
-                          if (useDirectAnimation)
-                            AnimatedAlign(
-                              duration: const Duration(milliseconds: 280),
-                              curve: Curves.easeOutCubic,
-                              alignment: Alignment(alignmentX, 0.0),
-                              child: capsuleIndicator,
-                            )
-                          else
-                            AnimatedBuilder(
-                              animation: pageController!,
-                              builder: (context, _) {
-                                final page = pageController!.hasClients &&
-                                        pageController!.page != null
-                                    ? pageController!.page!
-                                    : selectedIndex.toDouble();
-                                final continuousAlignX = options.length > 1
-                                    ? -1.0 + (2.0 * page / (options.length - 1))
-                                    : 0.0;
-                                return Align(
-                                  alignment: Alignment(
-                                      continuousAlignX.clamp(-1.0, 1.0), 0.0),
+                      child: widget.pageController == null
+                          ? Stack(
+                              children: [
+                                AnimatedAlign(
+                                  duration: const Duration(milliseconds: 280),
+                                  curve: Curves.easeOutCubic,
+                                  alignment: Alignment(alignmentX, 0.0),
                                   child: capsuleIndicator,
+                                ),
+                                Row(
+                                  children: options.map((f) {
+                                    final selected = activeFilter == f;
+                                    final labelChild =
+                                        AnimatedDefaultTextStyle(
+                                      duration:
+                                          const Duration(milliseconds: 280),
+                                      curve: Curves.easeOutCubic,
+                                      style: TextStyle(
+                                        color: selected
+                                            ? cs.onPrimary
+                                            : cs.onSurfaceVariant,
+                                        fontSize: 13,
+                                        fontWeight: selected
+                                            ? FontWeight.w600
+                                            : FontWeight.w500,
+                                      ),
+                                      child: Text(
+                                        f.localizedLabel(context),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    );
+                                    return _buildTabItem(f, labelChild);
+                                  }).toList(),
+                                ),
+                              ],
+                            )
+                          : AnimatedBuilder(
+                              animation: Listenable.merge([
+                                widget.pageController!,
+                                _tapAnimController,
+                              ]),
+                              builder: (context, _) {
+                                final double visualPage =
+                                    widget.isDirectTabTransition &&
+                                            _tapAnimation != null
+                                        ? _tapAnimation!.value
+                                        : (widget.pageController!.hasClients &&
+                                                widget.pageController!.page !=
+                                                    null
+                                            ? widget.pageController!.page!
+                                            : selectedIndex.toDouble());
+                                _lastVisualPage = visualPage;
+
+                                final continuousAlignX = options.length > 1
+                                    ? -1.0 +
+                                        (2.0 *
+                                            visualPage /
+                                            (options.length - 1))
+                                    : 0.0;
+
+                                return Stack(
+                                  children: [
+                                    Align(
+                                      alignment: Alignment(
+                                          continuousAlignX.clamp(-1.0, 1.0),
+                                          0.0),
+                                      child: capsuleIndicator,
+                                    ),
+                                    Row(
+                                      children:
+                                          options.asMap().entries.map((entry) {
+                                        final index = entry.key;
+                                        final f = entry.value;
+                                        final t =
+                                            (1.0 - (visualPage - index).abs())
+                                                .clamp(0.0, 1.0);
+                                        final color = Color.lerp(
+                                            cs.onSurfaceVariant,
+                                            cs.onPrimary,
+                                            t);
+                                        final weight = FontWeight.lerp(
+                                            FontWeight.w500,
+                                            FontWeight.w600,
+                                            t);
+                                        final labelChild = Text(
+                                          f.localizedLabel(context),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: color,
+                                            fontSize: 13,
+                                            fontWeight: weight,
+                                          ),
+                                        );
+                                        return _buildTabItem(f, labelChild);
+                                      }).toList(),
+                                    ),
+                                  ],
                                 );
                               },
                             ),
-                          Row(
-                            children: options.asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final f = entry.value;
-
-                              Widget labelChild;
-                              if (useDirectAnimation) {
-                                final selected = activeFilter == f;
-                                labelChild = AnimatedDefaultTextStyle(
-                                  duration: const Duration(milliseconds: 280),
-                                  curve: Curves.easeOutCubic,
-                                  style: TextStyle(
-                                    color: selected
-                                        ? cs.onPrimary
-                                        : cs.onSurfaceVariant,
-                                    fontSize: 13,
-                                    fontWeight: selected
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                  ),
-                                  child: Text(
-                                    f.localizedLabel(context),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                );
-                              } else {
-                                labelChild = AnimatedBuilder(
-                                  animation: pageController!,
-                                  builder: (context, _) {
-                                    final page = pageController!.hasClients &&
-                                            pageController!.page != null
-                                        ? pageController!.page!
-                                        : selectedIndex.toDouble();
-                                    final t = (1.0 - (page - index).abs())
-                                        .clamp(0.0, 1.0);
-                                    final color = Color.lerp(
-                                        cs.onSurfaceVariant, cs.onPrimary, t);
-                                    final weight = FontWeight.lerp(
-                                        FontWeight.w500, FontWeight.w600, t);
-                                    return Text(
-                                      f.localizedLabel(context),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: color,
-                                        fontSize: 13,
-                                        fontWeight: weight,
-                                      ),
-                                    );
-                                  },
-                                );
-                              }
-
-                              return Expanded(
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () {
-                                    if (onFilterChanged != null) {
-                                      onFilterChanged!(f);
-                                    } else {
-                                      ref
-                                          .read(
-                                              settingsNotifierProvider.notifier)
-                                          .update((s) =>
-                                              s.copyWith(defaultFilter: f));
-                                    }
-                                  },
-                                  child: Center(
-                                    child: labelChild,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
@@ -222,8 +305,8 @@ class FilterSortBar extends ConsumerWidget implements PreferredSizeWidget {
                                 context,
                                 currentSort: activeSort,
                                 onSortChanged: (s) {
-                                  if (onSortChanged != null) {
-                                    onSortChanged!(s);
+                                  if (widget.onSortChanged != null) {
+                                    widget.onSortChanged!(s);
                                   } else {
                                     ref
                                         .read(settingsNotifierProvider.notifier)

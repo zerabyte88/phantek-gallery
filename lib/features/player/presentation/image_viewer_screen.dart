@@ -65,7 +65,10 @@ ImageProvider screenDisplayImage(String path, [int maxDim = 1440]) {
 Widget _thumb(String id, [String? path, Uint8List? psdFallbackBytes]) {
   final hr = ThumbnailService.instance.getMemoryHighResThumbnail(id);
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
-  final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
+  final disk = mem == null
+      ? (ThumbnailService.instance.getCachedHighResFile(id) ??
+          ThumbnailService.instance.getCachedFile(id))
+      : null;
   final isVid = path != null &&
       (path.toLowerCase().endsWith('.mp4') ||
           path.toLowerCase().endsWith('.mkv') ||
@@ -103,7 +106,10 @@ Widget _buildHeroShuttle({
 }) {
   final hr = ThumbnailService.instance.getMemoryHighResThumbnail(id);
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
-  final disk = mem == null ? ThumbnailService.instance.getCachedFile(id) : null;
+  final disk = mem == null
+      ? (ThumbnailService.instance.getCachedHighResFile(id) ??
+          ThumbnailService.instance.getCachedFile(id))
+      : null;
   final isPsd = path != null && PsdService.isPsd(path);
   final ImageProvider? p = mem != null
       ? MemoryImage(mem)
@@ -1431,12 +1437,24 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   Widget _buildPhotoPage(MediaItem it, {bool isCurrent = false}) {
     if (it.isVideo) {
-      return Center(
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            _thumb(it.id, it.path),
-            GestureDetector(
+      final thumbRatio =
+          ThumbnailService.instance.getThumbnailAspectRatio(it.id);
+      final ar = (thumbRatio != null && thumbRatio > 0)
+          ? thumbRatio
+          : (it.width != null &&
+                  it.height != null &&
+                  it.width! > 0 &&
+                  it.height! > 0)
+              ? (it.width! / it.height!)
+              : null;
+
+      Widget content = Stack(
+        fit: StackFit.expand,
+        alignment: Alignment.center,
+        children: [
+          SizedBox.expand(child: _thumb(it.id, it.path)),
+          Center(
+            child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: isCurrent
                   ? () => _handoffToVideoPlayer(forcePlay: true)
@@ -1454,9 +1472,18 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       );
+
+      if (ar != null && ar > 0) {
+        content = AspectRatio(
+          aspectRatio: ar,
+          child: content,
+        );
+      }
+
+      return content;
     }
 
     if (PsdService.isPsd(it.path)) {
