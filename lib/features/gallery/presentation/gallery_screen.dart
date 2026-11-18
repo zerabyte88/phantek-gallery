@@ -334,8 +334,6 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   void _onTabSelected(FilterOption f) {
     final targetIdx = _tabs.indexOf(f);
     if (targetIdx != -1 && targetIdx != _currentPage) {
-      final oldPage = _currentPage;
-      final distance = (targetIdx - oldPage).abs();
       _tabTapTimer?.cancel();
       setState(() {
         _currentPage = targetIdx;
@@ -354,15 +352,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         });
       });
       if (_pageController.hasClients) {
-        if (distance > 1) {
-          _pageController.jumpToPage(targetIdx);
-        } else {
-          _pageController.animateToPage(
-            targetIdx,
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
-          );
-        }
+        _pageController.jumpToPage(targetIdx);
       }
     }
   }
@@ -1147,6 +1137,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             key: PageStorageKey(storageKey),
             controller: controller,
             cacheExtent: 800.0,
+            addAutomaticKeepAlives: false,
             padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: settings.gridColumns,
@@ -1243,6 +1234,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                       settings,
                     ),
                     childCount: entry.value.length,
+                    addAutomaticKeepAlives: false,
                     findChildIndexCallback: (Key key) {
                       if (key is ValueKey<String>) {
                         return groupIndexMaps[entry.key]?[key.value];
@@ -1387,6 +1379,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
       child: GridView.builder(
         key: PageStorageKey(storageKey),
+        addAutomaticKeepAlives: false,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: settings.albumGridColumns,

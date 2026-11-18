@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/enums/filter_option.dart';
@@ -373,26 +371,33 @@ class _FilterSortBarState extends ConsumerState<FilterSortBar>
     bool isDark,
     double borderRadius,
   ) {
-    return RepaintBoundary(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(borderRadius),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: isDark ? 0.12 : 0.35),
-                cs.surfaceContainerHighest.withValues(alpha: 0.25),
-              ],
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: isDark ? 0.16 : 0.4),
-              width: 1,
-            ),
-          ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(borderRadius),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  cs.surfaceContainerHigh.withValues(alpha: 0.88),
+                  cs.surfaceContainerHighest.withValues(alpha: 0.78),
+                ]
+              : [
+                  Colors.white.withValues(alpha: 0.86),
+                  cs.surfaceContainerHighest.withValues(alpha: 0.78),
+                ],
         ),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: isDark ? 0.14 : 0.65),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
     );
   }

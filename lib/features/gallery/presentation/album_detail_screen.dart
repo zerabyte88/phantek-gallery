@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,18 +40,148 @@ class AlbumDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
+  static const List<FilterOption> _tabs = [
+    FilterOption.all,
+    FilterOption.photosOnly,
+    FilterOption.videosOnly,
+  ];
+
   final Set<String> _selected = {};
   bool _selecting = false;
   FilterOption _filter = FilterOption.all;
   SortOption? _sort;
   bool _flattenSubfolders = true;
   String? _selectedSubfolder;
-  late final ScrollController _scrollController = ScrollController();
+  final Map<FilterOption, ScrollController> _scrollControllers = {
+    FilterOption.all: ScrollController(),
+    FilterOption.photosOnly: ScrollController(),
+    FilterOption.videosOnly: ScrollController(),
+  };
+  late PageController _pageController = PageController(initialPage: 0);
+  bool _isTabTapTransition = false;
+  int? _pendingTapTargetPage;
+  Timer? _tabTapTimer;
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _tabTapTimer?.cancel();
+    _pageController.dispose();
+    for (final c in _scrollControllers.values) {
+      c.dispose();
+    }
     super.dispose();
+  }
+
+  void _syncPageControllerToFilter() {
+    final targetIdx = _tabs.indexOf(_filter).clamp(0, _tabs.length - 1);
+    if (_pageController.hasClients) {
+      if (_pageController.page?.round() != targetIdx) {
+        _pageController.jumpToPage(targetIdx);
+      }
+    } else if (_pageController.initialPage != targetIdx) {
+      final oldController = _pageController;
+      _pageController = PageController(initialPage: targetIdx);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        oldController.dispose();
+      });
+    }
+  }
+
+  void _onTabSelected(FilterOption f) {
+    final targetIdx = _tabs.indexOf(f);
+    if (targetIdx != -1 && f != _filter) {
+      _tabTapTimer?.cancel();
+      setState(() {
+        _filter = f;
+        _isTabTapTransition = true;
+        _pendingTapTargetPage = targetIdx;
+        if (_selected.isNotEmpty) {
+          _selected.clear();
+          _selecting = false;
+        }
+        if (!_pageController.hasClients) {
+          _syncPageControllerToFilter();
+        }
+      });
+      _tabTapTimer = Timer(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
+        setState(() {
+          _isTabTapTransition = false;
+          _pendingTapTargetPage = null;
+        });
+      });
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(targetIdx);
+      }
+    }
+  }
+
+  void _onPageChanged(int index) {
+    if (_pendingTapTargetPage != null && index != _pendingTapTargetPage) {
+      return;
+    }
+    if (index == _pendingTapTargetPage) {
+      _pendingTapTargetPage = null;
+    }
+    final nextFilter = _tabs[index];
+    if (_filter != nextFilter) {
+      setState(() {
+        _filter = nextFilter;
+        if (_selected.isNotEmpty) {
+          _selected.clear();
+          _selecting = false;
+        }
+      });
+    }
+  }
+
+  int _compareMangaCanonical(
+    MediaItem a,
+    MediaItem b,
+    bool hasSubfolders,
+  ) {
+    if (hasSubfolders && _selectedSubfolder == null) {
+      final folderCmp =
+          naturalCompare(a.immediateFolderName, b.immediateFolderName);
+      if (folderCmp != 0) return folderCmp;
+    }
+    return naturalCompare(a.name, b.name);
+  }
+
+  List<MediaItem> _filterAndSortItems(
+    List<MediaItem> scopedItems,
+    FilterOption filter,
+    SortOption activeSort,
+    bool hasSubfolders,
+  ) {
+    final filteredItems = switch (filter) {
+      FilterOption.photosOnly => scopedItems.where((e) => !e.isVideo).toList(),
+      FilterOption.videosOnly => scopedItems.where((e) => e.isVideo).toList(),
+      _ => scopedItems,
+    };
+
+    return switch (activeSort) {
+      SortOption.newest => [...filteredItems]
+        ..sort((a, b) => b.timeAdded.compareTo(a.timeAdded)),
+      SortOption.oldest => [...filteredItems]
+        ..sort((a, b) => a.timeAdded.compareTo(b.timeAdded)),
+      SortOption.shootingTimeDesc => [...filteredItems]
+        ..sort((a, b) => b.date.compareTo(a.date)),
+      SortOption.shootingTimeAsc => [...filteredItems]
+        ..sort((a, b) => a.date.compareTo(b.date)),
+      SortOption.nameAZ => [...filteredItems]
+        ..sort((a, b) => _compareMangaCanonical(a, b, hasSubfolders)),
+      SortOption.nameZA => [...filteredItems]
+        ..sort((a, b) => _compareMangaCanonical(b, a, hasSubfolders)),
+      SortOption.sizeDesc => [...filteredItems]
+        ..sort((a, b) => b.size.compareTo(a.size)),
+      SortOption.sizeAsc => [...filteredItems]
+        ..sort((a, b) => a.size.compareTo(b.size)),
+      SortOption.albumAZ => [...filteredItems]
+        ..sort((a, b) => _compareMangaCanonical(a, b, hasSubfolders)),
+      SortOption.albumZA => [...filteredItems]
+        ..sort((a, b) => _compareMangaCanonical(b, a, hasSubfolders)),
+    };
   }
 
   void _scrollToActiveMedia(
@@ -58,7 +189,8 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     List<MediaItem> sortedItems,
     SettingsModel settings,
   ) {
-    if (!mounted || !_scrollController.hasClients) return;
+    final controller = _scrollControllers[_filter];
+    if (!mounted || controller == null || !controller.hasClients) return;
     final index = sortedItems.indexWhere((e) => e.id == mediaId);
     if (index < 0) return;
 
@@ -66,16 +198,16 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
       index: index,
       crossAxisCount: settings.gridColumns,
       screenWidth: MediaQuery.sizeOf(context).width,
-      viewportHeight: _scrollController.position.viewportDimension,
-      currentScrollOffset: _scrollController.offset,
-      maxScrollExtent: _scrollController.position.maxScrollExtent,
+      viewportHeight: controller.position.viewportDimension,
+      currentScrollOffset: controller.offset,
+      maxScrollExtent: controller.position.maxScrollExtent,
       paddingHorizontal: 4.0,
       paddingTop: 2.0,
       spacing: 2.0,
     );
 
-    if ((targetOffset - _scrollController.offset).abs() > 1.0) {
-      _scrollController.jumpTo(targetOffset);
+    if ((targetOffset - controller.offset).abs() > 1.0) {
+      controller.jumpTo(targetOffset);
     }
   }
 
@@ -239,44 +371,28 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
             .toList()
         : albumItems;
 
-    // 1. Filter by All / Photos / Videos
-    final filteredItems = switch (_filter) {
-      FilterOption.photosOnly => scopedItems.where((e) => !e.isVideo).toList(),
-      FilterOption.videosOnly => scopedItems.where((e) => e.isVideo).toList(),
-      _ => scopedItems,
-    };
-
-    int compareMangaCanonical(MediaItem a, MediaItem b) {
-      if (hasSubfolders && _selectedSubfolder == null) {
-        final folderCmp =
-            naturalCompare(a.immediateFolderName, b.immediateFolderName);
-        if (folderCmp != 0) return folderCmp;
-      }
-      return naturalCompare(a.name, b.name);
-    }
-
-    // 2. Sort by selected sort or settings.defaultSort
+    // 1. Filter & sort for active tab (app bar count, actions, active-media listener)
     final activeSort = _sort ?? settings.defaultSort;
-    final sortedItems = switch (activeSort) {
-      SortOption.newest => [...filteredItems]
-        ..sort((a, b) => b.timeAdded.compareTo(a.timeAdded)),
-      SortOption.oldest => [...filteredItems]
-        ..sort((a, b) => a.timeAdded.compareTo(b.timeAdded)),
-      SortOption.shootingTimeDesc => [...filteredItems]
-        ..sort((a, b) => b.date.compareTo(a.date)),
-      SortOption.shootingTimeAsc => [...filteredItems]
-        ..sort((a, b) => a.date.compareTo(b.date)),
-      SortOption.nameAZ => [...filteredItems]..sort(compareMangaCanonical),
-      SortOption.nameZA => [...filteredItems]
-        ..sort((a, b) => compareMangaCanonical(b, a)),
-      SortOption.sizeDesc => [...filteredItems]
-        ..sort((a, b) => b.size.compareTo(a.size)),
-      SortOption.sizeAsc => [...filteredItems]
-        ..sort((a, b) => a.size.compareTo(b.size)),
-      SortOption.albumAZ => [...filteredItems]..sort(compareMangaCanonical),
-      SortOption.albumZA => [...filteredItems]
-        ..sort((a, b) => compareMangaCanonical(b, a)),
-    };
+    final sortedItems = _filterAndSortItems(
+      scopedItems,
+      _filter,
+      activeSort,
+      hasSubfolders,
+    );
+    final isShowingSubfolderGrid =
+        hasSubfolders && !_flattenSubfolders && _selectedSubfolder == null;
+
+    if (albumItems.isNotEmpty &&
+        !isShowingSubfolderGrid &&
+        !_pageController.hasClients &&
+        _pageController.initialPage != _tabs.indexOf(_filter)) {
+      final targetIdx = _tabs.indexOf(_filter).clamp(0, _tabs.length - 1);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pageController.hasClients) {
+          _pageController.jumpToPage(targetIdx);
+        }
+      });
+    }
 
     ref.listen<String?>(activeViewerMediaIdProvider, (_, nextId) {
       if (nextId != null) {
@@ -349,6 +465,9 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                     setState(() {
                       _flattenSubfolders = !_flattenSubfolders;
                       _selectedSubfolder = null;
+                      if (_flattenSubfolders) {
+                        _syncPageControllerToFilter();
+                      }
                     });
                   },
                 ),
@@ -361,10 +480,11 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                 icon: const Icon(Icons.more_vert),
                 onSelected: (value) {
                   if (value == 'manga') {
-                    final mangaItems = filteredItems
+                    final mangaItems = sortedItems
                         .where((e) => !e.isVideo && !PsdService.isPsd(e.path))
                         .toList()
-                      ..sort(compareMangaCanonical);
+                      ..sort((a, b) =>
+                          _compareMangaCanonical(a, b, hasSubfolders));
                     if (mangaItems.isNotEmpty) {
                       Navigator.of(context).openImage(
                         mangaItems,
@@ -457,9 +577,12 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
             FilterSortBar(
               isAlbumDetail: true,
               currentFilter: _filter,
-              onFilterChanged: (f) => setState(() => _filter = f),
+              onFilterChanged: _onTabSelected,
               currentSort: activeSort,
               onSortChanged: (s) => setState(() => _sort = s),
+              pageController: isShowingSubfolderGrid ? null : _pageController,
+              isDirectTabTransition:
+                  isShowingSubfolderGrid ? false : _isTabTapTransition,
             ),
             if (hasSubfolders && _flattenSubfolders) ...[
               Container(
@@ -569,11 +692,10 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                         ],
                       ),
                     )
-                  : (hasSubfolders &&
-                          !_flattenSubfolders &&
-                          _selectedSubfolder == null)
+                  : isShowingSubfolderGrid
                       ? GridView.builder(
                           cacheExtent: 800.0,
+                          addAutomaticKeepAlives: false,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
                           gridDelegate:
@@ -599,65 +721,135 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                               key: ValueKey(sub),
                               album: subAlbum,
                               onTap: () {
-                                setState(() => _selectedSubfolder = sub);
+                                setState(() {
+                                  _selectedSubfolder = sub;
+                                  _syncPageControllerToFilter();
+                                });
                               },
                             );
                           },
                         )
-                      : sortedItems.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No ${_filter.label.toLowerCase()} in this album',
-                                style: const TextStyle(
-                                    fontSize: 14, color: Colors.grey),
-                              ),
-                            )
-                          : GridView.builder(
-                              controller: _scrollController,
-                              cacheExtent: 800.0,
-                              padding: const EdgeInsets.all(2),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: settings.gridColumns,
-                                crossAxisSpacing: 2,
-                                mainAxisSpacing: 2,
-                              ),
-                              itemCount: sortedItems.length,
-                              itemBuilder: (_, i) {
-                                final item = sortedItems[i];
-                                return MediaGridItem(
-                                  key: ValueKey(item.id),
-                                  item: item,
-                                  isSelected: _selected.contains(item.id),
-                                  isSelecting: _selecting,
-                                  showBadges: settings.showBadges,
-                                  onTap: () {
-                                    if (_selecting) {
-                                      _toggleSelect(item.id);
-                                      return;
-                                    }
-                                    if (sortedItems.every((e) => !e.isVideo)) {
-                                      Navigator.of(context)
-                                          .openImage(sortedItems, i);
-                                    } else {
-                                      Navigator.of(context)
-                                          .openVideo(sortedItems, i);
-                                    }
-                                  },
-                                  onLongPress: () {
-                                    if (!_selecting) {
-                                      _startSelect(item.id);
-                                    } else {
-                                      _toggleSelect(item.id);
-                                    }
-                                  },
-                                );
-                              },
-                            ),
+                      : NotificationListener<ScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification is ScrollStartNotification &&
+                                notification.dragDetails != null &&
+                                (_isTabTapTransition ||
+                                    _pendingTapTargetPage != null)) {
+                              _tabTapTimer?.cancel();
+                              setState(() {
+                                _isTabTapTransition = false;
+                                _pendingTapTargetPage = null;
+                              });
+                            }
+                            return false;
+                          },
+                          child: PageView.builder(
+                            controller: _pageController,
+                            itemCount: _tabs.length,
+                            onPageChanged: _onPageChanged,
+                            physics: _selecting
+                                ? const NeverScrollableScrollPhysics()
+                                : const PageScrollPhysics(),
+                            itemBuilder: (context, index) {
+                              final tab = _tabs[index];
+                              final pageItems = _filterAndSortItems(
+                                scopedItems,
+                                tab,
+                                activeSort,
+                                hasSubfolders,
+                              );
+                              return _KeepAliveAlbumPage(
+                                child: HeroMode(
+                                  enabled: _filter == tab,
+                                  child: pageItems.isEmpty
+                                      ? Center(
+                                          child: Text(
+                                            'No ${tab.label.toLowerCase()} in this album',
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        )
+                                      : GridView.builder(
+                                          key: PageStorageKey(
+                                            'album_${widget.albumName}_${_selectedSubfolder ?? 'all'}_${tab.name}',
+                                          ),
+                                          controller: _scrollControllers[tab],
+                                          cacheExtent: 800.0,
+                                          addAutomaticKeepAlives: false,
+                                          padding: const EdgeInsets.all(2),
+                                          gridDelegate:
+                                              SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount:
+                                                settings.gridColumns,
+                                            crossAxisSpacing: 2,
+                                            mainAxisSpacing: 2,
+                                          ),
+                                          itemCount: pageItems.length,
+                                          itemBuilder: (_, i) {
+                                            final item = pageItems[i];
+                                            return MediaGridItem(
+                                              key: ValueKey(item.id),
+                                              item: item,
+                                              isSelected:
+                                                  _selected.contains(item.id),
+                                              isSelecting: _selecting,
+                                              showBadges: settings.showBadges,
+                                              onTap: () {
+                                                if (_selecting) {
+                                                  _toggleSelect(item.id);
+                                                  return;
+                                                }
+                                                if (pageItems.every(
+                                                    (e) => !e.isVideo)) {
+                                                  Navigator.of(context)
+                                                      .openImage(pageItems, i);
+                                                } else {
+                                                  Navigator.of(context)
+                                                      .openVideo(pageItems, i);
+                                                }
+                                              },
+                                              onLongPress: () {
+                                                if (!_selecting) {
+                                                  _startSelect(item.id);
+                                                } else {
+                                                  _toggleSelect(item.id);
+                                                }
+                                              },
+                                            );
+                                          },
+                                        ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
             ),
           ],
         ),
       ),
     );
+  }
+}
+
+/// Keeps AlbumDetailScreen PageView tab pages alive in memory.
+class _KeepAliveAlbumPage extends StatefulWidget {
+  const _KeepAliveAlbumPage({required this.child});
+  final Widget child;
+
+  @override
+  State<_KeepAliveAlbumPage> createState() => _KeepAliveAlbumPageState();
+}
+
+class _KeepAliveAlbumPageState extends State<_KeepAliveAlbumPage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return RepaintBoundary(child: widget.child);
   }
 }

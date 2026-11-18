@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/enums/thumbnail_crop_style.dart';
 import '../../../../core/models/media_item.dart';
 import '../../../../core/services/psd_service.dart';
@@ -10,7 +9,7 @@ import '../../../../core/utils/media_utils.dart';
 import 'shimmer_loading_tile.dart';
 
 /// Gallery grid thumbnail item.
-class MediaGridItem extends ConsumerStatefulWidget {
+class MediaGridItem extends StatefulWidget {
   const MediaGridItem({
     super.key,
     required this.item,
@@ -31,10 +30,10 @@ class MediaGridItem extends ConsumerStatefulWidget {
   final VoidCallback onLongPress;
 
   @override
-  ConsumerState<MediaGridItem> createState() => _MediaGridItemState();
+  State<MediaGridItem> createState() => _MediaGridItemState();
 }
 
-class _MediaGridItemState extends ConsumerState<MediaGridItem> {
+class _MediaGridItemState extends State<MediaGridItem> {
   Future<Uint8List?>? _thumbFuture;
 
   @override

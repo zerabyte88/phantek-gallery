@@ -473,11 +473,15 @@ class MangaTranslationPainter extends CustomPainter {
       overlayStyle: overlayStyle,
     );
 
+    final palette = _OverlayStylePalette.fromStyle(overlayStyle);
+    final String displayText =
+        palette.uppercaseText ? normalizedText.toUpperCase() : normalizedText;
+
     final (:maxTextWidth, :targetMaxHeight, :isVertical) =
         _computeTextBounds(bubbleRect, fontScale: fontScale);
 
     final painter = _getOrCreateFittedPainter(
-      text: normalizedText,
+      text: displayText,
       maxTextWidth: maxTextWidth,
       targetMaxHeight: targetMaxHeight,
       fontScale: fontScale,
@@ -495,20 +499,29 @@ class MangaTranslationPainter extends CustomPainter {
     final Rect eraseRect = bubbleRect.inflate(3.5).intersect(safeViewport);
     final double cornerRadius =
         (isVertical || math.min(bubbleRect.width, bubbleRect.height) < 55.0)
-            ? 3.5
-            : 8.0;
+            ? palette.compactCornerRadius
+            : palette.normalCornerRadius;
     final RRect eraseRRect =
         RRect.fromRectAndRadius(eraseRect, Radius.circular(cornerRadius));
 
-    final palette = _OverlayStylePalette.fromStyle(overlayStyle);
+    if (palette.hasSoftShadow) {
+      canvas.drawRRect(
+        eraseRRect.shift(const Offset(0, 1.5)),
+        Paint()
+          ..color = const Color(0x26000000)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0),
+      );
+    }
     canvas.drawRRect(eraseRRect, Paint()..color = palette.bubbleFill);
-    canvas.drawRRect(
-      eraseRRect,
-      Paint()
-        ..color = palette.bubbleBorder
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = palette.bubbleBorderWidth,
-    );
+    if (palette.bubbleBorderWidth > 0 && palette.bubbleBorder.a > 0) {
+      canvas.drawRRect(
+        eraseRRect,
+        Paint()
+          ..color = palette.bubbleBorder
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = palette.bubbleBorderWidth,
+      );
+    }
 
     final double fitScale = _computeFitScale(
       painter.width,
@@ -603,26 +616,28 @@ class MangaTranslationPainter extends CustomPainter {
     final double maxTextHeight = math.max(4.0, pillRect.height - vPad);
 
     final palette = _OverlayStylePalette.fromStyle(overlayStyle);
+    final String displaySfx =
+        palette.uppercaseText ? normalized.toUpperCase() : normalized;
 
     final (painter: fillPainter, :fontSize) = _fitTextPainterToBounds(
-      text: normalized,
+      text: displaySfx,
       maxWidth: maxTextWidth,
       maxHeight: maxTextHeight,
       fontScale: fontScale,
       styleBuilder: (size) => TextStyle(
         color: palette.sfxText,
         fontSize: size,
-        fontWeight: FontWeight.w700,
+        fontWeight: palette.uppercaseText ? FontWeight.w900 : FontWeight.w700,
         height: size <= 8.0 ? 1.08 : 1.15,
       ),
     );
 
     final double strokeWidth = (fontSize * 0.22).clamp(0.8, 2.5);
     final strokePainter = _buildTextPainter(
-      text: normalized,
+      text: displaySfx,
       style: TextStyle(
         fontSize: fontSize,
-        fontWeight: FontWeight.w700,
+        fontWeight: palette.uppercaseText ? FontWeight.w900 : FontWeight.w700,
         height: fontSize <= 8.0 ? 1.08 : 1.15,
         foreground: Paint()
           ..style = PaintingStyle.stroke
@@ -641,19 +656,29 @@ class MangaTranslationPainter extends CustomPainter {
       math.max(1.0, pillRect.height - 2.0),
     );
 
+    if (palette.hasSoftShadow) {
+      canvas.drawRRect(
+        eraseRRect.shift(const Offset(0, 1.0)),
+        Paint()
+          ..color = const Color(0x22000000)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+      );
+    }
     canvas.drawRRect(
       eraseRRect,
       Paint()
         ..color = palette.sfxFill
         ..style = PaintingStyle.fill,
     );
-    canvas.drawRRect(
-      eraseRRect,
-      Paint()
-        ..color = palette.sfxBorder
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.9,
-    );
+    if (palette.sfxBorderWidth > 0 && palette.sfxBorder.a > 0) {
+      canvas.drawRRect(
+        eraseRRect,
+        Paint()
+          ..color = palette.sfxBorder
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = palette.sfxBorderWidth,
+      );
+    }
 
     canvas.save();
     canvas.clipRRect(eraseRRect);
@@ -830,7 +855,8 @@ class MangaTranslationPainter extends CustomPainter {
       styleBuilder: (size) => TextStyle(
         color: palette.textColor,
         fontSize: size,
-        fontWeight: FontWeight.w500,
+        fontWeight: palette.fontWeight,
+        letterSpacing: palette.uppercaseText ? 0.25 : 0.0,
         height: size <= 8.0 ? 1.08 : 1.18,
       ),
     );
@@ -851,8 +877,14 @@ class _OverlayStylePalette {
     required this.textColor,
     required this.sfxFill,
     required this.sfxBorder,
+    required this.sfxBorderWidth,
     required this.sfxText,
     required this.sfxStroke,
+    this.fontWeight = FontWeight.w500,
+    this.uppercaseText = false,
+    this.hasSoftShadow = false,
+    this.normalCornerRadius = 8.0,
+    this.compactCornerRadius = 3.5,
   });
 
   final Color bubbleFill;
@@ -861,30 +893,46 @@ class _OverlayStylePalette {
   final Color textColor;
   final Color sfxFill;
   final Color sfxBorder;
+  final double sfxBorderWidth;
   final Color sfxText;
   final Color sfxStroke;
+  final FontWeight fontWeight;
+  final bool uppercaseText;
+  final bool hasSoftShadow;
+  final double normalCornerRadius;
+  final double compactCornerRadius;
 
   factory _OverlayStylePalette.fromStyle(TranslationOverlayStyle style) {
     return switch (style) {
       TranslationOverlayStyle.googleLens => _OverlayStylePalette(
-          bubbleFill: const Color(0xFFFDFDFD),
-          bubbleBorder: const Color(0xFF5F6368),
-          bubbleBorderWidth: 1.1,
+          bubbleFill: const Color(0xFFF8F9FA),
+          bubbleBorder: Colors.transparent,
+          bubbleBorderWidth: 0.0,
           textColor: const Color(0xFF202124),
-          sfxFill: Colors.white.withValues(alpha: 0.94),
-          sfxBorder: const Color(0xFFDADCE0),
+          sfxFill: Colors.white.withValues(alpha: 0.92),
+          sfxBorder: Colors.transparent,
+          sfxBorderWidth: 0.0,
           sfxText: const Color(0xFF202124),
           sfxStroke: Colors.white,
+          fontWeight: FontWeight.w500,
+          hasSoftShadow: true,
+          normalCornerRadius: 12.0,
+          compactCornerRadius: 6.0,
         ),
       TranslationOverlayStyle.classicManga => const _OverlayStylePalette(
           bubbleFill: Color(0xFFFFFFFF),
           bubbleBorder: Color(0xFF111111),
-          bubbleBorderWidth: 1.5,
+          bubbleBorderWidth: 2.0,
           textColor: Color(0xFF000000),
-          sfxFill: Colors.white,
+          sfxFill: Color(0xFFFFFFFF),
           sfxBorder: Color(0xFF111111),
+          sfxBorderWidth: 1.8,
           sfxText: Color(0xFF000000),
           sfxStroke: Colors.white,
+          fontWeight: FontWeight.w800,
+          uppercaseText: true,
+          normalCornerRadius: 16.0,
+          compactCornerRadius: 6.0,
         ),
       TranslationOverlayStyle.darkContrast => const _OverlayStylePalette(
           bubbleFill: Color(0xF218181B),
@@ -893,6 +941,7 @@ class _OverlayStylePalette {
           textColor: Color(0xFFF4F4F5),
           sfxFill: Color(0xEE18181B),
           sfxBorder: Color(0xFF52525B),
+          sfxBorderWidth: 0.9,
           sfxText: Color(0xFFF4F4F5),
           sfxStroke: Color(0xFF09090B),
         ),
@@ -903,6 +952,7 @@ class _OverlayStylePalette {
           textColor: Color(0xFFFFFFFF),
           sfxFill: Color(0xBD111318),
           sfxBorder: Colors.white30,
+          sfxBorderWidth: 0.9,
           sfxText: Color(0xFFFFFFFF),
           sfxStroke: Color(0xFF000000),
         ),

@@ -3945,9 +3945,11 @@ void main() {
       final FilterSortBar draggedBar = tester.widget(barFinder);
       expect(draggedBar.currentFilter, FilterOption.videosOnly);
 
-      // Tapping adjacent tab (Photos, index 1) activates direct transition, and dragging cancels it immediately
+      // Tapping adjacent tab (Photos, index 1) jumps PageView immediately to 1.0,
+      // activates direct transition for FilterSortBar, and dragging cancels it immediately
       await tester.tap(find.text('Photos'));
       await tester.pump();
+      expect(tester.widget<PageView>(pageViewFinder).controller?.page, 1.0);
       expect(
           tester.widget<FilterSortBar>(barFinder).isDirectTabTransition, isTrue);
 
@@ -3958,6 +3960,105 @@ void main() {
           isFalse);
       await gesture.up();
       await tester.pump(const Duration(milliseconds: 500));
+    });
+
+    testWidgets(
+        'AlbumDetailScreen switches tabs instantly on tap and updates FilterSortBar on horizontal swipe',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            home: AlbumDetailScreen(albumName: 'a'),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final pageViewFinder = find.byType(PageView);
+      final barFinder = find.byType(FilterSortBar);
+      expect(pageViewFinder, findsOneWidget);
+      expect(barFinder, findsOneWidget);
+      expect(tester.widget<PageView>(pageViewFinder).controller?.page, 0.0);
+      expect(tester.widget<FilterSortBar>(barFinder).currentFilter,
+          FilterOption.all);
+
+      // Tap Photos (index 1): jumps immediately to 1.0 while FilterSortBar animates capsule
+      await tester.tap(find.text('Photos'));
+      await tester.pump();
+      expect(tester.widget<PageView>(pageViewFinder).controller?.page, 1.0);
+      expect(tester.widget<FilterSortBar>(barFinder).currentFilter,
+          FilterOption.photosOnly);
+      expect(
+          tester.widget<FilterSortBar>(barFinder).isDirectTabTransition, isTrue);
+
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(tester.widget<FilterSortBar>(barFinder).isDirectTabTransition,
+          isFalse);
+
+      // Tap Videos (index 2): jumps immediately to 2.0
+      await tester.tap(find.text('Videos'));
+      await tester.pump();
+      expect(tester.widget<PageView>(pageViewFinder).controller?.page, 2.0);
+      expect(tester.widget<FilterSortBar>(barFinder).currentFilter,
+          FilterOption.videosOnly);
+      expect(
+          tester.widget<FilterSortBar>(barFinder).isDirectTabTransition, isTrue);
+
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(tester.widget<FilterSortBar>(barFinder).isDirectTabTransition,
+          isFalse);
+
+      // Tap All (index 0): jumps immediately back to 0.0
+      await tester.tap(find.text('All'));
+      await tester.pump();
+      expect(tester.widget<PageView>(pageViewFinder).controller?.page, 0.0);
+      expect(tester.widget<FilterSortBar>(barFinder).currentFilter,
+          FilterOption.all);
+      expect(
+          tester.widget<FilterSortBar>(barFinder).isDirectTabTransition, isTrue);
+
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(tester.widget<FilterSortBar>(barFinder).isDirectTabTransition,
+          isFalse);
+
+      // Manual horizontal swipe forward from All (0) to Photos (1)
+      await tester.drag(pageViewFinder, const Offset(-500, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(tester.widget<PageView>(pageViewFinder).controller?.page?.round(),
+          1);
+      expect(tester.widget<FilterSortBar>(barFinder).currentFilter,
+          FilterOption.photosOnly);
+
+      // Manual horizontal swipe forward from Photos (1) to Videos (2)
+      await tester.drag(pageViewFinder, const Offset(-500, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(tester.widget<PageView>(pageViewFinder).controller?.page?.round(),
+          2);
+      expect(tester.widget<FilterSortBar>(barFinder).currentFilter,
+          FilterOption.videosOnly);
+
+      // Manual horizontal swipe back from Videos (2) to Photos (1)
+      await tester.drag(pageViewFinder, const Offset(500, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(tester.widget<PageView>(pageViewFinder).controller?.page?.round(),
+          1);
+      expect(tester.widget<FilterSortBar>(barFinder).currentFilter,
+          FilterOption.photosOnly);
     });
 
     testWidgets(
@@ -4749,7 +4850,9 @@ void main() {
       expect(find.text('EN'), findsOneWidget);
 
       // Select Dark Contrast style
-      await tester.tap(find.text('Dark Contrast'));
+      await tester.tap(find.byType(DropdownButton<TranslationOverlayStyle>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dark Contrast').last);
       await tester.pumpAndSettle();
       expect(SettingsService.instance.settings.translationOverlayStyle,
           TranslationOverlayStyle.darkContrast);

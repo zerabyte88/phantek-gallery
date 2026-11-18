@@ -1573,20 +1573,47 @@ Future<void> _showTranslationOverlayDialog(
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: TranslationOverlayStyle.values.map((style) {
-                        final selected = currentStyle == style;
-                        return ChoiceChip(
-                          label: Text(ctx.tr.overlayStyleLabel(style)),
-                          selected: selected,
-                          onSelected: (_) {
+                    Container(
+                      height: 46,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest
+                            .withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: cs.outlineVariant.withValues(alpha: 0.7),
+                        ),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<TranslationOverlayStyle>(
+                          value: currentStyle,
+                          isExpanded: true,
+                          borderRadius: BorderRadius.circular(12),
+                          dropdownColor: cs.surfaceContainerHigh,
+                          iconEnabledColor: cs.onSurfaceVariant,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w500,
+                            color: cs.onSurface,
+                          ),
+                          items: [
+                            for (final style in TranslationOverlayStyle.values)
+                              DropdownMenuItem<TranslationOverlayStyle>(
+                                value: style,
+                                child: Text(
+                                  ctx.tr.overlayStyleLabel(style),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                          onChanged: (style) {
+                            if (style == null) return;
                             HapticFeedback.selectionClick();
                             updateOverlay(overlayStyle: style);
                           },
-                        );
-                      }).toList(),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Row(
