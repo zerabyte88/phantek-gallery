@@ -25,6 +25,7 @@ import '../../../core/widgets/bouncy_tap.dart';
 import '../../../core/widgets/styled_popup_menu.dart';
 import '../../../core/widgets/theme_header_background.dart';
 import 'widgets/album_grid_item.dart';
+import 'widgets/drag_select_grid.dart';
 import 'widgets/fast_scroll_handle.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
@@ -90,9 +91,39 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   final Map<FilterOption, List<MediaItem>> _cachedGroupItems = {};
   final Map<FilterOption, TimelineGrouping> _cachedGroupTimelineGrouping = {};
   final Map<FilterOption, int> _cachedGroupDay = {};
-  final Map<FilterOption, Map<String, List<int>>> _cachedGroupResult = {};
-  final Map<FilterOption, Map<String, Map<String, int>>> _cachedGroupIndexMaps =
-      {};
+  final Map<FilterOption, int> _cachedGroupColumns = {};
+  final Map<FilterOption, String> _cachedGroupLocale = {};
+  final Map<FilterOption, List<_TimelineRow>> _cachedTimelineRows = {};
+  final Map<FilterOption, Map<String, int>> _cachedTimelineRowIndexMaps = {};
+  final Map<FilterOption, Map<String, int>> _cachedMediaRowMaps = {};
+  final Map<FilterOption, List<int>> _cachedTimelineOrderedIndices = {};
+
+  static const List<String> _monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  static double _timelineHeaderHeight(double textScale) =>
+      18.0 + 6.0 + (13.0 * 1.4 * textScale);
+
+  static double _timelineRowHeight(
+    _TimelineRow row,
+    double tileHeight,
+    double headerHeight,
+  ) =>
+      row.isHeader
+          ? headerHeight
+          : tileHeight + (row.isLastInGroup ? 0.0 : 3.0);
 
   static Map<String, int> _buildIndexMap(List<MediaItem> items) {
     final map = <String, int>{};
@@ -264,10 +295,52 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         break;
     }
 
+    final settings = ref.read(settingsNotifierProvider);
+    if (settings.timelineGrouping != TimelineGrouping.continuous) {
+      final timeline =
+          _getOrBuildTimelineData(currentItems, currentTab, settings);
+      final targetRowIdx = timeline.mediaRowMap[mediaId];
+      if (targetRowIdx == null) return;
+
+      final screenWidth = MediaQuery.sizeOf(context).width;
+      final cols = settings.gridColumns.clamp(1, 12);
+      final aspectRatio =
+          settings.thumbnailCropStyle == ThumbnailCropStyle.adaptive
+              ? 0.8
+              : 1.0;
+      final tileWidth = (screenWidth - 6.0 - (cols - 1) * 3.0) / cols;
+      final tileHeight = tileWidth / aspectRatio;
+      final headerHeight = _timelineHeaderHeight(
+        MediaQuery.textScalerOf(context).scale(1.0),
+      );
+
+      var y = 0.0;
+      for (var i = 0; i < targetRowIdx; i++) {
+        y += _timelineRowHeight(timeline.rows[i], tileHeight, headerHeight);
+      }
+
+      final rowTop = y;
+      final rowBottom = rowTop + tileHeight;
+      final viewportHeight = controller.position.viewportDimension;
+      final viewportTop = controller.offset;
+      final viewportBottom = viewportTop + viewportHeight;
+      final effectiveTopThreshold =
+          viewportTop <= 0.0 ? 0.0 : viewportTop + 10.0;
+      if (rowTop >= effectiveTopThreshold &&
+          rowBottom <= viewportBottom - 10.0) {
+        return;
+      }
+      final ideal = (rowTop - (viewportHeight - tileHeight) / 2.0)
+          .clamp(0.0, controller.position.maxScrollExtent);
+      if ((ideal - controller.offset).abs() > 1.0) {
+        controller.jumpTo(ideal);
+      }
+      return;
+    }
+
     final index = currentItems.indexWhere((e) => e.id == mediaId);
     if (index < 0) return;
 
-    final settings = ref.read(settingsNotifierProvider);
     final targetOffset = MediaUtils.calculateGridScrollOffset(
       index: index,
       crossAxisCount: settings.gridColumns,
@@ -399,6 +472,18 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     setState(() {
       _selected.clear();
       _selecting = false;
+    });
+  }
+
+  void _onDragSelectionChanged(Set<String> ids, bool select) {
+    if (ids.isEmpty) return;
+    setState(() {
+      if (select) {
+        _selected.addAll(ids);
+        _selecting = true;
+      } else {
+        _selected.removeAll(ids);
+      }
     });
   }
 
@@ -1135,130 +1220,329 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       return _PinchZoomGridListener(
         child: FastScrollHandle(
           controller: controller,
+          labelBuilder: (fraction) {
+            if (items.isEmpty) return null;
+            final idx = (fraction * (items.length - 1))
+                .round()
+                .clamp(0, items.length - 1);
+            return _formatMonthYear(items[idx].date);
+          },
           child: RefreshIndicator(
             onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
-            child: GridView.builder(
-              key: PageStorageKey(storageKey),
-              controller: controller,
-              cacheExtent: 800.0,
-              addAutomaticKeepAlives: false,
-              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: settings.gridColumns,
-                crossAxisSpacing: 3,
-                mainAxisSpacing: 3,
-                childAspectRatio: aspectRatio,
-              ),
+            child: DragSelectGrid(
+              isSelecting: _selecting,
               itemCount: items.length,
-              findChildIndexCallback: (Key key) {
-                if (key is ValueKey<String>) {
-                  return indexMap[key.value];
-                }
-                return null;
-              },
-              itemBuilder: (_, i) => _buildMediaGridItem(items, i, tab, settings),
+              crossAxisCount: settings.gridColumns,
+              childAspectRatio: aspectRatio,
+              crossAxisSpacing: 3,
+              mainAxisSpacing: 3,
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+              scrollController: controller,
+              idAt: (i) => items[i].id,
+              isSelected: (id) => _selected.contains(id),
+              onRangeSelectionChanged: _onDragSelectionChanged,
+              child: GridView.builder(
+                key: PageStorageKey(storageKey),
+                controller: controller,
+                cacheExtent: 800.0,
+                addAutomaticKeepAlives: false,
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: settings.gridColumns,
+                  crossAxisSpacing: 3,
+                  mainAxisSpacing: 3,
+                  childAspectRatio: aspectRatio,
+                ),
+                itemCount: items.length,
+                findChildIndexCallback: (Key key) {
+                  if (key is ValueKey<String>) {
+                    return indexMap[key.value];
+                  }
+                  return null;
+                },
+                itemBuilder: (_, i) =>
+                    _buildMediaGridItem(items, i, tab, settings),
+              ),
             ),
           ),
         ),
       );
     }
 
-    final now = DateTime.now();
-    final todayDate = DateTime(now.year, now.month, now.day);
-    final todayKey = now.year * 10000 + now.month * 100 + now.day;
-    Map<String, List<int>> groups;
-    Map<String, Map<String, int>> groupIndexMaps;
-    if (identical(_cachedGroupItems[tab], items) &&
-        _cachedGroupTimelineGrouping[tab] == settings.timelineGrouping &&
-        _cachedGroupDay[tab] == todayKey &&
-        _cachedGroupResult[tab] != null &&
-        _cachedGroupIndexMaps[tab] != null) {
-      groups = _cachedGroupResult[tab]!;
-      groupIndexMaps = _cachedGroupIndexMaps[tab]!;
-    } else {
-      groups = <String, List<int>>{};
-      groupIndexMaps = <String, Map<String, int>>{};
-      for (var i = 0; i < items.length; i++) {
-        final item = items[i];
-        final key = _formatTimelineGroupKey(
-          item.date,
-          settings.timelineGrouping,
-          today: todayDate,
-        );
-        final list = groups.putIfAbsent(key, () => []);
-        final idMap = groupIndexMaps.putIfAbsent(key, () => {});
-        idMap[item.id] = list.length;
-        list.add(i);
-      }
-      _cachedGroupItems[tab] = items;
-      _cachedGroupTimelineGrouping[tab] = settings.timelineGrouping;
-      _cachedGroupDay[tab] = todayKey;
-      _cachedGroupResult[tab] = groups;
-      _cachedGroupIndexMaps[tab] = groupIndexMaps;
-    }
-
+    final timeline = _getOrBuildTimelineData(items, tab, settings);
+    final rows = timeline.rows;
+    final rowIndexMap = timeline.rowIndexMap;
+    final orderedIndices = timeline.orderedItemIndices;
+    final cols = settings.gridColumns.clamp(1, 12);
     final cs = Theme.of(context).colorScheme;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
 
     return _PinchZoomGridListener(
       child: FastScrollHandle(
         controller: controller,
+        labelBuilder: (fraction) {
+          if (rows.isEmpty) return null;
+          final rowIdx =
+              (fraction * (rows.length - 1)).round().clamp(0, rows.length - 1);
+          return _formatMonthYear(rows[rowIdx].date);
+        },
         child: RefreshIndicator(
           onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
-          child: CustomScrollView(
-            key: PageStorageKey(storageKey),
-            controller: controller,
-            cacheExtent: 800.0,
-            slivers: [
-              for (final entry in groups.entries) ...[
-                SliverToBoxAdapter(
-                  child: Padding(
+          child: DragSelectGrid(
+            isSelecting: _selecting,
+            itemCount: orderedIndices.length,
+            crossAxisCount: cols,
+            childAspectRatio: aspectRatio,
+            crossAxisSpacing: 3,
+            mainAxisSpacing: 3,
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            scrollController: controller,
+            idAt: (i) => items[orderedIndices[i]].id,
+            isSelected: (id) => _selected.contains(id),
+            onRangeSelectionChanged: _onDragSelectionChanged,
+            indexAt: (localPos, viewportSize, requireExactItem) =>
+                _resolveTimelineDragIndex(
+              localPosition: localPos,
+              viewportSize: viewportSize,
+              requireExactItem: requireExactItem,
+              rows: rows,
+              totalCount: orderedIndices.length,
+              controller: controller,
+              cols: cols,
+              aspectRatio: aspectRatio,
+              textScale: textScale,
+            ),
+            child: ListView.builder(
+              key: PageStorageKey(storageKey),
+              controller: controller,
+              cacheExtent: 800.0,
+              addAutomaticKeepAlives: false,
+              padding: const EdgeInsets.only(bottom: 16),
+              itemCount: rows.length,
+              findChildIndexCallback: (Key key) {
+                if (key is ValueKey<String>) {
+                  return rowIndexMap[key.value];
+                }
+                return null;
+              },
+              itemBuilder: (ctx, rowIdx) {
+                final row = rows[rowIdx];
+                if (row.isHeader) {
+                  return Padding(
+                    key: ValueKey<String>(row.keyId),
                     padding: const EdgeInsets.fromLTRB(14, 18, 14, 6),
                     child: Text(
-                      entry.key,
+                      row.header!,
                       style: TextStyle(
                         fontSize: 13,
+                        height: 1.4,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 0.2,
                         color: cs.primary,
                       ),
                     ),
+                  );
+                }
+                final rowIndices = row.itemIndices!;
+                return Padding(
+                  key: ValueKey<String>(row.keyId),
+                  padding: EdgeInsets.fromLTRB(
+                    3,
+                    0,
+                    3,
+                    row.isLastInGroup ? 0 : 3,
                   ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  sliver: SliverGrid(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: settings.gridColumns,
-                      crossAxisSpacing: 3,
-                      mainAxisSpacing: 3,
-                      childAspectRatio: aspectRatio,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (ctx, i) => _buildMediaGridItem(
-                        items,
-                        entry.value[i],
-                        tab,
-                        settings,
-                      ),
-                      childCount: entry.value.length,
-                      addAutomaticKeepAlives: false,
-                      findChildIndexCallback: (Key key) {
-                        if (key is ValueKey<String>) {
-                          return groupIndexMaps[entry.key]?[key.value];
-                        }
-                        return null;
-                      },
-                    ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var col = 0; col < cols; col++) ...[
+                        if (col > 0) const SizedBox(width: 3),
+                        Expanded(
+                          child: col < rowIndices.length
+                              ? AspectRatio(
+                                  aspectRatio: aspectRatio,
+                                  child: _buildMediaGridItem(
+                                    items,
+                                    rowIndices[col],
+                                    tab,
+                                    settings,
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ],
                   ),
-                ),
-              ],
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            ],
+                );
+              },
+            ),
           ),
         ),
       ),
     );
   }
+
+  int? _resolveTimelineDragIndex({
+    required Offset localPosition,
+    required Size viewportSize,
+    required bool requireExactItem,
+    required List<_TimelineRow> rows,
+    required int totalCount,
+    required ScrollController controller,
+    required int cols,
+    required double aspectRatio,
+    required double textScale,
+  }) {
+    if (rows.isEmpty || totalCount <= 0 || viewportSize.width <= 0) {
+      return null;
+    }
+    final contentWidth = viewportSize.width - 6.0;
+    if (contentWidth <= 0) return null;
+    final tileWidth = (contentWidth - (cols - 1) * 3.0) / cols;
+    if (tileWidth <= 0 || aspectRatio <= 0) return null;
+    final tileHeight = tileWidth / aspectRatio;
+    final headerHeight = _timelineHeaderHeight(textScale);
+
+    final scrollOffset = controller.hasClients ? controller.offset : 0.0;
+    final y = localPosition.dy + scrollOffset;
+    final x = localPosition.dx - 3.0;
+    final stepX = tileWidth + 3.0;
+    final dir = Directionality.maybeOf(context) ?? TextDirection.ltr;
+
+    if (requireExactItem && (x < 0 || x > contentWidth || y < 0)) {
+      return null;
+    }
+    if (y < 0) return 0;
+
+    var curY = 0.0;
+    for (var i = 0; i < rows.length; i++) {
+      final row = rows[i];
+      final rowHeight = _timelineRowHeight(row, tileHeight, headerHeight);
+      if (y < curY + rowHeight) {
+        if (row.isHeader) {
+          if (requireExactItem) return null;
+          return row.firstDisplayIndex.clamp(0, totalCount - 1);
+        }
+        final indices = row.itemIndices!;
+        final rawCol = (x / stepX).floor().clamp(0, cols - 1);
+        final logicalCol =
+            dir == TextDirection.rtl ? (cols - 1 - rawCol) : rawCol;
+        if (logicalCol >= indices.length) {
+          if (requireExactItem) return null;
+          return (row.firstDisplayIndex + indices.length - 1)
+              .clamp(0, totalCount - 1);
+        }
+        return (row.firstDisplayIndex + logicalCol).clamp(0, totalCount - 1);
+      }
+      curY += rowHeight;
+    }
+
+    if (requireExactItem) return null;
+    return totalCount - 1;
+  }
+
+  ({
+    List<_TimelineRow> rows,
+    Map<String, int> rowIndexMap,
+    Map<String, int> mediaRowMap,
+    List<int> orderedItemIndices,
+  }) _getOrBuildTimelineData(
+    List<MediaItem> items,
+    FilterOption tab,
+    SettingsModel settings,
+  ) {
+    final now = DateTime.now();
+    final todayDate = DateTime(now.year, now.month, now.day);
+    final todayKey = now.year * 10000 + now.month * 100 + now.day;
+    final cols = settings.gridColumns.clamp(1, 12);
+    final localeTag = Localizations.localeOf(context).toString();
+
+    if (identical(_cachedGroupItems[tab], items) &&
+        _cachedGroupTimelineGrouping[tab] == settings.timelineGrouping &&
+        _cachedGroupDay[tab] == todayKey &&
+        _cachedGroupColumns[tab] == cols &&
+        _cachedGroupLocale[tab] == localeTag &&
+        _cachedTimelineRows[tab] != null &&
+        _cachedTimelineRowIndexMaps[tab] != null &&
+        _cachedMediaRowMaps[tab] != null &&
+        _cachedTimelineOrderedIndices[tab] != null) {
+      return (
+        rows: _cachedTimelineRows[tab]!,
+        rowIndexMap: _cachedTimelineRowIndexMaps[tab]!,
+        mediaRowMap: _cachedMediaRowMaps[tab]!,
+        orderedItemIndices: _cachedTimelineOrderedIndices[tab]!,
+      );
+    }
+
+    final groups = <String, List<int>>{};
+    for (var i = 0; i < items.length; i++) {
+      final key = _formatTimelineGroupKey(
+        items[i].date,
+        settings.timelineGrouping,
+        today: todayDate,
+      );
+      groups.putIfAbsent(key, () => []).add(i);
+    }
+
+    final rows = <_TimelineRow>[];
+    final rowIndexMap = <String, int>{};
+    final mediaRowMap = <String, int>{};
+    final orderedItemIndices = <int>[];
+
+    for (final entry in groups.entries) {
+      final indices = entry.value;
+      final headerKey = 'h:${entry.key}';
+      rowIndexMap[headerKey] = rows.length;
+      rows.add(_TimelineRow.header(
+        keyId: headerKey,
+        header: entry.key,
+        date: items[indices.first].date,
+        firstDisplayIndex: orderedItemIndices.length,
+      ));
+
+      for (var start = 0; start < indices.length; start += cols) {
+        final end =
+            (start + cols < indices.length) ? start + cols : indices.length;
+        final slice = indices.sublist(start, end);
+        final isLastInGroup = end == indices.length;
+        final rowKey = 'r:${items[slice.first].id}';
+        final rowIdx = rows.length;
+        final firstDisplayIndex = orderedItemIndices.length;
+        orderedItemIndices.addAll(slice);
+        rowIndexMap[rowKey] = rowIdx;
+        for (final itemIdx in slice) {
+          mediaRowMap[items[itemIdx].id] = rowIdx;
+        }
+        rows.add(_TimelineRow.media(
+          keyId: rowKey,
+          itemIndices: slice,
+          isLastInGroup: isLastInGroup,
+          date: items[slice.first].date,
+          firstDisplayIndex: firstDisplayIndex,
+        ));
+      }
+    }
+
+    _cachedGroupItems[tab] = items;
+    _cachedGroupTimelineGrouping[tab] = settings.timelineGrouping;
+    _cachedGroupDay[tab] = todayKey;
+    _cachedGroupColumns[tab] = cols;
+    _cachedGroupLocale[tab] = localeTag;
+    _cachedTimelineRows[tab] = rows;
+    _cachedTimelineRowIndexMaps[tab] = rowIndexMap;
+    _cachedMediaRowMaps[tab] = mediaRowMap;
+    _cachedTimelineOrderedIndices[tab] = orderedItemIndices;
+
+    return (
+      rows: rows,
+      rowIndexMap: rowIndexMap,
+      mediaRowMap: mediaRowMap,
+      orderedItemIndices: orderedItemIndices,
+    );
+  }
+
+  String _formatMonthYear(DateTime date) =>
+      '${_monthNames[date.month - 1]} ${date.year}';
 
   String _formatTimelineGroupKey(
     DateTime date,
@@ -1266,21 +1550,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     DateTime? today,
   }) {
     if (grouping == TimelineGrouping.monthly) {
-      const months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec'
-      ];
-      return '${months[date.month - 1]} ${date.year}';
+      return _formatMonthYear(date);
     }
     final effectiveToday = today ??
         () {
@@ -1291,21 +1561,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     final diff = effectiveToday.difference(target).inDays;
     if (diff == 0) return context.tr.today;
     if (diff == 1) return context.tr.yesterday;
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+    return '${_monthNames[date.month - 1]} ${date.day}, ${date.year}';
   }
 
   Widget _buildMediaGridItem(
@@ -1572,4 +1828,31 @@ class _PinchZoomGridListenerState
       child: widget.child,
     );
   }
+}
+
+class _TimelineRow {
+  const _TimelineRow.header({
+    required this.keyId,
+    required this.header,
+    required this.date,
+    required this.firstDisplayIndex,
+  })  : itemIndices = null,
+        isLastInGroup = false;
+
+  const _TimelineRow.media({
+    required this.keyId,
+    required this.itemIndices,
+    required this.isLastInGroup,
+    required this.date,
+    required this.firstDisplayIndex,
+  }) : header = null;
+
+  final String keyId;
+  final String? header;
+  final List<int>? itemIndices;
+  final bool isLastInGroup;
+  final DateTime date;
+  final int firstDisplayIndex;
+
+  bool get isHeader => header != null;
 }

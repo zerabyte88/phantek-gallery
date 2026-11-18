@@ -218,6 +218,13 @@ const Map<String, String> idTranslations = {
   'appLockToggleReason': 'Konfirmasi identitas untuk mengubah Kunci Aplikasi',
   'appLockUnavailable':
       'Atur PIN, pola, atau biometrik perangkat terlebih dahulu',
+  'appLockTimeout': 'Jeda Kunci Otomatis',
+  'appLockTimeoutImmediate': 'Langsung',
+  'appLockTimeout30s': '30 detik',
+  'appLockTimeout1m': '1 menit',
+  'appLockTimeout5m': '5 menit',
+  'appLockCanceledHint': 'Autentikasi dibatalkan. Ketuk untuk mencoba lagi.',
+  'searchInAlbumHint': 'Cari dalam album...',
   'unlock': 'Buka Kunci',
   'today': 'Hari Ini',
   'yesterday': 'Kemarin',

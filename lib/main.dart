@@ -57,6 +57,7 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
   late bool _isLocked;
   DateTime? _backgroundedAt;
   bool _authInProgress = false;
+  String? _lockStatusMessage;
 
   @override
   void initState() {
@@ -76,7 +77,8 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final appLockEnabled = ref.read(settingsNotifierProvider).appLockEnabled;
+    final settings = ref.read(settingsNotifierProvider);
+    final appLockEnabled = settings.appLockEnabled;
     if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
       if (appLockEnabled && !AppLockService.instance.isPromptActive) {
         _backgroundedAt ??= DateTime.now();
@@ -85,10 +87,14 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
       if (appLockEnabled) {
         final bgAt = _backgroundedAt;
         if (bgAt != null &&
-            DateTime.now().difference(bgAt).inSeconds >= 2 &&
+            DateTime.now().difference(bgAt).inSeconds >=
+                settings.appLockTimeoutSeconds &&
             !AppLockService.instance.isPromptActive &&
             !_isLocked) {
-          setState(() => _isLocked = true);
+          setState(() {
+            _isLocked = true;
+            _lockStatusMessage = null;
+          });
           _promptUnlock();
         }
       }
@@ -99,6 +105,9 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
   Future<void> _promptUnlock() async {
     if (_authInProgress || !mounted) return;
     _authInProgress = true;
+    if (_lockStatusMessage != null) {
+      setState(() => _lockStatusMessage = null);
+    }
     try {
       final locale =
           ref.read(settingsNotifierProvider).language.locale ?? const Locale('en');
@@ -107,8 +116,14 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
         title: loc.appLockTitle,
         subtitle: loc.appLockAuthReason,
       );
-      if (authenticated && mounted) {
-        setState(() => _isLocked = false);
+      if (!mounted) return;
+      if (authenticated) {
+        setState(() {
+          _isLocked = false;
+          _lockStatusMessage = null;
+        });
+      } else {
+        setState(() => _lockStatusMessage = loc.appLockCanceledHint);
       }
     } finally {
       _authInProgress = false;
@@ -138,7 +153,10 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
       settingsNotifierProvider.select((s) => s.appLockEnabled),
       (_, enabled) {
         if (!enabled && _isLocked) {
-          setState(() => _isLocked = false);
+          setState(() {
+            _isLocked = false;
+            _lockStatusMessage = null;
+          });
         }
       },
     );
@@ -212,6 +230,7 @@ class _PhantekGalleryAppState extends ConsumerState<PhantekGalleryApp>
                   child: _AppLockOverlay(
                     key: const ValueKey('app_lock_overlay'),
                     onUnlock: _promptUnlock,
+                    statusMessage: _lockStatusMessage,
                   ),
                 ),
             ],
@@ -226,69 +245,100 @@ class _AppLockOverlay extends StatelessWidget {
   const _AppLockOverlay({
     super.key,
     required this.onUnlock,
+    this.statusMessage,
   });
 
   final VoidCallback onUnlock;
+  final String? statusMessage;
+
+  void _handleUnlockTap() {
+    HapticFeedback.lightImpact();
+    onUnlock();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final hairline = cs.onSurface.withValues(alpha: 0.08);
+
     return Material(
       color: theme.scaffoldBackgroundColor,
       child: SafeArea(
         child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: cs.primary.withValues(alpha: 0.14),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.lock_rounded,
-                    size: 34,
-                    color: cs.primary,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Phantek Gallery',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  context.tr.appLockAuthReason,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                FilledButton.icon(
-                  onPressed: onUnlock,
-                  icon: const Icon(Icons.fingerprint_rounded),
-                  label: Text(context.tr.unlock),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Semantics(
+                    button: true,
+                    label: context.tr.unlock,
+                    child: Material(
+                      color: cs.surfaceContainer,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(color: hairline, width: 1),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: _handleUnlockTap,
+                        child: SizedBox(
+                          width: 72,
+                          height: 72,
+                          child: Icon(
+                            Icons.fingerprint_rounded,
+                            size: 32,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  Text(
+                    context.tr.appLockAuthReason,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w400,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.tonal(
+                    onPressed: _handleUnlockTap,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: cs.surfaceContainer,
+                      foregroundColor: cs.onSurface,
+                      minimumSize: const Size(120, 48),
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      side: BorderSide(color: hairline, width: 1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    child: Text(context.tr.unlock),
+                  ),
+                  if (statusMessage != null && statusMessage!.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      statusMessage!,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),

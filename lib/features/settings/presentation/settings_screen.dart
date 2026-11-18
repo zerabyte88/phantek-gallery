@@ -780,6 +780,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     }
                   },
                 ),
+                if (settings.appLockEnabled) ...[
+                  const _CardDivider(),
+                  _ModernTile(
+                    icon: Icons.timer_outlined,
+                    title: context.tr.appLockTimeout,
+                    subtitle: context.tr
+                        .appLockTimeoutLabel(settings.appLockTimeoutSeconds),
+                    onTap: () async {
+                      final chosen = await _showModernOptionDialog<int>(
+                        context,
+                        title: context.tr.appLockTimeout,
+                        subtitle: context.tr.privacyAndSecurity,
+                        headerIcon: Icons.timer_outlined,
+                        currentValue: settings.appLockTimeoutSeconds,
+                        options: [
+                          _OptionItem(
+                            value: 0,
+                            title: context.tr.appLockTimeoutImmediate,
+                            icon: Icons.flash_on_rounded,
+                          ),
+                          _OptionItem(
+                            value: 30,
+                            title: context.tr.appLockTimeout30s,
+                            icon: Icons.schedule_rounded,
+                          ),
+                          _OptionItem(
+                            value: 60,
+                            title: context.tr.appLockTimeout1m,
+                            icon: Icons.schedule_rounded,
+                          ),
+                          _OptionItem(
+                            value: 300,
+                            title: context.tr.appLockTimeout5m,
+                            icon: Icons.schedule_rounded,
+                          ),
+                        ],
+                      );
+                      if (chosen != null) {
+                        patch((s) => s.copyWith(appLockTimeoutSeconds: chosen));
+                      }
+                    },
+                  ),
+                ],
                 const _CardDivider(),
                 _ModernSwitchTile(
                   icon: Icons.security_rounded,

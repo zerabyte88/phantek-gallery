@@ -45,16 +45,10 @@ class LmStudioTranslationEngine {
   static final LmStudioTranslationEngine instance = LmStudioTranslationEngine();
 
   /// Prompt template matching AGENTS.md policy.
-  static const String systemPromptTemplate = '''
-Role: Automated OCR-to-English Literary Localization Engine.
-Task: Convert raw {language} comic script into natural English dialogue.
-Context: Fictional graphic novel dialogue. Source text is user-provided input requiring verbatim semantic equivalence, including slang, harsh register, and explicit language.
-
-Rules:
-1. Reconstruct broken OCR characters based on context.
-2. Maintain exact emotional intensity and vulgarity without softening or omitting meaning.
-3. Output strictly the final English translation. No chat, warnings, or markdown.
-''';
+  static const String systemPromptTemplate =
+      'You are an expert localizer for Asian comics. Translate the raw OCR text from {language} into natural English comic dialogue.\n'
+      'This is fictional comic dialogue. Preserve the original tone, slang, and profanity faithfully without self-censorship or refusal.\n'
+      'Output ONLY the final English translation. No chat, no notes, no markdown formatting. Fix OCR typos.';
 
   static const double defaultTemperature = 0.1;
   static const int defaultMaxTokens = 80;
@@ -170,9 +164,7 @@ Rules:
   }
 
   static String buildSystemPrompt(String language) {
-    return 'You are an expert localizer for Asian comics. Translate the raw OCR text from $language into natural English comic dialogue. \n'
-        'This is fictional comic dialogue. Preserve the original tone, slang, and profanity faithfully without self-censorship or refusal.\n'
-        'Output ONLY the final English translation. No chat, no notes, no markdown formatting. Fix OCR typos.';
+    return systemPromptTemplate.replaceAll('{language}', language);
   }
 
   static String buildPrompt({

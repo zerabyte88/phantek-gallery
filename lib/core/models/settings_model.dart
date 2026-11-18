@@ -39,6 +39,7 @@ class SettingsModel extends Equatable {
     this.showHiddenFiles = false,
     this.secureScreen = false,
     this.appLockEnabled = false,
+    this.appLockTimeoutSeconds = 0,
     this.lmStudioServerUrl = 'http://192.168.1.2:1234/v1',
     this.lmStudioApiKey = '',
     this.lmStudioModel = '',
@@ -123,6 +124,9 @@ class SettingsModel extends Equatable {
   /// Require biometric or device PIN authentication on app launch/resume.
   final bool appLockEnabled;
 
+  /// Background duration in seconds before App Lock re-engages (0 = immediate).
+  final int appLockTimeoutSeconds;
+
   /// Server URL for OpenAI-compatible Local AI / LM Studio translation server.
   final String lmStudioServerUrl;
 
@@ -172,6 +176,7 @@ class SettingsModel extends Equatable {
         'showHiddenFiles': showHiddenFiles,
         'secureScreen': secureScreen,
         'appLockEnabled': appLockEnabled,
+        'appLockTimeoutSeconds': appLockTimeoutSeconds,
         'lmStudioServerUrl': lmStudioServerUrl,
         'lmStudioApiKey': lmStudioApiKey,
         'lmStudioModel': lmStudioModel,
@@ -243,6 +248,7 @@ class SettingsModel extends Equatable {
       showHiddenFiles: map['showHiddenFiles'] as bool? ?? false,
       secureScreen: map['secureScreen'] as bool? ?? false,
       appLockEnabled: map['appLockEnabled'] as bool? ?? false,
+      appLockTimeoutSeconds: map['appLockTimeoutSeconds'] as int? ?? 0,
       lmStudioServerUrl:
           map['lmStudioServerUrl'] as String? ?? 'http://192.168.1.2:1234/v1',
       lmStudioApiKey: map['lmStudioApiKey'] as String? ?? '',
@@ -290,6 +296,7 @@ class SettingsModel extends Equatable {
     bool? showHiddenFiles,
     bool? secureScreen,
     bool? appLockEnabled,
+    int? appLockTimeoutSeconds,
     String? lmStudioServerUrl,
     String? lmStudioApiKey,
     String? lmStudioModel,
@@ -327,6 +334,8 @@ class SettingsModel extends Equatable {
       showHiddenFiles: showHiddenFiles ?? this.showHiddenFiles,
       secureScreen: secureScreen ?? this.secureScreen,
       appLockEnabled: appLockEnabled ?? this.appLockEnabled,
+      appLockTimeoutSeconds:
+          appLockTimeoutSeconds ?? this.appLockTimeoutSeconds,
       lmStudioServerUrl: lmStudioServerUrl ?? this.lmStudioServerUrl,
       lmStudioApiKey: lmStudioApiKey ?? this.lmStudioApiKey,
       lmStudioModel: lmStudioModel ?? this.lmStudioModel,
@@ -370,6 +379,7 @@ class SettingsModel extends Equatable {
         showHiddenFiles,
         secureScreen,
         appLockEnabled,
+        appLockTimeoutSeconds,
         lmStudioServerUrl,
         lmStudioApiKey,
         lmStudioModel,

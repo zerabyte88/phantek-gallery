@@ -5,7 +5,7 @@
 
   **Offline Android gallery for photos, videos, PSD files, and manga, with on-device manga OCR and dialogue localization via Local AI Server (LM Studio / Ollama).**
 
-  [![Version](https://img.shields.io/badge/Version-v2.19.16-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.19.21-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20LM%20Studio-6366f1.svg?style=flat-square)](https://lmstudio.ai/)
@@ -28,13 +28,15 @@ For comic and manga readers, Phantek Gallery pairs on-device OCR (**Google ML Ki
 
 ### Gallery and Viewing
 
+- **Fast Navigation & Selection**: Instant native-style tab switching across grid and album views, virtualized date-grouped timeline, right-edge fast-scroll handle with Month/Year indicator, in-album search, and drag-to-select.
 - **PSD Layer Viewer**: Open Adobe Photoshop (`.psd`) documents with embedded-JPEG previews and a dedicated sheet for toggling individual layer visibilities.
-- **Hardware Video Playback**: Built on AndroidX Media3 / ExoPlayer. Includes double-tap seek, gesture-based brightness and volume controls, and resume playback.
+- **Hardware Video Playback**: Built on AndroidX Media3 / ExoPlayer. Includes double-tap seek, gesture-based brightness and volume controls, fast seekbar frame preview with lift-off stabilization, and resume playback.
 - **EXIF and Technical Inspector**: Detailed photo metadata (ISO, aperture, shutter speed, focal length, resolution) and video properties (bitrate, fps, codec, channels).
 
 ### Manga Reader & Translation
 
 - **Local AI Server Translation**: Nuanced comic dialogue localization via LM Studio or Ollama over your private local network (LAN).
+- **Customizable Overlay Styles & Text Size**: Choose between *Google Lens*, *Classic Manga*, *Dark Contrast*, and *Translucent* bubble styles plus adjustable font scale with live JP→EN preview in Settings.
 - **Natural Comic Speech Bubble Geometry**:
   - **Preserved Original Bubble Contours**: Speech bubbles retain their natural comic outline and original bounding dimensions, completely eliminating artificial ballooning or obscuring character artwork.
   - **Vertical Dialogue Flow**: Automatically rotates English translations for tall, narrow Asian speech bubbles (90° clockwise with RTL column flow) so vertical dialogue fits cleanly and reads naturally without forced horizontal distortion.
@@ -43,6 +45,7 @@ For comic and manga readers, Phantek Gallery pairs on-device OCR (**Google ML Ki
 ### Privacy and Security
 
 - **100% Local & Private**: No analytics, no tracking. OCR runs entirely on-device and translation runs across your private local network (LM Studio / Ollama) without external cloud APIs.
+- **Biometric App Lock**: Minimalist fingerprint, face unlock, or device PIN lock screen with configurable auto-lock timeout (*Immediately*, *30s*, *1m*, *5m*).
 - **Screen Protection**: Optional Android `FLAG_SECURE` integration to prevent screen captures, video recordings, and task switcher previews.
 - **Recycle Bin**: Staged `.trash` directory with configurable auto-purge intervals (7, 14, 30 days, or never) and batch restore.
 

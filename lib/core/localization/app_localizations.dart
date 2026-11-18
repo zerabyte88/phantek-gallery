@@ -244,6 +244,13 @@ class AppLocalizations {
   String get appLockAuthReason => _t('appLockAuthReason');
   String get appLockToggleReason => _t('appLockToggleReason');
   String get appLockUnavailable => _t('appLockUnavailable');
+  String get appLockTimeout => _t('appLockTimeout');
+  String get appLockTimeoutImmediate => _t('appLockTimeoutImmediate');
+  String get appLockTimeout30s => _t('appLockTimeout30s');
+  String get appLockTimeout1m => _t('appLockTimeout1m');
+  String get appLockTimeout5m => _t('appLockTimeout5m');
+  String get appLockCanceledHint => _t('appLockCanceledHint');
+  String get searchInAlbumHint => _t('searchInAlbumHint');
   String get unlock => _t('unlock');
   String get translationOverlaySettings => _t('translationOverlaySettings');
   String get translationTextSize => _t('translationTextSize');
@@ -381,6 +388,13 @@ class AppLocalizations {
 
   String secondsCount(int count) =>
       _t('secondsCount').replaceAll('{count}', '$count');
+
+  String appLockTimeoutLabel(int seconds) => switch (seconds) {
+        30 => appLockTimeout30s,
+        60 => appLockTimeout1m,
+        300 => appLockTimeout5m,
+        _ => appLockTimeoutImmediate,
+      };
 }
 
 class _AppLocalizationsDelegate

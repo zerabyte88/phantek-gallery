@@ -40,6 +40,7 @@ class _K {
   static const showHiddenFiles = 'showHiddenFiles';
   static const secureScreen = 'secureScreen';
   static const appLockEnabled = 'appLockEnabled';
+  static const appLockTimeoutSeconds = 'appLockTimeoutSeconds';
   static const lmStudioServerUrl = 'lmStudioServerUrl';
   static const lmStudioApiKey = 'lmStudioApiKey';
   static const lmStudioModel = 'lmStudioModel';
@@ -112,6 +113,7 @@ class SettingsService {
       showHiddenFiles: _prefs.getBool(_K.showHiddenFiles) ?? false,
       secureScreen: _prefs.getBool(_K.secureScreen) ?? false,
       appLockEnabled: _prefs.getBool(_K.appLockEnabled) ?? false,
+      appLockTimeoutSeconds: _prefs.getInt(_K.appLockTimeoutSeconds) ?? 0,
       lmStudioServerUrl: _prefs.getString(_K.lmStudioServerUrl) ??
           'http://192.168.1.2:1234/v1',
       lmStudioApiKey: _prefs.getString(_K.lmStudioApiKey) ?? '',
@@ -168,6 +170,7 @@ class SettingsService {
       _prefs.setBool(_K.showHiddenFiles, model.showHiddenFiles),
       _prefs.setBool(_K.secureScreen, model.secureScreen),
       _prefs.setBool(_K.appLockEnabled, model.appLockEnabled),
+      _prefs.setInt(_K.appLockTimeoutSeconds, model.appLockTimeoutSeconds),
       _prefs.setString(_K.lmStudioServerUrl, model.lmStudioServerUrl),
       _prefs.setString(_K.lmStudioApiKey, model.lmStudioApiKey),
       _prefs.setString(_K.lmStudioModel, model.lmStudioModel),

@@ -19,6 +19,7 @@ import '../../../core/utils/media_utils.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import '../../../core/widgets/styled_popup_menu.dart';
 import 'widgets/album_grid_item.dart';
+import 'widgets/drag_select_grid.dart';
 import 'widgets/fast_scroll_handle.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
@@ -46,6 +47,20 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     FilterOption.photosOnly,
     FilterOption.videosOnly,
   ];
+  static const List<String> _monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
 
   final Set<String> _selected = {};
   bool _selecting = false;
@@ -63,10 +78,16 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
   bool _isTabTapTransition = false;
   int? _pendingTapTargetPage;
   Timer? _tabTapTimer;
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  String _searchQuery = '';
 
   @override
   void dispose() {
     _tabTapTimer?.cancel();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     _pageController.dispose();
     _subfolderScrollController.dispose();
     for (final c in _scrollControllers.values) {
@@ -157,11 +178,17 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     SortOption activeSort,
     bool hasSubfolders,
   ) {
-    final filteredItems = switch (filter) {
+    var filteredItems = switch (filter) {
       FilterOption.photosOnly => scopedItems.where((e) => !e.isVideo).toList(),
       FilterOption.videosOnly => scopedItems.where((e) => e.isVideo).toList(),
       _ => scopedItems,
     };
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      filteredItems = filteredItems
+          .where((e) => e.name.toLowerCase().contains(q))
+          .toList();
+    }
 
     return switch (activeSort) {
       SortOption.newest => [...filteredItems]
@@ -237,6 +264,38 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
       _selected.clear();
       _selecting = false;
     });
+  }
+
+  void _openSearch() {
+    setState(() => _isSearching = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _isSearching) {
+        _searchFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _closeSearch() {
+    _searchFocusNode.unfocus();
+    setState(() {
+      _isSearching = false;
+      _searchController.clear();
+      _searchQuery = '';
+    });
+  }
+
+  String? _buildScrollLabel(
+    List<MediaItem> items,
+    double fraction,
+    SortOption activeSort,
+  ) {
+    if (items.isEmpty) return null;
+    final index = (fraction.clamp(0.0, 1.0) * (items.length - 1)).round();
+    final item = items[index];
+    final useShootingDate = activeSort == SortOption.shootingTimeDesc ||
+        activeSort == SortOption.shootingTimeAsc;
+    final dt = useShootingDate ? item.date : item.timeAdded;
+    return '${_monthNames[dt.month - 1]} ${dt.year}';
   }
 
   Future<void> _deleteSelected(List<MediaItem> allItems) async {
@@ -404,9 +463,15 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     });
 
     return PopScope(
-      canPop: !_selecting,
+      canPop: !_selecting && !_isSearching,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _clearSelection();
+        if (!didPop) {
+          if (_selecting) {
+            _clearSelection();
+          } else if (_isSearching) {
+            _closeSearch();
+          }
+        }
       },
       child: Scaffold(
         appBar: AppBar(
@@ -418,7 +483,9 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
-              if (_selectedSubfolder != null && !_flattenSubfolders) {
+              if (_isSearching) {
+                _closeSearch();
+              } else if (_selectedSubfolder != null && !_flattenSubfolders) {
                 setState(() => _selectedSubfolder = null);
               } else {
                 Navigator.of(context).pop();
@@ -427,31 +494,90 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
           ),
           title: _selecting
               ? Text('${_selected.length} ${context.tr.selected}')
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.albumName == 'Favorites'
-                          ? context.tr.favorites
-                          : (_selectedSubfolder != null && !_flattenSubfolders
-                              ? '${widget.albumName} / $_selectedSubfolder'
-                              : widget.albumName),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      context.tr.itemsCount(sortedItems.length),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                  ],
+              : AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: _isSearching
+                      ? TextField(
+                          key: const ValueKey('album_search_field'),
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          style: const TextStyle(fontSize: 16),
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            hintText: context.tr.searchInAlbumHint,
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 8),
+                            hintStyle: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              fontSize: 16,
+                            ),
+                            suffixIconConstraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.close_rounded,
+                                        size: 20),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _searchQuery = '');
+                                    },
+                                  )
+                                : null,
+                          ),
+                          onChanged: (q) =>
+                              setState(() => _searchQuery = q.trim()),
+                        )
+                      : Align(
+                          key: const ValueKey('album_title_column'),
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                widget.albumName == 'Favorites'
+                                    ? context.tr.favorites
+                                    : (_selectedSubfolder != null &&
+                                            !_flattenSubfolders
+                                        ? '${widget.albumName} / $_selectedSubfolder'
+                                        : widget.albumName),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                context.tr.itemsCount(sortedItems.length),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                 ),
           actions: [
+            if (!_selecting && !_isSearching)
+              BouncyTap(
+                scaleDown: 0.88,
+                child: IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: context.tr.searchTooltip,
+                  onPressed: _openSearch,
+                ),
+              ),
             if (!_selecting && hasSubfolders)
               BouncyTap(
                 scaleDown: 0.88,
@@ -772,7 +898,10 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                                   child: pageItems.isEmpty
                                       ? Center(
                                           child: Text(
-                                            'No ${tab.label.toLowerCase()} in this album',
+                                            _searchQuery.isNotEmpty
+                                                ? context.tr.noMediaMatching(
+                                                    _searchQuery)
+                                                : 'No ${tab.label.toLowerCase()} in this album',
                                             style: const TextStyle(
                                               fontSize: 14,
                                               color: Colors.grey,
@@ -781,56 +910,89 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                                         )
                                       : FastScrollHandle(
                                           controller: _scrollControllers[tab]!,
-                                          child: GridView.builder(
-                                            key: PageStorageKey(
-                                              'album_${widget.albumName}_${_selectedSubfolder ?? 'all'}_${tab.name}',
-                                            ),
-                                            controller: _scrollControllers[tab],
-                                            cacheExtent: 800.0,
-                                            addAutomaticKeepAlives: false,
-                                            padding: const EdgeInsets.all(2),
-                                            gridDelegate:
-                                                SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount:
-                                                  settings.gridColumns,
-                                              crossAxisSpacing: 2,
-                                              mainAxisSpacing: 2,
-                                            ),
+                                          labelBuilder: (fraction) =>
+                                              _buildScrollLabel(
+                                            pageItems,
+                                            fraction,
+                                            activeSort,
+                                          ),
+                                          child: DragSelectGrid(
+                                            isSelecting: _selecting,
                                             itemCount: pageItems.length,
-                                            itemBuilder: (_, i) {
-                                              final item = pageItems[i];
-                                              return MediaGridItem(
-                                                key: ValueKey(item.id),
-                                                item: item,
-                                                isSelected:
-                                                    _selected.contains(item.id),
-                                                isSelecting: _selecting,
-                                                showBadges: settings.showBadges,
-                                                onTap: () {
-                                                  if (_selecting) {
-                                                    _toggleSelect(item.id);
-                                                    return;
-                                                  }
-                                                  if (pageItems.every(
-                                                      (e) => !e.isVideo)) {
-                                                    Navigator.of(context)
-                                                        .openImage(
-                                                            pageItems, i);
-                                                  } else {
-                                                    Navigator.of(context)
-                                                        .openVideo(
-                                                            pageItems, i);
-                                                  }
-                                                },
-                                                onLongPress: () {
-                                                  if (!_selecting) {
-                                                    _startSelect(item.id);
-                                                  } else {
-                                                    _toggleSelect(item.id);
-                                                  }
-                                                },
-                                              );
+                                            crossAxisCount:
+                                                settings.gridColumns,
+                                            crossAxisSpacing: 2,
+                                            mainAxisSpacing: 2,
+                                            padding: const EdgeInsets.all(2),
+                                            scrollController:
+                                                _scrollControllers[tab]!,
+                                            idAt: (i) => pageItems[i].id,
+                                            isSelected: (id) =>
+                                                _selected.contains(id),
+                                            onRangeSelectionChanged:
+                                                (ids, select) {
+                                              setState(() {
+                                                if (select) {
+                                                  _selected.addAll(ids);
+                                                  _selecting = true;
+                                                } else {
+                                                  _selected.removeAll(ids);
+                                                }
+                                              });
                                             },
+                                            child: GridView.builder(
+                                              key: PageStorageKey(
+                                                'album_${widget.albumName}_${_selectedSubfolder ?? 'all'}_${tab.name}',
+                                              ),
+                                              controller:
+                                                  _scrollControllers[tab],
+                                              cacheExtent: 800.0,
+                                              addAutomaticKeepAlives: false,
+                                              padding: const EdgeInsets.all(2),
+                                              gridDelegate:
+                                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount:
+                                                    settings.gridColumns,
+                                                crossAxisSpacing: 2,
+                                                mainAxisSpacing: 2,
+                                              ),
+                                              itemCount: pageItems.length,
+                                              itemBuilder: (_, i) {
+                                                final item = pageItems[i];
+                                                return MediaGridItem(
+                                                  key: ValueKey(item.id),
+                                                  item: item,
+                                                  isSelected: _selected
+                                                      .contains(item.id),
+                                                  isSelecting: _selecting,
+                                                  showBadges:
+                                                      settings.showBadges,
+                                                  onTap: () {
+                                                    if (_selecting) {
+                                                      _toggleSelect(item.id);
+                                                      return;
+                                                    }
+                                                    if (pageItems.every(
+                                                        (e) => !e.isVideo)) {
+                                                      Navigator.of(context)
+                                                          .openImage(
+                                                              pageItems, i);
+                                                    } else {
+                                                      Navigator.of(context)
+                                                          .openVideo(
+                                                              pageItems, i);
+                                                    }
+                                                  },
+                                                  onLongPress: () {
+                                                    if (!_selecting) {
+                                                      _startSelect(item.id);
+                                                    } else {
+                                                      _toggleSelect(item.id);
+                                                    }
+                                                  },
+                                                );
+                                              },
+                                            ),
                                           ),
                                         ),
                                 ),

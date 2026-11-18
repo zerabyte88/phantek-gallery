@@ -26,6 +26,7 @@ import 'package:phantek_gallery/core/services/psd_service.dart';
 import 'package:phantek_gallery/core/models/trash_item.dart';
 import 'package:phantek_gallery/core/utils/media_utils.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/album_grid_item.dart';
+import 'package:phantek_gallery/features/gallery/presentation/widgets/drag_select_grid.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/fast_scroll_handle.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/media_grid_item.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/shimmer_loading_tile.dart';
@@ -4616,36 +4617,37 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      var sliverGrids =
-          tester.widgetList<SliverGrid>(find.byType(SliverGrid)).toList();
-      expect(sliverGrids.length, 2);
+      expect(find.text('Today'), findsOneWidget);
+      expect(find.text('Yesterday'), findsOneWidget);
+      expect(find.byType(MediaGridItem), findsNWidgets(4));
 
-      var todayDelegate = sliverGrids[0].delegate as SliverChildBuilderDelegate;
-      var yestDelegate = sliverGrids[1].delegate as SliverChildBuilderDelegate;
+      var timelineList = tester.widget<ListView>(find.byType(ListView));
+      var timelineDelegate =
+          timelineList.childrenDelegate as SliverChildBuilderDelegate;
       expect(
-        todayDelegate.findChildIndexCallback!(
-            const ValueKey<String>('g_today_1')),
+        timelineDelegate.findChildIndexCallback!(
+            const ValueKey<String>('h:Today')),
         0,
       );
       expect(
-        todayDelegate.findChildIndexCallback!(
-            const ValueKey<String>('g_today_2')),
+        timelineDelegate.findChildIndexCallback!(
+            const ValueKey<String>('r:g_today_1')),
         1,
       );
       expect(
-        todayDelegate.findChildIndexCallback!(
-            const ValueKey<String>('g_yest_1')),
+        timelineDelegate.findChildIndexCallback!(
+            const ValueKey<String>('h:Yesterday')),
+        2,
+      );
+      expect(
+        timelineDelegate.findChildIndexCallback!(
+            const ValueKey<String>('r:g_yest_1')),
+        3,
+      );
+      expect(
+        timelineDelegate.findChildIndexCallback!(
+            const ValueKey<String>('missing')),
         isNull,
-      );
-      expect(
-        yestDelegate.findChildIndexCallback!(
-            const ValueKey<String>('g_yest_1')),
-        0,
-      );
-      expect(
-        yestDelegate.findChildIndexCallback!(
-            const ValueKey<String>('g_yest_2')),
-        1,
       );
 
       // Reorder within both groups
@@ -4686,30 +4688,39 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      sliverGrids =
-          tester.widgetList<SliverGrid>(find.byType(SliverGrid)).toList();
-      todayDelegate = sliverGrids[0].delegate as SliverChildBuilderDelegate;
-      yestDelegate = sliverGrids[1].delegate as SliverChildBuilderDelegate;
+      timelineList = tester.widget<ListView>(find.byType(ListView));
+      timelineDelegate =
+          timelineList.childrenDelegate as SliverChildBuilderDelegate;
 
       expect(
-        todayDelegate.findChildIndexCallback!(
-            const ValueKey<String>('g_today_2')),
+        timelineDelegate.findChildIndexCallback!(
+            const ValueKey<String>('h:Today')),
         0,
       );
       expect(
-        todayDelegate.findChildIndexCallback!(
-            const ValueKey<String>('g_today_1')),
+        timelineDelegate.findChildIndexCallback!(
+            const ValueKey<String>('r:g_today_2')),
         1,
       );
       expect(
-        yestDelegate.findChildIndexCallback!(
-            const ValueKey<String>('g_yest_2')),
-        0,
+        timelineDelegate.findChildIndexCallback!(
+            const ValueKey<String>('r:g_today_1')),
+        isNull,
       );
       expect(
-        yestDelegate.findChildIndexCallback!(
-            const ValueKey<String>('g_yest_1')),
-        1,
+        timelineDelegate.findChildIndexCallback!(
+            const ValueKey<String>('h:Yesterday')),
+        2,
+      );
+      expect(
+        timelineDelegate.findChildIndexCallback!(
+            const ValueKey<String>('r:g_yest_2')),
+        3,
+      );
+      expect(
+        timelineDelegate.findChildIndexCallback!(
+            const ValueKey<String>('r:g_yest_1')),
+        isNull,
       );
     });
 
@@ -4838,6 +4849,10 @@ void main() {
 
       expect(find.byKey(const ValueKey('app_lock_overlay')), findsOneWidget);
       expect(find.text('Unlock'), findsOneWidget);
+      expect(
+        find.text('Authentication canceled. Tap to try again.'),
+        findsOneWidget,
+      );
 
       // Now allow authentication to succeed and tap Unlock button.
       shouldUnlock = true;
@@ -4846,6 +4861,56 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byKey(const ValueKey('app_lock_overlay')), findsNothing);
+
+      // With appLockTimeoutSeconds = 30, immediate pause+resume should not re-lock.
+      await SettingsService.instance.save(
+        SettingsService.instance.settings.copyWith(appLockTimeoutSeconds: 30),
+      );
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byKey(const ValueKey('app_lock_overlay')), findsNothing);
+
+      // With appLockTimeoutSeconds = 0, immediate pause+resume re-locks and unlocks.
+      await SettingsService.instance.save(
+        SettingsService.instance.settings.copyWith(appLockTimeoutSeconds: 0),
+      );
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byKey(const ValueKey('app_lock_overlay')), findsNothing);
+
+      // If auth is canceled on resume, overlay stays visible with hint.
+      shouldUnlock = false;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byKey(const ValueKey('app_lock_overlay')), findsOneWidget);
+      expect(
+        find.text('Authentication canceled. Tap to try again.'),
+        findsOneWidget,
+      );
+    });
+
+    test('SettingsModel & SettingsService round-trip appLockTimeoutSeconds',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      const defaults = SettingsModel();
+      expect(defaults.appLockTimeoutSeconds, 0);
+
+      final updated = defaults.copyWith(appLockTimeoutSeconds: 60);
+      expect(updated.appLockTimeoutSeconds, 60);
+      expect(SettingsModel.fromMap(updated.toMap()), equals(updated));
+
+      await SettingsService.instance.save(updated);
+      expect(SettingsService.instance.settings.appLockTimeoutSeconds, 60);
     });
 
     test(
@@ -4994,13 +5059,27 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Save'));
       await tester.pumpAndSettle();
 
-      // 3. App Lock toggle under Privacy & Security
+      // 3. App Lock toggle & Auto-lock Timeout dialog under Privacy & Security
       final appLockTile = find.text('App Lock');
       await tester.scrollUntilVisible(appLockTile, 200);
       await tester.pumpAndSettle();
       await tester.tap(appLockTile);
       await tester.pumpAndSettle();
       expect(SettingsService.instance.settings.appLockEnabled, isTrue);
+
+      final timeoutTile = find.text('Auto-lock Timeout');
+      expect(timeoutTile, findsOneWidget);
+      expect(find.text('Immediately'), findsOneWidget);
+      await tester.tap(timeoutTile);
+      await tester.pumpAndSettle();
+      expect(find.text('30 seconds'), findsOneWidget);
+      expect(find.text('1 minute'), findsOneWidget);
+      expect(find.text('5 minutes'), findsOneWidget);
+
+      await tester.tap(find.text('1 minute'));
+      await tester.pumpAndSettle();
+      expect(SettingsService.instance.settings.appLockTimeoutSeconds, 60);
+      expect(find.text('1 minute'), findsOneWidget);
     });
   });
 
@@ -5150,6 +5229,232 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byType(FastScrollHandle), findsWidgets);
+    });
+
+    testWidgets(
+        'FastScrollHandle labelBuilder shows Month/Year pill during drag and hides on release',
+        (tester) async {
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 300,
+              height: 400,
+              child: FastScrollHandle(
+                controller: controller,
+                labelBuilder: (f) => f > 0.2 ? 'Nov 2026' : 'Oct 2026',
+                child: GridView.builder(
+                  controller: controller,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                  ),
+                  itemCount: 120,
+                  itemBuilder: (_, i) => Container(
+                    key: ValueKey('lbl_cell_$i'),
+                    color: Colors.blueGrey,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.drag(find.byType(GridView), const Offset(0, -100));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Oct 2026'), findsNothing);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byIcon(Icons.keyboard_arrow_down_rounded)),
+      );
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, 25));
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, 120));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Nov 2026'), findsOneWidget);
+      final pillOpacity = tester.widget<FadeTransition>(
+        find.descendant(
+          of: find.byKey(const ValueKey('fast_scroll_pill')),
+          matching: find.byType(FadeTransition),
+        ),
+      );
+      expect(pillOpacity.opacity.value, closeTo(1.0, 0.05));
+
+      await gesture.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(pillOpacity.opacity.value, closeTo(0.0, 0.05));
+
+      await tester.pump(const Duration(seconds: 3, milliseconds: 250));
+    });
+
+    testWidgets('DragSelectGrid selects range on horizontal drag',
+        (tester) async {
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+      final selected = <String>{};
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 300,
+              height: 300,
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  return DragSelectGrid(
+                    isSelecting: true,
+                    itemCount: 9,
+                    crossAxisCount: 3,
+                    scrollController: controller,
+                    idAt: (i) => 'id_$i',
+                    isSelected: (id) => selected.contains(id),
+                    onRangeSelectionChanged: (ids, select) {
+                      setState(() {
+                        if (select) {
+                          selected.addAll(ids);
+                        } else {
+                          selected.removeAll(ids);
+                        }
+                      });
+                    },
+                    child: GridView.builder(
+                      controller: controller,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                      ),
+                      itemCount: 9,
+                      itemBuilder: (_, i) => Container(
+                        key: ValueKey('drag_cell_$i'),
+                        color: selected.contains('id_$i')
+                            ? Colors.blue
+                            : Colors.grey,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.dragFrom(const Offset(25, 25), const Offset(225, 0));
+      await tester.pumpAndSettle();
+
+      expect(selected, containsAll(<String>['id_0', 'id_1', 'id_2']));
+    });
+
+    testWidgets(
+        'AlbumDetailScreen in-album search filters across tabs and dismisses on clear/back',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final items = [
+        MediaItem(
+          id: 'alb_1',
+          path: '/a/alpha_photo.jpg',
+          name: 'alpha_photo.jpg',
+          date: DateTime(2026, 3, 10),
+          size: 1000,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'alb_2',
+          path: '/a/beta_photo.jpg',
+          name: 'beta_photo.jpg',
+          date: DateTime(2026, 3, 9),
+          size: 1000,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'alb_3',
+          path: '/a/alpha_video.mp4',
+          name: 'alpha_video.mp4',
+          date: DateTime(2026, 3, 8),
+          size: 2000,
+          isVideo: true,
+        ),
+        MediaItem(
+          id: 'alb_4',
+          path: '/a/gamma_video.mp4',
+          name: 'gamma_video.mp4',
+          date: DateTime(2026, 3, 7),
+          size: 2000,
+          isVideo: true,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider
+                .overrideWith(() => _SpecificMockMediaNotifier(items)),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: AppLanguage.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: const AlbumDetailScreen(albumName: 'a'),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(MediaGridItem), findsNWidgets(4));
+
+      await tester.tap(find.byIcon(Icons.search));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final searchField = find.byKey(const ValueKey('album_search_field'));
+      expect(searchField, findsOneWidget);
+      expect(find.text('Search in album...'), findsOneWidget);
+
+      await tester.enterText(searchField, 'ALPHA');
+      await tester.pump();
+      expect(find.byType(MediaGridItem), findsNWidgets(2));
+
+      await tester.tap(find.text('Photos'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.byType(MediaGridItem), findsNWidgets(1));
+
+      await tester.tap(find.text('Videos'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.byType(MediaGridItem), findsNWidgets(1));
+
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pump();
+      expect(find.byType(MediaGridItem), findsNWidgets(2));
+
+      await tester.enterText(searchField, 'gamma');
+      await tester.pump();
+      expect(find.byType(MediaGridItem), findsNWidgets(1));
+
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.byKey(const ValueKey('album_search_field')), findsNothing);
+      expect(find.byType(MediaGridItem), findsNWidgets(2));
     });
   });
 }

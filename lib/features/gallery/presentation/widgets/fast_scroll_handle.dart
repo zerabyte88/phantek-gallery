@@ -9,30 +9,53 @@ class FastScrollHandle extends StatefulWidget {
     required this.controller,
     required this.child,
     this.hideDelay = const Duration(seconds: 3),
+    this.labelBuilder,
   });
 
   final ScrollController controller;
   final Widget child;
   final Duration hideDelay;
 
+  /// Optional callback returning a floating pill label (e.g. `"Nov 2026"`)
+  /// for the current scroll fraction `[0.0, 1.0]` while dragging the handle.
+  final String? Function(double fraction)? labelBuilder;
+
   @override
   State<FastScrollHandle> createState() => _FastScrollHandleState();
 }
 
-class _FastScrollHandleState extends State<FastScrollHandle> {
+class _FastScrollHandleState extends State<FastScrollHandle>
+    with SingleTickerProviderStateMixin {
   static const double _handleWidth = 38.0;
   static const double _handleHeight = 54.0;
   static const double _topPadding = 12.0;
   static const double _bottomPadding = 16.0;
 
   final ValueNotifier<double> _fractionNotifier = ValueNotifier<double>(0.0);
+  late final AnimationController _pillController;
+  late final Animation<double> _pillOpacity;
   bool _visible = false;
   bool _isDragging = false;
+  String? _lastLabel;
   Timer? _hideTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _pillController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 160),
+    );
+    _pillOpacity = CurvedAnimation(
+      parent: _pillController,
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _pillController.dispose();
     _fractionNotifier.dispose();
     super.dispose();
   }
@@ -79,9 +102,16 @@ class _FastScrollHandleState extends State<FastScrollHandle> {
 
   void _onVerticalDragStart(DragStartDetails details) {
     _hideTimer?.cancel();
-    _isDragging = true;
-    if (!_visible && mounted) {
-      setState(() => _visible = true);
+    final label = widget.labelBuilder?.call(_fractionNotifier.value);
+    if (label != null && label.isNotEmpty) {
+      _lastLabel = label;
+      _pillController.forward();
+    }
+    if (!_isDragging || !_visible) {
+      setState(() {
+        _isDragging = true;
+        _visible = true;
+      });
     }
   }
 
@@ -99,10 +129,26 @@ class _FastScrollHandleState extends State<FastScrollHandle> {
         widget.controller.jumpTo(newFrac * maxExtent);
       }
     }
+    final label = widget.labelBuilder?.call(newFrac);
+    if (label != null && label.isNotEmpty) {
+      _lastLabel = label;
+      if (_pillController.status != AnimationStatus.forward &&
+          _pillController.status != AnimationStatus.completed) {
+        _pillController.forward();
+      }
+    } else if (_pillController.status != AnimationStatus.reverse &&
+        _pillController.status != AnimationStatus.dismissed) {
+      _pillController.reverse();
+    }
   }
 
   void _onVerticalDragEnd() {
-    _isDragging = false;
+    if (mounted) {
+      setState(() => _isDragging = false);
+    } else {
+      _isDragging = false;
+    }
+    _pillController.reverse();
     _scheduleHide();
   }
 
@@ -157,9 +203,66 @@ class _FastScrollHandleState extends State<FastScrollHandle> {
                 valueListenable: _fractionNotifier,
                 builder: (context, frac, _) {
                   final top = _topPadding + frac * usableHeight;
+                  final activeLabel =
+                      _isDragging ? widget.labelBuilder?.call(frac) : null;
+                  final pillText = (activeLabel != null && activeLabel.isNotEmpty)
+                      ? activeLabel
+                      : _lastLabel;
+
                   return Stack(
                     children: [
+                      if (widget.labelBuilder != null &&
+                          pillText != null &&
+                          pillText.isNotEmpty)
+                        Positioned(
+                          key: const ValueKey('fast_scroll_pill'),
+                          right: _handleWidth + 12,
+                          top: top,
+                          height: _handleHeight,
+                          child: IgnorePointer(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: FadeTransition(
+                                opacity: _pillOpacity,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: cs.surfaceContainerHigh,
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color:
+                                          cs.onSurface.withValues(alpha: 0.08),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 7,
+                                    ),
+                                    child: ConstrainedBox(
+                                      constraints:
+                                          const BoxConstraints(maxWidth: 200),
+                                      child: Text(
+                                        pillText,
+                                        maxLines: 1,
+                                        softWrap: false,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color: cs.onSurface,
+                                          height: 1.2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       Positioned(
+                        key: const ValueKey('fast_scroll_thumb'),
                         right: 0,
                         top: top,
                         width: _handleWidth,
