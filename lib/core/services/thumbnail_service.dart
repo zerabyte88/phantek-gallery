@@ -503,9 +503,13 @@ class ThumbnailService {
     required Duration time,
     int width = 256,
     int height = 256,
+    bool exact = false,
   }) async {
-    final bucket = time.inMilliseconds ~/ 250;
-    final cacheKey = '$filePath:$bucket:${width}x$height';
+    final bucket =
+        exact ? (time.inMilliseconds ~/ 50) : (time.inMilliseconds ~/ 250);
+    final cacheKey = exact
+        ? '$filePath:exact:$bucket:${width}x$height'
+        : '$filePath:$bucket:${width}x$height';
     final cached = _videoFrameCache[cacheKey];
     if (cached != null) return cached;
 
@@ -518,6 +522,7 @@ class ThumbnailService {
           'timeUs': time.inMicroseconds,
           'width': width,
           'height': height,
+          'exact': exact,
         },
       );
       if (bytes != null && bytes.isNotEmpty) {
@@ -536,6 +541,13 @@ class ThumbnailService {
       return result;
     }
     return null;
+  }
+
+  /// Releases the cached native video frame retriever used during scrubbing.
+  Future<void> releaseVideoFrameRetriever() async {
+    try {
+      await _nativeChannel.invokeMethod<void>('releaseVideoFrameRetriever');
+    } catch (_) {}
   }
 
   Future<Directory> _getCacheDirectory() {

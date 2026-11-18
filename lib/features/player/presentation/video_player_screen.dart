@@ -3789,6 +3789,8 @@ class _BottomBarState extends State<_BottomBar> {
   bool _wasPlayingBeforeDrag = false;
   bool _isFetchingFrame = false;
   Duration? _pendingTargetPos;
+  bool _pendingExact = false;
+  double? _settledFrac;
 
   Uint8List? _resolveInitialThumbnail() {
     final mem = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
@@ -3832,6 +3834,9 @@ class _BottomBarState extends State<_BottomBar> {
       _previewMounted = false;
       _isFetchingFrame = false;
       _pendingTargetPos = null;
+      _pendingExact = false;
+      _settledFrac = null;
+      unawaited(ThumbnailService.instance.releaseVideoFrameRetriever());
     }
     if (oldWidget.controller != widget.controller) {
       _unsubscribePlayer();
@@ -3896,12 +3901,30 @@ class _BottomBarState extends State<_BottomBar> {
     _frameCache.clear();
     _isFetchingFrame = false;
     _pendingTargetPos = null;
+    _pendingExact = false;
+    _settledFrac = null;
+    unawaited(ThumbnailService.instance.releaseVideoFrameRetriever());
     _unsubscribePlayer();
     super.dispose();
   }
 
-  void _fetchPreviewFrame(Duration targetPos, {bool immediate = false}) {
+  void _fetchPreviewFrame(
+    Duration targetPos, {
+    bool immediate = false,
+    bool exact = false,
+  }) {
     if (widget.item.path.isEmpty) return;
+
+    if (exact) {
+      _pendingTargetPos = targetPos;
+      _pendingExact = true;
+      _debounceTimer?.cancel();
+      if (!_isFetchingFrame) {
+        _executeNextFetch();
+      }
+      return;
+    }
+
     final bucketKey = targetPos.inMilliseconds ~/ 250;
     if (_frameCache.containsKey(bucketKey)) {
       final cached = _frameCache[bucketKey];
@@ -3914,6 +3937,7 @@ class _BottomBarState extends State<_BottomBar> {
     }
 
     _pendingTargetPos = targetPos;
+    _pendingExact = false;
     if (_isFetchingFrame) return;
 
     if (immediate) {
@@ -3921,7 +3945,7 @@ class _BottomBarState extends State<_BottomBar> {
       _executeNextFetch();
     } else {
       _debounceTimer?.cancel();
-      _debounceTimer = Timer(const Duration(milliseconds: 35), () {
+      _debounceTimer = Timer(const Duration(milliseconds: 16), () {
         _executeNextFetch();
       });
     }
@@ -3933,9 +3957,11 @@ class _BottomBarState extends State<_BottomBar> {
 
     final targetPos = _pendingTargetPos!;
     _pendingTargetPos = null;
+    final exact = _pendingExact;
+    _pendingExact = false;
     final bucketKey = targetPos.inMilliseconds ~/ 250;
 
-    if (_frameCache.containsKey(bucketKey)) {
+    if (!exact && _frameCache.containsKey(bucketKey)) {
       final cached = _frameCache[bucketKey];
       if (_lastFrameBytes != cached && mounted) {
         setState(() {
@@ -3962,13 +3988,16 @@ class _BottomBarState extends State<_BottomBar> {
         time: targetPos,
         width: reqW,
         height: reqH,
+        exact: exact,
       );
 
       if (mounted && bytes != null && bytes.isNotEmpty) {
-        if (_frameCache.length >= 80) {
-          _frameCache.remove(_frameCache.keys.first);
+        if (!exact) {
+          if (_frameCache.length >= 80) {
+            _frameCache.remove(_frameCache.keys.first);
+          }
+          _frameCache[bucketKey] = bytes;
         }
-        _frameCache[bucketKey] = bytes;
         if (_isDragging || _showPreview) {
           setState(() {
             _lastFrameBytes = bytes;
@@ -4000,6 +4029,7 @@ class _BottomBarState extends State<_BottomBar> {
     setState(() {
       _isDragging = true;
       _dragFraction = v;
+      _settledFrac = null;
       _showPillBadge = true;
       _showPreview = true;
       _previewMounted = true;
@@ -4013,6 +4043,7 @@ class _BottomBarState extends State<_BottomBar> {
     setState(() {
       _isDragging = true;
       _dragFraction = v;
+      _settledFrac = null;
       _showPillBadge = true;
       _showPreview = true;
       _previewMounted = true;
@@ -4037,12 +4068,12 @@ class _BottomBarState extends State<_BottomBar> {
       }
     }
     widget.onScrubbingChanged?.call(false);
-    _debounceTimer?.cancel();
-    _pendingTargetPos = null;
     setState(() {
       _isDragging = false;
       _dragFraction = null;
+      _settledFrac = v;
     });
+    _fetchPreviewFrame(target, immediate: true, exact: true);
     _previewFadeTimer?.cancel();
     _previewFadeTimer = Timer(const Duration(milliseconds: 350), () {
       if (mounted && !_isDragging) {
@@ -4053,6 +4084,7 @@ class _BottomBarState extends State<_BottomBar> {
           if (mounted && !_isDragging) {
             setState(() {
               _previewMounted = false;
+              _settledFrac = null;
             });
           }
         });
@@ -4326,14 +4358,14 @@ class _BottomBarState extends State<_BottomBar> {
             final dur = (val != null && val.duration > Duration.zero)
                 ? val.duration
                 : (widget.item.duration ?? Duration.zero);
-            final displayPos = (_isDragging &&
-                    _dragFraction != null &&
-                    dur.inMilliseconds > 0)
+            final activeFrac =
+                _dragFraction ?? (!_isDragging ? _settledFrac : null);
+            final displayPos = (activeFrac != null && dur.inMilliseconds > 0)
                 ? Duration(
-                    milliseconds: (_dragFraction! * dur.inMilliseconds).round())
+                    milliseconds: (activeFrac * dur.inMilliseconds).round())
                 : pos;
             final frac = dur.inMilliseconds > 0
-                ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))
+                ? (activeFrac ?? (pos.inMilliseconds / dur.inMilliseconds))
                 : 0.0;
 
             return Column(
@@ -4584,14 +4616,14 @@ class _BottomBarState extends State<_BottomBar> {
             final dur = (val != null && val.duration > Duration.zero)
                 ? val.duration
                 : (widget.item.duration ?? Duration.zero);
-            final displayPos = (_isDragging &&
-                    _dragFraction != null &&
-                    dur.inMilliseconds > 0)
+            final activeFrac =
+                _dragFraction ?? (!_isDragging ? _settledFrac : null);
+            final displayPos = (activeFrac != null && dur.inMilliseconds > 0)
                 ? Duration(
-                    milliseconds: (_dragFraction! * dur.inMilliseconds).round())
+                    milliseconds: (activeFrac * dur.inMilliseconds).round())
                 : pos;
             final frac = dur.inMilliseconds > 0
-                ? (_dragFraction ?? (pos.inMilliseconds / dur.inMilliseconds))
+                ? (activeFrac ?? (pos.inMilliseconds / dur.inMilliseconds))
                 : 0.0;
 
             return Column(
@@ -5022,6 +5054,9 @@ class _VideoScrubberBar extends StatefulWidget {
 
 class _VideoScrubberBarState extends State<_VideoScrubberBar> {
   double? _lastFrac;
+  int? _activePointer;
+  double? _lastMoveX;
+  bool _didMove = false;
 
   @override
   Widget build(BuildContext context) {
@@ -5036,24 +5071,50 @@ class _VideoScrubberBarState extends State<_VideoScrubberBar> {
         return Listener(
           behavior: HitTestBehavior.opaque,
           onPointerDown: (e) {
+            if (_activePointer != null) return;
+            _activePointer = e.pointer;
             final x = e.localPosition.dx;
             final frac = ((x - trackPadding) / trackWidth).clamp(0.0, 1.0);
+            _lastMoveX = x;
+            _didMove = false;
             _lastFrac = frac;
             widget.onScrubStart(frac);
           },
           onPointerMove: (e) {
+            if (e.pointer != _activePointer) return;
             final x = e.localPosition.dx;
+            if (!_didMove &&
+                _lastMoveX != null &&
+                (x - _lastMoveX!).abs() < 2.0) {
+              return;
+            }
+            _didMove = true;
+            _lastMoveX = x;
             final frac = ((x - trackPadding) / trackWidth).clamp(0.0, 1.0);
             _lastFrac = frac;
             widget.onScrubUpdate(frac);
           },
           onPointerUp: (e) {
+            if (e.pointer != _activePointer) return;
+            _activePointer = null;
             final x = e.localPosition.dx;
             final frac = ((x - trackPadding) / trackWidth).clamp(0.0, 1.0);
+            final endFrac = (_didMove &&
+                    _lastMoveX != null &&
+                    _lastFrac != null &&
+                    (x - _lastMoveX!).abs() <= 6.0)
+                ? _lastFrac!
+                : frac;
             _lastFrac = null;
-            widget.onScrubEnd(frac);
+            _lastMoveX = null;
+            _didMove = false;
+            widget.onScrubEnd(endFrac);
           },
           onPointerCancel: (e) {
+            if (e.pointer != _activePointer) return;
+            _activePointer = null;
+            _lastMoveX = null;
+            _didMove = false;
             final endFrac = _lastFrac ?? widget.value;
             _lastFrac = null;
             widget.onScrubEnd(endFrac);

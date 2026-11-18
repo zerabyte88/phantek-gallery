@@ -25,6 +25,7 @@ import '../../../core/widgets/bouncy_tap.dart';
 import '../../../core/widgets/styled_popup_menu.dart';
 import '../../../core/widgets/theme_header_background.dart';
 import 'widgets/album_grid_item.dart';
+import 'widgets/fast_scroll_handle.dart';
 import 'widgets/filter_sort_bar.dart';
 import 'widgets/media_grid_item.dart';
 import 'widgets/delete_confirmation_sheet.dart';
@@ -66,6 +67,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     FilterOption.all: ScrollController(),
     FilterOption.photosOnly: ScrollController(),
     FilterOption.videosOnly: ScrollController(),
+    FilterOption.albums: ScrollController(),
   };
 
   // Memoized tab items for smooth tab transitions.
@@ -1120,7 +1122,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       );
     }
 
-    final controller = _scrollControllers[tab];
+    final controller = _scrollControllers[tab]!;
     final aspectRatio =
         settings.thumbnailCropStyle == ThumbnailCropStyle.adaptive ? 0.8 : 1.0;
 
@@ -1131,28 +1133,31 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         _ => _memoizedAllIndex,
       };
       return _PinchZoomGridListener(
-        child: RefreshIndicator(
-          onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
-          child: GridView.builder(
-            key: PageStorageKey(storageKey),
-            controller: controller,
-            cacheExtent: 800.0,
-            addAutomaticKeepAlives: false,
-            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: settings.gridColumns,
-              crossAxisSpacing: 3,
-              mainAxisSpacing: 3,
-              childAspectRatio: aspectRatio,
+        child: FastScrollHandle(
+          controller: controller,
+          child: RefreshIndicator(
+            onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
+            child: GridView.builder(
+              key: PageStorageKey(storageKey),
+              controller: controller,
+              cacheExtent: 800.0,
+              addAutomaticKeepAlives: false,
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: settings.gridColumns,
+                crossAxisSpacing: 3,
+                mainAxisSpacing: 3,
+                childAspectRatio: aspectRatio,
+              ),
+              itemCount: items.length,
+              findChildIndexCallback: (Key key) {
+                if (key is ValueKey<String>) {
+                  return indexMap[key.value];
+                }
+                return null;
+              },
+              itemBuilder: (_, i) => _buildMediaGridItem(items, i, tab, settings),
             ),
-            itemCount: items.length,
-            findChildIndexCallback: (Key key) {
-              if (key is ValueKey<String>) {
-                return indexMap[key.value];
-              }
-              return null;
-            },
-            itemBuilder: (_, i) => _buildMediaGridItem(items, i, tab, settings),
           ),
         ),
       );
@@ -1195,58 +1200,61 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     final cs = Theme.of(context).colorScheme;
 
     return _PinchZoomGridListener(
-      child: RefreshIndicator(
-        onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
-        child: CustomScrollView(
-          key: PageStorageKey(storageKey),
-          controller: controller,
-          cacheExtent: 800.0,
-          slivers: [
-            for (final entry in groups.entries) ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 18, 14, 6),
-                  child: Text(
-                    entry.key,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.2,
-                      color: cs.primary,
+      child: FastScrollHandle(
+        controller: controller,
+        child: RefreshIndicator(
+          onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
+          child: CustomScrollView(
+            key: PageStorageKey(storageKey),
+            controller: controller,
+            cacheExtent: 800.0,
+            slivers: [
+              for (final entry in groups.entries) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 18, 14, 6),
+                    child: Text(
+                      entry.key,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.2,
+                        color: cs.primary,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                sliver: SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: settings.gridColumns,
-                    crossAxisSpacing: 3,
-                    mainAxisSpacing: 3,
-                    childAspectRatio: aspectRatio,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, i) => _buildMediaGridItem(
-                      items,
-                      entry.value[i],
-                      tab,
-                      settings,
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: settings.gridColumns,
+                      crossAxisSpacing: 3,
+                      mainAxisSpacing: 3,
+                      childAspectRatio: aspectRatio,
                     ),
-                    childCount: entry.value.length,
-                    addAutomaticKeepAlives: false,
-                    findChildIndexCallback: (Key key) {
-                      if (key is ValueKey<String>) {
-                        return groupIndexMaps[entry.key]?[key.value];
-                      }
-                      return null;
-                    },
+                    delegate: SliverChildBuilderDelegate(
+                      (ctx, i) => _buildMediaGridItem(
+                        items,
+                        entry.value[i],
+                        tab,
+                        settings,
+                      ),
+                      childCount: entry.value.length,
+                      addAutomaticKeepAlives: false,
+                      findChildIndexCallback: (Key key) {
+                        if (key is ValueKey<String>) {
+                          return groupIndexMaps[entry.key]?[key.value];
+                        }
+                        return null;
+                      },
+                    ),
                   ),
                 ),
-              ),
+              ],
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
             ],
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
-          ],
+          ),
         ),
       ),
     );
@@ -1375,42 +1383,48 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
-      child: GridView.builder(
-        key: PageStorageKey(storageKey),
-        addAutomaticKeepAlives: false,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: settings.albumGridColumns,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 16,
-          childAspectRatio: 0.74,
+    final controller = _scrollControllers[FilterOption.albums]!;
+
+    return FastScrollHandle(
+      controller: controller,
+      child: RefreshIndicator(
+        onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
+        child: GridView.builder(
+          key: PageStorageKey(storageKey),
+          controller: controller,
+          addAutomaticKeepAlives: false,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: settings.albumGridColumns,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.74,
+          ),
+          itemCount: albums.length,
+          itemBuilder: (_, i) {
+            final album = albums[i];
+            return AlbumGridItem(
+              key: ValueKey(album.name),
+              album: album,
+              isSelected: _selected.contains(album.name),
+              isSelecting: _selecting,
+              onTap: () {
+                if (_selecting) {
+                  _toggleSelect(album.name);
+                  return;
+                }
+                Navigator.of(context).openAlbum(album.name);
+              },
+              onLongPress: () {
+                if (!_selecting) {
+                  _startSelect(album.name);
+                } else {
+                  _toggleSelect(album.name);
+                }
+              },
+            );
+          },
         ),
-        itemCount: albums.length,
-        itemBuilder: (_, i) {
-          final album = albums[i];
-          return AlbumGridItem(
-            key: ValueKey(album.name),
-            album: album,
-            isSelected: _selected.contains(album.name),
-            isSelecting: _selecting,
-            onTap: () {
-              if (_selecting) {
-                _toggleSelect(album.name);
-                return;
-              }
-              Navigator.of(context).openAlbum(album.name);
-            },
-            onLongPress: () {
-              if (!_selecting) {
-                _startSelect(album.name);
-              } else {
-                _toggleSelect(album.name);
-              }
-            },
-          );
-        },
       ),
     );
   }

@@ -26,6 +26,7 @@ import 'package:phantek_gallery/core/services/psd_service.dart';
 import 'package:phantek_gallery/core/models/trash_item.dart';
 import 'package:phantek_gallery/core/utils/media_utils.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/album_grid_item.dart';
+import 'package:phantek_gallery/features/gallery/presentation/widgets/fast_scroll_handle.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/media_grid_item.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/shimmer_loading_tile.dart';
 import 'package:phantek_gallery/features/gallery/presentation/album_detail_screen.dart';
@@ -3896,6 +3897,127 @@ void main() {
     });
 
     testWidgets(
+        'VideoPlayerScreen scrub bar stabilizes <= 6px lift-off micro-jitter and fetches exact frame on release',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final frameCalls = <Map<dynamic, dynamic>>[];
+      // Minimal valid 1x1 transparent PNG
+      final dummyPng = Uint8List.fromList([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82,
+      ]);
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('com.phantek.gallery/thumbnail'),
+        (call) async {
+          if (call.method == 'getVideoFrame') {
+            frameCalls.add(Map<dynamic, dynamic>.from(call.arguments as Map));
+            return dummyPng;
+          }
+          return null;
+        },
+      );
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+          const MethodChannel('com.phantek.gallery/thumbnail'),
+          null,
+        );
+      });
+
+      final videoItem = MediaItem(
+        id: 'scrub_video_1',
+        path: '/mock/scrub_exact_test.mp4',
+        name: 'scrub_exact_test.mp4',
+        date: DateTime(2026, 1, 1),
+        size: 4096,
+        isVideo: true,
+        width: 1920,
+        height: 1080,
+        duration: const Duration(seconds: 60),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsNotifierProvider.overrideWith(
+              () => _TestSettingsNotifier(
+                const SettingsModel(autoPlayVideo: false),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: VideoPlayerScreen(
+              items: [videoItem],
+              initialIndex: 0,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final scrubberFinder = find.byWidgetPredicate(
+        (w) => w.runtimeType.toString() == '_VideoScrubberBar',
+      );
+      expect(scrubberFinder, findsOneWidget);
+
+      final box = tester.renderObject<RenderBox>(scrubberFinder);
+      const trackPadding = 16.0;
+      final trackWidth = box.size.width - trackPadding * 2;
+      final centerY = box.size.height / 2;
+
+      final startPos = box.localToGlobal(
+        Offset(trackPadding + trackWidth * 0.2, centerY),
+      );
+      final dragPos = box.localToGlobal(
+        Offset(trackPadding + trackWidth * 0.5, centerY),
+      );
+      // 4px micro-shift on finger lift-off (<= 6px threshold)
+      final liftOffJitterPos = Offset(dragPos.dx + 4.0, dragPos.dy);
+
+      const pointerId = 42;
+      tester.binding.handlePointerEvent(
+        PointerDownEvent(pointer: pointerId, position: startPos),
+      );
+      await tester.pump();
+
+      tester.binding.handlePointerEvent(
+        PointerMoveEvent(pointer: pointerId, position: dragPos),
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+
+      tester.binding.handlePointerEvent(
+        PointerUpEvent(pointer: pointerId, position: liftOffJitterPos),
+      );
+      await tester.pump();
+
+      final exactCalls =
+          frameCalls.where((args) => args['exact'] == true).toList();
+      expect(exactCalls, isNotEmpty);
+      expect(exactCalls.last['timeUs'], 30000000);
+
+      // Let preview & pill fade timers complete cleanly.
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets(
         'GalleryScreen direct tab jump from All to Albums switches cleanly and manual drag updates FilterSortBar',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
@@ -4879,6 +5001,155 @@ void main() {
       await tester.tap(appLockTile);
       await tester.pumpAndSettle();
       expect(SettingsService.instance.settings.appLockEnabled, isTrue);
+    });
+  });
+
+  group('FastScrollHandle Tests', () {
+    testWidgets(
+        'FastScrollHandle is initially hidden, appears on scroll, auto-hides after 3s, reappears on scroll, and jumps on drag',
+        (tester) async {
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 300,
+              height: 400,
+              child: FastScrollHandle(
+                controller: controller,
+                child: GridView.builder(
+                  controller: controller,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                  ),
+                  itemCount: 120,
+                  itemBuilder: (_, i) => Container(
+                    key: ValueKey('cell_$i'),
+                    color: Colors.blueGrey,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      AnimatedOpacity getHandleOpacity() {
+        return tester.widget<AnimatedOpacity>(
+          find.descendant(
+            of: find.byType(FastScrollHandle),
+            matching: find.byType(AnimatedOpacity),
+          ),
+        );
+      }
+
+      Positioned getHandlePositioned() {
+        return tester.widget<Positioned>(
+          find.descendant(
+            of: find.byType(FastScrollHandle),
+            matching: find.byWidgetPredicate(
+              (w) => w is Positioned && w.width == 38.0 && w.height == 54.0,
+            ),
+          ),
+        );
+      }
+
+      // 1) Initially hidden when idle
+      expect(getHandleOpacity().opacity, 0.0);
+      expect(getHandlePositioned().top, 12.0);
+
+      // 2) Appears on scroll, moves down proportionally, stays visible < 3s
+      await tester.drag(find.byType(GridView), const Offset(0, -400));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(getHandleOpacity().opacity, 1.0);
+      final topAfterScroll = getHandlePositioned().top!;
+      expect(topAfterScroll, greaterThan(12.0));
+
+      await tester.pump(const Duration(seconds: 2, milliseconds: 500));
+      expect(getHandleOpacity().opacity, 1.0);
+
+      // 3) Automatically hides after 3 seconds of no movement
+      await tester.pump(const Duration(milliseconds: 750));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(getHandleOpacity().opacity, 0.0);
+
+      // 4) Reappears immediately on scroll and dragging handle jumps offset
+      await tester.drag(find.byType(GridView), const Offset(0, -100));
+      await tester.pump();
+      expect(getHandleOpacity().opacity, 1.0);
+
+      final offsetBeforeHandleDrag = controller.offset;
+      await tester.drag(
+        find.byIcon(Icons.keyboard_arrow_down_rounded),
+        const Offset(0, 150),
+      );
+      await tester.pump();
+      expect(controller.offset, greaterThan(offsetBeforeHandleDrag + 300));
+
+      // Drain hide timer cleanly
+      await tester.pump(const Duration(seconds: 3, milliseconds: 250));
+    });
+
+    testWidgets('GalleryScreen and AlbumDetailScreen render with FastScrollHandle',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final items = List.generate(
+        30,
+        (i) => MediaItem(
+          id: 'fast_$i',
+          path: '/a/$i.jpg',
+          name: '$i.jpg',
+          date: DateTime(2026, 1, 1).add(Duration(minutes: i)),
+          size: 1000,
+          isVideo: false,
+        ),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider
+                .overrideWith(() => _SpecificMockMediaNotifier(items)),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            home: GalleryScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(FastScrollHandle), findsWidgets);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider.overrideWith(() => _MockMediaListNotifier()),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            home: AlbumDetailScreen(albumName: 'a'),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(FastScrollHandle), findsWidgets);
     });
   });
 }

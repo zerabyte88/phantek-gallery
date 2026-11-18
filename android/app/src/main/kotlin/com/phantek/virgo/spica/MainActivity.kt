@@ -17,6 +17,24 @@ class MainActivity : FlutterFragmentActivity() {
     private val REQUEST_CODE_PICK_FOLDER = 9921
     private var pendingAppLockResult: MethodChannel.Result? = null
     private val REQUEST_CODE_APP_LOCK = 9922
+    private val scrubExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var activeScrubPath: String? = null
+    private var activeScrubRetriever: android.media.MediaMetadataRetriever? = null
+    private var activeScrubFis: java.io.FileInputStream? = null
+    private var activeScrubPfd: android.os.ParcelFileDescriptor? = null
+    private var activeScrubOrigW: Int = 0
+    private var activeScrubOrigH: Int = 0
+    private var activeScrubRotation: Int = 0
+
+    override fun onDestroy() {
+        try {
+            if (!scrubExecutor.isShutdown) {
+                scrubExecutor.execute { releaseActiveScrubRetriever() }
+            }
+            scrubExecutor.shutdown()
+        } catch (_: Throwable) {}
+        super.onDestroy()
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -194,22 +212,40 @@ class MainActivity : FlutterFragmentActivity() {
                 val timeUs = (call.argument<Number>("timeUs"))?.toLong() ?: 0L
                 val width = call.argument<Int>("width") ?: 256
                 val height = call.argument<Int>("height") ?: 256
+                val exact = call.argument<Boolean>("exact") ?: false
                 if (path == null) {
                     result.error("INVALID_PATH", "Path is null", null)
                     return@setMethodCallHandler
                 }
-                videoExecutor.execute {
+                if (!scrubExecutor.isShutdown) {
                     try {
-                        val bytes = extractVideoFrame(path, timeUs, width, height)
-                        runOnUiThread {
-                            result.success(bytes)
+                        scrubExecutor.execute {
+                            try {
+                                val bytes = extractVideoFrame(path, timeUs, width, height, exact)
+                                runOnUiThread {
+                                    result.success(bytes)
+                                }
+                            } catch (e: Throwable) {
+                                runOnUiThread {
+                                    result.success(null)
+                                }
+                            }
                         }
-                    } catch (e: Throwable) {
-                        runOnUiThread {
-                            result.success(null)
+                    } catch (_: Throwable) {
+                        result.success(null)
+                    }
+                } else {
+                    result.success(null)
+                }
+            } else if (call.method == "releaseVideoFrameRetriever") {
+                try {
+                    if (!scrubExecutor.isShutdown) {
+                        scrubExecutor.execute {
+                            releaseActiveScrubRetriever()
                         }
                     }
-                }
+                } catch (_: Throwable) {}
+                result.success(null)
             } else {
                 result.notImplemented()
             }
@@ -565,7 +601,21 @@ class MainActivity : FlutterFragmentActivity() {
         return if (resultBytes.isNotEmpty()) resultBytes else null
     }
 
-    private fun extractVideoFrame(path: String, timeUs: Long, targetWidth: Int, targetHeight: Int): ByteArray? {
+    private fun releaseActiveScrubRetriever() {
+        try { activeScrubRetriever?.release() } catch (_: Throwable) {}
+        try { activeScrubFis?.close() } catch (_: Throwable) {}
+        try { activeScrubPfd?.close() } catch (_: Throwable) {}
+        activeScrubRetriever = null
+        activeScrubFis = null
+        activeScrubPfd = null
+        activeScrubPath = null
+        activeScrubOrigW = 0
+        activeScrubOrigH = 0
+        activeScrubRotation = 0
+    }
+
+    private fun openActiveScrubRetriever(path: String): Boolean {
+        releaseActiveScrubRetriever()
         val file = File(path)
         val retriever = android.media.MediaMetadataRetriever()
         var fis: java.io.FileInputStream? = null
@@ -646,20 +696,91 @@ class MainActivity : FlutterFragmentActivity() {
 
             // 3. Fallback to raw string path
             if (!dataSourceSet) {
-                try {
-                    retriever.setDataSource(path)
-                    dataSourceSet = true
-                } catch (_: Throwable) {
-                    return null
-                }
+                retriever.setDataSource(path)
+                dataSourceSet = true
             }
 
             val widthStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
             val heightStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
             val rotationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
-            val origW = widthStr?.toIntOrNull() ?: 0
-            val origH = heightStr?.toIntOrNull() ?: 0
-            val rotation = rotationStr?.toIntOrNull() ?: 0
+
+            activeScrubPath = path
+            activeScrubRetriever = retriever
+            activeScrubFis = fis
+            activeScrubPfd = pfd
+            activeScrubOrigW = widthStr?.toIntOrNull() ?: 0
+            activeScrubOrigH = heightStr?.toIntOrNull() ?: 0
+            activeScrubRotation = rotationStr?.toIntOrNull() ?: 0
+            return true
+        } catch (_: Throwable) {
+            try { retriever.release() } catch (_: Throwable) {}
+            try { fis?.close() } catch (_: Throwable) {}
+            try { pfd?.close() } catch (_: Throwable) {}
+            return false
+        }
+    }
+
+    private fun decodeScrubBitmap(
+        retriever: android.media.MediaMetadataRetriever,
+        safeTimeUs: Long,
+        options: IntArray,
+        dstW: Int,
+        dstH: Int
+    ): Pair<android.graphics.Bitmap?, Boolean> {
+        var bitmap: android.graphics.Bitmap? = null
+        var hadException = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            for (opt in options) {
+                if (bitmap != null) break
+                try {
+                    bitmap = retriever.getScaledFrameAtTime(safeTimeUs, opt, dstW, dstH)
+                } catch (_: Throwable) {
+                    hadException = true
+                }
+            }
+        }
+
+        if (bitmap == null) {
+            for (opt in options) {
+                if (bitmap != null) break
+                try {
+                    val rawBitmap = retriever.getFrameAtTime(safeTimeUs, opt)
+                    if (rawBitmap != null) {
+                        if (rawBitmap.width > dstW || rawBitmap.height > dstH) {
+                            bitmap = android.graphics.Bitmap.createScaledBitmap(rawBitmap, dstW, dstH, true)
+                            if (bitmap != rawBitmap) {
+                                rawBitmap.recycle()
+                            }
+                        } else {
+                            bitmap = rawBitmap
+                        }
+                    }
+                } catch (_: Throwable) {
+                    hadException = true
+                }
+            }
+        }
+        return Pair(bitmap, hadException)
+    }
+
+    private fun extractVideoFrame(
+        path: String,
+        timeUs: Long,
+        targetWidth: Int,
+        targetHeight: Int,
+        exact: Boolean = false
+    ): ByteArray? {
+        try {
+            if (activeScrubPath != path || activeScrubRetriever == null) {
+                if (!openActiveScrubRetriever(path)) {
+                    return null
+                }
+            }
+
+            var retriever = activeScrubRetriever ?: return null
+            val origW = activeScrubOrigW
+            val origH = activeScrubOrigH
+            var rotation = activeScrubRotation
 
             val (dstW, dstH) = if (origW > 0 && origH > 0) {
                 val scaleW = targetWidth.toFloat() / origW.toFloat()
@@ -672,48 +793,29 @@ class MainActivity : FlutterFragmentActivity() {
                 Pair(targetWidth, targetHeight)
             }
 
-            // Use sync-frame extraction for >=720p streams to avoid keyframe decode stalls.
+            // Use sync-frame extraction during scrubbing for >=720p streams to avoid keyframe decode stalls,
+            // and exact frame extraction when requested (e.g. finger release).
             val isHighRes = origW >= 1280 || origH >= 1280
-            val options = if (isHighRes) {
+            val options = if (exact || !isHighRes) {
                 intArrayOf(
+                    android.media.MediaMetadataRetriever.OPTION_CLOSEST,
                     android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                     android.media.MediaMetadataRetriever.OPTION_PREVIOUS_SYNC
                 )
             } else {
                 intArrayOf(
-                    android.media.MediaMetadataRetriever.OPTION_CLOSEST,
                     android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                     android.media.MediaMetadataRetriever.OPTION_PREVIOUS_SYNC
                 )
             }
 
             val safeTimeUs = timeUs.coerceAtLeast(0L)
-            var bitmap: android.graphics.Bitmap? = null
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                for (opt in options) {
-                    if (bitmap != null) break
-                    try {
-                        bitmap = retriever.getScaledFrameAtTime(safeTimeUs, opt, dstW, dstH)
-                    } catch (_: Throwable) {}
-                }
-            }
-
-            if (bitmap == null) {
-                for (opt in options) {
-                    if (bitmap != null) break
-                    try {
-                        val rawBitmap = retriever.getFrameAtTime(safeTimeUs, opt)
-                        if (rawBitmap != null) {
-                            if (rawBitmap.width > dstW || rawBitmap.height > dstH) {
-                                bitmap = android.graphics.Bitmap.createScaledBitmap(rawBitmap, dstW, dstH, true)
-                                if (bitmap != rawBitmap) {
-                                    rawBitmap.recycle()
-                                }
-                            } else {
-                                bitmap = rawBitmap
-                            }
-                        }
-                    } catch (_: Throwable) {}
+            var (bitmap, hadException) = decodeScrubBitmap(retriever, safeTimeUs, options, dstW, dstH)
+            if (bitmap == null && hadException) {
+                if (openActiveScrubRetriever(path)) {
+                    retriever = activeScrubRetriever ?: return null
+                    rotation = activeScrubRotation
+                    bitmap = decodeScrubBitmap(retriever, safeTimeUs, options, dstW, dstH).first
                 }
             }
 
@@ -744,10 +846,7 @@ class MainActivity : FlutterFragmentActivity() {
                 return if (resultBytes.isNotEmpty()) resultBytes else null
             }
         } catch (_: Throwable) {
-        } finally {
-            try { retriever.release() } catch (_: Throwable) {}
-            try { fis?.close() } catch (_: Throwable) {}
-            try { pfd?.close() } catch (_: Throwable) {}
+            releaseActiveScrubRetriever()
         }
         return null
     }
