@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart' hide FilterOption;
@@ -41,7 +42,8 @@ class AlbumDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<AlbumDetailScreen> createState() => _AlbumDetailScreenState();
 }
 
-class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
+class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
+    with SingleTickerProviderStateMixin {
   static const List<FilterOption> _tabs = [
     FilterOption.all,
     FilterOption.photosOnly,
@@ -78,6 +80,10 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
   bool _isTabTapTransition = false;
   int? _pendingTapTargetPage;
   Timer? _tabTapTimer;
+  late final AnimationController _searchAnimController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 350),
+  );
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -86,6 +92,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
   @override
   void dispose() {
     _tabTapTimer?.cancel();
+    _searchAnimController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _pageController.dispose();
@@ -268,7 +275,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
 
   void _openSearch() {
     setState(() => _isSearching = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _searchAnimController.forward().then((_) {
       if (mounted && _isSearching) {
         _searchFocusNode.requestFocus();
       }
@@ -277,10 +284,14 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
 
   void _closeSearch() {
     _searchFocusNode.unfocus();
-    setState(() {
-      _isSearching = false;
-      _searchController.clear();
-      _searchQuery = '';
+    _searchAnimController.reverse().then((_) {
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+          _searchController.clear();
+          _searchQuery = '';
+        });
+      }
     });
   }
 
@@ -289,6 +300,10 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     double fraction,
     SortOption activeSort,
   ) {
+    if (activeSort.criterion != SortCriterion.timeAdded &&
+        activeSort.criterion != SortCriterion.shootingTime) {
+      return null;
+    }
     if (items.isEmpty) return null;
     final index = (fraction.clamp(0.0, 1.0) * (items.length - 1)).round();
     final item = items[index];
@@ -477,228 +492,412 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          flexibleSpace: const RepaintBoundary(
-            child: ThemeHeaderBackground(),
-          ),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              if (_isSearching) {
-                _closeSearch();
-              } else if (_selectedSubfolder != null && !_flattenSubfolders) {
-                setState(() => _selectedSubfolder = null);
-              } else {
-                Navigator.of(context).pop();
-              }
-            },
-          ),
-          title: _selecting
-              ? Text('${_selected.length} ${context.tr.selected}')
-              : AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: _isSearching
-                      ? TextField(
-                          key: const ValueKey('album_search_field'),
-                          controller: _searchController,
-                          focusNode: _searchFocusNode,
-                          style: const TextStyle(fontSize: 16),
-                          textInputAction: TextInputAction.search,
-                          decoration: InputDecoration(
-                            hintText: context.tr.searchInAlbumHint,
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding:
-                                const EdgeInsets.symmetric(vertical: 8),
-                            hintStyle: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                              fontSize: 16,
-                            ),
-                            suffixIconConstraints: const BoxConstraints(
-                              minWidth: 32,
-                              minHeight: 32,
-                            ),
-                            suffixIcon: _searchController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.close_rounded,
-                                        size: 20),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() => _searchQuery = '');
-                                    },
-                                  )
-                                : null,
-                          ),
-                          onChanged: (q) =>
-                              setState(() => _searchQuery = q.trim()),
-                        )
-                      : Align(
-                          key: const ValueKey('album_title_column'),
-                          alignment: AlignmentDirectional.centerStart,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                widget.albumName == 'Favorites'
-                                    ? context.tr.favorites
-                                    : (_selectedSubfolder != null &&
-                                            !_flattenSubfolders
-                                        ? '${widget.albumName} / $_selectedSubfolder'
-                                        : widget.albumName),
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
+          flexibleSpace: Stack(
+            fit: StackFit.expand,
+            children: [
+              const RepaintBoundary(
+                child: ThemeHeaderBackground(),
+              ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Theme.of(context)
+                          .scaffoldBackgroundColor
+                          .withValues(alpha: 0.82),
+                      Theme.of(context)
+                          .scaffoldBackgroundColor
+                          .withValues(alpha: 0.62),
+                      Theme.of(context)
+                          .scaffoldBackgroundColor
+                          .withValues(alpha: 0.14),
+                    ],
+                    stops: const [0.0, 0.46, 1.0],
+                  ),
+                ),
+              ),
+              AnimatedBuilder(
+                animation: _searchAnimController,
+                builder: (context, _) {
+                  final progress = _searchAnimController.value;
+                  if (progress == 0.0 && !_isSearching) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final curvedProgress = CurvedAnimation(
+                    parent: _searchAnimController,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  ).value;
+
+                  final cs = Theme.of(context).colorScheme;
+                  final topPadding = MediaQuery.paddingOf(context).top;
+
+                  return Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: topPadding + kToolbarHeight,
+                    child: SafeArea(
+                      bottom: false,
+                      child: SizedBox(
+                        height: kToolbarHeight,
+                        child: Center(
+                          child: Opacity(
+                            opacity: curvedProgress.clamp(0.0, 1.0),
+                            child: Transform.translate(
+                              offset:
+                                  Offset(20.0 * (1.0 - curvedProgress), 0.0),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16.0,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(20),
+                                        child: BackdropFilter(
+                                          filter: ImageFilter.blur(
+                                              sigmaX: 10, sigmaY: 10),
+                                          child: Container(
+                                            height: 40,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12),
+                                            decoration: BoxDecoration(
+                                              color: cs.surfaceContainerHighest
+                                                  .withValues(alpha: 0.5),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.search_rounded,
+                                                  size: 18,
+                                                  color: cs.onSurfaceVariant,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: TextField(
+                                                    key: const ValueKey(
+                                                        'album_search_field'),
+                                                    controller:
+                                                        _searchController,
+                                                    focusNode: _searchFocusNode,
+                                                    style: const TextStyle(
+                                                        fontSize: 14),
+                                                    textInputAction:
+                                                        TextInputAction.search,
+                                                    decoration: InputDecoration(
+                                                      hintText: context
+                                                          .tr.searchInAlbumHint,
+                                                      isDense: true,
+                                                      contentPadding:
+                                                          const EdgeInsets
+                                                              .symmetric(
+                                                              vertical: 8),
+                                                      border: InputBorder.none,
+                                                      hintStyle: TextStyle(
+                                                        color:
+                                                            cs.onSurfaceVariant,
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                    onChanged: (q) => setState(
+                                                        () => _searchQuery =
+                                                            q.trim()),
+                                                  ),
+                                                ),
+                                                if (_searchController
+                                                    .text.isNotEmpty)
+                                                  BouncyTap(
+                                                    scaleDown: 0.88,
+                                                    onTap: () {
+                                                      _searchController.clear();
+                                                      setState(() =>
+                                                          _searchQuery = '');
+                                                    },
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              left: 4),
+                                                      child: Icon(
+                                                        Icons.close_rounded,
+                                                        size: 18,
+                                                        color:
+                                                            cs.onSurfaceVariant,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    BouncyTap(
+                                      key: const ValueKey(
+                                          'album_search_cancel_button'),
+                                      scaleDown: 0.92,
+                                      onTap: _closeSearch,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6.0,
+                                          vertical: 6.0,
+                                        ),
+                                        child: Text(
+                                          context.tr.cancel,
+                                          style: TextStyle(
+                                            color: cs.primary,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              Text(
-                                context.tr.itemsCount(sortedItems.length),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                  fontWeight: FontWeight.normal,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
-                ),
-          actions: [
-            if (!_selecting && !_isSearching)
-              BouncyTap(
-                scaleDown: 0.88,
-                child: IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: context.tr.searchTooltip,
-                  onPressed: _openSearch,
-                ),
-              ),
-            if (!_selecting && hasSubfolders)
-              BouncyTap(
-                scaleDown: 0.88,
-                child: IconButton(
-                  icon: Icon(
-                    _flattenSubfolders
-                        ? Icons.folder_copy_outlined
-                        : Icons.grid_view_rounded,
-                  ),
-                  tooltip: _flattenSubfolders
-                      ? context.tr.showSubfolders
-                      : context.tr.flattenSubfolders,
-                  onPressed: () {
-                    setState(() {
-                      _flattenSubfolders = !_flattenSubfolders;
-                      _selectedSubfolder = null;
-                      if (_flattenSubfolders) {
-                        _syncPageControllerToFilter();
-                      }
-                    });
-                  },
-                ),
-              ),
-            if (!_selecting)
-              StyledMoreMenuButton<String>(
-                splashRadius: 20,
-                tooltip: context.tr.moreOptions,
-                placement: StyledMenuPlacement.topBar,
-                icon: const Icon(Icons.more_vert),
-                onSelected: (value) {
-                  if (value == 'manga') {
-                    final mangaItems = sortedItems
-                        .where((e) => !e.isVideo && !PsdService.isPsd(e.path))
-                        .toList()
-                      ..sort((a, b) =>
-                          _compareMangaCanonical(a, b, hasSubfolders));
-                    if (mangaItems.isNotEmpty) {
-                      Navigator.of(context).openImage(
-                        mangaItems,
-                        0,
-                        initialMangaMode: true,
-                      );
-                    } else {
-                      showFeedbackPill(
-                        context,
-                        message: context.tr.noPhotosFound,
-                        icon: Icons.auto_stories_rounded,
-                      );
-                    }
-                  } else if (value == 'slideshow') {
-                    if (sortedItems.isNotEmpty) {
-                      final hasVideos = sortedItems.any((e) => e.isVideo);
-                      if (hasVideos) {
-                        Navigator.of(context).openVideo(
-                          sortedItems,
-                          0,
-                          startSlideshow: true,
-                        );
-                      } else {
-                        Navigator.of(context).openImage(
-                          sortedItems,
-                          0,
-                          startSlideshow: true,
-                        );
-                      }
-                    }
-                  } else if (value == 'select') {
-                    setState(() {
-                      _selecting = true;
-                    });
-                  }
+                      ),
+                    ),
+                  );
                 },
-                actions: [
-                  if (sortedItems.isNotEmpty) ...[
-                    StyledMenuAction(
-                      value: 'manga',
-                      icon: Icons.auto_stories_rounded,
-                      label: context.tr.readAsManga,
-                    ),
-                    StyledMenuAction(
-                      value: 'slideshow',
-                      icon: Icons.slideshow_rounded,
-                      label: context.tr.slideshow,
-                    ),
-                  ],
-                  StyledMenuAction(
-                    value: 'select',
-                    icon: Icons.checklist_rounded,
-                    label: context.tr.select,
-                  ),
-                ],
-              ),
-            if (_selecting) ...[
-              BouncyTap(
-                scaleDown: 0.88,
-                child: IconButton(
-                  icon: const Icon(Icons.select_all),
-                  tooltip: context.tr.selectAll,
-                  onPressed: () {
-                    setState(() {
-                      _selected.addAll(sortedItems.map((e) => e.id));
-                    });
-                  },
-                ),
-              ),
-              BouncyTap(
-                scaleDown: 0.88,
-                child: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: context.tr.deleteSelected,
-                  onPressed: () => _deleteSelected(sortedItems),
-                ),
-              ),
-              BouncyTap(
-                scaleDown: 0.88,
-                child: IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: _clearSelection,
-                ),
               ),
             ],
+          ),
+          leading: AnimatedBuilder(
+            animation: _searchAnimController,
+            builder: (context, child) {
+              final normalOpacity =
+                  (1.0 - _searchAnimController.value * 1.5).clamp(0.0, 1.0);
+              return Opacity(
+                opacity: normalOpacity,
+                child: IgnorePointer(
+                  ignoring: _searchAnimController.value > 0.0 || _isSearching,
+                  child: child,
+                ),
+              );
+            },
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                if (_isSearching) {
+                  _closeSearch();
+                } else if (_selectedSubfolder != null && !_flattenSubfolders) {
+                  setState(() => _selectedSubfolder = null);
+                } else {
+                  Navigator.of(context).pop();
+                }
+              },
+            ),
+          ),
+          title: AnimatedBuilder(
+            animation: _searchAnimController,
+            builder: (context, child) {
+              final normalOpacity =
+                  (1.0 - _searchAnimController.value * 1.5).clamp(0.0, 1.0);
+              return Opacity(
+                opacity: normalOpacity,
+                child: IgnorePointer(
+                  ignoring: _searchAnimController.value > 0.0 || _isSearching,
+                  child: child,
+                ),
+              );
+            },
+            child: _selecting
+                ? Text('${_selected.length} ${context.tr.selected}')
+                : Align(
+                    key: const ValueKey('album_title_column'),
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.albumName == 'Favorites'
+                              ? context.tr.favorites
+                              : (_selectedSubfolder != null &&
+                                      !_flattenSubfolders
+                                  ? '${widget.albumName} / $_selectedSubfolder'
+                                  : widget.albumName),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          context.tr.itemsCount(sortedItems.length),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.78),
+                            fontWeight: FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+          actions: [
+            AnimatedBuilder(
+              animation: _searchAnimController,
+              builder: (context, child) {
+                final normalOpacity =
+                    (1.0 - _searchAnimController.value * 1.5).clamp(0.0, 1.0);
+                return Opacity(
+                  opacity: normalOpacity,
+                  child: IgnorePointer(
+                    ignoring: _searchAnimController.value > 0.0 || _isSearching,
+                    child: child,
+                  ),
+                );
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!_selecting)
+                    BouncyTap(
+                      scaleDown: 0.88,
+                      child: IconButton(
+                        icon: const Icon(Icons.search),
+                        tooltip: context.tr.searchTooltip,
+                        onPressed: _openSearch,
+                      ),
+                    ),
+                  if (!_selecting && hasSubfolders)
+                    BouncyTap(
+                      scaleDown: 0.88,
+                      child: IconButton(
+                        icon: Icon(
+                          _flattenSubfolders
+                              ? Icons.folder_copy_outlined
+                              : Icons.grid_view_rounded,
+                        ),
+                        tooltip: _flattenSubfolders
+                            ? context.tr.showSubfolders
+                            : context.tr.flattenSubfolders,
+                        onPressed: () {
+                          setState(() {
+                            _flattenSubfolders = !_flattenSubfolders;
+                            _selectedSubfolder = null;
+                            if (_flattenSubfolders) {
+                              _syncPageControllerToFilter();
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                  if (!_selecting)
+                    StyledMoreMenuButton<String>(
+                      splashRadius: 20,
+                      tooltip: context.tr.moreOptions,
+                      placement: StyledMenuPlacement.topBar,
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (value) {
+                        if (value == 'manga') {
+                          final mangaItems = sortedItems
+                              .where((e) =>
+                                  !e.isVideo && !PsdService.isPsd(e.path))
+                              .toList()
+                            ..sort((a, b) =>
+                                _compareMangaCanonical(a, b, hasSubfolders));
+                          if (mangaItems.isNotEmpty) {
+                            Navigator.of(context).openImage(
+                              mangaItems,
+                              0,
+                              initialMangaMode: true,
+                            );
+                          } else {
+                            showFeedbackPill(
+                              context,
+                              message: context.tr.noPhotosFound,
+                              icon: Icons.auto_stories_rounded,
+                            );
+                          }
+                        } else if (value == 'slideshow') {
+                          if (sortedItems.isNotEmpty) {
+                            final hasVideos = sortedItems.any((e) => e.isVideo);
+                            if (hasVideos) {
+                              Navigator.of(context).openVideo(
+                                sortedItems,
+                                0,
+                                startSlideshow: true,
+                              );
+                            } else {
+                              Navigator.of(context).openImage(
+                                sortedItems,
+                                0,
+                                startSlideshow: true,
+                              );
+                            }
+                          }
+                        } else if (value == 'select') {
+                          setState(() {
+                            _selecting = true;
+                          });
+                        }
+                      },
+                      actions: [
+                        if (sortedItems.isNotEmpty) ...[
+                          StyledMenuAction(
+                            value: 'manga',
+                            icon: Icons.auto_stories_rounded,
+                            label: context.tr.readAsManga,
+                          ),
+                          StyledMenuAction(
+                            value: 'slideshow',
+                            icon: Icons.slideshow_rounded,
+                            label: context.tr.slideshow,
+                          ),
+                        ],
+                        StyledMenuAction(
+                          value: 'select',
+                          icon: Icons.checklist_rounded,
+                          label: context.tr.select,
+                        ),
+                      ],
+                    ),
+                  if (_selecting) ...[
+                    BouncyTap(
+                      scaleDown: 0.88,
+                      child: IconButton(
+                        icon: const Icon(Icons.select_all),
+                        tooltip: context.tr.selectAll,
+                        onPressed: () {
+                          setState(() {
+                            _selected.addAll(sortedItems.map((e) => e.id));
+                          });
+                        },
+                      ),
+                    ),
+                    BouncyTap(
+                      scaleDown: 0.88,
+                      child: IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: context.tr.deleteSelected,
+                        onPressed: () => _deleteSelected(sortedItems),
+                      ),
+                    ),
+                    BouncyTap(
+                      scaleDown: 0.88,
+                      child: IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: _clearSelection,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
         body: Column(

@@ -5296,6 +5296,59 @@ void main() {
       await tester.pump(const Duration(seconds: 3, milliseconds: 250));
     });
 
+    testWidgets(
+        'AlbumDetailScreen FastScrollHandle shows Month/Year pill only for date sorts',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final items = List.generate(
+        30,
+        (i) => MediaItem(
+          id: 'sort_pill_$i',
+          path: '/a/$i.jpg',
+          name: '$i.jpg',
+          date: DateTime(2026, 3, 15).add(Duration(minutes: i)),
+          dateAdded: DateTime(2026, 5, 20).add(Duration(minutes: i)),
+          size: 1000,
+          isVideo: false,
+          album: 'a',
+        ),
+      );
+
+      Future<String?> pumpWithSort(SortOption sort) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            key: ValueKey(sort),
+            overrides: [
+              settingsNotifierProvider.overrideWith(
+                () => _TestSettingsNotifier(SettingsModel(defaultSort: sort)),
+              ),
+              mediaListProvider
+                  .overrideWith(() => _SpecificMockMediaNotifier(items)),
+            ],
+            child: const MaterialApp(
+              localizationsDelegates: [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+              ],
+              home: AlbumDetailScreen(albumName: 'a'),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        final handle =
+            tester.widget<FastScrollHandle>(find.byType(FastScrollHandle));
+        return handle.labelBuilder?.call(0.5);
+      }
+
+      expect(await pumpWithSort(SortOption.newest), 'May 2026');
+      expect(await pumpWithSort(SortOption.shootingTimeDesc), 'Mar 2026');
+      expect(await pumpWithSort(SortOption.nameAZ), isNull);
+    });
+
     testWidgets('DragSelectGrid selects range on horizontal drag',
         (tester) async {
       final controller = ScrollController();
@@ -5450,9 +5503,9 @@ void main() {
       await tester.pump();
       expect(find.byType(MediaGridItem), findsNWidgets(1));
 
-      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.tap(find.byKey(const ValueKey('album_search_cancel_button')));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 400));
       expect(find.byKey(const ValueKey('album_search_field')), findsNothing);
       expect(find.byType(MediaGridItem), findsNWidgets(2));
     });

@@ -709,6 +709,26 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               const RepaintBoundary(
                 child: ThemeHeaderBackground(),
               ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Theme.of(context)
+                          .scaffoldBackgroundColor
+                          .withValues(alpha: 0.82),
+                      Theme.of(context)
+                          .scaffoldBackgroundColor
+                          .withValues(alpha: 0.62),
+                      Theme.of(context)
+                          .scaffoldBackgroundColor
+                          .withValues(alpha: 0.14),
+                    ],
+                    stops: const [0.0, 0.46, 1.0],
+                  ),
+                ),
+              ),
               AnimatedBuilder(
                 animation: _searchAnimController,
                 builder: (context, _) {
@@ -1210,6 +1230,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     final controller = _scrollControllers[tab]!;
     final aspectRatio =
         settings.thumbnailCropStyle == ThumbnailCropStyle.adaptive ? 0.8 : 1.0;
+    final isDateSorted =
+        settings.defaultSort.criterion == SortCriterion.timeAdded ||
+            settings.defaultSort.criterion == SortCriterion.shootingTime;
 
     if (settings.timelineGrouping == TimelineGrouping.continuous) {
       final indexMap = switch (tab) {
@@ -1220,13 +1243,19 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       return _PinchZoomGridListener(
         child: FastScrollHandle(
           controller: controller,
-          labelBuilder: (fraction) {
-            if (items.isEmpty) return null;
-            final idx = (fraction * (items.length - 1))
-                .round()
-                .clamp(0, items.length - 1);
-            return _formatMonthYear(items[idx].date);
-          },
+          labelBuilder: isDateSorted
+              ? (fraction) {
+                  if (items.isEmpty) return null;
+                  final idx = (fraction * (items.length - 1))
+                      .round()
+                      .clamp(0, items.length - 1);
+                  final dt = settings.defaultSort.criterion ==
+                          SortCriterion.shootingTime
+                      ? items[idx].date
+                      : items[idx].timeAdded;
+                  return _formatMonthYear(dt);
+                }
+              : null,
           child: RefreshIndicator(
             onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
             child: DragSelectGrid(
@@ -1280,12 +1309,15 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     return _PinchZoomGridListener(
       child: FastScrollHandle(
         controller: controller,
-        labelBuilder: (fraction) {
-          if (rows.isEmpty) return null;
-          final rowIdx =
-              (fraction * (rows.length - 1)).round().clamp(0, rows.length - 1);
-          return _formatMonthYear(rows[rowIdx].date);
-        },
+        labelBuilder: isDateSorted
+            ? (fraction) {
+                if (rows.isEmpty) return null;
+                final rowIdx = (fraction * (rows.length - 1))
+                    .round()
+                    .clamp(0, rows.length - 1);
+                return _formatMonthYear(rows[rowIdx].date);
+              }
+            : null,
         child: RefreshIndicator(
           onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
           child: DragSelectGrid(
