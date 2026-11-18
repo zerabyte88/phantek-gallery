@@ -25,6 +25,7 @@ const Map<String, String> zhTwTranslations = {
   'clearThumbnailCache': '清除縮圖快取',
   'clearCache': '清除快取',
   'clearAll': '全部清除',
+  'clearSearch': '清除搜尋',
   'codec': '編碼',
   'columnsCount': '{count} 欄',
   'compactDetailedView': '精簡詳細檢視',

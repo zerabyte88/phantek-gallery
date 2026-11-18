@@ -25,6 +25,7 @@ const Map<String, String> nlTranslations = {
   'clearThumbnailCache': 'Miniaturencache wissen',
   'clearCache': 'Cache wissen',
   'clearAll': 'Alles wissen',
+  'clearSearch': 'Zoekopdracht wissen',
   'codec': 'Codec',
   'columnsCount': '{count} kolommen',
   'compactDetailedView': 'Compacte gedetailleerde weergave',

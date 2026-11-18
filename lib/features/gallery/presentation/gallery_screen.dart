@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,11 +52,13 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
 
   late final PageController _pageController;
   late final AnimationController _searchAnimController;
+  late final CurvedAnimation _searchCurvedAnim;
   final FocusNode _searchFocusNode = FocusNode();
   late int _currentPage;
   bool _isTabTapTransition = false;
   int? _pendingTapTargetPage;
   Timer? _tabTapTimer;
+  Timer? _searchDebounce;
   final Set<String> _selected = {};
   bool _selecting = false;
   bool _isSearching = false;
@@ -152,11 +155,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
 
     var filteredItems = allItems;
     if (!settings.showHiddenFiles) {
-      filteredItems = filteredItems.where((e) {
-        final segments = e.path.split(RegExp(r'[/\\]'));
-        return !segments
-            .any((s) => s.isNotEmpty && s.startsWith('.') && s != '.');
-      }).toList();
+      filteredItems =
+          filteredItems.where((e) => !MediaUtils.isHiddenPath(e.path)).toList();
     }
     if (settings.filterSmallImages) {
       filteredItems =
@@ -219,6 +219,11 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
+    _searchCurvedAnim = CurvedAnimation(
+      parent: _searchAnimController,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
     final settings = ref.read(settingsNotifierProvider);
     final startupFilter = switch (settings.startupScreen) {
       StartupScreen.all => FilterOption.all,
@@ -262,10 +267,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tabTapTimer?.cancel();
+    _searchDebounce?.cancel();
     _mediaChangeSub?.cancel();
     try {
       PhotoManager.stopChangeNotify();
     } catch (_) {}
+    _searchCurvedAnim.dispose();
     _searchAnimController.dispose();
     _searchFocusNode.dispose();
     _searchController.dispose();
@@ -370,6 +377,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   }
 
   void _clearSearch() {
+    _searchDebounce?.cancel();
     _searchFocusNode.unfocus();
     _searchAnimController.reverse().then((_) {
       if (mounted) {
@@ -378,6 +386,23 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           _searchController.clear();
           _searchQuery = '';
         });
+      }
+    });
+  }
+
+  void _onSearchChanged(String raw, int sourceCount) {
+    final q = raw.trim();
+    if (q.isEmpty || sourceCount <= 250) {
+      _searchDebounce?.cancel();
+      if (_searchQuery != q) {
+        setState(() => _searchQuery = q);
+      }
+      return;
+    }
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 120), () {
+      if (mounted && _searchQuery != q) {
+        setState(() => _searchQuery = q);
       }
     });
   }
@@ -737,15 +762,13 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                     return const SizedBox.shrink();
                   }
 
-                  final curvedProgress = CurvedAnimation(
-                    parent: _searchAnimController,
-                    curve: Curves.easeOutCubic,
-                    reverseCurve: Curves.easeInCubic,
-                  ).value;
+                  final curvedProgress = _searchCurvedAnim.value;
 
                   final cs = Theme.of(context).colorScheme;
 
                   final topPadding = MediaQuery.paddingOf(context).top;
+                  final clampedProgress = curvedProgress.clamp(0.0, 1.0);
+                  final blurSigma = 20.0 * clampedProgress;
                   return Positioned(
                     top: 0,
                     left: 0,
@@ -756,86 +779,136 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                       child: SizedBox(
                         height: kToolbarHeight,
                         child: Center(
-                          child: Opacity(
-                            opacity: curvedProgress.clamp(0.0, 1.0),
-                            child: Transform.translate(
-                              offset:
-                                  Offset(20.0 * (1.0 - curvedProgress), 0.0),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16.0,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Container(
-                                        height: 40,
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 12),
-                                        decoration: BoxDecoration(
-                                          color: cs.surfaceContainerHighest
-                                              .withValues(alpha: 0.5),
-                                          borderRadius:
-                                              BorderRadius.circular(20),
+                          child: Transform.translate(
+                            offset: Offset(20.0 * (1.0 - curvedProgress), 0.0),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: BackdropFilter(
+                                        filter: ImageFilter.blur(
+                                          sigmaX: blurSigma,
+                                          sigmaY: blurSigma,
                                         ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.search_rounded,
-                                              size: 18,
-                                              color: cs.onSurfaceVariant,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: TextField(
-                                                controller: _searchController,
-                                                focusNode: _searchFocusNode,
-                                                style: const TextStyle(
-                                                    fontSize: 14),
-                                                decoration: InputDecoration(
-                                                  hintText:
-                                                      context.tr.searchHint,
-                                                  isDense: true,
-                                                  contentPadding:
-                                                      const EdgeInsets
-                                                          .symmetric(
-                                                          vertical: 8),
-                                                  border: InputBorder.none,
-                                                  hintStyle: TextStyle(
-                                                    color: cs.onSurfaceVariant,
-                                                    fontSize: 14,
+                                        child: Container(
+                                          height: 40,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12),
+                                          decoration: BoxDecoration(
+                                            color: cs.surfaceContainerHighest
+                                                .withValues(
+                                                    alpha:
+                                                        0.68 * clampedProgress),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          child: Opacity(
+                                            opacity: clampedProgress,
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.search_rounded,
+                                                  size: 18,
+                                                  color: cs.onSurfaceVariant,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: TextField(
+                                                    controller:
+                                                        _searchController,
+                                                    focusNode: _searchFocusNode,
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      color: cs.onSurface,
+                                                    ),
+                                                    textInputAction:
+                                                        TextInputAction.search,
+                                                    decoration: InputDecoration(
+                                                      hintText:
+                                                          context.tr.searchHint,
+                                                      isDense: true,
+                                                      contentPadding:
+                                                          const EdgeInsets
+                                                              .symmetric(
+                                                              vertical: 8),
+                                                      border: InputBorder.none,
+                                                      hintStyle: TextStyle(
+                                                        color:
+                                                            cs.onSurfaceVariant,
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                    onChanged: (q) =>
+                                                        _onSearchChanged(
+                                                      q,
+                                                      (mediaAsync.valueOrNull ??
+                                                              const [])
+                                                          .length,
+                                                    ),
+                                                    onSubmitted: (raw) {
+                                                      _searchDebounce?.cancel();
+                                                      final q = raw.trim();
+                                                      if (_searchQuery != q) {
+                                                        setState(() =>
+                                                            _searchQuery = q);
+                                                      }
+                                                    },
                                                   ),
                                                 ),
-                                                onChanged: (q) => setState(() =>
-                                                    _searchQuery = q.trim()),
-                                              ),
-                                            ),
-                                            if (_searchController
-                                                .text.isNotEmpty)
-                                              BouncyTap(
-                                                scaleDown: 0.88,
-                                                onTap: () {
-                                                  _searchController.clear();
-                                                  setState(
-                                                      () => _searchQuery = '');
-                                                },
-                                                child: Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          left: 4),
-                                                  child: Icon(
-                                                    Icons.cancel,
-                                                    size: 18,
-                                                    color: cs.onSurfaceVariant,
-                                                  ),
+                                                ValueListenableBuilder<
+                                                    TextEditingValue>(
+                                                  valueListenable:
+                                                      _searchController,
+                                                  builder:
+                                                      (context, value, _) {
+                                                    if (value.text.isEmpty) {
+                                                      return const SizedBox
+                                                          .shrink();
+                                                    }
+                                                    return BouncyTap(
+                                                      scaleDown: 0.88,
+                                                      onTap: () {
+                                                        _searchDebounce
+                                                            ?.cancel();
+                                                        _searchController
+                                                            .clear();
+                                                        if (_searchQuery
+                                                            .isNotEmpty) {
+                                                          setState(() =>
+                                                              _searchQuery =
+                                                                  '');
+                                                        }
+                                                      },
+                                                      child: Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(left: 4),
+                                                        child: Icon(
+                                                          Icons.close_rounded,
+                                                          size: 18,
+                                                          color: cs
+                                                              .onSurfaceVariant,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
                                                 ),
-                                              ),
-                                          ],
+                                              ],
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    BouncyTap(
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Opacity(
+                                    opacity: clampedProgress,
+                                    child: BouncyTap(
                                       key: const ValueKey(
                                           'search_cancel_button'),
                                       scaleDown: 0.92,
@@ -855,8 +928,8 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                                         ),
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -1112,17 +1185,24 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
         BouncyTap(
           scaleDown: 0.88,
           child: IconButton(
-            icon: const Icon(Icons.search),
-            tooltip: context.tr.searchTooltip,
+            icon: Icon(
+              Icons.search,
+              semanticLabel: context.tr.searchTooltip,
+            ),
             onPressed: _openSearch,
           ),
         ),
-        StyledMoreMenuButton<String>(
-          splashRadius: 20,
-          tooltip: context.tr.moreOptions,
-          placement: StyledMenuPlacement.topBar,
-          icon: const Icon(Icons.more_vert),
-          onSelected: (value) {
+        BouncyTap(
+          scaleDown: 0.88,
+          child: StyledMoreMenuButton<String>(
+            splashRadius: 20,
+            disableSplash: true,
+            placement: StyledMenuPlacement.topBar,
+            icon: Icon(
+              Icons.more_vert,
+              semanticLabel: context.tr.moreOptions,
+            ),
+            onSelected: (value) {
             if (value == 'slideshow') {
               final items = _currentTabItems;
               if (items.isNotEmpty) {
@@ -1177,6 +1257,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               label: context.tr.settings,
             ),
           ],
+          ),
         ),
       ],
     );
@@ -1189,6 +1270,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     required String storageKey,
   }) {
     if (items.isEmpty) {
+      final cs = Theme.of(context).colorScheme;
       return RefreshIndicator(
         onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
         child: LayoutBuilder(
@@ -1207,17 +1289,33 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                               ? Icons.videocam_outlined
                               : Icons.photo_library_outlined),
                       size: 64,
-                      color: Colors.white24,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.45),
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      _searchQuery.isNotEmpty
-                          ? context.tr.noMediaMatching(_searchQuery)
-                          : (tab == FilterOption.videosOnly
-                              ? context.tr.noVideosFound
-                              : context.tr.noPhotosFound),
-                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        _searchQuery.isNotEmpty
+                            ? context.tr.noMediaMatching(_searchQuery)
+                            : (tab == FilterOption.videosOnly
+                                ? context.tr.noVideosFound
+                                : context.tr.noPhotosFound),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
                     ),
+                    if (_searchQuery.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        key: const ValueKey('gallery_clear_search_button'),
+                        onPressed: _clearSearch,
+                        icon: const Icon(Icons.close_rounded, size: 16),
+                        label: Text(context.tr.clearSearch),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1637,6 +1735,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     required String storageKey,
   }) {
     if (albums.isEmpty) {
+      final cs = Theme.of(context).colorScheme;
       return RefreshIndicator(
         onRefresh: () => ref.read(mediaListProvider.notifier).refresh(),
         child: LayoutBuilder(
@@ -1653,15 +1752,31 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                           ? Icons.search_off_outlined
                           : Icons.folder_open_outlined,
                       size: 64,
-                      color: Colors.white24,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.45),
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      _searchQuery.isNotEmpty
-                          ? context.tr.noAlbumsMatching(_searchQuery)
-                          : context.tr.noAlbumsFound,
-                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        _searchQuery.isNotEmpty
+                            ? context.tr.noAlbumsMatching(_searchQuery)
+                            : context.tr.noAlbumsFound,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
                     ),
+                    if (_searchQuery.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        key: const ValueKey('albums_clear_search_button'),
+                        onPressed: _clearSearch,
+                        icon: const Icon(Icons.close_rounded, size: 16),
+                        label: Text(context.tr.clearSearch),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1724,19 +1839,25 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.photo_library_outlined,
-              size: 80, color: Colors.white38),
+          Icon(
+            Icons.photo_library_outlined,
+            size: 80,
+            color: cs.onSurfaceVariant.withValues(alpha: 0.45),
+          ),
           const SizedBox(height: 16),
           const Text('No media found',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
           const SizedBox(height: 8),
-          const Text('Grant storage permission or add photos/videos.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey)),
+          Text(
+            'Grant storage permission or add photos/videos.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: cs.onSurfaceVariant),
+          ),
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: onRefresh,
@@ -1756,17 +1877,20 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline, size: 60, color: Colors.redAccent),
+          Icon(Icons.error_outline, size: 60, color: cs.error),
           const SizedBox(height: 12),
           const Text('Could not load media'),
           const SizedBox(height: 8),
-          Text('$error',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-              textAlign: TextAlign.center),
+          Text(
+            '$error',
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: onRetry,

@@ -8,6 +8,18 @@ class MediaUtils {
 
   static final _dateFormatter = DateFormat('dd MMM yyyy');
   static final _dateTimeFormatter = DateFormat('dd MMM yyyy  HH:mm');
+  static final RegExp _pathSepRegex = RegExp(r'[/\\]');
+
+  /// Returns true if any path segment starts with '.' (other than '.').
+  static bool isHiddenPath(String path) {
+    if (!path.contains('/.') &&
+        !path.contains('\\.') &&
+        !path.startsWith('.')) {
+      return false;
+    }
+    final segments = path.split(_pathSepRegex);
+    return segments.any((s) => s.isNotEmpty && s.startsWith('.') && s != '.');
+  }
 
   /// Human-readable file size: "3.2 MB", "840 KB", etc.
   static String formatSize(int bytes) {

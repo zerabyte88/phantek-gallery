@@ -25,6 +25,7 @@ const Map<String, String> ruTranslations = {
   'clearThumbnailCache': 'Очистить кэш миниатюр',
   'clearCache': 'Очистить кэш',
   'clearAll': 'Очистить все',
+  'clearSearch': 'Очистить поиск',
   'codec': 'Кодек',
   'columnsCount': '{count} столбца(ов)',
   'compactDetailedView': 'Компактный детальный вид',

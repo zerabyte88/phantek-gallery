@@ -25,6 +25,7 @@ const Map<String, String> hiTranslations = {
   'clearThumbnailCache': 'थंबनेल कैश साफ़ करें',
   'clearCache': 'कैश साफ़ करें',
   'clearAll': 'सभी साफ़ करें',
+  'clearSearch': 'खोज साफ़ करें',
   'codec': 'कोडेक',
   'columnsCount': '{count} कॉलम',
   'compactDetailedView': 'कॉम्पैक्ट विस्तृत दृश्य',

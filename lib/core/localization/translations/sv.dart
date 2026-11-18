@@ -26,6 +26,7 @@ const Map<String, String> svTranslations = {
   'clearThumbnailCache': 'Rensa miniatyrcache',
   'clearCache': 'Rensa cache',
   'clearAll': 'Rensa alla',
+  'clearSearch': 'Rensa sökning',
   'codec': 'Kodek',
   'columnsCount': '{count} kolumner',
   'compactDetailedView': 'Kompakt detaljerad vy',

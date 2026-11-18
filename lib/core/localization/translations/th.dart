@@ -26,6 +26,7 @@ const Map<String, String> thTranslations = {
   'clearThumbnailCache': 'ล้างแคชภาพขนาดย่อ',
   'clearCache': 'ล้างแคช',
   'clearAll': 'ล้างทั้งหมด',
+  'clearSearch': 'ล้างการค้นหา',
   'codec': 'ตัวแปลงสัญญาณ',
   'columnsCount': '{count} คอลัมน์',
   'compactDetailedView': 'มุมมองกะทัดรัดแบบละเอียด',

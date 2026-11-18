@@ -26,6 +26,7 @@ const Map<String, String> idTranslations = {
   'clearThumbnailCache': 'Hapus Cache Thumbnail & Preview',
   'clearCache': 'Clear Cache',
   'clearAll': 'Hapus Semua',
+  'clearSearch': 'Hapus pencarian',
   'codec': 'Codec',
   'columnsCount': '{count} kolom',
   'compactDetailedView': 'Tampilan ringkas mendetail',

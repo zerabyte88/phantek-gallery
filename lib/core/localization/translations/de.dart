@@ -26,6 +26,7 @@ const Map<String, String> deTranslations = {
   'clearThumbnailCache': 'Thumbnail-Cache leeren',
   'clearCache': 'Cache leeren',
   'clearAll': 'Alle löschen',
+  'clearSearch': 'Suche löschen',
   'codec': 'Codec',
   'columnsCount': '{count} Spalten',
   'compactDetailedView': 'Kompakte Detailansicht',

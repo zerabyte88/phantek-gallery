@@ -3168,6 +3168,9 @@ class _FeedbackPillOverlay extends StatefulWidget {
 class _FeedbackPillOverlayState extends State<_FeedbackPillOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _animController;
+  late final Animation<double> _opacityAnim;
+  late final CurvedAnimation _slideCurvedAnim;
+  late final Animation<Offset> _slideAnim;
   Timer? _hideTimer;
   _FeedbackPillData? _currentData;
 
@@ -3179,6 +3182,17 @@ class _FeedbackPillOverlayState extends State<_FeedbackPillOverlay>
       duration: const Duration(milliseconds: 150),
       reverseDuration: const Duration(milliseconds: 150),
     );
+    _opacityAnim = _animController.drive(
+      CurveTween(curve: Curves.easeOut),
+    );
+    _slideCurvedAnim = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    );
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.2),
+      end: Offset.zero,
+    ).animate(_slideCurvedAnim);
     _animController.addStatusListener((status) {
       if (status == AnimationStatus.dismissed && mounted) {
         setState(() {
@@ -3193,6 +3207,7 @@ class _FeedbackPillOverlayState extends State<_FeedbackPillOverlay>
   void dispose() {
     widget.dataNotifier.removeListener(_onDataChanged);
     _hideTimer?.cancel();
+    _slideCurvedAnim.dispose();
     _animController.dispose();
     super.dispose();
   }
@@ -3233,19 +3248,9 @@ class _FeedbackPillOverlayState extends State<_FeedbackPillOverlay>
         builder: (context, drag, child) {
           final dragFade = (1.0 - (drag.dy / 35.0)).clamp(0.0, 1.0);
           return FadeTransition(
-            opacity: _animController.drive(
-              CurveTween(curve: Curves.easeOut),
-            ),
+            opacity: _opacityAnim,
             child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.2),
-                end: Offset.zero,
-              ).animate(
-                CurvedAnimation(
-                  parent: _animController,
-                  curve: Curves.easeOutCubic,
-                ),
-              ),
+              position: _slideAnim,
               child: Opacity(
                 opacity: dragFade,
                 child: child,

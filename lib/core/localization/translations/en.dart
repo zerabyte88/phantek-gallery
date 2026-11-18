@@ -26,6 +26,7 @@ const Map<String, String> enTranslations = {
   'clearThumbnailCache': 'Clear Thumbnail & Preview Cache',
   'clearCache': 'Clear Cache',
   'clearAll': 'Clear All',
+  'clearSearch': 'Clear search',
   'codec': 'Codec',
   'columnsCount': '{count} columns',
   'compactDetailedView': 'Compact detailed view',

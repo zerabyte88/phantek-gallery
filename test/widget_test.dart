@@ -1017,7 +1017,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Find search icon and tap it
-      final searchBtn = find.byTooltip('Search');
+      expect(find.byTooltip('Search'), findsNothing);
+      final searchBtn = find.byIcon(Icons.search);
       expect(searchBtn, findsOneWidget);
       await tester.tap(searchBtn);
       await tester.pump();
@@ -5508,6 +5509,343 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.byKey(const ValueKey('album_search_field')), findsNothing);
       expect(find.byType(MediaGridItem), findsNWidgets(2));
+    });
+
+    test('AppTheme configures ripple-free iconButtonTheme across all 6 themes',
+        () {
+      final themes = [
+        AppTheme.light,
+        AppTheme.cleanLight,
+        AppTheme.amoledPure,
+        AppTheme.amoledSnowfall,
+        AppTheme.amoledMidnight,
+        AppTheme.amoledSakura,
+      ];
+
+      for (final theme in themes) {
+        final style = theme.iconButtonTheme.style;
+        expect(style, isNotNull);
+        expect(style!.splashFactory, NoSplash.splashFactory);
+        expect(
+          style.overlayColor?.resolve(<WidgetState>{}),
+          Colors.transparent,
+        );
+        expect(
+          style.overlayColor?.resolve(<WidgetState>{WidgetState.pressed}),
+          Colors.transparent,
+        );
+      }
+    });
+
+    testWidgets(
+        'GalleryScreen empty search state shows clear search button and restores items on tap',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final items = [
+        MediaItem(
+          id: 'gal_1',
+          path: '/a/sunset.jpg',
+          name: 'sunset.jpg',
+          date: DateTime(2026, 3, 10),
+          size: 100000,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'gal_2',
+          path: '/a/mountain.jpg',
+          name: 'mountain.jpg',
+          date: DateTime(2026, 3, 9),
+          size: 100000,
+          isVideo: false,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider
+                .overrideWith(() => _SpecificMockMediaNotifier(items)),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: AppLanguage.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: const GalleryScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(MediaGridItem), findsNWidgets(2));
+
+      await tester.tap(find.byIcon(Icons.search));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      await tester.enterText(find.byType(TextField), 'zzz_no_match');
+      await tester.pump();
+
+      expect(find.byType(MediaGridItem), findsNothing);
+      final clearSearchBtn =
+          find.byKey(const ValueKey('gallery_clear_search_button'));
+      expect(clearSearchBtn, findsOneWidget);
+      expect(find.text('Clear search'), findsOneWidget);
+
+      await tester.tap(clearSearchBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(clearSearchBtn, findsNothing);
+      expect(find.byType(MediaGridItem), findsNWidgets(2));
+    });
+
+    testWidgets(
+        'AlbumDetailScreen empty search state shows clear search button and restores items on tap',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final items = [
+        MediaItem(
+          id: 'alb_empty_1',
+          path: '/a/alpha.jpg',
+          name: 'alpha.jpg',
+          date: DateTime(2026, 3, 10),
+          size: 100000,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'alb_empty_2',
+          path: '/a/beta.jpg',
+          name: 'beta.jpg',
+          date: DateTime(2026, 3, 9),
+          size: 100000,
+          isVideo: false,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider
+                .overrideWith(() => _SpecificMockMediaNotifier(items)),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: AppLanguage.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: const AlbumDetailScreen(albumName: 'a'),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(MediaGridItem), findsNWidgets(2));
+
+      await tester.tap(find.byIcon(Icons.search));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      await tester.enterText(
+          find.byKey(const ValueKey('album_search_field')), 'zzz_no_match');
+      await tester.pump();
+
+      expect(find.byType(MediaGridItem), findsNothing);
+      final clearSearchBtn =
+          find.byKey(const ValueKey('album_clear_search_button'));
+      expect(clearSearchBtn, findsOneWidget);
+      expect(find.text('Clear search'), findsOneWidget);
+
+      await tester.tap(clearSearchBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(clearSearchBtn, findsNothing);
+      expect(find.byKey(const ValueKey('album_search_field')), findsNothing);
+      expect(find.byType(MediaGridItem), findsNWidgets(2));
+    });
+
+    test('MediaUtils.isHiddenPath handles normal, dot-prefixed, and relative paths',
+        () {
+      expect(MediaUtils.isHiddenPath('/storage/emulated/0/DCIM/photo.jpg'),
+          isFalse);
+      expect(MediaUtils.isHiddenPath(r'C:\Users\test\Pictures\pic.png'),
+          isFalse);
+      expect(MediaUtils.isHiddenPath('./relative/photo.jpg'), isFalse);
+      expect(MediaUtils.isHiddenPath(r'.\relative\photo.jpg'), isFalse);
+      expect(MediaUtils.isHiddenPath('.'), isFalse);
+
+      expect(MediaUtils.isHiddenPath('/storage/0/.hidden/photo.jpg'), isTrue);
+      expect(MediaUtils.isHiddenPath(r'C:\media\.thumbnails\thumb.jpg'),
+          isTrue);
+      expect(MediaUtils.isHiddenPath('.nomedia'), isTrue);
+      expect(MediaUtils.isHiddenPath('/storage/0/DCIM/.nomedia'), isTrue);
+    });
+
+    testWidgets(
+        'ThemeHeaderBackground and AnimatedFlameTitle pause when covered by non-opaque route or paused lifecycle',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+      addTearDown(
+        () => tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed),
+      );
+
+      late BuildContext scaffoldContext;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsNotifierProvider.overrideWith(
+              () => _TestSettingsNotifier(
+                const SettingsModel(themeMode: AppThemeMode.amoledMidnight),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              appBar: AppBar(
+                flexibleSpace: const ThemeHeaderBackground(),
+                title: const AnimatedFlameTitle(title: 'Phantek'),
+              ),
+              body: Builder(
+                builder: (context) {
+                  scaffoldContext = context;
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      expect(tester.binding.transientCallbackCount, 2);
+
+      // Push a non-opaque route (mirrors _mediaViewerRoute).
+      Navigator.of(scaffoldContext).push(
+        PageRouteBuilder<void>(
+          opaque: false,
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(tester.binding.transientCallbackCount, 0);
+
+      // Pop back to the underlying screen.
+      Navigator.of(scaffoldContext).pop();
+      await tester.pump();
+      await tester.pump();
+      expect(tester.binding.transientCallbackCount, 2);
+
+      // Background the app, then resume.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(tester.binding.transientCallbackCount, 0);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(tester.binding.transientCallbackCount, 2);
+    });
+
+    testWidgets(
+        'GalleryScreen search debounces on large sets (>250 items) and resets immediately on clear',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final baseDate = DateTime(2026, 3, 10);
+      final items = List.generate(
+        260,
+        (i) => MediaItem(
+          id: 'large_$i',
+          path: '/a/item_$i.jpg',
+          name: 'item_$i.jpg',
+          date: baseDate.subtract(Duration(minutes: i)),
+          size: 100000,
+          isVideo: false,
+        ),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mediaListProvider
+                .overrideWith(() => _SpecificMockMediaNotifier(items)),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: AppLanguage.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: const GalleryScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(MediaGridItem), findsWidgets);
+
+      await tester.tap(find.byIcon(Icons.search));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Typing on >250 items shows the clear button immediately, but defers filtering by 120ms.
+      final appBarClearIcon = find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byIcon(Icons.close_rounded),
+      );
+      await tester.enterText(find.byType(TextField), 'zzz_no_match');
+      await tester.pump();
+      expect(appBarClearIcon, findsOneWidget);
+      expect(find.byKey(const ValueKey('gallery_clear_search_button')),
+          findsNothing);
+      expect(find.byType(MediaGridItem), findsWidgets);
+
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(find.byKey(const ValueKey('gallery_clear_search_button')),
+          findsOneWidget);
+      expect(find.byType(MediaGridItem), findsNothing);
+
+      // Clearing text resets immediately without debounce.
+      await tester.enterText(find.byType(TextField), '');
+      await tester.pump();
+      expect(find.byKey(const ValueKey('gallery_clear_search_button')),
+          findsNothing);
+      expect(find.byType(MediaGridItem), findsWidgets);
+
+      // Re-type to filter, then tap the clear 'X' icon to verify immediate reset.
+      await tester.enterText(find.byType(TextField), 'zzz_no_match');
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(find.byType(MediaGridItem), findsNothing);
+
+      await tester.tap(appBarClearIcon);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('gallery_clear_search_button')),
+          findsNothing);
+      expect(find.byType(MediaGridItem), findsWidgets);
     });
   });
 }

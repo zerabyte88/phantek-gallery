@@ -104,6 +104,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
     return Scaffold(
       appBar: AppBar(
+        leading: Navigator.of(context).canPop()
+            ? BouncyTap(
+                scaleDown: 0.88,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                ),
+              )
+            : null,
         title: Text(
           context.tr.settings,
           style: const TextStyle(fontWeight: FontWeight.w600),
@@ -148,13 +157,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               width: 34,
                               height: 34,
                               decoration: BoxDecoration(
-                                color: cs.primary
-                                    .withValues(alpha: isDark ? 0.14 : 0.10),
+                                color: cs.surfaceContainerHighest
+                                    .withValues(alpha: isDark ? 0.50 : 0.65),
                                 borderRadius: BorderRadius.circular(9),
                               ),
                               child: Icon(
                                 Icons.palette_outlined,
-                                color: cs.primary,
+                                color: cs.onSurfaceVariant,
                                 size: 18,
                               ),
                             ),
@@ -842,33 +851,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       ? context.tr.allFilesGranted
                       : context.tr.allFilesAccessSubtitle,
                   trailing: _hasManageStorage
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color:
-                                const Color(0xFF10B981).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.check_circle_rounded,
-                                size: 13,
-                                color: Color(0xFF10B981),
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Granted',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF10B981),
-                                ),
-                              ),
-                            ],
-                          ),
+                      ? const Icon(
+                          Icons.check_circle_rounded,
+                          size: 18,
+                          color: Color(0xFF10B981),
                         )
                       : null,
                   onTap: () async {
@@ -923,14 +909,14 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 8),
       child: Text(
         title,
         style: TextStyle(
-          fontSize: 12,
+          fontSize: 12.5,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.6,
-          color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+          color: cs.onSurfaceVariant,
         ),
       ),
     );
@@ -1004,13 +990,15 @@ class _ModernTile extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: (iconColor ?? cs.primary)
-                      .withValues(alpha: isDark ? 0.14 : 0.10),
+                  color: iconColor != null
+                      ? iconColor!.withValues(alpha: isDark ? 0.14 : 0.10)
+                      : cs.surfaceContainerHighest
+                          .withValues(alpha: isDark ? 0.50 : 0.65),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
                   icon,
-                  color: iconColor ?? cs.primary,
+                  color: iconColor ?? cs.onSurfaceVariant,
                   size: 18,
                 ),
               ),
@@ -1095,12 +1083,13 @@ class _ModernSwitchTile extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
+                  color: cs.surfaceContainerHighest
+                      .withValues(alpha: isDark ? 0.50 : 0.65),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
                   icon,
-                  color: cs.primary,
+                  color: cs.onSurfaceVariant,
                   size: 18,
                 ),
               ),
@@ -1202,12 +1191,13 @@ class _ModernSliderTile extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
+                  color: cs.surfaceContainerHighest
+                      .withValues(alpha: isDark ? 0.50 : 0.65),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
                   icon,
-                  color: cs.primary,
+                  color: cs.onSurfaceVariant,
                   size: 18,
                 ),
               ),
@@ -1279,7 +1269,7 @@ class _CardDivider extends StatelessWidget {
     return Divider(
       height: 1,
       thickness: 1,
-      indent: 56,
+      indent: 64,
       endIndent: 0,
       color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
     );

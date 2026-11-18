@@ -65,6 +65,7 @@ class AppLocalizations {
   String get clearThumbnailCache => _t('clearThumbnailCache');
   String get clearCache => _t('clearCache');
   String get clearAll => _t('clearAll');
+  String get clearSearch => _t('clearSearch');
   String get playback => _t('playback');
   String get hardwareAcceleration => _t('hardwareAcceleration');
   String get hardwareAccelerationSubtitle => _t('hardwareAccelerationSubtitle');

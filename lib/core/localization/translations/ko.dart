@@ -25,6 +25,7 @@ const Map<String, String> koTranslations = {
   'clearThumbnailCache': '썸네일 캐시 지우기',
   'clearCache': '캐시 지우기',
   'clearAll': '모두 지우기',
+  'clearSearch': '검색 지우기',
   'codec': '코덱',
   'columnsCount': '{count}개 열',
   'compactDetailedView': '간결하고 상세한 화면',

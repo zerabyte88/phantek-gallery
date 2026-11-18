@@ -26,6 +26,7 @@ const Map<String, String> daTranslations = {
   'clearThumbnailCache': 'Ryd miniature-cache',
   'clearCache': 'Ryd cache',
   'clearAll': 'Ryd alle',
+  'clearSearch': 'Ryd søgning',
   'codec': 'Codec',
   'columnsCount': '{count} kolonner',
   'compactDetailedView': 'Kompakt detaljeret visning',

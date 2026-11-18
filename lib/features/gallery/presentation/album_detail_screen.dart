@@ -84,14 +84,43 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
     vsync: this,
     duration: const Duration(milliseconds: 350),
   );
+  late final CurvedAnimation _searchCurvedAnim = CurvedAnimation(
+    parent: _searchAnimController,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = '';
+  Timer? _searchDebounce;
+
+  List<MediaItem>? _cachedAllItemsRef;
+  String? _cachedAlbumName;
+  bool? _cachedShowHidden;
+  bool? _cachedFilterSmall;
+  List<String>? _cachedFavoriteIds;
+  String? _cachedSelectedSubfolder;
+  SortOption? _cachedActiveSort;
+  String? _cachedSearchQuery;
+  bool? _cachedFlattenSubfolders;
+
+  List<MediaItem> _memoizedAlbumItems = const [];
+  Map<String, List<MediaItem>> _memoizedSubfolderItemsMap = const {};
+  List<String> _memoizedSubfolderNames = const [];
+  bool _memoizedHasSubfolders = false;
+  List<MediaItem> _memoizedScopedItems = const [];
+  Map<FilterOption, List<MediaItem>> _memoizedByTab = {
+    FilterOption.all: const [],
+    FilterOption.photosOnly: const [],
+    FilterOption.videosOnly: const [],
+  };
 
   @override
   void dispose() {
     _tabTapTimer?.cancel();
+    _searchDebounce?.cancel();
+    _searchCurvedAnim.dispose();
     _searchAnimController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -283,6 +312,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
   }
 
   void _closeSearch() {
+    _searchDebounce?.cancel();
     _searchFocusNode.unfocus();
     _searchAnimController.reverse().then((_) {
       if (mounted) {
@@ -293,6 +323,113 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
         });
       }
     });
+  }
+
+  void _onSearchChanged(String raw, int sourceCount) {
+    final q = raw.trim();
+    if (q.isEmpty || sourceCount <= 250) {
+      _searchDebounce?.cancel();
+      if (_searchQuery != q) {
+        setState(() => _searchQuery = q);
+      }
+      return;
+    }
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 120), () {
+      if (mounted && _searchQuery != q) {
+        setState(() => _searchQuery = q);
+      }
+    });
+  }
+
+  void _updateMemoizedAlbumState(
+    List<MediaItem> allItems,
+    SettingsModel settings,
+  ) {
+    final baseUnchanged = identical(_cachedAllItemsRef, allItems) &&
+        _cachedAlbumName == widget.albumName &&
+        _cachedShowHidden == settings.showHiddenFiles &&
+        _cachedFilterSmall == settings.filterSmallImages &&
+        _cachedFavoriteIds == settings.favoriteIds &&
+        _cachedSelectedSubfolder == _selectedSubfolder;
+
+    final activeSort = _sort ?? settings.defaultSort;
+    final tabsUnchanged = baseUnchanged &&
+        _cachedActiveSort == activeSort &&
+        _cachedSearchQuery == _searchQuery &&
+        _cachedFlattenSubfolders == _flattenSubfolders;
+
+    if (tabsUnchanged) {
+      return;
+    }
+
+    if (!baseUnchanged) {
+      _cachedAllItemsRef = allItems;
+      _cachedAlbumName = widget.albumName;
+      _cachedShowHidden = settings.showHiddenFiles;
+      _cachedFilterSmall = settings.filterSmallImages;
+      _cachedFavoriteIds = settings.favoriteIds;
+      _cachedSelectedSubfolder = _selectedSubfolder;
+
+      var filtered = allItems;
+      if (!settings.showHiddenFiles) {
+        filtered =
+            filtered.where((e) => !MediaUtils.isHiddenPath(e.path)).toList();
+      }
+      if (settings.filterSmallImages) {
+        filtered =
+            filtered.where((e) => e.isVideo || e.size >= 50 * 1024).toList();
+      }
+      final albumItems = widget.albumName == 'Favorites'
+          ? filtered.where((e) => settings.favoriteIds.contains(e.id)).toList()
+          : filtered
+              .where((e) =>
+                  e.albumName == widget.albumName ||
+                  e.immediateFolderName == widget.albumName)
+              .toList();
+
+      final Map<String, List<MediaItem>> subfolderItemsMap = {};
+      for (final item in albumItems) {
+        if (item.immediateFolderName.isNotEmpty &&
+            item.immediateFolderName != widget.albumName) {
+          subfolderItemsMap
+              .putIfAbsent(item.immediateFolderName, () => [])
+              .add(item);
+        }
+      }
+      for (final list in subfolderItemsMap.values) {
+        list.sort((a, b) => naturalCompare(a.name, b.name));
+      }
+      final subfolderNames = subfolderItemsMap.keys.toList()
+        ..sort(naturalCompare);
+      final hasSubfolders = subfolderNames.length > 1;
+
+      final scopedItems = (_selectedSubfolder != null)
+          ? albumItems
+              .where((e) => e.immediateFolderName == _selectedSubfolder)
+              .toList()
+          : albumItems;
+
+      _memoizedAlbumItems = albumItems;
+      _memoizedSubfolderItemsMap = subfolderItemsMap;
+      _memoizedSubfolderNames = subfolderNames;
+      _memoizedHasSubfolders = hasSubfolders;
+      _memoizedScopedItems = scopedItems;
+    }
+
+    _cachedActiveSort = activeSort;
+    _cachedSearchQuery = _searchQuery;
+    _cachedFlattenSubfolders = _flattenSubfolders;
+
+    _memoizedByTab = {
+      for (final tab in _tabs)
+        tab: _filterAndSortItems(
+          _memoizedScopedItems,
+          tab,
+          activeSort,
+          _memoizedHasSubfolders,
+        ),
+    };
   }
 
   String? _buildScrollLabel(
@@ -403,59 +540,20 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final mediaAsync = ref.watch(mediaListProvider);
     final settings = ref.watch(settingsNotifierProvider);
 
-    var allItems = mediaAsync.value ?? [];
-    if (!settings.showHiddenFiles) {
-      allItems = allItems.where((e) {
-        final segments = e.path.split(RegExp(r'[/\\]'));
-        return !segments
-            .any((s) => s.isNotEmpty && s.startsWith('.') && s != '.');
-      }).toList();
-    }
-    if (settings.filterSmallImages) {
-      allItems =
-          allItems.where((e) => e.isVideo || e.size >= 50 * 1024).toList();
-    }
-    final albumItems = widget.albumName == 'Favorites'
-        ? allItems.where((e) => settings.favoriteIds.contains(e.id)).toList()
-        : allItems
-            .where((e) =>
-                e.albumName == widget.albumName ||
-                e.immediateFolderName == widget.albumName)
-            .toList();
-
-    final Map<String, List<MediaItem>> subfolderItemsMap = {};
-    for (final item in albumItems) {
-      if (item.immediateFolderName.isNotEmpty &&
-          item.immediateFolderName != widget.albumName) {
-        subfolderItemsMap
-            .putIfAbsent(item.immediateFolderName, () => [])
-            .add(item);
-      }
-    }
-    for (final list in subfolderItemsMap.values) {
-      list.sort((a, b) => naturalCompare(a.name, b.name));
-    }
-    final subfolderNames = subfolderItemsMap.keys.toList()
-      ..sort(naturalCompare);
-    final hasSubfolders = subfolderNames.length > 1;
-
-    final scopedItems = (_selectedSubfolder != null)
-        ? albumItems
-            .where((e) => e.immediateFolderName == _selectedSubfolder)
-            .toList()
-        : albumItems;
+    final rawAllItems = mediaAsync.value ?? const <MediaItem>[];
+    _updateMemoizedAlbumState(rawAllItems, settings);
+    final albumItems = _memoizedAlbumItems;
+    final subfolderItemsMap = _memoizedSubfolderItemsMap;
+    final subfolderNames = _memoizedSubfolderNames;
+    final hasSubfolders = _memoizedHasSubfolders;
 
     // 1. Filter & sort for active tab (app bar count, actions, active-media listener)
     final activeSort = _sort ?? settings.defaultSort;
-    final sortedItems = _filterAndSortItems(
-      scopedItems,
-      _filter,
-      activeSort,
-      hasSubfolders,
-    );
+    final sortedItems = _memoizedByTab[_filter]!;
     final isShowingSubfolderGrid =
         hasSubfolders && !_flattenSubfolders && _selectedSubfolder == null;
 
@@ -506,15 +604,15 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                     colors: [
                       Theme.of(context)
                           .scaffoldBackgroundColor
-                          .withValues(alpha: 0.82),
+                          .withValues(alpha: 0.86),
                       Theme.of(context)
                           .scaffoldBackgroundColor
-                          .withValues(alpha: 0.62),
+                          .withValues(alpha: 0.70),
                       Theme.of(context)
                           .scaffoldBackgroundColor
-                          .withValues(alpha: 0.14),
+                          .withValues(alpha: 0.16),
                     ],
-                    stops: const [0.0, 0.46, 1.0],
+                    stops: const [0.0, 0.56, 1.0],
                   ),
                 ),
               ),
@@ -526,14 +624,12 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                     return const SizedBox.shrink();
                   }
 
-                  final curvedProgress = CurvedAnimation(
-                    parent: _searchAnimController,
-                    curve: Curves.easeOutCubic,
-                    reverseCurve: Curves.easeInCubic,
-                  ).value;
+                  final curvedProgress = _searchCurvedAnim.value;
 
                   final cs = Theme.of(context).colorScheme;
                   final topPadding = MediaQuery.paddingOf(context).top;
+                  final clampedProgress = curvedProgress.clamp(0.0, 1.0);
+                  final blurSigma = 20.0 * clampedProgress;
 
                   return Positioned(
                     top: 0,
@@ -545,33 +641,36 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                       child: SizedBox(
                         height: kToolbarHeight,
                         child: Center(
-                          child: Opacity(
-                            opacity: curvedProgress.clamp(0.0, 1.0),
-                            child: Transform.translate(
-                              offset:
-                                  Offset(20.0 * (1.0 - curvedProgress), 0.0),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16.0,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(20),
-                                        child: BackdropFilter(
-                                          filter: ImageFilter.blur(
-                                              sigmaX: 10, sigmaY: 10),
-                                          child: Container(
-                                            height: 40,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 12),
-                                            decoration: BoxDecoration(
-                                              color: cs.surfaceContainerHighest
-                                                  .withValues(alpha: 0.5),
-                                              borderRadius:
-                                                  BorderRadius.circular(20),
-                                            ),
+                          child: Transform.translate(
+                            offset: Offset(20.0 * (1.0 - curvedProgress), 0.0),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: BackdropFilter(
+                                        filter: ImageFilter.blur(
+                                          sigmaX: blurSigma,
+                                          sigmaY: blurSigma,
+                                        ),
+                                        child: Container(
+                                          height: 40,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12),
+                                          decoration: BoxDecoration(
+                                            color: cs.surfaceContainerHighest
+                                                .withValues(
+                                                    alpha:
+                                                        0.68 * clampedProgress),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          child: Opacity(
+                                            opacity: clampedProgress,
                                             child: Row(
                                               children: [
                                                 Icon(
@@ -587,8 +686,10 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                                                     controller:
                                                         _searchController,
                                                     focusNode: _searchFocusNode,
-                                                    style: const TextStyle(
-                                                        fontSize: 14),
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      color: cs.onSurface,
+                                                    ),
                                                     textInputAction:
                                                         TextInputAction.search,
                                                     decoration: InputDecoration(
@@ -606,40 +707,71 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                                                         fontSize: 14,
                                                       ),
                                                     ),
-                                                    onChanged: (q) => setState(
-                                                        () => _searchQuery =
-                                                            q.trim()),
+                                                    onChanged: (q) =>
+                                                        _onSearchChanged(
+                                                      q,
+                                                      _memoizedScopedItems
+                                                          .length,
+                                                    ),
+                                                    onSubmitted: (raw) {
+                                                      _searchDebounce?.cancel();
+                                                      final q = raw.trim();
+                                                      if (_searchQuery != q) {
+                                                        setState(() =>
+                                                            _searchQuery = q);
+                                                      }
+                                                    },
                                                   ),
                                                 ),
-                                                if (_searchController
-                                                    .text.isNotEmpty)
-                                                  BouncyTap(
-                                                    scaleDown: 0.88,
-                                                    onTap: () {
-                                                      _searchController.clear();
-                                                      setState(() =>
-                                                          _searchQuery = '');
-                                                    },
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                              left: 4),
-                                                      child: Icon(
-                                                        Icons.close_rounded,
-                                                        size: 18,
-                                                        color:
-                                                            cs.onSurfaceVariant,
+                                                ValueListenableBuilder<
+                                                    TextEditingValue>(
+                                                  valueListenable:
+                                                      _searchController,
+                                                  builder:
+                                                      (context, value, _) {
+                                                    if (value.text.isEmpty) {
+                                                      return const SizedBox
+                                                          .shrink();
+                                                    }
+                                                    return BouncyTap(
+                                                      scaleDown: 0.88,
+                                                      onTap: () {
+                                                        _searchDebounce
+                                                            ?.cancel();
+                                                        _searchController
+                                                            .clear();
+                                                        if (_searchQuery
+                                                            .isNotEmpty) {
+                                                          setState(() =>
+                                                              _searchQuery =
+                                                                  '');
+                                                        }
+                                                      },
+                                                      child: Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(left: 4),
+                                                        child: Icon(
+                                                          Icons.close_rounded,
+                                                          size: 18,
+                                                          color: cs
+                                                              .onSurfaceVariant,
+                                                        ),
                                                       ),
-                                                    ),
-                                                  ),
+                                                    );
+                                                  },
+                                                ),
                                               ],
                                             ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    BouncyTap(
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Opacity(
+                                    opacity: clampedProgress,
+                                    child: BouncyTap(
                                       key: const ValueKey(
                                           'album_search_cancel_button'),
                                       scaleDown: 0.92,
@@ -653,14 +785,14 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                                           context.tr.cancel,
                                           style: TextStyle(
                                             color: cs.primary,
-                                            fontSize: 15,
+                                            fontSize: 14,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -685,17 +817,20 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                 ),
               );
             },
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () {
-                if (_isSearching) {
-                  _closeSearch();
-                } else if (_selectedSubfolder != null && !_flattenSubfolders) {
-                  setState(() => _selectedSubfolder = null);
-                } else {
-                  Navigator.of(context).pop();
-                }
-              },
+            child: BouncyTap(
+              scaleDown: 0.88,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  if (_isSearching) {
+                    _closeSearch();
+                  } else if (_selectedSubfolder != null && !_flattenSubfolders) {
+                    setState(() => _selectedSubfolder = null);
+                  } else {
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
             ),
           ),
           title: AnimatedBuilder(
@@ -711,41 +846,66 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                 ),
               );
             },
-            child: _selecting
-                ? Text('${_selected.length} ${context.tr.selected}')
-                : Align(
-                    key: const ValueKey('album_title_column'),
-                    alignment: AlignmentDirectional.centerStart,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          widget.albumName == 'Favorites'
-                              ? context.tr.favorites
-                              : (_selectedSubfolder != null &&
-                                      !_flattenSubfolders
-                                  ? '${widget.albumName} / $_selectedSubfolder'
-                                  : widget.albumName),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          context.tr.itemsCount(sortedItems.length),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.78),
-                            fontWeight: FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
+            child: Builder(
+              builder: (context) {
+                final cs = Theme.of(context).colorScheme;
+                final haloColor = Theme.of(context).scaffoldBackgroundColor;
+                final textShadows = [
+                  Shadow(
+                    color: haloColor.withValues(alpha: 0.92),
+                    blurRadius: 8,
                   ),
+                  Shadow(
+                    color: haloColor.withValues(alpha: 0.75),
+                    blurRadius: 2,
+                  ),
+                ];
+
+                if (_selecting) {
+                  return Text(
+                    '${_selected.length} ${context.tr.selected}',
+                    style: TextStyle(shadows: textShadows),
+                  );
+                }
+
+                return Align(
+                  key: const ValueKey('album_title_column'),
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.albumName == 'Favorites'
+                            ? context.tr.favorites
+                            : (_selectedSubfolder != null && !_flattenSubfolders
+                                ? '${widget.albumName} / $_selectedSubfolder'
+                                : widget.albumName),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
+                          shadows: textShadows,
+                        ),
+                      ),
+                      Text(
+                        context.tr.itemsCount(sortedItems.length),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withValues(alpha: 0.92),
+                          fontWeight: FontWeight.w500,
+                          shadows: textShadows,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
           actions: [
             AnimatedBuilder(
@@ -768,8 +928,10 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                     BouncyTap(
                       scaleDown: 0.88,
                       child: IconButton(
-                        icon: const Icon(Icons.search),
-                        tooltip: context.tr.searchTooltip,
+                        icon: Icon(
+                          Icons.search,
+                          semanticLabel: context.tr.searchTooltip,
+                        ),
                         onPressed: _openSearch,
                       ),
                     ),
@@ -797,74 +959,81 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                       ),
                     ),
                   if (!_selecting)
-                    StyledMoreMenuButton<String>(
-                      splashRadius: 20,
-                      tooltip: context.tr.moreOptions,
-                      placement: StyledMenuPlacement.topBar,
-                      icon: const Icon(Icons.more_vert),
-                      onSelected: (value) {
-                        if (value == 'manga') {
-                          final mangaItems = sortedItems
-                              .where((e) =>
-                                  !e.isVideo && !PsdService.isPsd(e.path))
-                              .toList()
-                            ..sort((a, b) =>
-                                _compareMangaCanonical(a, b, hasSubfolders));
-                          if (mangaItems.isNotEmpty) {
-                            Navigator.of(context).openImage(
-                              mangaItems,
-                              0,
-                              initialMangaMode: true,
-                            );
-                          } else {
-                            showFeedbackPill(
-                              context,
-                              message: context.tr.noPhotosFound,
-                              icon: Icons.auto_stories_rounded,
-                            );
-                          }
-                        } else if (value == 'slideshow') {
-                          if (sortedItems.isNotEmpty) {
-                            final hasVideos = sortedItems.any((e) => e.isVideo);
-                            if (hasVideos) {
-                              Navigator.of(context).openVideo(
-                                sortedItems,
+                    BouncyTap(
+                      scaleDown: 0.88,
+                      child: StyledMoreMenuButton<String>(
+                        splashRadius: 20,
+                        disableSplash: true,
+                        placement: StyledMenuPlacement.topBar,
+                        icon: Icon(
+                          Icons.more_vert,
+                          semanticLabel: context.tr.moreOptions,
+                        ),
+                        onSelected: (value) {
+                          if (value == 'manga') {
+                            final mangaItems = sortedItems
+                                .where((e) =>
+                                    !e.isVideo && !PsdService.isPsd(e.path))
+                                .toList()
+                              ..sort((a, b) =>
+                                  _compareMangaCanonical(a, b, hasSubfolders));
+                            if (mangaItems.isNotEmpty) {
+                              Navigator.of(context).openImage(
+                                mangaItems,
                                 0,
-                                startSlideshow: true,
+                                initialMangaMode: true,
                               );
                             } else {
-                              Navigator.of(context).openImage(
-                                sortedItems,
-                                0,
-                                startSlideshow: true,
+                              showFeedbackPill(
+                                context,
+                                message: context.tr.noPhotosFound,
+                                icon: Icons.auto_stories_rounded,
                               );
                             }
+                          } else if (value == 'slideshow') {
+                            if (sortedItems.isNotEmpty) {
+                              final hasVideos =
+                                  sortedItems.any((e) => e.isVideo);
+                              if (hasVideos) {
+                                Navigator.of(context).openVideo(
+                                  sortedItems,
+                                  0,
+                                  startSlideshow: true,
+                                );
+                              } else {
+                                Navigator.of(context).openImage(
+                                  sortedItems,
+                                  0,
+                                  startSlideshow: true,
+                                );
+                              }
+                            }
+                          } else if (value == 'select') {
+                            setState(() {
+                              _selecting = true;
+                            });
                           }
-                        } else if (value == 'select') {
-                          setState(() {
-                            _selecting = true;
-                          });
-                        }
-                      },
-                      actions: [
-                        if (sortedItems.isNotEmpty) ...[
+                        },
+                        actions: [
+                          if (sortedItems.isNotEmpty) ...[
+                            StyledMenuAction(
+                              value: 'manga',
+                              icon: Icons.auto_stories_rounded,
+                              label: context.tr.readAsManga,
+                            ),
+                            StyledMenuAction(
+                              value: 'slideshow',
+                              icon: Icons.slideshow_rounded,
+                              label: context.tr.slideshow,
+                            ),
+                          ],
                           StyledMenuAction(
-                            value: 'manga',
-                            icon: Icons.auto_stories_rounded,
-                            label: context.tr.readAsManga,
-                          ),
-                          StyledMenuAction(
-                            value: 'slideshow',
-                            icon: Icons.slideshow_rounded,
-                            label: context.tr.slideshow,
+                            value: 'select',
+                            icon: Icons.checklist_rounded,
+                            label: context.tr.select,
                           ),
                         ],
-                        StyledMenuAction(
-                          value: 'select',
-                          icon: Icons.checklist_rounded,
-                          label: context.tr.select,
-                        ),
-                      ],
+                      ),
                     ),
                   if (_selecting) ...[
                     BouncyTap(
@@ -981,7 +1150,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Text('•', style: TextStyle(color: Colors.grey)),
+                    Text('•', style: TextStyle(color: cs.onSurfaceVariant)),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -1009,13 +1178,18 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.photo_library_outlined,
-                              size: 64, color: Colors.white38),
+                          Icon(
+                            Icons.photo_library_outlined,
+                            size: 64,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.45),
+                          ),
                           const SizedBox(height: 12),
                           Text(
                             'No media in ${widget.albumName}',
-                            style: const TextStyle(
-                                fontSize: 16, color: Colors.grey),
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: cs.onSurfaceVariant,
+                            ),
                           ),
                         ],
                       ),
@@ -1085,26 +1259,58 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                                 : const PageScrollPhysics(),
                             itemBuilder: (context, index) {
                               final tab = _tabs[index];
-                              final pageItems = _filterAndSortItems(
-                                scopedItems,
-                                tab,
-                                activeSort,
-                                hasSubfolders,
-                              );
+                              final pageItems = _memoizedByTab[tab]!;
                               return _KeepAliveAlbumPage(
                                 child: HeroMode(
                                   enabled: _filter == tab,
                                   child: pageItems.isEmpty
                                       ? Center(
-                                          child: Text(
-                                            _searchQuery.isNotEmpty
-                                                ? context.tr.noMediaMatching(
-                                                    _searchQuery)
-                                                : 'No ${tab.label.toLowerCase()} in this album',
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey,
-                                            ),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                _searchQuery.isNotEmpty
+                                                    ? Icons.search_off_outlined
+                                                    : Icons
+                                                        .photo_library_outlined,
+                                                size: 56,
+                                                color: cs.onSurfaceVariant
+                                                    .withValues(alpha: 0.45),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 24),
+                                                child: Text(
+                                                  _searchQuery.isNotEmpty
+                                                      ? context.tr
+                                                          .noMediaMatching(
+                                                              _searchQuery)
+                                                      : 'No ${tab.label.toLowerCase()} in this album',
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontSize: 15,
+                                                    color: cs.onSurfaceVariant,
+                                                  ),
+                                                ),
+                                              ),
+                                              if (_searchQuery.isNotEmpty) ...[
+                                                const SizedBox(height: 16),
+                                                OutlinedButton.icon(
+                                                  key: const ValueKey(
+                                                      'album_clear_search_button'),
+                                                  onPressed: _closeSearch,
+                                                  icon: const Icon(
+                                                    Icons.close_rounded,
+                                                    size: 16,
+                                                  ),
+                                                  label: Text(
+                                                    context.tr.clearSearch,
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
                                           ),
                                         )
                                       : FastScrollHandle(

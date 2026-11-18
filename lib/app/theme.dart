@@ -12,6 +12,14 @@ class AppTheme {
     splashRadius: 0,
   );
 
+  static final _iconButtonTheme = IconButtonThemeData(
+    style: IconButton.styleFrom(
+      splashFactory: NoSplash.splashFactory,
+      overlayColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+    ),
+  );
+
   static ThemeData get light => ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -26,6 +34,7 @@ class AppTheme {
         brightness: Brightness.light,
         splashFactory: InkRipple.splashFactory,
         switchTheme: _switchTheme,
+        iconButtonTheme: _iconButtonTheme,
         scaffoldBackgroundColor: const Color(0xFFFFFDF5),
         canvasColor: const Color(0xFFFFFFFF),
         appBarTheme: const AppBarTheme(
@@ -71,6 +80,7 @@ class AppTheme {
         brightness: Brightness.dark,
         splashFactory: InkRipple.splashFactory,
         switchTheme: _switchTheme,
+        iconButtonTheme: _iconButtonTheme,
         scaffoldBackgroundColor: Colors.black,
         canvasColor: Colors.black,
         appBarTheme: const AppBarTheme(
@@ -117,6 +127,7 @@ class AppTheme {
         brightness: Brightness.dark,
         splashFactory: InkRipple.splashFactory,
         switchTheme: _switchTheme,
+        iconButtonTheme: _iconButtonTheme,
         scaffoldBackgroundColor: Colors.black,
         canvasColor: Colors.black,
         appBarTheme: const AppBarTheme(
@@ -165,6 +176,7 @@ class AppTheme {
         brightness: Brightness.dark,
         splashFactory: InkRipple.splashFactory,
         switchTheme: _switchTheme,
+        iconButtonTheme: _iconButtonTheme,
         scaffoldBackgroundColor: Colors.black,
         canvasColor: Colors.black,
         appBarTheme: const AppBarTheme(
@@ -210,6 +222,7 @@ class AppTheme {
         brightness: Brightness.dark,
         splashFactory: InkRipple.splashFactory,
         switchTheme: _switchTheme,
+        iconButtonTheme: _iconButtonTheme,
         scaffoldBackgroundColor: Colors.black,
         canvasColor: Colors.black,
         appBarTheme: const AppBarTheme(
@@ -256,6 +269,7 @@ class AppTheme {
         brightness: Brightness.light,
         splashFactory: InkRipple.splashFactory,
         switchTheme: _switchTheme,
+        iconButtonTheme: _iconButtonTheme,
         scaffoldBackgroundColor: const Color(0xFFEDF2FA),
         canvasColor: const Color(0xFFFFFFFF),
         appBarTheme: const AppBarTheme(

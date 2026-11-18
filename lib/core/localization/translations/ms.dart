@@ -27,6 +27,7 @@ const Map<String, String> msTranslations = {
   'clearThumbnailCache': 'Kosongkan Cache Gambar Kenit',
   'clearCache': 'Kosongkan Cache',
   'clearAll': 'Kosongkan Semua',
+  'clearSearch': 'Kosongkan carian',
   'codec': 'Kodek',
   'columnsCount': '{count} lajur',
   'compactDetailedView': 'Paparan padat terperinci',

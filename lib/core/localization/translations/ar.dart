@@ -25,6 +25,7 @@ const Map<String, String> arTranslations = {
   'clearThumbnailCache': 'مسح ذاكرة التخزين المؤقت للصور المصغرة',
   'clearCache': 'مسح الذاكرة المؤقتة',
   'clearAll': 'مسح الكل',
+  'clearSearch': 'مسح البحث',
   'codec': 'برنامج الترميز',
   'columnsCount': '{count} أعمدة',
   'compactDetailedView': 'عرض مضغوط ومفصل',

@@ -26,6 +26,7 @@ const Map<String, String> noTranslations = {
   'clearThumbnailCache': 'Tøm miniatyrbilde-buffer',
   'clearCache': 'Tøm buffer',
   'clearAll': 'Tøm alle',
+  'clearSearch': 'Tøm søk',
   'codec': 'Kodek',
   'columnsCount': '{count} kolonner',
   'compactDetailedView': 'Kompakt detaljert visning',

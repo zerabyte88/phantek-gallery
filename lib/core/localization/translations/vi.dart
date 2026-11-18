@@ -26,6 +26,7 @@ const Map<String, String> viTranslations = {
   'clearThumbnailCache': 'Xóa bộ nhớ đệm ảnh thu nhỏ',
   'clearCache': 'Xóa bộ nhớ đệm',
   'clearAll': 'Xóa tất cả',
+  'clearSearch': 'Xóa tìm kiếm',
   'codec': 'Bộ mã hóa',
   'columnsCount': '{count} cột',
   'compactDetailedView': 'Chế độ xem chi tiết nhỏ gọn',

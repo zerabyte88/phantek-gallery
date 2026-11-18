@@ -27,6 +27,7 @@ const Map<String, String> esTranslations = {
   'clearThumbnailCache': 'Limpiar caché de miniaturas',
   'clearCache': 'Limpiar caché',
   'clearAll': 'Borrar todo',
+  'clearSearch': 'Borrar búsqueda',
   'codec': 'Códec',
   'columnsCount': '{count} columnas',
   'compactDetailedView': 'Vista compacta y detallada',

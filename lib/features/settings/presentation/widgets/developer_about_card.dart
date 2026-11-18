@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/services/license_service.dart';
+import '../../../../core/widgets/bouncy_tap.dart';
 
 /// Developer & About card matching the Phantek Video Toolkit Vega standard.
 class DeveloperAboutCard extends ConsumerWidget {
@@ -92,16 +93,14 @@ class DeveloperAboutCard extends ConsumerWidget {
         final isDark = theme.brightness == Brightness.dark;
 
         return Container(
-          margin: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          margin: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isDark
-                ? cs.surfaceContainerHighest.withValues(alpha: 0.35)
-                : cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(18),
+            color: isDark ? cs.surfaceContainerLow : cs.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: cs.outline.withValues(alpha: isDark ? 0.08 : 0.12),
-              width: 0.8,
+              color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+              width: 1,
             ),
           ),
           child: Column(
@@ -109,10 +108,10 @@ class DeveloperAboutCard extends ConsumerWidget {
             children: [
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.info_outline_rounded,
                     size: 18,
-                    color: Color(0xFF06B6D4),
+                    color: cs.onSurfaceVariant,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -141,113 +140,94 @@ class DeveloperAboutCard extends ConsumerWidget {
                   buildNumber,
                 ),
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: cs.primary.withValues(alpha: 0.14),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      key: const ValueKey('developer_avatar'),
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: cs.primary.withValues(alpha: 0.2),
-                          width: 1.2,
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8.8),
-                        child: Image.asset(
-                          'assets/developer_avatar.png',
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                            color: cs.primary.withValues(alpha: 0.1),
-                            child: Icon(
-                              Icons.person_rounded,
-                              size: 18,
-                              color: cs.primary,
-                            ),
+              Divider(
+                height: 24,
+                thickness: 1,
+                color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+              ),
+              Row(
+                children: [
+                  SizedBox(
+                    key: const ValueKey('developer_avatar'),
+                    width: 36,
+                    height: 36,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.asset(
+                        'assets/developer_avatar.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: cs.surfaceContainerHighest
+                              .withValues(alpha: isDark ? 0.55 : 0.75),
+                          child: Icon(
+                            Icons.person_rounded,
+                            size: 18,
+                            color: cs.onSurfaceVariant,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Developer: zerabyte88',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: cs.onSurface,
-                            ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Developer: zerabyte88',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface,
                           ),
-                          const SizedBox(height: 2),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'github.com/zerabyte88',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: cs.onSurface.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  BouncyTap(
+                    scaleDown: 0.94,
+                    onTap: () => _openUrl(_githubProfileUrl),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest
+                            .withValues(alpha: isDark ? 0.55 : 0.75),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.open_in_new_rounded,
+                            size: 13,
+                            color: cs.onSurface,
+                          ),
+                          const SizedBox(width: 5),
                           Text(
-                            'github.com/zerabyte88',
+                            'GitHub',
                             style: TextStyle(
-                              fontSize: 11,
-                              color: cs.onSurface.withValues(alpha: 0.55),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: cs.onSurface,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () => _openUrl(_githubProfileUrl),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: cs.primary.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: cs.primary.withValues(alpha: 0.28),
-                              width: 0.9,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.open_in_new_rounded,
-                                size: 13,
-                                color: cs.primary,
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                'GitHub',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: cs.primary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -306,9 +286,9 @@ class DeveloperAboutCard extends ConsumerWidget {
     );
 
     if (onTap != null) {
-      return InkWell(
+      return BouncyTap(
+        scaleDown: 0.985,
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
         child: rowContent,
       );
     }

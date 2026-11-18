@@ -25,6 +25,7 @@ const Map<String, String> jaTranslations = {
   'clearThumbnailCache': 'サムネイルキャッシュを削除',
   'clearCache': 'キャッシュを削除',
   'clearAll': 'すべてクリア',
+  'clearSearch': '検索をクリア',
   'codec': 'コーデック',
   'columnsCount': '{count} 列',
   'compactDetailedView': 'コンパクトな一覧表示',

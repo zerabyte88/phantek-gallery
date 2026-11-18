@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/models/settings_model.dart';
+import '../../../../core/widgets/bouncy_tap.dart';
 
 /// Extension pembantu untuk memastikan akses getter `themeMode*` tersedia
 /// secara langsung pada [AppLocalizations].
@@ -167,77 +168,80 @@ class _ThemeCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final accent = item.accent;
 
-    return Material(
-      color: isSelected
-          ? accent.withValues(alpha: isDark ? 0.16 : 0.10)
-          : cs.surfaceContainerHighest.withValues(alpha: isDark ? 0.35 : 0.45),
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          height: 78,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected
-                  ? accent
-                  : cs.outlineVariant.withValues(alpha: isDark ? 0.18 : 0.25),
-              width: isSelected ? 1.8 : 1.0,
+    return BouncyTap(
+      scaleDown: 0.95,
+      onTap: onTap,
+      child: Container(
+        height: 78,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? accent.withValues(alpha: isDark ? 0.16 : 0.10)
+              : cs.surfaceContainerHighest
+                  .withValues(alpha: isDark ? 0.35 : 0.45),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? accent
+                : cs.outlineVariant.withValues(alpha: isDark ? 0.18 : 0.25),
+            width: isSelected ? 1.8 : 1.0,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              item.icon,
+              size: 20,
+              color: isSelected ? accent : cs.onSurface,
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(
-                item.icon,
-                size: 20,
-                color: isSelected ? accent : cs.onSurface,
-              ),
-              const SizedBox(height: 4),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  item.title,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected ? accent : cs.onSurface,
-                  ),
+            const SizedBox(height: 4),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                item.title,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? accent : cs.onSurface,
                 ),
               ),
-              const SizedBox(height: 3),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 5,
-                  vertical: 1.5,
-                ),
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: isDark ? 0.18 : 0.10),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: accent.withValues(alpha: isDark ? 0.50 : 0.35),
-                    width: 0.9,
-                  ),
-                ),
-                child: Text(
-                  item.badge,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.w700,
-                    color: accent,
-                    letterSpacing: 0.3,
-                  ),
+            ),
+            const SizedBox(height: 3),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 5,
+                vertical: 1.5,
+              ),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? accent.withValues(alpha: isDark ? 0.18 : 0.10)
+                    : cs.surfaceContainerHighest
+                        .withValues(alpha: isDark ? 0.55 : 0.75),
+                borderRadius: BorderRadius.circular(4),
+                border: isSelected
+                    ? Border.all(
+                        color: accent.withValues(alpha: isDark ? 0.50 : 0.35),
+                        width: 0.9,
+                      )
+                    : null,
+              ),
+              child: Text(
+                item.badge,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? accent : cs.onSurfaceVariant,
+                  letterSpacing: 0.3,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

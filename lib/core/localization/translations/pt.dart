@@ -27,6 +27,7 @@ const Map<String, String> ptTranslations = {
   'clearThumbnailCache': 'Limpar cache de miniaturas',
   'clearCache': 'Limpar cache',
   'clearAll': 'Limpar tudo',
+  'clearSearch': 'Limpar pesquisa',
   'codec': 'Codec',
   'columnsCount': '{count} colunas',
   'compactDetailedView': 'Visualização compacta e detalhada',

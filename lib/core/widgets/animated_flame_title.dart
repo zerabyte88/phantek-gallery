@@ -21,8 +21,10 @@ class AnimatedFlameTitle extends ConsumerStatefulWidget {
 }
 
 class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _controller;
+  bool _isAppActive = true;
+  bool _isRouteCurrent = true;
 
   // Snowfall (Snow Blue)
   static const _darkColors = [
@@ -82,14 +84,45 @@ class _AnimatedFlameTitleState extends ConsumerState<AnimatedFlameTitle>
   @override
   void initState() {
     super.initState();
+    final ls = WidgetsBinding.instance.lifecycleState;
+    _isAppActive = ls == null || ls == AppLifecycleState.resumed;
+    WidgetsBinding.instance.addObserver(this);
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2800),
-    )..repeat();
+    );
+    _syncAnimationPlayback();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _isRouteCurrent = ModalRoute.of(context)?.isCurrent ?? true;
+    _syncAnimationPlayback();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isAppActive = state == AppLifecycleState.resumed;
+    _syncAnimationPlayback();
+  }
+
+  void _syncAnimationPlayback() {
+    final shouldAnimate = _isAppActive && _isRouteCurrent;
+    if (shouldAnimate) {
+      if (!_controller.isAnimating) {
+        _controller.repeat();
+      }
+    } else {
+      if (_controller.isAnimating) {
+        _controller.stop();
+      }
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }

@@ -41,6 +41,7 @@ class StyledMoreMenuButton<T> extends StatelessWidget {
     this.splashRadius,
     this.placement = StyledMenuPlacement.topBar,
     this.forceDark = false,
+    this.disableSplash = false,
   }) : assert(
           icon == null || child == null,
           'Cannot specify both icon and child on StyledMoreMenuButton.',
@@ -54,6 +55,7 @@ class StyledMoreMenuButton<T> extends StatelessWidget {
   final double? splashRadius;
   final StyledMenuPlacement placement;
   final bool forceDark;
+  final bool disableSplash;
 
   static const double _itemHeight = 40.0;
   static const double _menuVerticalPadding = 6.0;
@@ -65,12 +67,23 @@ class StyledMoreMenuButton<T> extends StatelessWidget {
         icon: icon!,
         tooltip: tooltip,
         splashRadius: splashRadius,
+        style: disableSplash
+            ? IconButton.styleFrom(
+                splashFactory: NoSplash.splashFactory,
+                overlayColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+              )
+            : null,
         onPressed: () => _openMenu(context),
       );
     }
 
     final Widget inkWell = InkWell(
       borderRadius: BorderRadius.circular(20),
+      splashFactory: disableSplash ? NoSplash.splashFactory : null,
+      overlayColor: disableSplash
+          ? const WidgetStatePropertyAll(Colors.transparent)
+          : null,
       onTap: () => _openMenu(context),
       child: child ?? const Icon(Icons.more_vert),
     );

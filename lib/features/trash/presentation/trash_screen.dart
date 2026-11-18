@@ -11,6 +11,7 @@ import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
+import '../../../core/widgets/bouncy_tap.dart';
 import '../../../core/widgets/feedback_pill.dart';
 
 class TrashScreen extends ConsumerStatefulWidget {
@@ -175,39 +176,42 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
     final bool allSelected = totalCount > 0 && _selected.length == totalCount;
     final bool partialSelected = _selected.isNotEmpty && !allSelected;
 
-    return IconButton(
-      tooltip: allSelected ? context.tr.deselectAll : context.tr.selectAll,
-      icon: Container(
-        width: 22,
-        height: 22,
-        decoration: BoxDecoration(
-          color: (allSelected || partialSelected)
-              ? cs.primary
-              : Colors.transparent,
-          border: Border.all(
+    return BouncyTap(
+      scaleDown: 0.88,
+      child: IconButton(
+        tooltip: allSelected ? context.tr.deselectAll : context.tr.selectAll,
+        icon: Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
             color: (allSelected || partialSelected)
                 ? cs.primary
-                : cs.onSurface.withValues(alpha: 0.6),
-            width: 2,
+                : Colors.transparent,
+            border: Border.all(
+              color: (allSelected || partialSelected)
+                  ? cs.primary
+                  : cs.onSurface.withValues(alpha: 0.6),
+              width: 2,
+            ),
+            borderRadius: BorderRadius.circular(5),
           ),
-          borderRadius: BorderRadius.circular(5),
+          child: allSelected
+              ? const Icon(Icons.check, size: 16, color: Colors.white)
+              : partialSelected
+                  ? const Icon(Icons.remove, size: 16, color: Colors.white)
+                  : null,
         ),
-        child: allSelected
-            ? const Icon(Icons.check, size: 16, color: Colors.white)
-            : partialSelected
-                ? const Icon(Icons.remove, size: 16, color: Colors.white)
-                : null,
+        onPressed: () {
+          final all = ref.read(trashProvider).value ?? [];
+          setState(() {
+            if (allSelected) {
+              _selected.clear();
+            } else {
+              _selected.addAll(all.map((e) => e.id));
+            }
+          });
+        },
       ),
-      onPressed: () {
-        final all = ref.read(trashProvider).value ?? [];
-        setState(() {
-          if (allSelected) {
-            _selected.clear();
-          } else {
-            _selected.addAll(all.map((e) => e.id));
-          }
-        });
-      },
     );
   }
 
@@ -232,9 +236,12 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
         appBar: AppBar(
           leading: _selecting
               ? _buildSelectAllCheckbox(context, trashAsync.value?.length ?? 0)
-              : IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-                  onPressed: () => Navigator.of(context).pop(),
+              : BouncyTap(
+                  scaleDown: 0.88,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
                 ),
           centerTitle: false,
           title: Text(
@@ -247,16 +254,22 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           ),
           actions: [
             if (_selecting)
-              IconButton(
-                icon: const Icon(Icons.close, size: 22),
-                tooltip: context.tr.cancel,
-                onPressed: _clearSelection,
+              BouncyTap(
+                scaleDown: 0.88,
+                child: IconButton(
+                  icon: const Icon(Icons.close, size: 22),
+                  tooltip: context.tr.cancel,
+                  onPressed: _clearSelection,
+                ),
               )
             else if (trashAsync.value?.isNotEmpty ?? false)
-              IconButton(
-                icon: const Icon(Icons.check_box_outlined, size: 22),
-                tooltip: context.tr.select,
-                onPressed: () => setState(() => _selecting = true),
+              BouncyTap(
+                scaleDown: 0.88,
+                child: IconButton(
+                  icon: const Icon(Icons.check_box_outlined, size: 22),
+                  tooltip: context.tr.select,
+                  onPressed: () => setState(() => _selecting = true),
+                ),
               ),
           ],
         ),

@@ -26,7 +26,7 @@ class ThemeHeaderBackground extends ConsumerStatefulWidget {
 }
 
 class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const int _minFrameIntervalMs = 33; // ~30fps ambient header throttle
 
   late final AnimationController _controller;
@@ -36,10 +36,16 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
   late final _DarkHeaderPainter _darkPainter;
   late final _LightHeaderPainter _lightPainter;
   Duration? _lastPaintElapsed;
+  bool _isAppActive = true;
+  bool _isRouteCurrent = true;
+  bool _isStaticTheme = false;
 
   @override
   void initState() {
     super.initState();
+    final ls = WidgetsBinding.instance.lifecycleState;
+    _isAppActive = ls == null || ls == AppLifecycleState.resumed;
+    WidgetsBinding.instance.addObserver(this);
     _throttledProgress = ValueNotifier<double>(0.0);
     _amoledPainter =
         _AmoledHeaderPainter(progressListenable: _throttledProgress);
@@ -50,9 +56,35 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
-    )
-      ..addListener(_onTick)
-      ..repeat();
+    )..addListener(_onTick);
+    _syncAnimationPlayback();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _isRouteCurrent = ModalRoute.of(context)?.isCurrent ?? true;
+    _syncAnimationPlayback();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isAppActive = state == AppLifecycleState.resumed;
+    _syncAnimationPlayback();
+  }
+
+  void _syncAnimationPlayback() {
+    final shouldAnimate = _isAppActive && _isRouteCurrent && !_isStaticTheme;
+    if (shouldAnimate) {
+      if (!_controller.isAnimating) {
+        _controller.repeat();
+      }
+    } else {
+      if (_controller.isAnimating) {
+        _controller.stop();
+        _lastPaintElapsed = null;
+      }
+    }
   }
 
   void _onTick() {
@@ -68,6 +100,7 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.removeListener(_onTick);
     _controller.dispose();
     _throttledProgress.dispose();
@@ -91,16 +124,11 @@ class _ThemeHeaderBackgroundState extends ConsumerState<ThemeHeaderBackground>
     final isStatic = effectiveMode == AppThemeMode.amoledPure ||
         effectiveMode == AppThemeMode.cleanLight;
 
+    _isStaticTheme = isStatic;
+    _syncAnimationPlayback();
+
     if (isStatic) {
-      if (_controller.isAnimating) {
-        _controller.stop();
-        _lastPaintElapsed = null;
-      }
       return const SizedBox.shrink();
-    } else {
-      if (!_controller.isAnimating) {
-        _controller.repeat();
-      }
     }
 
     final CustomPainter painter = switch (effectiveMode) {

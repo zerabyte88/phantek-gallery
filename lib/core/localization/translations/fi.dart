@@ -26,6 +26,7 @@ const Map<String, String> fiTranslations = {
   'clearThumbnailCache': 'Tyhjennä pikkukuvien välimuisti',
   'clearCache': 'Tyhjennä välimuisti',
   'clearAll': 'Tyhjennä kaikki',
+  'clearSearch': 'Tyhjennä haku',
   'codec': 'Koodekki',
   'columnsCount': '{count} saraketta',
   'compactDetailedView': 'Kompakti yksityiskohtainen näkymä',

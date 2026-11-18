@@ -5,7 +5,7 @@
 
   **Offline Android gallery for photos, videos, PSD files, and manga, with on-device manga OCR and dialogue localization via Local AI Server (LM Studio / Ollama).**
 
-  [![Version](https://img.shields.io/badge/Version-v2.19.22-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.19.23-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20LM%20Studio-6366f1.svg?style=flat-square)](https://lmstudio.ai/)
@@ -28,7 +28,7 @@ For comic and manga readers, Phantek Gallery pairs on-device OCR (**Google ML Ki
 
 ### Gallery and Viewing
 
-- **Fast Navigation & Selection**: Instant native-style tab switching across grid and album views, virtualized date-grouped timeline, right-edge fast-scroll handle with Month/Year indicator, in-album search, and drag-to-select.
+- **Fast Navigation & Selection**: Instant native-style tab switching across grid and album views, virtualized date-grouped timeline, right-edge fast-scroll handle with Month/Year indicator, frosted-blur search across grid and albums with adaptive debounce and quick clear-search empty states, album-level memoization, and drag-to-select.
 - **PSD Layer Viewer**: Open Adobe Photoshop (`.psd`) documents with embedded-JPEG previews and a dedicated sheet for toggling individual layer visibilities.
 - **Hardware Video Playback**: Built on AndroidX Media3 / ExoPlayer. Includes double-tap seek, gesture-based brightness and volume controls, fast seekbar frame preview with lift-off stabilization, and resume playback.
 - **EXIF and Technical Inspector**: Detailed photo metadata (ISO, aperture, shutter speed, focal length, resolution) and video properties (bitrate, fps, codec, channels).
@@ -51,7 +51,7 @@ For comic and manga readers, Phantek Gallery pairs on-device OCR (**Google ML Ki
 
 ### Personalization
 
-- **Visual Themes**: *Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, and *Sakura* with dynamic theme headers.
+- **Visual Themes**: *Dark Mode*, *Light Mode*, *Sunlight*, *Snowfall*, *Midnight*, and *Sakura* with dynamic theme headers that automatically pause when covered by media viewers or backgrounded, plus consistent ripple-free tactile controls and refined Settings hierarchy.
 
 ---
 

@@ -26,6 +26,7 @@ const Map<String, String> frTranslations = {
   'clearThumbnailCache': 'Vider le cache des miniatures',
   'clearCache': 'Vider le cache',
   'clearAll': 'Tout effacer',
+  'clearSearch': 'Effacer la recherche',
   'codec': 'Codec',
   'columnsCount': '{count} colonnes',
   'compactDetailedView': 'Vue compacte détaillée',
