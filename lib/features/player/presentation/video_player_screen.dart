@@ -959,10 +959,6 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                 precacheImage(MemoryImage(mem), context);
               }
               if (item.path.isNotEmpty && mounted) {
-                unawaited(ThumbnailService.instance.prewarmPhotoPreview(
-                  item.path,
-                  assetId: item.id,
-                ));
                 precacheImage(screenDisplayImage(item.path), context);
               }
             }
@@ -2771,15 +2767,14 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                     return child!;
                                   },
                                   child: RepaintBoundary(
-                                    child: Center(
-                                      child: ClipRect(
-                                        child: isCur
-                                            ? KeyedSubtree(
-                                                key: _viewerKeyFor(
-                                                    _videos[index].id),
-                                                child: InteractiveViewer(
-                                                  key: ValueKey(
-                                                      'iv_${_videos[index].id}'),
+                                    child: ClipRect(
+                                      child: isCur
+                                          ? KeyedSubtree(
+                                              key: _viewerKeyFor(
+                                                  _videos[index].id),
+                                              child: InteractiveViewer(
+                                                key: ValueKey(
+                                                    'iv_${_videos[index].id}'),
                                                 transformationController:
                                                     _transformationController,
                                                 minScale: 1.0,
@@ -2823,46 +2818,50 @@ class _VideoPlayerScreenState extends ConsumerState<VideoPlayerScreen>
                                                     }
                                                   }
                                                 },
-                                                child: Hero(
-                                                  tag: _videos[index].id,
-                                                  flightShuttleBuilder: (
-                                                    flightContext,
-                                                    animation,
-                                                    flightDirection,
-                                                    fromHeroContext,
-                                                    toHeroContext,
-                                                  ) =>
-                                                      _buildHeroShuttle(
-                                                    animation: animation,
-                                                    flightDirection:
+                                                child: SizedBox.expand(
+                                                  child: Center(
+                                                    child: Hero(
+                                                      tag: _videos[index].id,
+                                                      flightShuttleBuilder: (
+                                                        flightContext,
+                                                        animation,
                                                         flightDirection,
-                                                    item: _videos[index],
-                                                    psdFallbackBytes:
-                                                        _psdRenderedBytes[
-                                                                _videos[index]
-                                                                    .path] ??
-                                                            PsdService.instance
-                                                                .getCachedRenderedPreviewSync(
+                                                        fromHeroContext,
+                                                        toHeroContext,
+                                                      ) =>
+                                                          _buildHeroShuttle(
+                                                        animation: animation,
+                                                        flightDirection:
+                                                            flightDirection,
+                                                        item: _videos[index],
+                                                        psdFallbackBytes:
+                                                            _psdRenderedBytes[
                                                                     _videos[index]
-                                                                        .path),
-                                                    fallbackChild:
-                                                        flightDirection ==
-                                                                HeroFlightDirection
-                                                                    .push
-                                                            ? toHeroContext
-                                                                .widget
-                                                            : fromHeroContext
-                                                                .widget,
+                                                                        .path] ??
+                                                                PsdService
+                                                                    .instance
+                                                                    .getCachedRenderedPreviewSync(
+                                                                        _videos[index]
+                                                                            .path),
+                                                        fallbackChild:
+                                                            flightDirection ==
+                                                                    HeroFlightDirection
+                                                                        .push
+                                                                ? toHeroContext
+                                                                    .widget
+                                                                : fromHeroContext
+                                                                    .widget,
+                                                      ),
+                                                      child: _buildVideoPage(
+                                                          index),
+                                                    ),
                                                   ),
-                                                  child:
-                                                      _buildVideoPage(index),
                                                 ),
                                               ),
-                                              )
-                                            : Center(
-                                                child: _buildVideoPage(index),
-                                              ),
-                                      ),
+                                            )
+                                          : Center(
+                                              child: _buildVideoPage(index),
+                                            ),
                                     ),
                                   ),
                                 );

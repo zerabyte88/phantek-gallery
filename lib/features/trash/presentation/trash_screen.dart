@@ -11,6 +11,7 @@ import '../../../core/providers/settings_provider.dart';
 import '../../../core/providers/trash_provider.dart';
 import '../../../core/services/thumbnail_service.dart';
 import '../../gallery/presentation/widgets/delete_confirmation_sheet.dart';
+import '../../gallery/presentation/widgets/drag_select_grid.dart';
 import '../../../core/widgets/bouncy_tap.dart';
 import '../../../core/widgets/feedback_pill.dart';
 
@@ -91,6 +92,18 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
         _selected.clear();
         _selecting = false;
       });
+
+  void _onDragSelectionChanged(Set<String> ids, bool select) {
+    if (ids.isEmpty) return;
+    setState(() {
+      if (select) {
+        _selected.addAll(ids);
+        _selecting = true;
+      } else {
+        _selected.removeAll(ids);
+      }
+    });
+  }
 
   void _openPreview(
       BuildContext context, List<TrashItem> items, TrashItem item) {
@@ -296,52 +309,66 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                 Expanded(
                   child: items.isEmpty
                       ? const _TrashEmptyState()
-                      : GridView.builder(
-                          controller: _scrollController,
-                          cacheExtent: 600.0,
+                      : DragSelectGrid(
+                          isSelecting: _selecting,
+                          itemCount: items.length,
+                          crossAxisCount: settings.gridColumns,
+                          childAspectRatio: 0.82,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: settings.gridColumns,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                            childAspectRatio: 0.82,
-                          ),
-                          itemCount: items.length,
-                          itemBuilder: (context, i) {
-                            final item = items[i];
-                            final isSelected = _selected.contains(item.id);
-                            return _TrashGridItem(
-                              key: ValueKey(item.id),
-                              item: item,
-                              isSelected: isSelected,
-                              isSelecting: _selecting,
-                              onTap: () {
-                                if (_selecting) {
-                                  _toggleSelect(item.id);
-                                } else {
-                                  if (item.isVideo) {
-                                    ThumbnailService.instance
-                                        .getHighResVideoThumbnail(
-                                      item.id,
-                                      filePath: item.trashPath,
-                                    );
+                          scrollController: _scrollController,
+                          idAt: (i) => items[i].id,
+                          isSelected: (id) => _selected.contains(id),
+                          onRangeSelectionChanged: _onDragSelectionChanged,
+                          child: GridView.builder(
+                            controller: _scrollController,
+                            cacheExtent: 350.0,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: settings.gridColumns,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                              childAspectRatio: 0.82,
+                            ),
+                            itemCount: items.length,
+                            itemBuilder: (context, i) {
+                              final item = items[i];
+                              final isSelected = _selected.contains(item.id);
+                              return _TrashGridItem(
+                                key: ValueKey(item.id),
+                                item: item,
+                                isSelected: isSelected,
+                                isSelecting: _selecting,
+                                onTap: () {
+                                  if (_selecting) {
+                                    _toggleSelect(item.id);
+                                  } else {
+                                    if (item.isVideo) {
+                                      ThumbnailService.instance
+                                          .getHighResVideoThumbnail(
+                                        item.id,
+                                        filePath: item.trashPath,
+                                      );
+                                    }
+                                    _openPreview(context, items, item);
                                   }
-                                  _openPreview(context, items, item);
-                                }
-                              },
-                              onOpenPreview: () =>
-                                  _openPreview(context, items, item),
-                              onLongPress: () {
-                                if (!_selecting) {
-                                  _startSelect(item.id);
-                                } else {
-                                  _toggleSelect(item.id);
-                                }
-                              },
-                            );
-                          },
+                                },
+                                onOpenPreview: () =>
+                                    _openPreview(context, items, item),
+                                onLongPress: () {
+                                  if (!_selecting) {
+                                    _startSelect(item.id);
+                                  } else {
+                                    _toggleSelect(item.id);
+                                  }
+                                },
+                              );
+                            },
+                          ),
                         ),
                 ),
               ],
@@ -349,40 +376,44 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           },
         ),
         bottomNavigationBar: _selecting
-            ? Container(
-                height: 70,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 48, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  border: Border(
-                    top: BorderSide(
-                      color:
-                          Theme.of(context).dividerColor.withValues(alpha: 0.2),
-                      width: 0.5,
+            ? SafeArea(
+                top: false,
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 70),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 48, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context)
+                            .dividerColor
+                            .withValues(alpha: 0.2),
+                        width: 0.5,
+                      ),
                     ),
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _BottomActionItem(
-                      icon: Icons.restore_rounded,
-                      label: context.tr.restore,
-                      enabled: _selected.isNotEmpty,
-                      onTap: _selected.isNotEmpty
-                          ? () => _restoreSelected(trashAsync.value ?? [])
-                          : null,
-                    ),
-                    _BottomActionItem(
-                      icon: Icons.delete_outline_rounded,
-                      label: context.tr.delete,
-                      enabled: _selected.isNotEmpty,
-                      onTap: _selected.isNotEmpty
-                          ? () => _deleteSelected(trashAsync.value ?? [])
-                          : null,
-                    ),
-                  ],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _BottomActionItem(
+                        icon: Icons.restore_rounded,
+                        label: context.tr.restore,
+                        enabled: _selected.isNotEmpty,
+                        onTap: _selected.isNotEmpty
+                            ? () => _restoreSelected(trashAsync.value ?? [])
+                            : null,
+                      ),
+                      _BottomActionItem(
+                        icon: Icons.delete_outline_rounded,
+                        label: context.tr.delete,
+                        enabled: _selected.isNotEmpty,
+                        onTap: _selected.isNotEmpty
+                            ? () => _deleteSelected(trashAsync.value ?? [])
+                            : null,
+                      ),
+                    ],
+                  ),
                 ),
               )
             : null,

@@ -29,7 +29,7 @@ class GridHiResState {
 /// the active viewport once scrolling settles for [idleDelay].
 class GridHiResController extends ValueNotifier<GridHiResState> {
   GridHiResController({
-    this.idleDelay = const Duration(milliseconds: 180),
+    this.idleDelay = const Duration(milliseconds: 260),
   }) : super(const GridHiResState(active: false, generation: 0));
 
   final Duration idleDelay;
@@ -157,17 +157,17 @@ class GridHiResController extends ValueNotifier<GridHiResState> {
   }
 
   /// Computes a sharp decode width for [tileContext] based on physical pixels
-  /// (1.5x supersampled for readable small text, clamped to [minWidth]..[maxWidth]).
+  /// (2.0x supersampled for readable small text, clamped to [minWidth]..[maxWidth]).
   int computeTargetCacheWidth(
     BuildContext tileContext, {
-    int minWidth = 640,
-    int maxWidth = 960,
+    int minWidth = 768,
+    int maxWidth = 1080,
   }) {
     final renderBox = tileContext.findRenderObject();
     final dpr = MediaQuery.maybeDevicePixelRatioOf(tileContext) ?? 2.0;
     if (renderBox is RenderBox && renderBox.attached && renderBox.hasSize) {
-      final raw = (renderBox.size.width * dpr * 1.5).round();
-      final bucketed = ((raw + 31) ~/ 32) * 32;
+      final raw = (renderBox.size.width * dpr * 2.0).round();
+      final bucketed = ((raw + 63) ~/ 64) * 64;
       return bucketed.clamp(minWidth, maxWidth);
     }
     return minWidth;
@@ -188,12 +188,14 @@ class GridHiResScope extends StatefulWidget {
   const GridHiResScope({
     super.key,
     required this.child,
-    this.idleDelay = const Duration(milliseconds: 180),
+    this.idleDelay = const Duration(milliseconds: 260),
+    this.enabled = true,
     this.controller,
   });
 
   final Widget child;
   final Duration idleDelay;
+  final bool enabled;
   final GridHiResController? controller;
 
   static GridHiResController? maybeOf(BuildContext context) {
@@ -249,6 +251,8 @@ class _GridHiResScopeState extends State<GridHiResScope>
         _ownsController = true;
       }
       _syncVisibility();
+    } else if (oldWidget.enabled != widget.enabled) {
+      _syncVisibility();
     }
   }
 
@@ -266,7 +270,7 @@ class _GridHiResScopeState extends State<GridHiResScope>
   }
 
   void _syncVisibility() {
-    _controller.setVisible(_isAppActive && _isRouteCurrent);
+    _controller.setVisible(widget.enabled && _isAppActive && _isRouteCurrent);
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {

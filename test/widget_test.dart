@@ -50,12 +50,14 @@ import 'package:phantek_gallery/core/services/share_service.dart';
 import 'package:phantek_gallery/core/widgets/animated_flame_title.dart';
 import 'package:phantek_gallery/core/widgets/theme_header_background.dart';
 import 'package:phantek_gallery/core/providers/settings_provider.dart';
+import 'package:phantek_gallery/core/providers/trash_provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:phantek_gallery/core/localization/app_language.dart';
 import 'package:phantek_gallery/core/localization/app_localizations.dart';
 import 'package:phantek_gallery/core/services/app_lock_service.dart';
 import 'package:phantek_gallery/core/services/translation/translation_models.dart';
 import 'package:phantek_gallery/features/settings/presentation/widgets/translation_overlay_preview.dart';
+import 'package:phantek_gallery/features/trash/presentation/trash_screen.dart';
 import 'package:phantek_gallery/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -3780,15 +3782,25 @@ void main() {
       final ivFinder = find.byType(InteractiveViewer);
       expect(ivFinder, findsOneWidget);
       final ivBox = tester.renderObject<RenderBox>(ivFinder);
-      expect(ivBox.size.width, closeTo(300.0, 0.5));
+      expect(ivBox.size.width, closeTo(800.0, 0.5));
       expect(ivBox.size.height, closeTo(600.0, 0.5));
       final ivTopLeft = ivBox.localToGlobal(Offset.zero);
-      expect(ivTopLeft.dx, closeTo(250.0, 0.5));
+      expect(ivTopLeft.dx, closeTo(0.0, 0.5));
+      expect(ivTopLeft.dy, closeTo(0.0, 0.5));
 
-      // Tap asymmetric interior point inside the letterboxed image
+      final arFinder = find.descendant(
+        of: ivFinder,
+        matching: find.byType(AspectRatio),
+      );
+      expect(arFinder, findsOneWidget);
+      final arBox = tester.renderObject<RenderBox>(arFinder);
+      expect(arBox.size.width, closeTo(300.0, 0.5));
+      expect(arBox.size.height, closeTo(600.0, 0.5));
+      expect(arBox.localToGlobal(Offset.zero).dx, closeTo(250.0, 0.5));
+
       const screenTap = Offset(310.0, 180.0);
       final expectedLocalFocal = ivBox.globalToLocal(screenTap);
-      expect(expectedLocalFocal.dx, closeTo(60.0, 0.5));
+      expect(expectedLocalFocal.dx, closeTo(310.0, 0.5));
       expect(expectedLocalFocal.dy, closeTo(180.0, 0.5));
 
       await tester.tapAt(screenTap);
@@ -3804,10 +3816,9 @@ void main() {
           MatrixUtils.transformPoint(controller.value, expectedLocalFocal);
       expect(transformed.dx, closeTo(expectedLocalFocal.dx, 0.5));
       expect(transformed.dy, closeTo(expectedLocalFocal.dy, 0.5));
-      expect(controller.value.storage[12], closeTo(-120.0, 0.5));
+      expect(controller.value.storage[12], closeTo(-620.0, 0.5));
       expect(controller.value.storage[13], closeTo(-360.0, 0.5));
 
-      // Second double-tap resets to 1.0x
       await tester.tapAt(screenTap);
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tapAt(screenTap);
@@ -3821,7 +3832,6 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       await SettingsService.init();
 
-      // Portrait 1:2 video inside 800x600 screen -> letterboxed 300x600 at x=250..550
       final portraitVideo = MediaItem(
         id: 'letterbox_video_1',
         path: '/mock/letterbox_video_1.mp4',
@@ -3865,12 +3875,26 @@ void main() {
       final ivFinder = find.byType(InteractiveViewer);
       expect(ivFinder, findsOneWidget);
       final ivBox = tester.renderObject<RenderBox>(ivFinder);
-      expect(ivBox.size.width, closeTo(300.0, 0.5));
+      expect(ivBox.size.width, closeTo(800.0, 0.5));
       expect(ivBox.size.height, closeTo(600.0, 0.5));
-      expect(ivBox.localToGlobal(Offset.zero).dx, closeTo(250.0, 0.5));
+      final ivTopLeft = ivBox.localToGlobal(Offset.zero);
+      expect(ivTopLeft.dx, closeTo(0.0, 0.5));
+      expect(ivTopLeft.dy, closeTo(0.0, 0.5));
+
+      final arFinder = find.descendant(
+        of: ivFinder,
+        matching: find.byType(AspectRatio),
+      );
+      expect(arFinder, findsOneWidget);
+      final arBox = tester.renderObject<RenderBox>(arFinder);
+      expect(arBox.size.width, closeTo(300.0, 0.5));
+      expect(arBox.size.height, closeTo(600.0, 0.5));
+      expect(arBox.localToGlobal(Offset.zero).dx, closeTo(250.0, 0.5));
 
       const screenTap = Offset(310.0, 180.0);
       final expectedLocalFocal = ivBox.globalToLocal(screenTap);
+      expect(expectedLocalFocal.dx, closeTo(310.0, 0.5));
+      expect(expectedLocalFocal.dy, closeTo(180.0, 0.5));
 
       await tester.tapAt(screenTap);
       await tester.pump(const Duration(milliseconds: 60));
@@ -3885,10 +3909,9 @@ void main() {
           MatrixUtils.transformPoint(controller.value, expectedLocalFocal);
       expect(transformed.dx, closeTo(expectedLocalFocal.dx, 0.5));
       expect(transformed.dy, closeTo(expectedLocalFocal.dy, 0.5));
-      expect(controller.value.storage[12], closeTo(-120.0, 0.5));
+      expect(controller.value.storage[12], closeTo(-620.0, 0.5));
       expect(controller.value.storage[13], closeTo(-360.0, 0.5));
 
-      // Second double-tap resets to 1.0x
       await tester.tapAt(screenTap);
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tapAt(screenTap);
@@ -5946,6 +5969,71 @@ void main() {
       expect(result, isNull);
     });
 
+    testWidgets(
+        'GridHiResScope(enabled: false) downgrades immediately and re-activates when enabled becomes true',
+        (tester) async {
+      final hiResController = GridHiResController(
+        idleDelay: const Duration(milliseconds: 260),
+      );
+      addTearDown(hiResController.dispose);
+
+      Widget buildApp(bool enabled) => MaterialApp(
+            home: Scaffold(
+              body: GridHiResScope(
+                controller: hiResController,
+                enabled: enabled,
+                child: const SizedBox.expand(),
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(buildApp(true));
+      await tester.pump();
+      expect(hiResController.value.active, isFalse);
+
+      await tester.pump(const Duration(milliseconds: 280));
+      expect(hiResController.value.active, isTrue);
+
+      // Switching tab sets enabled: false -> downgrades immediately.
+      await tester.pumpWidget(buildApp(false));
+      await tester.pump();
+      expect(hiResController.value.active, isFalse);
+
+      // Even after idleDelay, stays inactive while disabled.
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(hiResController.value.active, isFalse);
+
+      // Re-enabling schedules idle upgrade and activates after idleDelay.
+      await tester.pumpWidget(buildApp(true));
+      await tester.pump();
+      expect(hiResController.value.active, isFalse);
+
+      await tester.pump(const Duration(milliseconds: 280));
+      expect(hiResController.value.active, isTrue);
+    });
+
+    test(
+        'ThumbnailService.getGridHiResPhotoThumbnail returns null immediately when already cancelled',
+        () async {
+      final result = await ThumbnailService.instance.getGridHiResPhotoThumbnail(
+        'cancelled_photo_1',
+        filePath: '/storage/emulated/0/DCIM/cancelled.jpg',
+        isCancelled: () => true,
+      );
+      expect(result, isNull);
+    });
+
+    test(
+        'ThumbnailService.getThumbnail returns null immediately when isCancelled is already true',
+        () async {
+      final result = await ThumbnailService.instance.getThumbnail(
+        'cancelled_lowres_1',
+        filePath: '/storage/emulated/0/DCIM/cancelled_lowres.jpg',
+        isCancelled: () => true,
+      );
+      expect(result, isNull);
+    });
+
     test('AppLanguage.sortedLanguages sorts A-Z by native language name', () {
       final sorted = AppLanguage.sortedLanguages;
       expect(sorted.length, AppLanguage.values.length);
@@ -5969,6 +6057,68 @@ void main() {
           lessThanOrEqualTo(0),
         );
       }
+    });
+
+    testWidgets(
+        'TrashScreen supports hold-and-drag quick selection via DragSelectGrid',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final trashItems = List.generate(
+        6,
+        (i) => TrashItem(
+          id: 'trash_$i',
+          originalPath: '/storage/emulated/0/DCIM/$i.jpg',
+          trashPath: '/mock/trash/$i.jpg',
+          name: '$i.jpg',
+          deletedDate: DateTime(2026, 11, 20),
+          size: 1024,
+          isVideo: i.isOdd,
+        ),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsNotifierProvider.overrideWith(
+              () => _TestSettingsNotifier(
+                const SettingsModel(gridColumns: 3),
+              ),
+            ),
+            trashProvider.overrideWith(() => _MockTrashNotifier(trashItems)),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: const TrashScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final dragGridFinder = find.byType(DragSelectGrid);
+      expect(dragGridFinder, findsOneWidget);
+
+      final tile1Center =
+          tester.getCenter(find.byKey(const ValueKey('trash_1')));
+      final tile2Center =
+          tester.getCenter(find.byKey(const ValueKey('trash_2')));
+
+      // Long press first item to enter selection mode, then drag across row.
+      await tester.longPress(find.byKey(const ValueKey('trash_0')));
+      await tester.pumpAndSettle();
+      expect(find.text('1 selected'), findsOneWidget);
+
+      await tester.dragFrom(tile1Center, tile2Center - tile1Center);
+      await tester.pumpAndSettle();
+      expect(find.text('3 selected'), findsOneWidget);
     });
   });
 }
@@ -6068,4 +6218,12 @@ class _MutableMockMediaNotifier extends MediaListNotifier {
   Future<void> refresh() async {
     state = AsyncData(_items);
   }
+}
+
+class _MockTrashNotifier extends TrashNotifier {
+  final List<TrashItem> _items;
+  _MockTrashNotifier(this._items);
+
+  @override
+  Future<List<TrashItem>> build() async => _items;
 }

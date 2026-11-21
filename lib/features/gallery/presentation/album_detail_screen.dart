@@ -1174,9 +1174,8 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
             ],
             const Divider(height: 1),
             Expanded(
-              child: GridHiResScope(
-                child: albumItems.isEmpty
-                    ? Center(
+              child: albumItems.isEmpty
+                  ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1197,45 +1196,49 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                       ),
                     )
                   : isShowingSubfolderGrid
-                      ? FastScrollHandle(
-                          controller: _subfolderScrollController,
-                          child: GridView.builder(
+                      ? GridHiResScope(
+                          child: FastScrollHandle(
                             controller: _subfolderScrollController,
-                            cacheExtent: 800.0,
-                            addAutomaticKeepAlives: false,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: settings.albumGridColumns,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 16,
-                              childAspectRatio: 0.74,
+                            child: GridView.builder(
+                              controller: _subfolderScrollController,
+                              cacheExtent: 350.0,
+                              addAutomaticKeepAlives: false,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: settings.albumGridColumns,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 16,
+                                childAspectRatio: 0.74,
+                              ),
+                              itemCount: subfolderNames.length,
+                              itemBuilder: (_, i) {
+                                final sub = subfolderNames[i];
+                                final subItems =
+                                    subfolderItemsMap[sub] ?? const [];
+                                final cover =
+                                    subItems.isNotEmpty ? subItems.first : null;
+                                if (cover == null) {
+                                  return const SizedBox.shrink();
+                                }
+                                final subAlbum = Album(
+                                  name: sub,
+                                  items: subItems,
+                                  coverItem: cover,
+                                );
+                                return AlbumGridItem(
+                                  key: ValueKey(sub),
+                                  album: subAlbum,
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedSubfolder = sub;
+                                      _syncPageControllerToFilter();
+                                    });
+                                  },
+                                );
+                              },
                             ),
-                            itemCount: subfolderNames.length,
-                            itemBuilder: (_, i) {
-                              final sub = subfolderNames[i];
-                              final subItems =
-                                  subfolderItemsMap[sub] ?? const [];
-                              final cover =
-                                  subItems.isNotEmpty ? subItems.first : null;
-                              if (cover == null) return const SizedBox.shrink();
-                              final subAlbum = Album(
-                                name: sub,
-                                items: subItems,
-                                coverItem: cover,
-                              );
-                              return AlbumGridItem(
-                                key: ValueKey(sub),
-                                album: subAlbum,
-                                onTap: () {
-                                  setState(() {
-                                    _selectedSubfolder = sub;
-                                    _syncPageControllerToFilter();
-                                  });
-                                },
-                              );
-                            },
                           ),
                         )
                       : NotificationListener<ScrollNotification>(
@@ -1265,149 +1268,151 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                               return _KeepAliveAlbumPage(
                                 child: HeroMode(
                                   enabled: _filter == tab,
-                                  child: pageItems.isEmpty
-                                      ? Center(
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                _searchQuery.isNotEmpty
-                                                    ? Icons.search_off_outlined
-                                                    : Icons
-                                                        .photo_library_outlined,
-                                                size: 56,
-                                                color: cs.onSurfaceVariant
-                                                    .withValues(alpha: 0.45),
-                                              ),
-                                              const SizedBox(height: 12),
-                                              Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 24),
-                                                child: Text(
+                                  child: GridHiResScope(
+                                    enabled: _filter == tab,
+                                    child: pageItems.isEmpty
+                                        ? Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
                                                   _searchQuery.isNotEmpty
-                                                      ? context.tr
-                                                          .noMediaMatching(
-                                                              _searchQuery)
-                                                      : 'No ${tab.label.toLowerCase()} in this album',
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(
-                                                    fontSize: 15,
-                                                    color: cs.onSurfaceVariant,
+                                                      ? Icons.search_off_outlined
+                                                      : Icons
+                                                          .photo_library_outlined,
+                                                  size: 56,
+                                                  color: cs.onSurfaceVariant
+                                                      .withValues(alpha: 0.45),
+                                                ),
+                                                const SizedBox(height: 12),
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                          horizontal: 24),
+                                                  child: Text(
+                                                    _searchQuery.isNotEmpty
+                                                        ? context.tr
+                                                            .noMediaMatching(
+                                                                _searchQuery)
+                                                        : 'No ${tab.label.toLowerCase()} in this album',
+                                                    textAlign: TextAlign.center,
+                                                    style: TextStyle(
+                                                      fontSize: 15,
+                                                      color: cs.onSurfaceVariant,
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                              if (_searchQuery.isNotEmpty) ...[
-                                                const SizedBox(height: 16),
-                                                OutlinedButton.icon(
-                                                  key: const ValueKey(
-                                                      'album_clear_search_button'),
-                                                  onPressed: _closeSearch,
-                                                  icon: const Icon(
-                                                    Icons.close_rounded,
-                                                    size: 16,
+                                                if (_searchQuery.isNotEmpty) ...[
+                                                  const SizedBox(height: 16),
+                                                  OutlinedButton.icon(
+                                                    key: const ValueKey(
+                                                        'album_clear_search_button'),
+                                                    onPressed: _closeSearch,
+                                                    icon: const Icon(
+                                                      Icons.close_rounded,
+                                                      size: 16,
+                                                    ),
+                                                    label: Text(
+                                                      context.tr.clearSearch,
+                                                    ),
                                                   ),
-                                                  label: Text(
-                                                    context.tr.clearSearch,
-                                                  ),
-                                                ),
+                                                ],
                                               ],
-                                            ],
-                                          ),
-                                        )
-                                      : FastScrollHandle(
-                                          controller: _scrollControllers[tab]!,
-                                          labelBuilder: (fraction) =>
-                                              _buildScrollLabel(
-                                            pageItems,
-                                            fraction,
-                                            activeSort,
-                                          ),
-                                          child: DragSelectGrid(
-                                            isSelecting: _selecting,
-                                            itemCount: pageItems.length,
-                                            crossAxisCount:
-                                                settings.gridColumns,
-                                            crossAxisSpacing: 2,
-                                            mainAxisSpacing: 2,
-                                            padding: const EdgeInsets.all(2),
-                                            scrollController:
-                                                _scrollControllers[tab]!,
-                                            idAt: (i) => pageItems[i].id,
-                                            isSelected: (id) =>
-                                                _selected.contains(id),
-                                            onRangeSelectionChanged:
-                                                (ids, select) {
-                                              setState(() {
-                                                if (select) {
-                                                  _selected.addAll(ids);
-                                                  _selecting = true;
-                                                } else {
-                                                  _selected.removeAll(ids);
-                                                }
-                                              });
-                                            },
-                                            child: GridView.builder(
-                                              key: PageStorageKey(
-                                                'album_${widget.albumName}_${_selectedSubfolder ?? 'all'}_${tab.name}',
-                                              ),
-                                              controller:
-                                                  _scrollControllers[tab],
-                                              cacheExtent: 800.0,
-                                              addAutomaticKeepAlives: false,
-                                              padding: const EdgeInsets.all(2),
-                                              gridDelegate:
-                                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                                crossAxisCount:
-                                                    settings.gridColumns,
-                                                crossAxisSpacing: 2,
-                                                mainAxisSpacing: 2,
-                                              ),
+                                            ),
+                                          )
+                                        : FastScrollHandle(
+                                            controller: _scrollControllers[tab]!,
+                                            labelBuilder: (fraction) =>
+                                                _buildScrollLabel(
+                                              pageItems,
+                                              fraction,
+                                              activeSort,
+                                            ),
+                                            child: DragSelectGrid(
+                                              isSelecting: _selecting,
                                               itemCount: pageItems.length,
-                                              itemBuilder: (_, i) {
-                                                final item = pageItems[i];
-                                                return MediaGridItem(
-                                                  key: ValueKey(item.id),
-                                                  item: item,
-                                                  isSelected: _selected
-                                                      .contains(item.id),
-                                                  isSelecting: _selecting,
-                                                  showBadges:
-                                                      settings.showBadges,
-                                                  onTap: () {
-                                                    if (_selecting) {
-                                                      _toggleSelect(item.id);
-                                                      return;
-                                                    }
-                                                    if (pageItems.every(
-                                                        (e) => !e.isVideo)) {
-                                                      Navigator.of(context)
-                                                          .openImage(
-                                                              pageItems, i);
-                                                    } else {
-                                                      Navigator.of(context)
-                                                          .openVideo(
-                                                              pageItems, i);
-                                                    }
-                                                  },
-                                                  onLongPress: () {
-                                                    if (!_selecting) {
-                                                      _startSelect(item.id);
-                                                    } else {
-                                                      _toggleSelect(item.id);
-                                                    }
-                                                  },
-                                                );
+                                              crossAxisCount:
+                                                  settings.gridColumns,
+                                              crossAxisSpacing: 2,
+                                              mainAxisSpacing: 2,
+                                              padding: const EdgeInsets.all(2),
+                                              scrollController:
+                                                  _scrollControllers[tab]!,
+                                              idAt: (i) => pageItems[i].id,
+                                              isSelected: (id) =>
+                                                  _selected.contains(id),
+                                              onRangeSelectionChanged:
+                                                  (ids, select) {
+                                                setState(() {
+                                                  if (select) {
+                                                    _selected.addAll(ids);
+                                                    _selecting = true;
+                                                  } else {
+                                                    _selected.removeAll(ids);
+                                                  }
+                                                });
                                               },
+                                              child: GridView.builder(
+                                                key: PageStorageKey(
+                                                  'album_${widget.albumName}_${_selectedSubfolder ?? 'all'}_${tab.name}',
+                                                ),
+                                                controller:
+                                                    _scrollControllers[tab],
+                                                cacheExtent: 350.0,
+                                                addAutomaticKeepAlives: false,
+                                                padding: const EdgeInsets.all(2),
+                                                gridDelegate:
+                                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                                  crossAxisCount:
+                                                      settings.gridColumns,
+                                                  crossAxisSpacing: 2,
+                                                  mainAxisSpacing: 2,
+                                                ),
+                                                itemCount: pageItems.length,
+                                                itemBuilder: (_, i) {
+                                                  final item = pageItems[i];
+                                                  return MediaGridItem(
+                                                    key: ValueKey(item.id),
+                                                    item: item,
+                                                    isSelected: _selected
+                                                        .contains(item.id),
+                                                    isSelecting: _selecting,
+                                                    showBadges:
+                                                        settings.showBadges,
+                                                    onTap: () {
+                                                      if (_selecting) {
+                                                        _toggleSelect(item.id);
+                                                        return;
+                                                      }
+                                                      if (pageItems.every(
+                                                          (e) => !e.isVideo)) {
+                                                        Navigator.of(context)
+                                                            .openImage(
+                                                                pageItems, i);
+                                                      } else {
+                                                        Navigator.of(context)
+                                                            .openVideo(
+                                                                pageItems, i);
+                                                      }
+                                                    },
+                                                    onLongPress: () {
+                                                      if (!_selecting) {
+                                                        _startSelect(item.id);
+                                                      } else {
+                                                        _toggleSelect(item.id);
+                                                      }
+                                                    },
+                                                  );
+                                                },
+                                              ),
                                             ),
                                           ),
-                                        ),
+                                  ),
                                 ),
                               );
                             },
                           ),
                         ),
-              ),
             ),
           ],
         ),

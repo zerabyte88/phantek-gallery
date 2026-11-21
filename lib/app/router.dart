@@ -8,7 +8,6 @@ import '../features/trash/presentation/trash_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../core/models/media_item.dart';
 import '../core/services/psd_service.dart';
-import '../core/services/thumbnail_service.dart';
 
 /// Global navigator key allowing overlays and dialogs to be shown from anywhere.
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -125,21 +124,13 @@ class _ViewerArgs {
 }
 
 void _prewarmOnOpen(BuildContext context, List<MediaItem> items, int index) {
-  if (items.isEmpty) return;
-  for (final offset in const [0, -1, 1]) {
-    final target = index + offset;
-    if (target < 0 || target >= items.length) continue;
-    final item = items[target];
-    if (item.path.isEmpty) continue;
-    if (PsdService.isPsd(item.path)) {
-      unawaited(PsdService.instance.prewarmPsdDocument(item.path));
-    } else if (!item.isVideo) {
-      unawaited(ThumbnailService.instance.prewarmPhotoPreview(
-        item.path,
-        assetId: item.id,
-      ));
-      precacheImage(screenDisplayImage(item.path), context);
-    }
+  if (items.isEmpty || index < 0 || index >= items.length) return;
+  final item = items[index];
+  if (item.path.isEmpty) return;
+  if (PsdService.isPsd(item.path)) {
+    unawaited(PsdService.instance.prewarmPsdDocument(item.path));
+  } else if (!item.isVideo) {
+    precacheImage(screenDisplayImage(item.path), context);
   }
 }
 

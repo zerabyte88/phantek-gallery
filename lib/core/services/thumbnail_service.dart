@@ -29,19 +29,33 @@ class CacheSizeBreakdown {
 
 /// Queued thumbnail fetch request for uncached items.
 class _ThumbnailRequest {
-  _ThumbnailRequest(this.id, this.completer,
-      {this.filePath, this.isVideo = false});
+  _ThumbnailRequest(
+    this.id,
+    this.completer, {
+    this.filePath,
+    this.isVideo = false,
+    bool Function()? isCancelled,
+  }) {
+    cancelPredicates.add(isCancelled);
+  }
+
   final String id;
   final String? filePath;
   final bool isVideo;
   final Completer<Uint8List?> completer;
+  final List<bool Function()?> cancelPredicates = [];
+
+  bool get isAllCancelled =>
+      cancelPredicates.isNotEmpty &&
+      cancelPredicates.every((fn) => fn != null && fn());
 }
 
-class _GridHiResVideoRequest {
-  _GridHiResVideoRequest({
+class _GridHiResRequest {
+  _GridHiResRequest({
     required this.assetId,
     required this.filePath,
     required this.size,
+    required this.isVideo,
     required this.isCancelled,
     required this.completer,
   });
@@ -49,6 +63,7 @@ class _GridHiResVideoRequest {
   final String assetId;
   final String filePath;
   final int size;
+  final bool isVideo;
   final bool Function()? isCancelled;
   final Completer<Uint8List?> completer;
 }
@@ -62,7 +77,7 @@ class ThumbnailService {
   static const int _thumbnailQuality = 90;
   static const int _maxMemoryEntries = 500;
   static const int _maxConcurrent = 6;
-  static const int _maxGridHiResConcurrent = 3;
+  static const int _maxGridHiResConcurrent = 2;
   static const int defaultPreviewMaxDim = 1440;
   static const int _maxPreviewMemoryEntries = 40;
   static const MethodChannel _nativeChannel =
@@ -71,14 +86,16 @@ class ThumbnailService {
   final Map<String, Uint8List> _memoryCache = {};
   final Map<String, Uint8List> _highResVideoCache = {};
   final Map<String, Uint8List> _previewMemoryCache = {};
+  final Map<String, String> _previewFileNameByPathKey = {};
   final Map<String, double> _thumbnailAspectRatioCache = {};
   final Map<String, Uint8List> _videoFrameCache = {};
   final Map<String, Completer<Uint8List?>> _inFlight = {};
+  final Map<String, _ThumbnailRequest> _queuedOrInFlightRequests = {};
   final Map<String, Completer<Uint8List?>> _highResInFlight = {};
   final Map<String, Completer<Uint8List?>> _previewInFlight = {};
   final Map<String, AssetEntity> _entityCache = {};
   final Queue<_ThumbnailRequest> _queue = Queue();
-  final Queue<_GridHiResVideoRequest> _gridHiResQueue = Queue();
+  final Queue<_GridHiResRequest> _gridHiResQueue = Queue();
   final Set<String> _diskCachedFileNames = {};
   int _activeWorkers = 0;
   int _activeGridHiResWorkers = 0;
@@ -183,15 +200,18 @@ class ThumbnailService {
   bool hasDiskCacheFileName(String fileName) =>
       _diskCachedFileNames.contains(fileName);
 
-  String? _previewCacheFileName(
+  String _previewPathKey(String filePath, int maxDimension) =>
+      '$filePath|$maxDimension';
+
+  Future<String?> _computePreviewCacheFileNameAsync(
     String filePath, {
     int maxDimension = defaultPreviewMaxDim,
-  }) {
+  }) async {
     if (filePath.isEmpty) return null;
     try {
       final file = File(filePath);
-      if (!file.existsSync()) return null;
-      final stat = file.statSync();
+      if (!await file.exists()) return null;
+      final stat = await file.stat();
       final sig =
           '${filePath}_${stat.size}_${stat.modified.millisecondsSinceEpoch}_$maxDimension';
       final safe = p
@@ -203,13 +223,14 @@ class ThumbnailService {
     }
   }
 
-  /// Fast synchronous lookup in the in-memory screen-fit preview cache (0ms).
+  /// Fast synchronous lookup in the in-memory screen-fit preview cache (0ms, zero disk I/O).
   Uint8List? getMemoryPreview(
     String filePath, {
     int maxDimension = defaultPreviewMaxDim,
   }) {
+    if (filePath.isEmpty) return null;
     final fileName =
-        _previewCacheFileName(filePath, maxDimension: maxDimension);
+        _previewFileNameByPathKey[_previewPathKey(filePath, maxDimension)];
     if (fileName == null) return null;
     final bytes = _previewMemoryCache.remove(fileName);
     if (bytes == null) return null;
@@ -217,21 +238,19 @@ class ThumbnailService {
     return bytes;
   }
 
-  /// Synchronously returns the cached screen-fit preview File on disk if it exists.
+  /// Synchronously returns the cached screen-fit preview File on disk without
+  /// performing blocking `existsSync()` / `statSync()` on the UI thread.
   File? getCachedPreviewFile(
     String filePath, {
     int maxDimension = defaultPreviewMaxDim,
   }) {
+    if (filePath.isEmpty) return null;
     final fileName =
-        _previewCacheFileName(filePath, maxDimension: maxDimension);
+        _previewFileNameByPathKey[_previewPathKey(filePath, maxDimension)];
     final dirPath = cacheDirPathSync;
     if (fileName == null || dirPath == null) return null;
-    final file = File(p.join(dirPath, fileName));
-    if (file.existsSync()) {
-      _diskCachedFileNames.add(fileName);
-      return file;
-    }
-    return null;
+    if (!_diskCachedFileNames.contains(fileName)) return null;
+    return File(p.join(dirPath, fileName));
   }
 
   void _putPreviewInMemory(String fileName, Uint8List bytes) {
@@ -253,9 +272,13 @@ class ThumbnailService {
         MediaScannerService.isSupportedVideo(filePath)) {
       return null;
     }
-    final fileName =
-        _previewCacheFileName(filePath, maxDimension: maxDimension);
+    final fileName = await _computePreviewCacheFileNameAsync(
+      filePath,
+      maxDimension: maxDimension,
+    );
     if (fileName == null) return null;
+    _previewFileNameByPathKey[_previewPathKey(filePath, maxDimension)] =
+        fileName;
 
     final mem = getMemoryPreview(filePath, maxDimension: maxDimension);
     if (mem != null) return mem;
@@ -463,6 +486,49 @@ class ThumbnailService {
     return null;
   }
 
+  void _pruneCancelledGridHiResQueue() {
+    if (_gridHiResQueue.isEmpty) return;
+    final retained = <_GridHiResRequest>[];
+    while (_gridHiResQueue.isNotEmpty) {
+      final req = _gridHiResQueue.removeFirst();
+      if (req.isCancelled?.call() == true) {
+        if (!req.completer.isCompleted) {
+          req.completer.complete(null);
+        }
+      } else {
+        retained.add(req);
+      }
+    }
+    _gridHiResQueue.addAll(retained);
+  }
+
+  /// Extracts an ephemeral high-resolution thumbnail for a visible photo tile
+  /// without persisting to disk or retaining it in [_memoryCache].
+  Future<Uint8List?> getGridHiResPhotoThumbnail(
+    String assetId, {
+    required String filePath,
+    int size = 1024,
+    bool Function()? isCancelled,
+  }) {
+    if (isCancelled?.call() == true || filePath.isEmpty) {
+      return Future.value(null);
+    }
+    _pruneCancelledGridHiResQueue();
+    final completer = Completer<Uint8List?>();
+    _gridHiResQueue.add(
+      _GridHiResRequest(
+        assetId: assetId,
+        filePath: filePath,
+        size: size,
+        isVideo: false,
+        isCancelled: isCancelled,
+        completer: completer,
+      ),
+    );
+    _processGridHiResQueue();
+    return completer.future;
+  }
+
   /// Extracts an ephemeral high-resolution frame for a visible video tile
   /// without persisting to disk or retaining it in [_highResVideoCache].
   Future<Uint8List?> getGridHiResVideoThumbnail(
@@ -478,12 +544,14 @@ class ThumbnailService {
     if (cached != null && cached.isNotEmpty) {
       return Future.value(cached);
     }
+    _pruneCancelledGridHiResQueue();
     final completer = Completer<Uint8List?>();
     _gridHiResQueue.add(
-      _GridHiResVideoRequest(
+      _GridHiResRequest(
         assetId: assetId,
         filePath: filePath,
         size: size,
+        isVideo: true,
         isCancelled: isCancelled,
         completer: completer,
       ),
@@ -511,45 +579,70 @@ class ThumbnailService {
         }
         Uint8List? bytes;
         try {
-          try {
-            bytes = await _nativeChannel.invokeMethod<Uint8List>(
-              'getVideoThumbnail',
-              {
-                'path': req.filePath,
-                'assetId': req.assetId,
-                'size': req.size,
-              },
-            );
-          } catch (_) {}
+          if (!req.isVideo) {
+            try {
+              bytes = await _nativeChannel
+                  .invokeMethod<Uint8List>(
+                    'getImageThumbnail',
+                    {
+                      'path': req.filePath,
+                      'assetId': req.assetId,
+                      'size': req.size,
+                      'lowPriority': true,
+                    },
+                  )
+                  .timeout(const Duration(seconds: 4), onTimeout: () => null);
+            } catch (_) {}
+          } else {
+            try {
+              bytes = await _nativeChannel
+                  .invokeMethod<Uint8List>(
+                    'getVideoThumbnail',
+                    {
+                      'path': req.filePath,
+                      'assetId': req.assetId,
+                      'size': req.size,
+                      'lowPriority': true,
+                    },
+                  )
+                  .timeout(const Duration(seconds: 4), onTimeout: () => null);
+            } catch (_) {}
 
-          if ((bytes == null || bytes.isEmpty) &&
-              req.isCancelled?.call() != true) {
-            final entity =
-                _entityCache[req.assetId] ?? await AssetEntity.fromId(req.assetId);
-            if (entity != null && req.isCancelled?.call() != true) {
-              try {
-                final w = entity.orientatedWidth > 0
-                    ? entity.orientatedWidth
-                    : entity.width;
-                final h = entity.orientatedHeight > 0
-                    ? entity.orientatedHeight
-                    : entity.height;
-                final maxDim = (w > 0 && h > 0) ? (w > h ? w : h) : req.size;
-                final scale = maxDim > req.size ? req.size / maxDim : 1.0;
-                final targetW =
-                    (w > 0) ? (w * scale).toInt().clamp(2, req.size) : req.size;
-                final targetH =
-                    (h > 0) ? (h * scale).toInt().clamp(2, req.size) : req.size;
-                bytes = await entity.thumbnailDataWithSize(
-                  ThumbnailSize(targetW, targetH),
-                  quality: 92,
-                );
-              } catch (_) {}
+            if ((bytes == null || bytes.isEmpty) &&
+                req.isCancelled?.call() != true) {
+              final entity = _entityCache[req.assetId] ??
+                  await AssetEntity.fromId(req.assetId);
+              if (entity != null && req.isCancelled?.call() != true) {
+                try {
+                  final w = entity.orientatedWidth > 0
+                      ? entity.orientatedWidth
+                      : entity.width;
+                  final h = entity.orientatedHeight > 0
+                      ? entity.orientatedHeight
+                      : entity.height;
+                  final maxDim = (w > 0 && h > 0) ? (w > h ? w : h) : req.size;
+                  final scale = maxDim > req.size ? req.size / maxDim : 1.0;
+                  final targetW = (w > 0)
+                      ? (w * scale).toInt().clamp(2, req.size)
+                      : req.size;
+                  final targetH = (h > 0)
+                      ? (h * scale).toInt().clamp(2, req.size)
+                      : req.size;
+                  bytes = await entity
+                      .thumbnailDataWithSize(
+                        ThumbnailSize(targetW, targetH),
+                        quality: 92,
+                      )
+                      .timeout(
+                        const Duration(seconds: 4),
+                        onTimeout: () => null,
+                      );
+                } catch (_) {}
+              }
             }
           }
         } catch (e) {
-          debugPrint(
-              '[ThumbnailService] getGridHiResVideoThumbnail error: $e');
+          debugPrint('[ThumbnailService] getGridHiRes error: $e');
         }
 
         if (!req.completer.isCompleted) {
@@ -764,20 +857,44 @@ class ThumbnailService {
     return File(p.join(dir.path, _cacheFileName(assetId)));
   }
 
+  void _pruneCancelledThumbnailQueue() {
+    if (_queue.length <= 64) return;
+    final retained = <_ThumbnailRequest>[];
+    while (_queue.isNotEmpty) {
+      final req = _queue.removeFirst();
+      if (req.isAllCancelled) {
+        _inFlight.remove(req.id);
+        _queuedOrInFlightRequests.remove(req.id);
+        if (!req.completer.isCompleted) {
+          req.completer.complete(null);
+        }
+      } else {
+        retained.add(req);
+      }
+    }
+    _queue.addAll(retained);
+  }
+
   /// Returns cached thumbnail bytes from memory or disk, or fetches
   /// from PhotoManager / native video frame extractor and persists to disk.
   Future<Uint8List?> getThumbnail(
     String assetId, {
     String? filePath,
     bool isVideo = false,
+    bool Function()? isCancelled,
   }) async {
+    if (isCancelled?.call() == true) return null;
+
     final cached = _memoryCache[assetId];
     if (cached != null) return cached;
 
     final inFlight = _inFlight[assetId];
-    if (inFlight != null) return inFlight.future;
+    if (inFlight != null) {
+      _queuedOrInFlightRequests[assetId]?.cancelPredicates.add(isCancelled);
+      return inFlight.future;
+    }
 
-    final diskFile = getCachedFile(assetId);
+    final diskFile = getIndexedDiskFile(assetId);
     if (diskFile != null) {
       final completer = Completer<Uint8List?>();
       _inFlight[assetId] = completer;
@@ -787,18 +904,23 @@ class ThumbnailService {
         completer,
         filePath: filePath,
         isVideo: isVideo,
+        isCancelled: isCancelled,
       );
       return completer.future;
     }
 
+    _pruneCancelledThumbnailQueue();
     final completer = Completer<Uint8List?>();
-    _inFlight[assetId] = completer;
-    _queue.add(_ThumbnailRequest(
+    final req = _ThumbnailRequest(
       assetId,
       completer,
       filePath: filePath,
       isVideo: isVideo,
-    ));
+      isCancelled: isCancelled,
+    );
+    _inFlight[assetId] = completer;
+    _queuedOrInFlightRequests[assetId] = req;
+    _queue.add(req);
     _processQueue();
     return completer.future;
   }
@@ -809,25 +931,38 @@ class ThumbnailService {
     Completer<Uint8List?> completer, {
     String? filePath,
     bool isVideo = false,
+    bool Function()? isCancelled,
   }) async {
     try {
       final bytes = await file.readAsBytes();
       if (bytes.isNotEmpty) {
         _putInMemory(assetId, bytes);
         _inFlight.remove(assetId);
+        _queuedOrInFlightRequests.remove(assetId);
         completer.complete(bytes);
         return;
       }
-    } catch (_) {}
+    } catch (_) {
+      evictDiskCacheIndex(assetId);
+    }
     _inFlight.remove(assetId);
+    _queuedOrInFlightRequests.remove(assetId);
+    if (isCancelled?.call() == true) {
+      completer.complete(null);
+      return;
+    }
+    _pruneCancelledThumbnailQueue();
     final fallbackCompleter = Completer<Uint8List?>();
-    _inFlight[assetId] = fallbackCompleter;
-    _queue.add(_ThumbnailRequest(
+    final req = _ThumbnailRequest(
       assetId,
       fallbackCompleter,
       filePath: filePath,
       isVideo: isVideo,
-    ));
+      isCancelled: isCancelled,
+    );
+    _inFlight[assetId] = fallbackCompleter;
+    _queuedOrInFlightRequests[assetId] = req;
+    _queue.add(req);
     _processQueue();
     completer.complete(await fallbackCompleter.future);
   }
@@ -842,10 +977,17 @@ class ThumbnailService {
   Future<void> _runWorker() async {
     try {
       while (_queue.isNotEmpty) {
-        // FIFO order prevents cold-start starvation for visible grid tiles.
-        final req = _queue.removeFirst();
+        // LIFO order prioritizes tiles currently visible on screen over scrolled-past tiles.
+        final req = _queue.removeLast();
         if (req.completer.isCompleted) {
           _inFlight.remove(req.id);
+          _queuedOrInFlightRequests.remove(req.id);
+          continue;
+        }
+        if (req.isAllCancelled) {
+          _inFlight.remove(req.id);
+          _queuedOrInFlightRequests.remove(req.id);
+          req.completer.complete(null);
           continue;
         }
         try {
@@ -857,6 +999,7 @@ class ThumbnailService {
             req.completer.complete(null);
           }
           _inFlight.remove(req.id);
+          _queuedOrInFlightRequests.remove(req.id);
         }
       }
     } finally {
@@ -875,6 +1018,7 @@ class ThumbnailService {
         if (diskBytes.isNotEmpty) {
           _putInMemory(req.id, diskBytes);
           _inFlight.remove(req.id);
+          _queuedOrInFlightRequests.remove(req.id);
           req.completer.complete(diskBytes);
           return;
         }
@@ -1012,7 +1156,10 @@ class ThumbnailService {
       _saveToDisk(req.id, bytes);
     }
     _inFlight.remove(req.id);
-    req.completer.complete(bytes);
+    _queuedOrInFlightRequests.remove(req.id);
+    if (!req.completer.isCompleted) {
+      req.completer.complete(bytes);
+    }
   }
 
   Future<void> _writeBytesAtomic(
@@ -1087,6 +1234,7 @@ class ThumbnailService {
     _highResVideoCache.remove(assetId);
     _thumbnailAspectRatioCache.remove(assetId);
     _inFlight.remove(assetId);
+    _queuedOrInFlightRequests.remove(assetId);
     _highResInFlight.remove(assetId);
     _entityCache.remove(assetId);
     try {
@@ -1119,9 +1267,17 @@ class ThumbnailService {
     _memoryCache.clear();
     _highResVideoCache.clear();
     _previewMemoryCache.clear();
+    _previewFileNameByPathKey.clear();
     _thumbnailAspectRatioCache.clear();
     _videoFrameCache.clear();
+    while (_queue.isNotEmpty) {
+      final req = _queue.removeFirst();
+      if (!req.completer.isCompleted) {
+        req.completer.complete(null);
+      }
+    }
     _inFlight.clear();
+    _queuedOrInFlightRequests.clear();
     _previewInFlight.clear();
     while (_gridHiResQueue.isNotEmpty) {
       final req = _gridHiResQueue.removeFirst();

@@ -1010,52 +1010,56 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
 
             _updateMemoizedTabs(allItems, settings);
 
-            return GridHiResScope(
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (notification) {
-                  if (notification is ScrollStartNotification &&
-                      notification.dragDetails != null &&
-                      (_isTabTapTransition || _pendingTapTargetPage != null)) {
-                    _tabTapTimer?.cancel();
-                    setState(() {
-                      _isTabTapTransition = false;
-                      _pendingTapTargetPage = null;
-                    });
-                  }
-                  return false;
-                },
-                child: PageView.builder(
-                  controller: _pageController,
-                  physics: _selecting
-                      ? const NeverScrollableScrollPhysics()
-                      : const PageScrollPhysics(),
-                  onPageChanged: _onPageChanged,
-                  itemCount: _tabs.length,
-                  itemBuilder: (context, index) {
-                    final tab = _tabs[index];
-                    if (tab == FilterOption.albums) {
-                      return _KeepAlivePage(
+            return NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification is ScrollStartNotification &&
+                    notification.dragDetails != null &&
+                    (_isTabTapTransition || _pendingTapTargetPage != null)) {
+                  _tabTapTimer?.cancel();
+                  setState(() {
+                    _isTabTapTransition = false;
+                    _pendingTapTargetPage = null;
+                  });
+                }
+                return false;
+              },
+              child: PageView.builder(
+                controller: _pageController,
+                physics: _selecting
+                    ? const NeverScrollableScrollPhysics()
+                    : const PageScrollPhysics(),
+                onPageChanged: _onPageChanged,
+                itemCount: _tabs.length,
+                itemBuilder: (context, index) {
+                  final tab = _tabs[index];
+                  if (tab == FilterOption.albums) {
+                    return _KeepAlivePage(
+                      child: GridHiResScope(
+                        enabled: _currentPage == index,
                         child: _buildAlbumsGrid(
                           albums: _memoizedAlbums,
                           settings: settings,
                           storageKey: 'gallery_tab_albums',
                         ),
-                      );
-                    }
-                    final List<MediaItem> tabItems;
-                    switch (tab) {
-                      case FilterOption.photosOnly:
-                        tabItems = _memoizedPhotos;
-                        break;
-                      case FilterOption.videosOnly:
-                        tabItems = _memoizedVideos;
-                        break;
-                      default:
-                        tabItems = _memoizedAll;
-                        break;
-                    }
-                    return _KeepAlivePage(
-                      child: HeroMode(
+                      ),
+                    );
+                  }
+                  final List<MediaItem> tabItems;
+                  switch (tab) {
+                    case FilterOption.photosOnly:
+                      tabItems = _memoizedPhotos;
+                      break;
+                    case FilterOption.videosOnly:
+                      tabItems = _memoizedVideos;
+                      break;
+                    default:
+                      tabItems = _memoizedAll;
+                      break;
+                  }
+                  return _KeepAlivePage(
+                    child: HeroMode(
+                      enabled: _currentPage == index,
+                      child: GridHiResScope(
                         enabled: _currentPage == index,
                         child: _buildMediaGrid(
                           items: tabItems,
@@ -1064,9 +1068,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                           storageKey: 'gallery_tab_${tab.name}',
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
               ),
             );
           },
@@ -1374,7 +1378,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
               child: GridView.builder(
                 key: PageStorageKey(storageKey),
                 controller: controller,
-                cacheExtent: 800.0,
+                cacheExtent: 350.0,
                 addAutomaticKeepAlives: false,
                 padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -1448,7 +1452,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             child: ListView.builder(
               key: PageStorageKey(storageKey),
               controller: controller,
-              cacheExtent: 800.0,
+              cacheExtent: 350.0,
               addAutomaticKeepAlives: false,
               padding: const EdgeInsets.only(bottom: 16),
               itemCount: rows.length,

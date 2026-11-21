@@ -39,7 +39,7 @@ class _MediaGridItemState extends State<MediaGridItem> {
   GridHiResController? _hiResController;
   bool _hiResActive = false;
   bool _hiResInFlight = false;
-  int _hiResWidth = 640;
+  int _hiResWidth = 768;
   int _hiResToken = 0;
   ImageProvider? _activeHiResProvider;
 
@@ -115,11 +115,7 @@ class _MediaGridItemState extends State<MediaGridItem> {
       return;
     }
 
-    final targetWidth = controller.computeTargetCacheWidth(
-      context,
-      minWidth: 640,
-      maxWidth: 960,
-    );
+    final targetWidth = controller.computeTargetCacheWidth(context);
     if (_hiResActive &&
         _hiResWidth == targetWidth &&
         (_activeHiResProvider != null || _hiResInFlight)) {
@@ -129,16 +125,42 @@ class _MediaGridItemState extends State<MediaGridItem> {
     final item = widget.item;
     if (item.path.isEmpty) return;
 
+    // Only upgrade after low-res thumbnail is cached so hi-res never competes
+    // with cold-start low-res decoding.
+    final hasLowRes =
+        ThumbnailService.instance.getMemoryThumbnail(item.id) != null ||
+            ThumbnailService.instance.hasDiskCache(item.id);
+    if (!hasLowRes) {
+      return;
+    }
+
     if (!item.isVideo && !PsdService.isPsd(item.path)) {
-      _hiResToken++;
-      _hiResInFlight = false;
-      _evictHiResProvider();
+      final token = ++_hiResToken;
       _hiResWidth = targetWidth;
-      _activeHiResProvider = ResizeImage(
-        FileImage(File(item.path)),
-        width: targetWidth,
-      );
-      setState(() => _hiResActive = true);
+      _hiResActive = true;
+      _hiResInFlight = true;
+      ThumbnailService.instance
+          .getGridHiResPhotoThumbnail(
+        item.id,
+        filePath: item.path,
+        size: targetWidth,
+        isCancelled: () =>
+            !mounted ||
+            _hiResToken != token ||
+            !(_hiResController?.value.active ?? false),
+      )
+          .then((bytes) {
+        if (!mounted ||
+            _hiResToken != token ||
+            !(_hiResController?.value.active ?? false)) {
+          return;
+        }
+        _hiResInFlight = false;
+        if (bytes == null || bytes.isEmpty) return;
+        _evictHiResProvider();
+        _activeHiResProvider = MemoryImage(bytes);
+        setState(() {});
+      });
       return;
     }
 
@@ -153,6 +175,8 @@ class _MediaGridItemState extends State<MediaGridItem> {
         _activeHiResProvider = ResizeImage(
           MemoryImage(memHi),
           width: targetWidth,
+          height: targetWidth,
+          policy: ResizeImagePolicy.fit,
         );
         setState(() => _hiResActive = true);
         return;
@@ -181,10 +205,7 @@ class _MediaGridItemState extends State<MediaGridItem> {
         _hiResInFlight = false;
         if (bytes == null || bytes.isEmpty) return;
         _evictHiResProvider();
-        _activeHiResProvider = ResizeImage(
-          MemoryImage(bytes),
-          width: targetWidth,
-        );
+        _activeHiResProvider = MemoryImage(bytes);
         setState(() {});
       });
       return;
@@ -200,6 +221,8 @@ class _MediaGridItemState extends State<MediaGridItem> {
       _activeHiResProvider = ResizeImage(
         MemoryImage(mem),
         width: targetWidth,
+        height: targetWidth,
+        policy: ResizeImagePolicy.fit,
       );
       setState(() => _hiResActive = true);
       return;
@@ -214,9 +237,30 @@ class _MediaGridItemState extends State<MediaGridItem> {
       _activeHiResProvider = ResizeImage(
         FileImage(diskFile),
         width: targetWidth,
+        height: targetWidth,
+        policy: ResizeImagePolicy.fit,
       );
       setState(() => _hiResActive = true);
     }
+  }
+
+  void _startThumbnailFetch() {
+    final requestedId = widget.item.id;
+    final future = ThumbnailService.instance.getThumbnail(
+      requestedId,
+      filePath: widget.item.path,
+      isVideo: widget.item.isVideo,
+      isCancelled: () => !mounted || widget.item.id != requestedId,
+    );
+    _thumbFuture = future;
+    future.then((bytes) {
+      if (!mounted || widget.item.id != requestedId) return;
+      if (bytes != null &&
+          bytes.isNotEmpty &&
+          _hiResController?.value.active == true) {
+        _onHiResStateChanged();
+      }
+    });
   }
 
   void _initThumbnail() {
@@ -226,11 +270,7 @@ class _MediaGridItemState extends State<MediaGridItem> {
       _thumbFuture = null;
       return;
     }
-    _thumbFuture = ThumbnailService.instance.getThumbnail(
-      widget.item.id,
-      filePath: widget.item.path,
-      isVideo: widget.item.isVideo,
-    );
+    _startThumbnailFetch();
   }
 
   Widget _buildPlaceholder(ColorScheme cs) {
@@ -277,8 +317,18 @@ class _MediaGridItemState extends State<MediaGridItem> {
     );
   }
 
-  Widget _buildLowResThumbnail(ColorScheme cs, BoxFit fit) {
+  Widget _lowResFrameBuilder(
+    ColorScheme cs,
+    BuildContext context,
+    Widget child,
+    int? frame,
+    bool wasSynchronouslyLoaded,
+  ) {
+    if (wasSynchronouslyLoaded || frame != null) return child;
+    return ColoredBox(color: cs.surfaceContainerHighest);
+  }
 
+  Widget _buildLowResThumbnail(ColorScheme cs, BoxFit fit) {
     // 1. Memory cache lookup.
     final mem = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
     if (mem != null) {
@@ -288,6 +338,8 @@ class _MediaGridItemState extends State<MediaGridItem> {
         fit: fit,
         gaplessPlayback: true,
         filterQuality: FilterQuality.low,
+        frameBuilder: (ctx, child, frame, sync) =>
+            _lowResFrameBuilder(cs, ctx, child, frame, sync),
       );
     }
 
@@ -301,6 +353,8 @@ class _MediaGridItemState extends State<MediaGridItem> {
         fit: fit,
         gaplessPlayback: true,
         filterQuality: FilterQuality.low,
+        frameBuilder: (ctx, child, frame, sync) =>
+            _lowResFrameBuilder(cs, ctx, child, frame, sync),
         errorBuilder: (_, __, ___) {
           ThumbnailService.instance.evictDiskCacheIndex(widget.item.id);
           return _buildPlaceholder(cs);
@@ -309,11 +363,9 @@ class _MediaGridItemState extends State<MediaGridItem> {
     }
 
     // 3. Fetch asynchronously if not cached.
-    _thumbFuture ??= ThumbnailService.instance.getThumbnail(
-      widget.item.id,
-      filePath: widget.item.path,
-      isVideo: widget.item.isVideo,
-    );
+    if (_thumbFuture == null) {
+      _startThumbnailFetch();
+    }
 
     return FutureBuilder<Uint8List?>(
       future: _thumbFuture,
@@ -325,6 +377,8 @@ class _MediaGridItemState extends State<MediaGridItem> {
             fit: fit,
             gaplessPlayback: true,
             filterQuality: FilterQuality.low,
+            frameBuilder: (ctx, child, frame, sync) =>
+                _lowResFrameBuilder(cs, ctx, child, frame, sync),
           );
         }
         if (snap.connectionState == ConnectionState.done) {
@@ -337,6 +391,8 @@ class _MediaGridItemState extends State<MediaGridItem> {
               fit: fit,
               gaplessPlayback: true,
               filterQuality: FilterQuality.low,
+              frameBuilder: (ctx, child, frame, sync) =>
+                  _lowResFrameBuilder(cs, ctx, child, frame, sync),
             );
           }
           final currentDisk =
@@ -348,6 +404,8 @@ class _MediaGridItemState extends State<MediaGridItem> {
               fit: fit,
               gaplessPlayback: true,
               filterQuality: FilterQuality.low,
+              frameBuilder: (ctx, child, frame, sync) =>
+                  _lowResFrameBuilder(cs, ctx, child, frame, sync),
               errorBuilder: (_, __, ___) {
                 ThumbnailService.instance.evictDiskCacheIndex(widget.item.id);
                 return _buildPlaceholder(cs);
@@ -364,6 +422,8 @@ class _MediaGridItemState extends State<MediaGridItem> {
               fit: fit,
               gaplessPlayback: true,
               filterQuality: FilterQuality.low,
+              frameBuilder: (ctx, child, frame, sync) =>
+                  _lowResFrameBuilder(cs, ctx, child, frame, sync),
               errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
             );
           }
@@ -384,13 +444,11 @@ class _MediaGridItemState extends State<MediaGridItem> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            RepaintBoundary(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Hero(
-                  tag: widget.item.id,
-                  child: _buildThumbnail(cs),
-                ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Hero(
+                tag: widget.item.id,
+                child: _buildThumbnail(cs),
               ),
             ),
           if (widget.item.isVideo && widget.showBadges)

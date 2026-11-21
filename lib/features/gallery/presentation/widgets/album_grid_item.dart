@@ -34,7 +34,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
   GridHiResController? _hiResController;
   bool _hiResActive = false;
   bool _hiResInFlight = false;
-  int _hiResWidth = 640;
+  int _hiResWidth = 768;
   int _hiResToken = 0;
   ImageProvider? _activeHiResProvider;
 
@@ -110,11 +110,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
       return;
     }
 
-    final targetWidth = controller.computeTargetCacheWidth(
-      context,
-      minWidth: 640,
-      maxWidth: 960,
-    );
+    final targetWidth = controller.computeTargetCacheWidth(context);
     if (_hiResActive &&
         _hiResWidth == targetWidth &&
         (_activeHiResProvider != null || _hiResInFlight)) {
@@ -124,16 +120,42 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
     final cover = widget.album.coverItem;
     if (cover.path.isEmpty) return;
 
+    // Only upgrade after low-res cover is cached so hi-res never competes
+    // with cold-start low-res decoding.
+    final hasLowRes =
+        ThumbnailService.instance.getMemoryThumbnail(cover.id) != null ||
+            ThumbnailService.instance.hasDiskCache(cover.id);
+    if (!hasLowRes) {
+      return;
+    }
+
     if (!cover.isVideo && !PsdService.isPsd(cover.path)) {
-      _hiResToken++;
-      _hiResInFlight = false;
-      _evictHiResProvider();
+      final token = ++_hiResToken;
       _hiResWidth = targetWidth;
-      _activeHiResProvider = ResizeImage(
-        FileImage(File(cover.path)),
-        width: targetWidth,
-      );
-      setState(() => _hiResActive = true);
+      _hiResActive = true;
+      _hiResInFlight = true;
+      ThumbnailService.instance
+          .getGridHiResPhotoThumbnail(
+        cover.id,
+        filePath: cover.path,
+        size: targetWidth,
+        isCancelled: () =>
+            !mounted ||
+            _hiResToken != token ||
+            !(_hiResController?.value.active ?? false),
+      )
+          .then((bytes) {
+        if (!mounted ||
+            _hiResToken != token ||
+            !(_hiResController?.value.active ?? false)) {
+          return;
+        }
+        _hiResInFlight = false;
+        if (bytes == null || bytes.isEmpty) return;
+        _evictHiResProvider();
+        _activeHiResProvider = MemoryImage(bytes);
+        setState(() {});
+      });
       return;
     }
 
@@ -148,6 +170,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
         _activeHiResProvider = ResizeImage(
           MemoryImage(memHi),
           width: targetWidth,
+          height: targetWidth,
+          policy: ResizeImagePolicy.fit,
         );
         setState(() => _hiResActive = true);
         return;
@@ -176,10 +200,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
         _hiResInFlight = false;
         if (bytes == null || bytes.isEmpty) return;
         _evictHiResProvider();
-        _activeHiResProvider = ResizeImage(
-          MemoryImage(bytes),
-          width: targetWidth,
-        );
+        _activeHiResProvider = MemoryImage(bytes);
         setState(() {});
       });
       return;
@@ -195,6 +216,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
       _activeHiResProvider = ResizeImage(
         MemoryImage(mem),
         width: targetWidth,
+        height: targetWidth,
+        policy: ResizeImagePolicy.fit,
       );
       setState(() => _hiResActive = true);
       return;
@@ -209,9 +232,30 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
       _activeHiResProvider = ResizeImage(
         FileImage(diskFile),
         width: targetWidth,
+        height: targetWidth,
+        policy: ResizeImagePolicy.fit,
       );
       setState(() => _hiResActive = true);
     }
+  }
+
+  void _startThumbnailFetch() {
+    final requestedId = widget.album.coverItem.id;
+    final future = ThumbnailService.instance.getThumbnail(
+      requestedId,
+      filePath: widget.album.coverItem.path,
+      isVideo: widget.album.coverItem.isVideo,
+      isCancelled: () => !mounted || widget.album.coverItem.id != requestedId,
+    );
+    _thumbFuture = future;
+    future.then((bytes) {
+      if (!mounted || widget.album.coverItem.id != requestedId) return;
+      if (bytes != null &&
+          bytes.isNotEmpty &&
+          _hiResController?.value.active == true) {
+        _onHiResStateChanged();
+      }
+    });
   }
 
   void _initThumbnail() {
@@ -222,11 +266,7 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
       _thumbFuture = null;
       return;
     }
-    _thumbFuture = ThumbnailService.instance.getThumbnail(
-      widget.album.coverItem.id,
-      filePath: widget.album.coverItem.path,
-      isVideo: widget.album.coverItem.isVideo,
-    );
+    _startThumbnailFetch();
   }
 
   Widget _buildPlaceholder(ColorScheme cs) {
@@ -268,6 +308,17 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
     );
   }
 
+  Widget _lowResFrameBuilder(
+    ColorScheme cs,
+    BuildContext context,
+    Widget child,
+    int? frame,
+    bool wasSynchronouslyLoaded,
+  ) {
+    if (wasSynchronouslyLoaded || frame != null) return child;
+    return ColoredBox(color: cs.surfaceContainerHighest);
+  }
+
   Widget _buildLowResCover(ColorScheme cs) {
     final mem =
         ThumbnailService.instance.getMemoryThumbnail(widget.album.coverItem.id);
@@ -278,6 +329,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
         fit: BoxFit.cover,
         gaplessPlayback: true,
         filterQuality: FilterQuality.low,
+        frameBuilder: (ctx, child, frame, sync) =>
+            _lowResFrameBuilder(cs, ctx, child, frame, sync),
       );
     }
 
@@ -290,6 +343,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
         fit: BoxFit.cover,
         gaplessPlayback: true,
         filterQuality: FilterQuality.low,
+        frameBuilder: (ctx, child, frame, sync) =>
+            _lowResFrameBuilder(cs, ctx, child, frame, sync),
         errorBuilder: (_, __, ___) {
           ThumbnailService.instance
               .evictDiskCacheIndex(widget.album.coverItem.id);
@@ -298,11 +353,9 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
       );
     }
 
-    _thumbFuture ??= ThumbnailService.instance.getThumbnail(
-      widget.album.coverItem.id,
-      filePath: widget.album.coverItem.path,
-      isVideo: widget.album.coverItem.isVideo,
-    );
+    if (_thumbFuture == null) {
+      _startThumbnailFetch();
+    }
 
     return FutureBuilder<Uint8List?>(
       future: _thumbFuture,
@@ -314,6 +367,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
             fit: BoxFit.cover,
             gaplessPlayback: true,
             filterQuality: FilterQuality.low,
+            frameBuilder: (ctx, child, frame, sync) =>
+                _lowResFrameBuilder(cs, ctx, child, frame, sync),
           );
         }
         if (snap.connectionState == ConnectionState.done) {
@@ -326,6 +381,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
               fit: BoxFit.cover,
               gaplessPlayback: true,
               filterQuality: FilterQuality.low,
+              frameBuilder: (ctx, child, frame, sync) =>
+                  _lowResFrameBuilder(cs, ctx, child, frame, sync),
             );
           }
           final currentDisk = ThumbnailService.instance
@@ -337,6 +394,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
               fit: BoxFit.cover,
               gaplessPlayback: true,
               filterQuality: FilterQuality.low,
+              frameBuilder: (ctx, child, frame, sync) =>
+                  _lowResFrameBuilder(cs, ctx, child, frame, sync),
               errorBuilder: (_, __, ___) {
                 ThumbnailService.instance
                     .evictDiskCacheIndex(widget.album.coverItem.id);
@@ -353,6 +412,8 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
               fit: BoxFit.cover,
               gaplessPlayback: true,
               filterQuality: FilterQuality.low,
+              frameBuilder: (ctx, child, frame, sync) =>
+                  _lowResFrameBuilder(cs, ctx, child, frame, sync),
               errorBuilder: (_, __, ___) => _buildPlaceholder(cs),
             );
           }

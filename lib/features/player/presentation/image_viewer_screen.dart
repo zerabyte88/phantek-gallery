@@ -50,9 +50,6 @@ ImageProvider screenDisplayImage(String path, [int maxDim = 1440]) {
   final cachedFile =
       ThumbnailService.instance.getCachedPreviewFile(path, maxDimension: maxDim);
   if (cachedFile != null) return FileImage(cachedFile);
-  unawaited(
-    ThumbnailService.instance.prewarmPhotoPreview(path, maxDimension: maxDim),
-  );
   return ResizeImage(
     FileImage(File(path)),
     width: maxDim,
@@ -67,7 +64,7 @@ Widget _thumb(String id, [String? path, Uint8List? psdFallbackBytes]) {
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
   final disk = mem == null
       ? (ThumbnailService.instance.getCachedHighResFile(id) ??
-          ThumbnailService.instance.getCachedFile(id))
+          ThumbnailService.instance.getIndexedDiskFile(id))
       : null;
   final isVid = path != null &&
       (path.toLowerCase().endsWith('.mp4') ||
@@ -108,7 +105,7 @@ Widget _buildHeroShuttle({
   final mem = hr ?? ThumbnailService.instance.getMemoryThumbnail(id);
   final disk = mem == null
       ? (ThumbnailService.instance.getCachedHighResFile(id) ??
-          ThumbnailService.instance.getCachedFile(id))
+          ThumbnailService.instance.getIndexedDiskFile(id))
       : null;
   final isPsd = path != null && PsdService.isPsd(path);
   final ImageProvider? p = mem != null
@@ -203,19 +200,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   late final PageController _mangaPageController;
 
   TranslationRenderMode? _translationMode;
-  late List<MediaItem> _cachedMangaList;
+  List<MediaItem>? _cachedMangaList;
   late final ValueNotifier<int> _activeMangaPageNotifier;
   bool _isScrubbingMangaSlider = false;
   int? _mangaScrubTargetPage;
 
-  void _updateMangaList() {
-    _cachedMangaList = widget.items
-        .where((it) => !it.isVideo && !PsdService.isPsd(it.path))
-        .toList();
-  }
-
   late final TranslationIsolateCoordinator _translationCoordinator;
   Timer? _slideshowTimer;
+  Timer? _precacheTimer;
   bool _isSlideshowPlaying = false;
   Timer? _videoHandoffTimer;
   bool _didHandoffToVideo = false;
@@ -456,16 +448,20 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   void initState() {
     super.initState();
     _current = widget.initialIndex;
-    _updateMangaList();
-    final hasValidManga = _cachedMangaList.isNotEmpty;
-    _isMangaMode = widget.initialMangaMode && hasValidManga;
-    final initialActive = _cachedMangaList.isNotEmpty
-        ? _cachedMangaList
-            .indexOf(_currentItem)
-            .clamp(0, _cachedMangaList.length - 1)
-        : 0;
-    _activeMangaPageNotifier = ValueNotifier<int>(initialActive);
-    _mangaPageController = PageController(initialPage: initialActive);
+    if (widget.initialMangaMode) {
+      final mangaList = _mangaItems;
+      final hasValidManga = mangaList.isNotEmpty;
+      _isMangaMode = hasValidManga;
+      final initialActive = hasValidManga
+          ? mangaList.indexOf(_currentItem).clamp(0, mangaList.length - 1)
+          : 0;
+      _activeMangaPageNotifier = ValueNotifier<int>(initialActive);
+      _mangaPageController = PageController(initialPage: initialActive);
+    } else {
+      _isMangaMode = false;
+      _activeMangaPageNotifier = ValueNotifier<int>(0);
+      _mangaPageController = PageController(initialPage: 0);
+    }
     _translationCoordinator = TranslationIsolateCoordinator();
 
     if (_isMangaMode && widget.initialIndex > 0) {
@@ -525,10 +521,10 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
 
   void _precacheAdjacent(int index) {
     if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _precacheTimer?.cancel();
+    _precacheTimer = Timer(const Duration(milliseconds: 180), () {
       if (!mounted) return;
-      // Pre-cache current and upcoming neighbor images (±2 window).
-      for (final offset in const [0, -1, 1, -2, 2]) {
+      for (final offset in const [-1, 1]) {
         final target = index + offset;
         if (target >= 0 && target < widget.items.length) {
           final item = widget.items[target];
@@ -537,14 +533,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             if (PsdService.isPsd(item.path)) {
               unawaited(PsdService.instance.prewarmPsdDocument(item.path));
             } else {
-              final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
-              if (mem != null) {
-                precacheImage(MemoryImage(mem), context);
-              }
-              unawaited(ThumbnailService.instance.prewarmPhotoPreview(
-                item.path,
-                assetId: item.id,
-              ));
               precacheImage(screenDisplayImage(item.path), context);
             }
           }
@@ -557,12 +545,14 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   void didUpdateWidget(ImageViewerScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.items != oldWidget.items) {
-      _updateMangaList();
+      _cachedMangaList = null;
     }
   }
 
   @override
   void dispose() {
+    _precacheTimer?.cancel();
+    _precacheTimer = null;
     _videoHandoffTimer?.cancel();
     _videoHandoffTimer = null;
     _activeMangaPageNotifier.dispose();
@@ -1448,7 +1438,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     );
   }
 
-  List<MediaItem> get _mangaItems => _cachedMangaList;
+  List<MediaItem> get _mangaItems => _cachedMangaList ??= widget.items
+      .where((it) => !it.isVideo && !PsdService.isPsd(it.path))
+      .toList();
 
   MediaItem get _currentItem => widget.items[_current];
 
@@ -2573,16 +2565,15 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                               return child!;
                                             },
                                             child: RepaintBoundary(
-                                              child: Center(
-                                                child: ClipRect(
-                                                  child: isCur
-                                                      ? KeyedSubtree(
-                                                          key: _viewerKeyFor(
-                                                              'photo_${it.id}'),
-                                                          child:
-                                                              InteractiveViewer(
-                                                            key: ValueKey(
-                                                                'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
+                                              child: ClipRect(
+                                                child: isCur
+                                                    ? KeyedSubtree(
+                                                        key: _viewerKeyFor(
+                                                            'photo_${it.id}'),
+                                                        child:
+                                                            InteractiveViewer(
+                                                          key: ValueKey(
+                                                              'iv_${it.id}_${MediaQuery.orientationOf(context)}'),
                                                           transformationController:
                                                               _transformationController,
                                                           minScale: 1.0,
@@ -2658,98 +2649,104 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                                               }
                                                             }
                                                           },
-                                                          child: Stack(
-                                                            alignment: Alignment
-                                                                .center,
-                                                            children: [
-                                                              Hero(
-                                                                tag: it.id,
-                                                                flightShuttleBuilder: (
-                                                                  flightContext,
-                                                                  animation,
-                                                                  flightDirection,
-                                                                  fromHeroContext,
-                                                                  toHeroContext,
-                                                                ) =>
-                                                                    _buildHeroShuttle(
-                                                                  animation:
+                                                          child:
+                                                              SizedBox.expand(
+                                                            child: Center(
+                                                              child: Stack(
+                                                                alignment:
+                                                                    Alignment
+                                                                        .center,
+                                                                children: [
+                                                                  Hero(
+                                                                    tag: it.id,
+                                                                    flightShuttleBuilder:
+                                                                        (
+                                                                      flightContext,
                                                                       animation,
-                                                                  flightDirection:
                                                                       flightDirection,
-                                                                  id: it.id,
-                                                                  path: it.path,
-                                                                  psdFallbackBytes:
-                                                                      _psdRenderedBytes[
-                                                                              it.path] ??
-                                                                          PsdService.instance.getCachedRenderedPreviewSync(it.path),
-                                                                  fallbackChild: flightDirection ==
-                                                                          HeroFlightDirection
-                                                                              .push
-                                                                      ? toHeroContext
-                                                                          .widget
-                                                                      : fromHeroContext
-                                                                          .widget,
-                                                                ),
-                                                                child: _buildPhotoPage(
-                                                                    it,
-                                                                    isCurrent:
-                                                                        true),
-                                                              ),
-                                                              if (_translationMode !=
-                                                                      null &&
-                                                                  !it.isVideo &&
-                                                                  !PsdService
-                                                                      .isPsd(it
-                                                                          .path))
-                                                                Positioned.fill(
-                                                                  child: ValueListenableBuilder<
-                                                                      TranslationResult?>(
-                                                                    valueListenable:
-                                                                        _translationCoordinator
-                                                                            .getResultNotifier(it.path),
-                                                                    builder:
-                                                                        (context,
-                                                                            result,
-                                                                            _) {
-                                                                      if (result ==
-                                                                              null ||
-                                                                          !result
-                                                                              .isSuccess ||
-                                                                          result
-                                                                              .blocks
-                                                                              .isEmpty) {
-                                                                        return const SizedBox
-                                                                            .shrink();
-                                                                      }
-                                                                      return MangaTranslationOverlay(
-                                                                        result:
-                                                                            result,
-                                                                        mode:
-                                                                            _translationMode!,
-                                                                        fontScale: ref.watch(
-                                                                          settingsNotifierProvider.select(
-                                                                              (s) => s.translationFontScale),
-                                                                        ),
-                                                                        overlayStyle: ref.watch(
-                                                                          settingsNotifierProvider.select(
-                                                                              (s) => s.translationOverlayStyle),
-                                                                        ),
-                                                                      );
-                                                                    },
+                                                                      fromHeroContext,
+                                                                      toHeroContext,
+                                                                    ) =>
+                                                                            _buildHeroShuttle(
+                                                                      animation:
+                                                                          animation,
+                                                                      flightDirection:
+                                                                          flightDirection,
+                                                                      id: it.id,
+                                                                      path: it
+                                                                          .path,
+                                                                      psdFallbackBytes:
+                                                                          _psdRenderedBytes[
+                                                                                  it.path] ??
+                                                                              PsdService.instance.getCachedRenderedPreviewSync(it.path),
+                                                                      fallbackChild: flightDirection ==
+                                                                              HeroFlightDirection
+                                                                                  .push
+                                                                          ? toHeroContext
+                                                                              .widget
+                                                                          : fromHeroContext
+                                                                              .widget,
+                                                                    ),
+                                                                    child: _buildPhotoPage(
+                                                                        it,
+                                                                        isCurrent:
+                                                                            true),
                                                                   ),
-                                                                ),
-                                                            ],
+                                                                  if (_translationMode !=
+                                                                          null &&
+                                                                      !it.isVideo &&
+                                                                      !PsdService
+                                                                          .isPsd(it
+                                                                              .path))
+                                                                    Positioned
+                                                                        .fill(
+                                                                      child: ValueListenableBuilder<
+                                                                          TranslationResult?>(
+                                                                        valueListenable:
+                                                                            _translationCoordinator
+                                                                                .getResultNotifier(it.path),
+                                                                        builder:
+                                                                            (context,
+                                                                                result,
+                                                                                _) {
+                                                                          if (result ==
+                                                                                  null ||
+                                                                              !result
+                                                                                  .isSuccess ||
+                                                                              result
+                                                                                  .blocks
+                                                                                  .isEmpty) {
+                                                                            return const SizedBox
+                                                                                .shrink();
+                                                                          }
+                                                                          return MangaTranslationOverlay(
+                                                                            result:
+                                                                                result,
+                                                                            mode:
+                                                                                _translationMode!,
+                                                                            fontScale: ref.watch(
+                                                                              settingsNotifierProvider.select(
+                                                                                  (s) => s.translationFontScale),
+                                                                            ),
+                                                                            overlayStyle: ref.watch(
+                                                                              settingsNotifierProvider.select(
+                                                                                  (s) => s.translationOverlayStyle),
+                                                                            ),
+                                                                          );
+                                                                        },
+                                                                      ),
+                                                                    ),
+                                                                ],
+                                                              ),
+                                                            ),
                                                           ),
                                                         ),
-                                                        )
-                                                      : Center(
-                                                          child:
-                                                              _buildPhotoPage(
-                                                                  it,
-                                                                  isCurrent:
-                                                                      false),
-                                                        ),
-                                                ),
+                                                      )
+                                                    : Center(
+                                                        child: _buildPhotoPage(
+                                                            it,
+                                                            isCurrent: false),
+                                                      ),
                                               ),
                                             ),
                                           ),

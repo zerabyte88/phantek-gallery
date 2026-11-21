@@ -161,7 +161,10 @@ class MainActivity : FlutterFragmentActivity() {
         }
 
         val executor = java.util.concurrent.Executors.newFixedThreadPool(4)
-        val videoExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val videoExecutor = java.util.concurrent.Executors.newFixedThreadPool(2)
+        val hiResExecutor = java.util.concurrent.Executors.newFixedThreadPool(2) { r ->
+            Thread(r, "grid-hires").apply { priority = Thread.MIN_PRIORITY + 1 }
+        }
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -171,11 +174,13 @@ class MainActivity : FlutterFragmentActivity() {
                 val assetId = call.argument<String>("assetId")
                 val path = call.argument<String>("path") ?: ""
                 val size = call.argument<Int>("size") ?: 512
+                val lowPriority = call.argument<Boolean>("lowPriority") ?: false
                 if (path.isEmpty() && assetId == null) {
                     result.error("INVALID_ARGS", "Both path and assetId are null/empty", null)
                     return@setMethodCallHandler
                 }
-                videoExecutor.execute {
+                val pool = if (lowPriority) hiResExecutor else videoExecutor
+                pool.execute {
                     try {
                         val bytes = extractVideoThumbnail(path, assetId, size)
                         runOnUiThread {
@@ -191,11 +196,13 @@ class MainActivity : FlutterFragmentActivity() {
                 val assetId = call.argument<String>("assetId")
                 val path = call.argument<String>("path")
                 val size = call.argument<Int>("size") ?: 512
+                val lowPriority = call.argument<Boolean>("lowPriority") ?: false
                 if (path == null && assetId == null) {
                     result.error("INVALID_ARGS", "Both path and assetId are null", null)
                     return@setMethodCallHandler
                 }
-                executor.execute {
+                val pool = if (lowPriority) hiResExecutor else executor
+                pool.execute {
                     try {
                         val bytes = extractImageThumbnail(path ?: "", assetId, size)
                         runOnUiThread {
@@ -348,7 +355,11 @@ class MainActivity : FlutterFragmentActivity() {
 
                         val rotated = if (degrees != 0) {
                             val matrix = android.graphics.Matrix().apply { postRotate(degrees.toFloat()) }
-                            android.graphics.Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+                            val r = android.graphics.Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+                            if (r !== decoded && !decoded.isRecycled) {
+                                decoded.recycle()
+                            }
+                            r
                         } else {
                             decoded
                         }
@@ -359,7 +370,11 @@ class MainActivity : FlutterFragmentActivity() {
                             val scale = targetSize.toFloat() / curMax.toFloat()
                             val dstW = Math.max(2, (rotated.width * scale).toInt())
                             val dstH = Math.max(2, (rotated.height * scale).toInt())
-                            android.graphics.Bitmap.createScaledBitmap(rotated, dstW, dstH, true)
+                            val scaled = android.graphics.Bitmap.createScaledBitmap(rotated, dstW, dstH, true)
+                            if (scaled !== rotated && !rotated.isRecycled) {
+                                rotated.recycle()
+                            }
+                            scaled
                         } else {
                             rotated
                         }
@@ -430,8 +445,8 @@ class MainActivity : FlutterFragmentActivity() {
             )
         } else null
 
-        // 1. Android Q+ (API 29+): prioritize contentResolver.loadThumbnail in <2ms when uri != null
-        if (uri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        // 1. Android Q+ (API 29+): prioritize contentResolver.loadThumbnail in <2ms when targetSize <= 512 and uri != null
+        if (targetSize <= 512 && uri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 bitmap = contentResolver.loadThumbnail(
                     uri,
@@ -524,7 +539,8 @@ class MainActivity : FlutterFragmentActivity() {
                     if (bitmap != null && rotation != 0) {
                         val alreadyRotated = if (rotation == 90 || rotation == 270) {
                             if (streamW > 0 && streamH > 0 && streamW != streamH) {
-                                bitmap!!.width == streamH && bitmap!!.height == streamW
+                                (streamW > streamH && bitmap!!.height > bitmap!!.width) ||
+                                    (streamH > streamW && bitmap!!.width > bitmap!!.height)
                             } else {
                                 false
                             }
