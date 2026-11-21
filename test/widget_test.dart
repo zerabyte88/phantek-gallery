@@ -28,6 +28,7 @@ import 'package:phantek_gallery/core/utils/media_utils.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/album_grid_item.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/drag_select_grid.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/fast_scroll_handle.dart';
+import 'package:phantek_gallery/features/gallery/presentation/widgets/grid_hi_res_scope.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/media_grid_item.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/shimmer_loading_tile.dart';
 import 'package:phantek_gallery/features/gallery/presentation/album_detail_screen.dart';
@@ -3219,6 +3220,7 @@ void main() {
         () {
       const resolutions = [
         Size(1920, 1080),
+        Size(1080, 1920),
         Size(2560, 1440),
         Size(3840, 2160),
       ];
@@ -3226,11 +3228,9 @@ void main() {
       for (final raw in resolutions) {
         expect(resolveEffectiveVideoSize(raw, 0), raw);
         expect(resolveEffectiveVideoSize(raw, 180), raw);
-        expect(resolveEffectiveVideoSize(raw, 90), Size(raw.height, raw.width));
-        expect(
-            resolveEffectiveVideoSize(raw, 270), Size(raw.height, raw.width));
-        expect(
-            resolveEffectiveVideoSize(raw, -90), Size(raw.height, raw.width));
+        expect(resolveEffectiveVideoSize(raw, 90), raw);
+        expect(resolveEffectiveVideoSize(raw, 270), raw);
+        expect(resolveEffectiveVideoSize(raw, -90), raw);
       }
 
       expect(resolveEffectiveVideoSize(Size.zero, 0), const Size(16, 9));
@@ -5846,6 +5846,129 @@ void main() {
       expect(find.byKey(const ValueKey('gallery_clear_search_button')),
           findsNothing);
       expect(find.byType(MediaGridItem), findsWidgets);
+    });
+
+    testWidgets(
+        'GridHiResScope activates hi-res after idle, downgrades immediately on scroll start, and re-activates after scroll settles',
+        (tester) async {
+      final hiResController = GridHiResController(
+        idleDelay: const Duration(milliseconds: 180),
+      );
+      addTearDown(hiResController.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: GridHiResScope(
+              controller: hiResController,
+              child: ListView.builder(
+                itemCount: 40,
+                itemBuilder: (_, i) => SizedBox(
+                  height: 120,
+                  child: Text('Tile $i'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Post-frame schedules initial idle; before idleDelay expires, hi-res is inactive.
+      await tester.pump();
+      expect(hiResController.value.active, isFalse);
+
+      // After idle delay, hi-res activates.
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(hiResController.value.active, isTrue);
+
+      // Starting a vertical drag immediately downgrades hi-res to false.
+      final gesture = await tester.startGesture(const Offset(200, 300));
+      await gesture.moveBy(const Offset(0, -120));
+      await tester.pump();
+      expect(hiResController.value.active, isFalse);
+
+      // Release drag and let fling/scroll settle past idleDelay -> re-activates.
+      await gesture.up();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(hiResController.value.active, isTrue);
+    });
+
+    testWidgets(
+        'GridHiResScope downgrades immediately when covered by a non-opaque route and re-activates on pop',
+        (tester) async {
+      final hiResController = GridHiResController(
+        idleDelay: const Duration(milliseconds: 180),
+      );
+      addTearDown(hiResController.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: GridHiResScope(
+              controller: hiResController,
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(hiResController.value.active, isTrue);
+
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      navigator.push(
+        PageRouteBuilder<void>(
+          opaque: false,
+          pageBuilder: (_, __, ___) => const Scaffold(
+            body: Center(child: Text('Overlay Viewer')),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(hiResController.value.active, isFalse);
+
+      navigator.pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(hiResController.value.active, isTrue);
+    });
+
+    test(
+        'ThumbnailService.getGridHiResVideoThumbnail returns null immediately when already cancelled',
+        () async {
+      final result = await ThumbnailService.instance.getGridHiResVideoThumbnail(
+        'cancelled_vid_1',
+        filePath: '/storage/emulated/0/Movies/cancelled.mp4',
+        isCancelled: () => true,
+      );
+      expect(result, isNull);
+    });
+
+    test('AppLanguage.sortedLanguages sorts A-Z by native language name', () {
+      final sorted = AppLanguage.sortedLanguages;
+      expect(sorted.length, AppLanguage.values.length);
+      expect(
+        sorted.take(6).map((l) => l.nativeName).toList(),
+        [
+          'Bahasa Indonesia',
+          'Bahasa Melayu',
+          'Dansk',
+          'Deutsch',
+          'English',
+          'Español',
+        ],
+      );
+      for (int i = 0; i < sorted.length - 1; i++) {
+        expect(
+          sorted[i]
+              .nativeName
+              .toLowerCase()
+              .compareTo(sorted[i + 1].nativeName.toLowerCase()),
+          lessThanOrEqualTo(0),
+        );
+      }
     });
   });
 }

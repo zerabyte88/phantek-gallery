@@ -223,4 +223,6 @@ const Map<String, String> koTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': '페이지 이동',
+  'jump': '이동',
 };

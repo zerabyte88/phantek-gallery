@@ -37,6 +37,22 @@ class _ThumbnailRequest {
   final Completer<Uint8List?> completer;
 }
 
+class _GridHiResVideoRequest {
+  _GridHiResVideoRequest({
+    required this.assetId,
+    required this.filePath,
+    required this.size,
+    required this.isCancelled,
+    required this.completer,
+  });
+
+  final String assetId;
+  final String filePath;
+  final int size;
+  final bool Function()? isCancelled;
+  final Completer<Uint8List?> completer;
+}
+
 /// Asynchronous thumbnail cache with persistent disk storage, background worker pool, and in-memory layer.
 class ThumbnailService {
   ThumbnailService._();
@@ -46,6 +62,7 @@ class ThumbnailService {
   static const int _thumbnailQuality = 90;
   static const int _maxMemoryEntries = 500;
   static const int _maxConcurrent = 6;
+  static const int _maxGridHiResConcurrent = 3;
   static const int defaultPreviewMaxDim = 1440;
   static const int _maxPreviewMemoryEntries = 40;
   static const MethodChannel _nativeChannel =
@@ -61,8 +78,10 @@ class ThumbnailService {
   final Map<String, Completer<Uint8List?>> _previewInFlight = {};
   final Map<String, AssetEntity> _entityCache = {};
   final Queue<_ThumbnailRequest> _queue = Queue();
+  final Queue<_GridHiResVideoRequest> _gridHiResQueue = Queue();
   final Set<String> _diskCachedFileNames = {};
   int _activeWorkers = 0;
+  int _activeGridHiResWorkers = 0;
   Directory? _cacheDir;
   String? _cacheDirPath;
   Future<Directory>? _cacheDirFuture;
@@ -442,6 +461,113 @@ class ThumbnailService {
 
     completer.complete(null);
     return null;
+  }
+
+  /// Extracts an ephemeral high-resolution frame for a visible video tile
+  /// without persisting to disk or retaining it in [_highResVideoCache].
+  Future<Uint8List?> getGridHiResVideoThumbnail(
+    String assetId, {
+    required String filePath,
+    int size = 960,
+    bool Function()? isCancelled,
+  }) {
+    if (isCancelled?.call() == true) {
+      return Future.value(null);
+    }
+    final cached = _highResVideoCache[assetId];
+    if (cached != null && cached.isNotEmpty) {
+      return Future.value(cached);
+    }
+    final completer = Completer<Uint8List?>();
+    _gridHiResQueue.add(
+      _GridHiResVideoRequest(
+        assetId: assetId,
+        filePath: filePath,
+        size: size,
+        isCancelled: isCancelled,
+        completer: completer,
+      ),
+    );
+    _processGridHiResQueue();
+    return completer.future;
+  }
+
+  void _processGridHiResQueue() {
+    while (_activeGridHiResWorkers < _maxGridHiResConcurrent &&
+        _gridHiResQueue.isNotEmpty) {
+      _activeGridHiResWorkers++;
+      _runGridHiResWorker();
+    }
+  }
+
+  Future<void> _runGridHiResWorker() async {
+    try {
+      while (_gridHiResQueue.isNotEmpty) {
+        final req = _gridHiResQueue.removeFirst();
+        if (req.completer.isCompleted) continue;
+        if (req.isCancelled?.call() == true) {
+          req.completer.complete(null);
+          continue;
+        }
+        Uint8List? bytes;
+        try {
+          try {
+            bytes = await _nativeChannel.invokeMethod<Uint8List>(
+              'getVideoThumbnail',
+              {
+                'path': req.filePath,
+                'assetId': req.assetId,
+                'size': req.size,
+              },
+            );
+          } catch (_) {}
+
+          if ((bytes == null || bytes.isEmpty) &&
+              req.isCancelled?.call() != true) {
+            final entity =
+                _entityCache[req.assetId] ?? await AssetEntity.fromId(req.assetId);
+            if (entity != null && req.isCancelled?.call() != true) {
+              try {
+                final w = entity.orientatedWidth > 0
+                    ? entity.orientatedWidth
+                    : entity.width;
+                final h = entity.orientatedHeight > 0
+                    ? entity.orientatedHeight
+                    : entity.height;
+                final maxDim = (w > 0 && h > 0) ? (w > h ? w : h) : req.size;
+                final scale = maxDim > req.size ? req.size / maxDim : 1.0;
+                final targetW =
+                    (w > 0) ? (w * scale).toInt().clamp(2, req.size) : req.size;
+                final targetH =
+                    (h > 0) ? (h * scale).toInt().clamp(2, req.size) : req.size;
+                bytes = await entity.thumbnailDataWithSize(
+                  ThumbnailSize(targetW, targetH),
+                  quality: 92,
+                );
+              } catch (_) {}
+            }
+          }
+        } catch (e) {
+          debugPrint(
+              '[ThumbnailService] getGridHiResVideoThumbnail error: $e');
+        }
+
+        if (!req.completer.isCompleted) {
+          if (req.isCancelled?.call() == true ||
+              bytes == null ||
+              bytes.isEmpty) {
+            req.completer.complete(null);
+          } else {
+            req.completer.complete(bytes);
+          }
+        }
+      }
+    } finally {
+      _activeGridHiResWorkers--;
+      if (_gridHiResQueue.isNotEmpty) {
+        _processGridHiResQueue();
+      }
+    }
   }
 
   /// Parses physical pixel dimensions directly from JPEG markers (SOF0/SOF2).
@@ -997,6 +1123,12 @@ class ThumbnailService {
     _videoFrameCache.clear();
     _inFlight.clear();
     _previewInFlight.clear();
+    while (_gridHiResQueue.isNotEmpty) {
+      final req = _gridHiResQueue.removeFirst();
+      if (!req.completer.isCompleted) {
+        req.completer.complete(null);
+      }
+    }
     _entityCache.clear();
     await PsdService.instance.clearCache();
     try {

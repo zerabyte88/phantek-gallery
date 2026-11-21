@@ -115,10 +115,8 @@ Size resolveEffectiveVideoSize(Size rawSize, int rotationCorrection) {
       rawSize.height <= 0) {
     return const Size(16, 9);
   }
-  final normalizedRotation = (rotationCorrection % 360).abs();
-  if (normalizedRotation == 90 || normalizedRotation == 270) {
-    return Size(rawSize.height, rawSize.width);
-  }
+  // VideoPlayerValue.size from Media3 VideoSize is already display-oriented;
+  // swapping on rotationCorrection double-swaps portrait videos on Impeller ImageReader.
   return rawSize;
 }
 

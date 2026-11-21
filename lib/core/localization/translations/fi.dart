@@ -229,4 +229,6 @@ const Map<String, String> fiTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Siirry sivulle',
+  'jump': 'Siirry',
 };

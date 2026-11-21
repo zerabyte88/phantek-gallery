@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/models/album.dart';
 import '../../../../core/services/psd_service.dart';
 import '../../../../core/services/thumbnail_service.dart';
+import 'grid_hi_res_scope.dart';
 import 'shimmer_loading_tile.dart';
 
 /// Single cell in the albums grid (3 items per row).
@@ -30,6 +31,12 @@ class AlbumGridItem extends StatefulWidget {
 
 class _AlbumGridItemState extends State<AlbumGridItem> {
   Future<Uint8List?>? _thumbFuture;
+  GridHiResController? _hiResController;
+  bool _hiResActive = false;
+  bool _hiResInFlight = false;
+  int _hiResWidth = 640;
+  int _hiResToken = 0;
+  ImageProvider? _activeHiResProvider;
 
   @override
   void initState() {
@@ -38,11 +45,172 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = GridHiResScope.maybeOf(context);
+    if (next != _hiResController) {
+      _hiResController?.removeListener(_onHiResStateChanged);
+      _hiResController = next;
+      _hiResController?.addListener(_onHiResStateChanged);
+      if (next?.value.active == true) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _onHiResStateChanged();
+        });
+      } else {
+        _downgradeToLowRes(triggerRebuild: false);
+      }
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant AlbumGridItem oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.album.coverItem.id != widget.album.coverItem.id ||
         oldWidget.album.coverItem.path != widget.album.coverItem.path) {
+      _downgradeToLowRes(triggerRebuild: false);
       _initThumbnail();
+      if (_hiResController?.value.active == true) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _onHiResStateChanged();
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _hiResController?.removeListener(_onHiResStateChanged);
+    _downgradeToLowRes(triggerRebuild: false);
+    super.dispose();
+  }
+
+  void _evictHiResProvider() {
+    _activeHiResProvider?.evict();
+    _activeHiResProvider = null;
+  }
+
+  void _downgradeToLowRes({required bool triggerRebuild}) {
+    _hiResToken++;
+    _hiResInFlight = false;
+    final wasActive = _hiResActive || _activeHiResProvider != null;
+    _evictHiResProvider();
+    _hiResActive = false;
+    if (triggerRebuild && mounted && wasActive) {
+      setState(() {});
+    }
+  }
+
+  void _onHiResStateChanged() {
+    if (!mounted) return;
+    final controller = _hiResController;
+    if (controller == null ||
+        !controller.value.active ||
+        !controller.isTileVisibleInViewport(context)) {
+      _downgradeToLowRes(triggerRebuild: true);
+      return;
+    }
+
+    final targetWidth = controller.computeTargetCacheWidth(
+      context,
+      minWidth: 640,
+      maxWidth: 960,
+    );
+    if (_hiResActive &&
+        _hiResWidth == targetWidth &&
+        (_activeHiResProvider != null || _hiResInFlight)) {
+      return;
+    }
+
+    final cover = widget.album.coverItem;
+    if (cover.path.isEmpty) return;
+
+    if (!cover.isVideo && !PsdService.isPsd(cover.path)) {
+      _hiResToken++;
+      _hiResInFlight = false;
+      _evictHiResProvider();
+      _hiResWidth = targetWidth;
+      _activeHiResProvider = ResizeImage(
+        FileImage(File(cover.path)),
+        width: targetWidth,
+      );
+      setState(() => _hiResActive = true);
+      return;
+    }
+
+    if (cover.isVideo) {
+      final memHi =
+          ThumbnailService.instance.getMemoryHighResThumbnail(cover.id);
+      if (memHi != null && memHi.isNotEmpty) {
+        _hiResToken++;
+        _hiResInFlight = false;
+        _evictHiResProvider();
+        _hiResWidth = targetWidth;
+        _activeHiResProvider = ResizeImage(
+          MemoryImage(memHi),
+          width: targetWidth,
+        );
+        setState(() => _hiResActive = true);
+        return;
+      }
+
+      final token = ++_hiResToken;
+      _hiResWidth = targetWidth;
+      _hiResActive = true;
+      _hiResInFlight = true;
+      ThumbnailService.instance
+          .getGridHiResVideoThumbnail(
+        cover.id,
+        filePath: cover.path,
+        size: targetWidth,
+        isCancelled: () =>
+            !mounted ||
+            _hiResToken != token ||
+            !(_hiResController?.value.active ?? false),
+      )
+          .then((bytes) {
+        if (!mounted ||
+            _hiResToken != token ||
+            !(_hiResController?.value.active ?? false)) {
+          return;
+        }
+        _hiResInFlight = false;
+        if (bytes == null || bytes.isEmpty) return;
+        _evictHiResProvider();
+        _activeHiResProvider = ResizeImage(
+          MemoryImage(bytes),
+          width: targetWidth,
+        );
+        setState(() {});
+      });
+      return;
+    }
+
+    // PSD: decode full cached thumbnail up to targetWidth.
+    final mem = ThumbnailService.instance.getMemoryThumbnail(cover.id);
+    if (mem != null && mem.isNotEmpty) {
+      _hiResToken++;
+      _hiResInFlight = false;
+      _evictHiResProvider();
+      _hiResWidth = targetWidth;
+      _activeHiResProvider = ResizeImage(
+        MemoryImage(mem),
+        width: targetWidth,
+      );
+      setState(() => _hiResActive = true);
+      return;
+    }
+
+    final diskFile = ThumbnailService.instance.getIndexedDiskFile(cover.id);
+    if (diskFile != null) {
+      _hiResToken++;
+      _hiResInFlight = false;
+      _evictHiResProvider();
+      _hiResWidth = targetWidth;
+      _activeHiResProvider = ResizeImage(
+        FileImage(diskFile),
+        width: targetWidth,
+      );
+      setState(() => _hiResActive = true);
     }
   }
 
@@ -73,6 +241,34 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
   }
 
   Widget _buildCover(ColorScheme cs) {
+    final lowRes = _buildLowResCover(cs);
+    final hiResProvider = _activeHiResProvider;
+    if (!_hiResActive || hiResProvider == null) {
+      return lowRes;
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        lowRes,
+        Image(
+          image: hiResProvider,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
+          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+            if (wasSynchronouslyLoaded || frame != null) {
+              return child;
+            }
+            return const SizedBox.shrink();
+          },
+          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLowResCover(ColorScheme cs) {
     final mem =
         ThumbnailService.instance.getMemoryThumbnail(widget.album.coverItem.id);
     if (mem != null) {

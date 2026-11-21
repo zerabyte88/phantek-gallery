@@ -231,4 +231,6 @@ const Map<String, String> hiTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'पृष्ठ पर जाएं',
+  'jump': 'जाएं',
 };

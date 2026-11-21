@@ -230,4 +230,6 @@ const Map<String, String> viTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Đi tới trang',
+  'jump': 'Đi',
 };

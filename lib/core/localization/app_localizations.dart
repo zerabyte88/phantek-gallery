@@ -253,6 +253,8 @@ class AppLocalizations {
   String get appLockCanceledHint => _t('appLockCanceledHint');
   String get searchInAlbumHint => _t('searchInAlbumHint');
   String get unlock => _t('unlock');
+  String get goToPage => _t('goToPage');
+  String get jump => _t('jump');
   String get translationOverlaySettings => _t('translationOverlaySettings');
   String get translationTextSize => _t('translationTextSize');
   String get translationOverlayStyle => _t('translationOverlayStyle');

@@ -234,4 +234,6 @@ const Map<String, String> msTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Lompat ke halaman',
+  'jump': 'Pergi',
 };

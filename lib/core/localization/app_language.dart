@@ -104,10 +104,13 @@ enum AppLanguage {
     );
   }
 
-  /// Languages sorted alphabetically (A-Z) by [englishName].
+  /// Languages sorted alphabetically (A-Z) by [nativeName].
   static List<AppLanguage> get sortedLanguages {
     final list = AppLanguage.values.toList()
-      ..sort((a, b) => a.englishName.compareTo(b.englishName));
+      ..sort(
+        (a, b) =>
+            a.nativeName.toLowerCase().compareTo(b.nativeName.toLowerCase()),
+      );
     return list;
   }
 

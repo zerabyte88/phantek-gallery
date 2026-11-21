@@ -410,5 +410,69 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+        'Manga Mode bottom page jump bar jumps via buttons and direct page input dialog',
+        (tester) async {
+      await tester.pumpWidget(buildViewer(mangaMode: true));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('manga_page_jump_bar')), findsOneWidget);
+      expect(find.byKey(const ValueKey('manga_page_slider')), findsOneWidget);
+      expect(find.text('1 / 5'), findsOneWidget);
+
+      // Zoom pill clears bottom page-jump bar cleanly without overlapping it.
+      final jumpBarRect =
+          tester.getRect(find.byKey(const ValueKey('manga_page_jump_bar')));
+      final zoomInRect =
+          tester.getRect(find.byKey(const ValueKey('manga_zoom_in_button')));
+      expect(zoomInRect.bottom, lessThanOrEqualTo(jumpBarRect.top));
+
+      // Next page button advances 1 -> 2.
+      await tester.tap(find.byKey(const ValueKey('manga_next_page_button')));
+      await tester.pumpAndSettle();
+      expect(find.text('2 / 5'), findsOneWidget);
+
+      // Prev page button returns 2 -> 1.
+      await tester.tap(find.byKey(const ValueKey('manga_prev_page_button')));
+      await tester.pumpAndSettle();
+      expect(find.text('1 / 5'), findsOneWidget);
+
+      // Tap current page badge to open direct Go-to-Page dialog and jump to page 4.
+      await tester.tap(find.byKey(const ValueKey('manga_jump_page_button')));
+      await tester.pumpAndSettle();
+
+      final inputFinder = find.byKey(const ValueKey('manga_jump_page_input'));
+      expect(inputFinder, findsOneWidget);
+      await tester.enterText(inputFinder, '4');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('manga_jump_page_confirm')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('4 / 5'), findsOneWidget);
+      expect(find.text('page_3.jpg'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Manga Mode bottom slider scrubs to target page cleanly',
+        (tester) async {
+      await tester.pumpWidget(buildViewer(mangaMode: true));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      final sliderFinder = find.byKey(const ValueKey('manga_page_slider'));
+      final sliderRect = tester.getRect(sliderFinder);
+
+      // Drag near the right end of the slider track to scrub toward page 5.
+      await tester.dragFrom(
+        sliderRect.centerLeft + const Offset(12, 0),
+        Offset(sliderRect.width - 24, 0),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('5 / 5'), findsOneWidget);
+      expect(find.text('page_4.jpg'), findsOneWidget);
+    });
   });
 }

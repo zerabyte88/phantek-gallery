@@ -233,4 +233,6 @@ const Map<String, String> ptTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Ir para a página',
+  'jump': 'Ir',
 };

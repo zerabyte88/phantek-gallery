@@ -233,4 +233,6 @@ const Map<String, String> ruTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Перейти на страницу',
+  'jump': 'Перейти',
 };

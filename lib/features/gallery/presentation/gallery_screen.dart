@@ -29,6 +29,7 @@ import 'widgets/album_grid_item.dart';
 import 'widgets/drag_select_grid.dart';
 import 'widgets/fast_scroll_handle.dart';
 import 'widgets/filter_sort_bar.dart';
+import 'widgets/grid_hi_res_scope.dart';
 import 'widgets/media_grid_item.dart';
 import 'widgets/delete_confirmation_sheet.dart';
 import 'widgets/manga_folder_picker_sheet.dart';
@@ -1009,61 +1010,63 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
 
             _updateMemoizedTabs(allItems, settings);
 
-            return NotificationListener<ScrollNotification>(
-              onNotification: (notification) {
-                if (notification is ScrollStartNotification &&
-                    notification.dragDetails != null &&
-                    (_isTabTapTransition || _pendingTapTargetPage != null)) {
-                  _tabTapTimer?.cancel();
-                  setState(() {
-                    _isTabTapTransition = false;
-                    _pendingTapTargetPage = null;
-                  });
-                }
-                return false;
-              },
-              child: PageView.builder(
-                controller: _pageController,
-                physics: _selecting
-                    ? const NeverScrollableScrollPhysics()
-                    : const PageScrollPhysics(),
-                onPageChanged: _onPageChanged,
-                itemCount: _tabs.length,
-                itemBuilder: (context, index) {
-                  final tab = _tabs[index];
-                  if (tab == FilterOption.albums) {
+            return GridHiResScope(
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  if (notification is ScrollStartNotification &&
+                      notification.dragDetails != null &&
+                      (_isTabTapTransition || _pendingTapTargetPage != null)) {
+                    _tabTapTimer?.cancel();
+                    setState(() {
+                      _isTabTapTransition = false;
+                      _pendingTapTargetPage = null;
+                    });
+                  }
+                  return false;
+                },
+                child: PageView.builder(
+                  controller: _pageController,
+                  physics: _selecting
+                      ? const NeverScrollableScrollPhysics()
+                      : const PageScrollPhysics(),
+                  onPageChanged: _onPageChanged,
+                  itemCount: _tabs.length,
+                  itemBuilder: (context, index) {
+                    final tab = _tabs[index];
+                    if (tab == FilterOption.albums) {
+                      return _KeepAlivePage(
+                        child: _buildAlbumsGrid(
+                          albums: _memoizedAlbums,
+                          settings: settings,
+                          storageKey: 'gallery_tab_albums',
+                        ),
+                      );
+                    }
+                    final List<MediaItem> tabItems;
+                    switch (tab) {
+                      case FilterOption.photosOnly:
+                        tabItems = _memoizedPhotos;
+                        break;
+                      case FilterOption.videosOnly:
+                        tabItems = _memoizedVideos;
+                        break;
+                      default:
+                        tabItems = _memoizedAll;
+                        break;
+                    }
                     return _KeepAlivePage(
-                      child: _buildAlbumsGrid(
-                        albums: _memoizedAlbums,
-                        settings: settings,
-                        storageKey: 'gallery_tab_albums',
+                      child: HeroMode(
+                        enabled: _currentPage == index,
+                        child: _buildMediaGrid(
+                          items: tabItems,
+                          tab: tab,
+                          settings: settings,
+                          storageKey: 'gallery_tab_${tab.name}',
+                        ),
                       ),
                     );
-                  }
-                  final List<MediaItem> tabItems;
-                  switch (tab) {
-                    case FilterOption.photosOnly:
-                      tabItems = _memoizedPhotos;
-                      break;
-                    case FilterOption.videosOnly:
-                      tabItems = _memoizedVideos;
-                      break;
-                    default:
-                      tabItems = _memoizedAll;
-                      break;
-                  }
-                  return _KeepAlivePage(
-                    child: HeroMode(
-                      enabled: _currentPage == index,
-                      child: _buildMediaGrid(
-                        items: tabItems,
-                        tab: tab,
-                        settings: settings,
-                        storageKey: 'gallery_tab_${tab.name}',
-                      ),
-                    ),
-                  );
-                },
+                  },
+                ),
               ),
             );
           },

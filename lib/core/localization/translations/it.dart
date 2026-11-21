@@ -238,4 +238,6 @@ const Map<String, String> itTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Vai alla pagina',
+  'jump': 'Vai',
 };

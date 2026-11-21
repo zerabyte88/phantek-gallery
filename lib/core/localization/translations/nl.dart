@@ -231,4 +231,6 @@ const Map<String, String> nlTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Ga naar pagina',
+  'jump': 'Ga',
 };

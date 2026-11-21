@@ -226,4 +226,6 @@ const Map<String, String> thTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'ไปยังหน้า',
+  'jump': 'ไป',
 };

@@ -23,6 +23,7 @@ import 'widgets/album_grid_item.dart';
 import 'widgets/drag_select_grid.dart';
 import 'widgets/fast_scroll_handle.dart';
 import 'widgets/filter_sort_bar.dart';
+import 'widgets/grid_hi_res_scope.dart';
 import 'widgets/media_grid_item.dart';
 import 'widgets/delete_confirmation_sheet.dart';
 import '../../../core/widgets/feedback_pill.dart';
@@ -1173,8 +1174,9 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
             ],
             const Divider(height: 1),
             Expanded(
-              child: albumItems.isEmpty
-                  ? Center(
+              child: GridHiResScope(
+                child: albumItems.isEmpty
+                    ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1405,6 +1407,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                             },
                           ),
                         ),
+              ),
             ),
           ],
         ),

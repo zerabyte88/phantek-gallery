@@ -228,4 +228,6 @@ const Map<String, String> noTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Gå til side',
+  'jump': 'Gå',
 };

@@ -223,4 +223,6 @@ const Map<String, String> jaTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'ページへ移動',
+  'jump': '移動',
 };

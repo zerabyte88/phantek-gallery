@@ -223,4 +223,6 @@ const Map<String, String> zhTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': '跳转到页面',
+  'jump': '跳转',
 };

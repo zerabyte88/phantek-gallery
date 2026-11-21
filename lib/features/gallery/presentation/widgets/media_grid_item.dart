@@ -6,6 +6,7 @@ import '../../../../core/models/media_item.dart';
 import '../../../../core/services/psd_service.dart';
 import '../../../../core/services/thumbnail_service.dart';
 import '../../../../core/utils/media_utils.dart';
+import 'grid_hi_res_scope.dart';
 import 'shimmer_loading_tile.dart';
 
 /// Gallery grid thumbnail item.
@@ -35,6 +36,12 @@ class MediaGridItem extends StatefulWidget {
 
 class _MediaGridItemState extends State<MediaGridItem> {
   Future<Uint8List?>? _thumbFuture;
+  GridHiResController? _hiResController;
+  bool _hiResActive = false;
+  bool _hiResInFlight = false;
+  int _hiResWidth = 640;
+  int _hiResToken = 0;
+  ImageProvider? _activeHiResProvider;
 
   @override
   void initState() {
@@ -43,11 +50,172 @@ class _MediaGridItemState extends State<MediaGridItem> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = GridHiResScope.maybeOf(context);
+    if (next != _hiResController) {
+      _hiResController?.removeListener(_onHiResStateChanged);
+      _hiResController = next;
+      _hiResController?.addListener(_onHiResStateChanged);
+      if (next?.value.active == true) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _onHiResStateChanged();
+        });
+      } else {
+        _downgradeToLowRes(triggerRebuild: false);
+      }
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant MediaGridItem oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.id != widget.item.id ||
         oldWidget.item.path != widget.item.path) {
+      _downgradeToLowRes(triggerRebuild: false);
       _initThumbnail();
+      if (_hiResController?.value.active == true) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _onHiResStateChanged();
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _hiResController?.removeListener(_onHiResStateChanged);
+    _downgradeToLowRes(triggerRebuild: false);
+    super.dispose();
+  }
+
+  void _evictHiResProvider() {
+    _activeHiResProvider?.evict();
+    _activeHiResProvider = null;
+  }
+
+  void _downgradeToLowRes({required bool triggerRebuild}) {
+    _hiResToken++;
+    _hiResInFlight = false;
+    final wasActive = _hiResActive || _activeHiResProvider != null;
+    _evictHiResProvider();
+    _hiResActive = false;
+    if (triggerRebuild && mounted && wasActive) {
+      setState(() {});
+    }
+  }
+
+  void _onHiResStateChanged() {
+    if (!mounted) return;
+    final controller = _hiResController;
+    if (controller == null ||
+        !controller.value.active ||
+        !controller.isTileVisibleInViewport(context)) {
+      _downgradeToLowRes(triggerRebuild: true);
+      return;
+    }
+
+    final targetWidth = controller.computeTargetCacheWidth(
+      context,
+      minWidth: 640,
+      maxWidth: 960,
+    );
+    if (_hiResActive &&
+        _hiResWidth == targetWidth &&
+        (_activeHiResProvider != null || _hiResInFlight)) {
+      return;
+    }
+
+    final item = widget.item;
+    if (item.path.isEmpty) return;
+
+    if (!item.isVideo && !PsdService.isPsd(item.path)) {
+      _hiResToken++;
+      _hiResInFlight = false;
+      _evictHiResProvider();
+      _hiResWidth = targetWidth;
+      _activeHiResProvider = ResizeImage(
+        FileImage(File(item.path)),
+        width: targetWidth,
+      );
+      setState(() => _hiResActive = true);
+      return;
+    }
+
+    if (item.isVideo) {
+      final memHi =
+          ThumbnailService.instance.getMemoryHighResThumbnail(item.id);
+      if (memHi != null && memHi.isNotEmpty) {
+        _hiResToken++;
+        _hiResInFlight = false;
+        _evictHiResProvider();
+        _hiResWidth = targetWidth;
+        _activeHiResProvider = ResizeImage(
+          MemoryImage(memHi),
+          width: targetWidth,
+        );
+        setState(() => _hiResActive = true);
+        return;
+      }
+
+      final token = ++_hiResToken;
+      _hiResWidth = targetWidth;
+      _hiResActive = true;
+      _hiResInFlight = true;
+      ThumbnailService.instance
+          .getGridHiResVideoThumbnail(
+        item.id,
+        filePath: item.path,
+        size: targetWidth,
+        isCancelled: () =>
+            !mounted ||
+            _hiResToken != token ||
+            !(_hiResController?.value.active ?? false),
+      )
+          .then((bytes) {
+        if (!mounted ||
+            _hiResToken != token ||
+            !(_hiResController?.value.active ?? false)) {
+          return;
+        }
+        _hiResInFlight = false;
+        if (bytes == null || bytes.isEmpty) return;
+        _evictHiResProvider();
+        _activeHiResProvider = ResizeImage(
+          MemoryImage(bytes),
+          width: targetWidth,
+        );
+        setState(() {});
+      });
+      return;
+    }
+
+    // PSD: decode full cached thumbnail up to targetWidth.
+    final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
+    if (mem != null && mem.isNotEmpty) {
+      _hiResToken++;
+      _hiResInFlight = false;
+      _evictHiResProvider();
+      _hiResWidth = targetWidth;
+      _activeHiResProvider = ResizeImage(
+        MemoryImage(mem),
+        width: targetWidth,
+      );
+      setState(() => _hiResActive = true);
+      return;
+    }
+
+    final diskFile = ThumbnailService.instance.getIndexedDiskFile(item.id);
+    if (diskFile != null) {
+      _hiResToken++;
+      _hiResInFlight = false;
+      _evictHiResProvider();
+      _hiResWidth = targetWidth;
+      _activeHiResProvider = ResizeImage(
+        FileImage(diskFile),
+        width: targetWidth,
+      );
+      setState(() => _hiResActive = true);
     }
   }
 
@@ -82,6 +250,34 @@ class _MediaGridItemState extends State<MediaGridItem> {
     final fit = widget.cropStyle == ThumbnailCropStyle.adaptive
         ? BoxFit.contain
         : BoxFit.cover;
+    final lowRes = _buildLowResThumbnail(cs, fit);
+    final hiResProvider = _activeHiResProvider;
+    if (!_hiResActive || hiResProvider == null) {
+      return lowRes;
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        lowRes,
+        Image(
+          image: hiResProvider,
+          fit: fit,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
+          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+            if (wasSynchronouslyLoaded || frame != null) {
+              return child;
+            }
+            return const SizedBox.shrink();
+          },
+          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLowResThumbnail(ColorScheme cs, BoxFit fit) {
 
     // 1. Memory cache lookup.
     final mem = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);

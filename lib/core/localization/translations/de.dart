@@ -233,4 +233,6 @@ const Map<String, String> deTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Gehe zu Seite',
+  'jump': 'Los',
 };

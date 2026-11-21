@@ -228,4 +228,6 @@ const Map<String, String> svTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Gå till sida',
+  'jump': 'Gå',
 };

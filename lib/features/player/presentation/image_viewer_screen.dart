@@ -205,6 +205,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
   TranslationRenderMode? _translationMode;
   late List<MediaItem> _cachedMangaList;
   late final ValueNotifier<int> _activeMangaPageNotifier;
+  bool _isScrubbingMangaSlider = false;
+  int? _mangaScrubTargetPage;
 
   void _updateMangaList() {
     _cachedMangaList = widget.items
@@ -952,6 +954,284 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
     _mangaPageController.jumpToPage(mangaIdx);
   }
 
+  void _jumpToMangaPage(
+    int targetIndex, {
+    bool triggerTranslation = true,
+  }) {
+    final mangaList = _mangaItems;
+    if (mangaList.isEmpty) return;
+    final clamped = targetIndex.clamp(0, mangaList.length - 1);
+    final changed = _activeMangaPageNotifier.value != clamped;
+
+    _transformationController.value = Matrix4.identity();
+    _isPhotoZoomed = false;
+    _isDeepZoomed = false;
+    _isPinching = false;
+    _activeMangaPageNotifier.value = clamped;
+
+    final globalIndex = widget.items.indexOf(mangaList[clamped]);
+    if (globalIndex != -1) {
+      _current = globalIndex;
+      _activeMediaNotifier?.state = mangaList[clamped].id;
+      _precacheAdjacent(globalIndex);
+    }
+
+    if (_mangaPageController.hasClients && changed) {
+      _mangaPageController.jumpToPage(clamped);
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
+
+    if (triggerTranslation && _translationMode != null) {
+      _triggerMangaTranslationForActivePage();
+    }
+  }
+
+  Future<void> _showMangaJumpToPageDialog(int currentIdx, int total) async {
+    if (total <= 1) return;
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (ctx) => _MangaJumpToPageDialog(
+        currentPage: currentIdx + 1,
+        totalPages: total,
+        title: context.tr.goToPage,
+        cancelLabel: context.tr.cancel,
+        confirmLabel: context.tr.jump,
+      ),
+    );
+    if (picked != null && mounted) {
+      _jumpToMangaPage(picked);
+    }
+  }
+
+  Widget _buildMangaPageJumpBar(BuildContext context, bool showBars) {
+    final total = _mangaItems.length;
+    if (total <= 1) return const SizedBox.shrink();
+
+    final primary = Theme.of(context).colorScheme.primary;
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: _buildStaggeredBar(
+        context: context,
+        showBars: showBars,
+        isTopBar: false,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            child: ValueListenableBuilder<int>(
+              valueListenable: _activeMangaPageNotifier,
+              builder: (context, activeIdx, _) {
+                final maxPageIdx = total - 1;
+                final displayIdx = (_isScrubbingMangaSlider
+                        ? (_mangaScrubTargetPage ?? activeIdx)
+                        : activeIdx)
+                    .clamp(0, maxPageIdx);
+
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {},
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_isScrubbingMangaSlider)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.85),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.18),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Text(
+                              '${displayIdx + 1}/$total',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                fontFeatures: [FontFeature.tabularFigures()],
+                              ),
+                            ),
+                          ),
+                        ),
+                      Container(
+                        key: const ValueKey('manga_page_jump_bar'),
+                        height: 50,
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.78),
+                          borderRadius: BorderRadius.circular(25),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.16),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              key: const ValueKey('manga_prev_page_button'),
+                              icon: Icon(
+                                Icons.chevron_left_rounded,
+                                size: 22,
+                                color: displayIdx > 0
+                                    ? Colors.white
+                                    : Colors.white30,
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 34,
+                                minHeight: 34,
+                              ),
+                              padding: EdgeInsets.zero,
+                              onPressed: displayIdx > 0
+                                  ? () => _jumpToMangaPage(displayIdx - 1)
+                                  : null,
+                            ),
+                            BouncyTap(
+                              key: const ValueKey('manga_jump_page_button'),
+                              scaleDown: 0.92,
+                              onTap: () => _showMangaJumpToPageDialog(
+                                displayIdx,
+                                total,
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 9, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${displayIdx + 1}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    fontFeatures: [
+                                      FontFeature.tabularFigures()
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: SliderTheme(
+                                data: SliderTheme.of(context).copyWith(
+                                  activeTrackColor: primary,
+                                  inactiveTrackColor: Colors.white24,
+                                  thumbColor: Colors.white,
+                                  overlayColor: primary.withValues(alpha: 0.2),
+                                  tickMarkShape: SliderTickMarkShape.noTickMark,
+                                  trackHeight: 3.5,
+                                  thumbShape: const RoundSliderThumbShape(
+                                    enabledThumbRadius: 7,
+                                  ),
+                                  overlayShape: const RoundSliderOverlayShape(
+                                    overlayRadius: 15,
+                                  ),
+                                ),
+                                child: Slider(
+                                  key: const ValueKey('manga_page_slider'),
+                                  min: 0,
+                                  max: maxPageIdx.toDouble(),
+                                  divisions: maxPageIdx,
+                                  value: displayIdx.toDouble(),
+                                  onChangeStart: (v) {
+                                    setState(() {
+                                      _isScrubbingMangaSlider = true;
+                                      _mangaScrubTargetPage =
+                                          v.round().clamp(0, maxPageIdx);
+                                    });
+                                  },
+                                  onChanged: (v) {
+                                    final target =
+                                        v.round().clamp(0, maxPageIdx);
+                                    if (target != _mangaScrubTargetPage) {
+                                      HapticFeedback.selectionClick();
+                                      _mangaScrubTargetPage = target;
+                                      _jumpToMangaPage(
+                                        target,
+                                        triggerTranslation: false,
+                                      );
+                                    }
+                                  },
+                                  onChangeEnd: (v) {
+                                    final target =
+                                        v.round().clamp(0, maxPageIdx);
+                                    setState(() {
+                                      _isScrubbingMangaSlider = false;
+                                      _mangaScrubTargetPage = null;
+                                    });
+                                    _jumpToMangaPage(
+                                      target,
+                                      triggerTranslation: true,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _showMangaJumpToPageDialog(
+                                displayIdx,
+                                total,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 6),
+                                child: Text(
+                                  '$total',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    fontFeatures: [
+                                      FontFeature.tabularFigures()
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              key: const ValueKey('manga_next_page_button'),
+                              icon: Icon(
+                                Icons.chevron_right_rounded,
+                                size: 22,
+                                color: displayIdx < maxPageIdx
+                                    ? Colors.white
+                                    : Colors.white30,
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 34,
+                                minHeight: 34,
+                              ),
+                              padding: EdgeInsets.zero,
+                              onPressed: displayIdx < maxPageIdx
+                                  ? () => _jumpToMangaPage(displayIdx + 1)
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _toggleMangaMode() {
     final mangaList = _mangaItems;
     if (mangaList.isEmpty) {
@@ -1023,7 +1303,9 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
             _activeMediaNotifier?.state = mangaList[index].id;
           }
         });
-        _triggerMangaTranslationForActivePage();
+        if (!_isScrubbingMangaSlider) {
+          _triggerMangaTranslationForActivePage();
+        }
       },
       itemBuilder: (context, index) {
         final it = mangaList[index];
@@ -2680,9 +2962,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                   ),
                 ),
               if (_isMangaMode)
-                Positioned(
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
                   right: 16,
-                  bottom: 20,
+                  bottom: (showBars && _mangaItems.length > 1) ? 80 : 20,
                   child: SafeArea(
                     top: false,
                     left: false,
@@ -2788,6 +3072,8 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                     ),
                   ),
                 ),
+              if (_isMangaMode && _mangaItems.length > 1)
+                _buildMangaPageJumpBar(context, showBars),
               if (!_isMangaMode)
                 Positioned(
                   bottom: 0,
@@ -3151,4 +3437,115 @@ class _OutlinedSpinnerPainter extends CustomPainter {
   @override
   bool shouldRepaint(_OutlinedSpinnerPainter oldDelegate) =>
       oldDelegate.progress != progress;
+}
+
+class _MangaJumpToPageDialog extends StatefulWidget {
+  const _MangaJumpToPageDialog({
+    required this.currentPage,
+    required this.totalPages,
+    required this.title,
+    required this.cancelLabel,
+    required this.confirmLabel,
+  });
+
+  final int currentPage;
+  final int totalPages;
+  final String title;
+  final String cancelLabel;
+  final String confirmLabel;
+
+  @override
+  State<_MangaJumpToPageDialog> createState() => _MangaJumpToPageDialogState();
+}
+
+class _MangaJumpToPageDialogState extends State<_MangaJumpToPageDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final initialText = '${widget.currentPage}';
+    _controller = TextEditingController(text: initialText)
+      ..selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: initialText.length,
+      );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final parsed = int.tryParse(_controller.text.trim());
+    if (parsed == null) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final targetIndex = (parsed - 1).clamp(0, widget.totalPages - 1);
+    Navigator.of(context).pop(targetIndex);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1A1B20),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: Colors.white.withValues(alpha: 0.14),
+          width: 0.8,
+        ),
+      ),
+      title: Text(
+        widget.title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 17,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      content: TextField(
+        key: const ValueKey('manga_jump_page_input'),
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        textInputAction: TextInputAction.go,
+        style: const TextStyle(color: Colors.white, fontSize: 16),
+        decoration: InputDecoration(
+          hintText: '1 - ${widget.totalPages}',
+          hintStyle: const TextStyle(color: Colors.white38),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: primary, width: 1.5),
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            widget.cancelLabel,
+            style: const TextStyle(color: Colors.white70),
+          ),
+        ),
+        FilledButton(
+          key: const ValueKey('manga_jump_page_confirm'),
+          onPressed: _submit,
+          child: Text(widget.confirmLabel),
+        ),
+      ],
+    );
+  }
 }

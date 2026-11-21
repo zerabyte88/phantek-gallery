@@ -231,4 +231,6 @@ const Map<String, String> frTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Aller à la page',
+  'jump': 'Aller',
 };

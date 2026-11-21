@@ -226,4 +226,6 @@ const Map<String, String> arTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'الانتقال إلى صفحة',
+  'jump': 'انتقال',
 };

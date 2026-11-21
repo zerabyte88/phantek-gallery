@@ -257,4 +257,6 @@ const Map<String, String> enTranslations = {
   'testConnection': 'Test Connection',
   'testingConnection': 'Connecting...',
   'availableModels': 'Available Models',
+  'goToPage': 'Go to page',
+  'jump': 'Go',
 };

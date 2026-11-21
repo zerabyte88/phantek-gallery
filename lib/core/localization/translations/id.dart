@@ -260,4 +260,6 @@ const Map<String, String> idTranslations = {
   'testConnection': 'Tes Koneksi',
   'testingConnection': 'Menghubungkan...',
   'availableModels': 'Model Tersedia',
+  'goToPage': 'Lompat ke halaman',
+  'jump': 'Lompat',
 };

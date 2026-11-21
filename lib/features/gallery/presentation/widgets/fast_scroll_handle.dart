@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'grid_hi_res_scope.dart';
 
 /// A right-edge-docked fast-scroll thumb handle that appears when scrolling
 /// vertically, tracks scroll progress, and auto-hides after [hideDelay].
@@ -34,10 +35,17 @@ class _FastScrollHandleState extends State<FastScrollHandle>
   final ValueNotifier<double> _fractionNotifier = ValueNotifier<double>(0.0);
   late final AnimationController _pillController;
   late final Animation<double> _pillOpacity;
+  GridHiResController? _hiResController;
   bool _visible = false;
   bool _isDragging = false;
   String? _lastLabel;
   Timer? _hideTimer;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _hiResController = GridHiResScope.maybeOf(context);
+  }
 
   @override
   void initState() {
@@ -54,6 +62,9 @@ class _FastScrollHandleState extends State<FastScrollHandle>
 
   @override
   void dispose() {
+    if (_isDragging) {
+      _hiResController?.setExternalScrolling(false);
+    }
     _hideTimer?.cancel();
     _pillController.dispose();
     _fractionNotifier.dispose();
@@ -102,6 +113,7 @@ class _FastScrollHandleState extends State<FastScrollHandle>
 
   void _onVerticalDragStart(DragStartDetails details) {
     _hideTimer?.cancel();
+    _hiResController?.setExternalScrolling(true);
     final label = widget.labelBuilder?.call(_fractionNotifier.value);
     if (label != null && label.isNotEmpty) {
       _lastLabel = label;
@@ -143,6 +155,7 @@ class _FastScrollHandleState extends State<FastScrollHandle>
   }
 
   void _onVerticalDragEnd() {
+    _hiResController?.setExternalScrolling(false);
     if (mounted) {
       setState(() => _isDragging = false);
     } else {
