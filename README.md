@@ -5,7 +5,7 @@
 
   **Offline Android gallery for photos, videos, PSD files, and manga, with on-device manga OCR and dialogue localization via Local AI Server (LM Studio / Ollama).**
 
-  [![Version](https://img.shields.io/badge/Version-v2.19.25-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.19.26-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20LM%20Studio-6366f1.svg?style=flat-square)](https://lmstudio.ai/)
@@ -32,7 +32,7 @@ For comic and manga readers, Phantek Gallery pairs on-device OCR (**Google ML Ki
 - **Viewport-Aware Idle Hi-Res Thumbnails**: Automatically sharpens visible photo, video, and PSD thumbnails across all grids once scrolling settles so fine text and details are readable without opening each item, then immediately reverts and evicts hi-res bitmaps when scrolling resumes.
 - **PSD Layer Viewer**: Open Adobe Photoshop (`.psd`) documents with embedded-JPEG previews and a dedicated sheet for toggling individual layer visibilities.
 - **Hardware Video & Full-Viewport Media Zoom**: Built on AndroidX Media3 / ExoPlayer with double-tap seek, gesture-based brightness and volume controls, fast seekbar frame preview with lift-off stabilization, resume playback, and unclipped full-viewport pinch/double-tap zoom for both horizontal and vertical photos and videos.
-- **EXIF and Technical Inspector**: Detailed photo metadata (ISO, aperture, shutter speed, focal length, resolution) and video properties (bitrate, fps, codec, channels).
+- **EXIF and Technical Inspector**: Adaptive compact 2-column inspector displaying camera EXIF (camera model, aperture, shutter speed, ISO, focal length), illustration and artwork metadata (format, color space, print DPI, creator software from EXIF/PNG/XMP, and PSD layer counts), and video/audio properties (bitrate, FPS, video codec, audio codec, channels, and sample rate), automatically hiding unavailable fields.
 
 ### Manga Reader & Translation
 
