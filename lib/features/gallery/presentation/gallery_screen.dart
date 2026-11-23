@@ -743,13 +743,13 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                     colors: [
                       Theme.of(context)
                           .scaffoldBackgroundColor
-                          .withValues(alpha: 0.82),
+                          .withValues(alpha: 0.56),
                       Theme.of(context)
                           .scaffoldBackgroundColor
-                          .withValues(alpha: 0.62),
+                          .withValues(alpha: 0.36),
                       Theme.of(context)
                           .scaffoldBackgroundColor
-                          .withValues(alpha: 0.14),
+                          .withValues(alpha: 0.06),
                     ],
                     stops: const [0.0, 0.46, 1.0],
                   ),

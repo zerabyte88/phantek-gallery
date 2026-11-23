@@ -235,4 +235,12 @@ const Map<String, String> ruTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Перейти на страницу',
   'jump': 'Перейти',
+  'format': 'Формат',
+  'bitrate': 'Битрейт',
+  'audio': 'Аудио',
+  'camera': 'Камера',
+  'colorSpace': 'Цветовое пространство',
+  'software': 'Программа',
+  'dpi': 'Плотность (DPI)',
+  'layers': 'Слои',
 };

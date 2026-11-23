@@ -157,6 +157,14 @@ class AppLocalizations {
   String get date => _t('date');
   String get size => _t('size');
   String get resolution => _t('resolution');
+  String get format => _t('format');
+  String get bitrate => _t('bitrate');
+  String get audio => _t('audio');
+  String get camera => _t('camera');
+  String get colorSpace => _t('colorSpace');
+  String get software => _t('software');
+  String get dpi => _t('dpi');
+  String get layers => _t('layers');
   String get frameRate => _t('frameRate');
   String get codec => _t('codec');
   String get duration => _t('duration');

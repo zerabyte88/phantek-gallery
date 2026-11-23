@@ -228,4 +228,12 @@ const Map<String, String> thTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'ไปยังหน้า',
   'jump': 'ไป',
+  'format': 'รูปแบบ',
+  'bitrate': 'บิตเรต',
+  'audio': 'เสียง',
+  'camera': 'กล้อง',
+  'colorSpace': 'พื้นที่สี',
+  'software': 'ซอฟต์แวร์',
+  'dpi': 'ความหนาแน่น (DPI)',
+  'layers': 'เลเยอร์',
 };

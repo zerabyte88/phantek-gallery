@@ -233,4 +233,12 @@ const Map<String, String> nlTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Ga naar pagina',
   'jump': 'Ga',
+  'format': 'Formaat',
+  'bitrate': 'Bitrate',
+  'audio': 'Audio',
+  'camera': 'Camera',
+  'colorSpace': 'Kleurruimte',
+  'software': 'Software',
+  'dpi': 'Afdrukdichtheid (DPI)',
+  'layers': 'Lagen',
 };

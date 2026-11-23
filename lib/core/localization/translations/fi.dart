@@ -231,4 +231,12 @@ const Map<String, String> fiTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Siirry sivulle',
   'jump': 'Siirry',
+  'format': 'Muoto',
+  'bitrate': 'Bittinopeus',
+  'audio': 'Ääni',
+  'camera': 'Kamera',
+  'colorSpace': 'Väriavaruus',
+  'software': 'Ohjelmisto',
+  'dpi': 'Tiheys (DPI)',
+  'layers': 'Tasot',
 };

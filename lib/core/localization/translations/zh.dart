@@ -225,4 +225,12 @@ const Map<String, String> zhTranslations = {
   'availableModels': 'Available Models',
   'goToPage': '跳转到页面',
   'jump': '跳转',
+  'format': '格式',
+  'bitrate': '比特率',
+  'audio': '音频',
+  'camera': '相机',
+  'colorSpace': '色彩空间',
+  'software': '软件',
+  'dpi': '打印密度 (DPI)',
+  'layers': '图层',
 };

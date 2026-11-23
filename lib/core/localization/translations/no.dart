@@ -230,4 +230,12 @@ const Map<String, String> noTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Gå til side',
   'jump': 'Gå',
+  'format': 'Format',
+  'bitrate': 'Bithastighet',
+  'audio': 'Lyd',
+  'camera': 'Kamera',
+  'colorSpace': 'Fargerom',
+  'software': 'Programvare',
+  'dpi': 'Utskriftstetthet (DPI)',
+  'layers': 'Lag',
 };

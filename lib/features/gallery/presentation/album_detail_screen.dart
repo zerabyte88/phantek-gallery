@@ -605,13 +605,13 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                     colors: [
                       Theme.of(context)
                           .scaffoldBackgroundColor
-                          .withValues(alpha: 0.86),
+                          .withValues(alpha: 0.60),
                       Theme.of(context)
                           .scaffoldBackgroundColor
-                          .withValues(alpha: 0.70),
+                          .withValues(alpha: 0.42),
                       Theme.of(context)
                           .scaffoldBackgroundColor
-                          .withValues(alpha: 0.16),
+                          .withValues(alpha: 0.08),
                     ],
                     stops: const [0.0, 0.56, 1.0],
                   ),

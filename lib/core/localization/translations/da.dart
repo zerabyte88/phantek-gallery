@@ -229,4 +229,12 @@ const Map<String, String> daTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Gå til side',
   'jump': 'Gå',
+  'format': 'Format',
+  'bitrate': 'Bitrate',
+  'audio': 'Lyd',
+  'camera': 'Kamera',
+  'colorSpace': 'Farverum',
+  'software': 'Software',
+  'dpi': 'Printtæthed (DPI)',
+  'layers': 'Lag',
 };

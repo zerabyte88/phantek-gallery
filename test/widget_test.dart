@@ -35,6 +35,7 @@ import 'package:phantek_gallery/features/gallery/presentation/album_detail_scree
 import 'package:phantek_gallery/features/gallery/presentation/gallery_screen.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/filter_sort_bar.dart';
 import 'package:phantek_gallery/features/gallery/presentation/widgets/sort_bottom_sheet.dart';
+import 'package:phantek_gallery/core/services/media_metadata_service.dart';
 import 'package:phantek_gallery/features/player/presentation/widgets/media_info_sheet.dart';
 import 'package:phantek_gallery/features/player/presentation/image_viewer_screen.dart'
     show displayImage, screenDisplayImage, ImageViewerScreen;
@@ -6119,6 +6120,273 @@ void main() {
       await tester.dragFrom(tile1Center, tile2Center - tile1Center);
       await tester.pumpAndSettle();
       expect(find.text('3 selected'), findsOneWidget);
+    });
+
+    testWidgets(
+        'ImageViewerScreen waits for PageView settle before handing off to VideoPlayerScreen',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await SettingsService.init();
+
+      final items = [
+        MediaItem(
+          id: 'handoff_photo_1',
+          path: '/mock/photo_1.jpg',
+          name: 'photo_1.jpg',
+          date: DateTime(2026, 11, 20),
+          size: 1024,
+          isVideo: false,
+        ),
+        MediaItem(
+          id: 'handoff_video_1',
+          path: '/mock/video_1.mp4',
+          name: 'video_1.mp4',
+          date: DateTime(2026, 11, 20),
+          size: 2048,
+          isVideo: true,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsNotifierProvider.overrideWith(
+              () => _TestSettingsNotifier(
+                const SettingsModel(autoPlayVideo: false),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en'), Locale('id')],
+            home: ImageViewerScreen(items: items, initialIndex: 0),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final pageViewCenter = tester.getCenter(find.byType(PageView));
+      final gesture = await tester.startGesture(pageViewCenter);
+      // Use small steps (< kPanSlop) so PageView's horizontal drag wins over
+      // InteractiveViewer's ScaleGestureRecognizer, matching real touch input.
+      for (int i = 0; i < 25; i++) {
+        await gesture.moveBy(
+          const Offset(-20, 0),
+          timeStamp: Duration(milliseconds: (i + 1) * 16),
+        );
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(find.byIcon(Icons.play_circle_fill_rounded), findsOneWidget);
+
+      // Hold longer than the old 220ms timer: handoff must NOT cut off the drag.
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(ImageViewerScreen), findsOneWidget);
+      expect(find.byType(VideoPlayerScreen), findsNothing);
+
+      // Release and let the PageView settle; handoff runs after settle + debounce.
+      await gesture.up();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
+      expect(find.byType(VideoPlayerScreen), findsOneWidget);
+
+      // Tear down cleanly and drain any delayed video-init fallback timers.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 600));
+    });
+
+    test('MediaUtils formats EXIF, artwork, and video technical metadata', () {
+      expect(MediaUtils.formatBitrate(12400000), '12.4 Mbps');
+      expect(MediaUtils.formatBitrate(320000), '320 kbps');
+      expect(MediaUtils.formatAudioChannels(1), 'Mono');
+      expect(MediaUtils.formatAudioChannels(2), 'Stereo');
+      expect(MediaUtils.formatAudioChannels(6), '5.1');
+      expect(MediaUtils.formatAudioCodec('audio/mp4a-latm'), 'AAC');
+      expect(MediaUtils.formatAudioCodec('audio/opus'), 'Opus');
+      expect(MediaUtils.formatCodec('video/x-vnd.on2.vp9'), 'VP9');
+      expect(MediaUtils.formatAperture(1.8), 'f/1.8');
+      expect(MediaUtils.formatAperture(8.0), 'f/8');
+      expect(MediaUtils.formatShutterSpeed(0.008), '1/125 s');
+      expect(MediaUtils.formatShutterSpeed(2.0), '2 s');
+      expect(MediaUtils.formatFocalLength(5.4, focalLength35mm: 26),
+          '5.4 mm (26 mm eq.)');
+      expect(MediaUtils.formatColorSpace('sRGB IEC61966-2.1'), 'sRGB');
+      expect(MediaUtils.formatColorSpace('Display P3'), 'Display P3');
+      expect(MediaUtils.formatFileFormat('/art/drawing.png'), 'PNG');
+      expect(MediaUtils.formatFileFormat('/art/canvas.psd'), 'PSD');
+    });
+
+    testWidgets(
+        'MediaInfoSheet adapts between camera EXIF, illustration metadata, and video properties',
+        (tester) async {
+      final cameraPhoto = MediaItem(
+        id: 'cam_1',
+        path: '/storage/emulated/0/DCIM/IMG_001.jpg',
+        name: 'IMG_001.jpg',
+        date: DateTime(2026, 11, 20, 14, 15),
+        size: 4200000,
+        isVideo: false,
+        width: 4000,
+        height: 3000,
+      );
+      const cameraMeta = MediaMetadata(
+        mimeType: 'image/jpeg',
+        colorSpace: 'Display P3',
+        camera: 'Sony ILCE-7M4',
+        iso: 400,
+        aperture: 1.8,
+        shutterSpeed: 0.004,
+        focalLength: 35.0,
+      );
+
+      final artworkPng = MediaItem(
+        id: 'art_1',
+        path: '/storage/emulated/0/Pictures/illust.png',
+        name: 'illust.png',
+        date: DateTime(2026, 11, 20, 15, 0),
+        size: 6500000,
+        isVideo: false,
+        width: 2480,
+        height: 3508,
+      );
+      const artworkMeta = MediaMetadata(
+        mimeType: 'image/png',
+        colorSpace: 'sRGB IEC61966-2.1',
+        dpi: 350,
+        software: 'CLIP STUDIO PAINT',
+      );
+
+      final videoItem = MediaItem(
+        id: 'vid_meta_1',
+        path: '/storage/emulated/0/Movies/clip.mp4',
+        name: 'clip.mp4',
+        date: DateTime(2026, 11, 20, 16, 0),
+        size: 25000000,
+        isVideo: true,
+        width: 1920,
+        height: 1080,
+        duration: const Duration(seconds: 30),
+      );
+      const videoMeta = MediaMetadata(
+        bitrate: 12400000,
+        fps: 59.94,
+        videoCodec: 'video/hevc',
+        audioCodec: 'audio/mp4a-latm',
+        audioChannels: 2,
+        audioSampleRate: 48000,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Column(
+                children: [
+                  ElevatedButton(
+                    onPressed: () => showMediaInfoSheet(
+                      context,
+                      cameraPhoto,
+                      metadata: cameraMeta,
+                    ),
+                    child: const Text('Cam'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => showMediaInfoSheet(
+                      context,
+                      artworkPng,
+                      metadata: artworkMeta,
+                    ),
+                    child: const Text('Art'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => showMediaInfoSheet(
+                      context,
+                      videoItem,
+                      metadata: videoMeta,
+                    ),
+                    child: const Text('Vid'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // 1. Camera photo shows EXIF details
+      await tester.tap(find.text('Cam'));
+      await tester.pumpAndSettle();
+      expect(find.text('Sony ILCE-7M4'), findsOneWidget);
+      expect(find.text('f/1.8'), findsOneWidget);
+      expect(find.text('1/250 s'), findsOneWidget);
+      expect(find.text('ISO 400'), findsOneWidget);
+      expect(find.text('35 mm'), findsOneWidget);
+      expect(find.text('Display P3'), findsOneWidget);
+      Navigator.of(tester.element(find.text('Sony ILCE-7M4'))).pop();
+      await tester.pumpAndSettle();
+
+      // 2. Illustration shows Software/DPI/Color Space without Camera section
+      await tester.tap(find.text('Art'));
+      await tester.pumpAndSettle();
+      expect(find.text('CLIP STUDIO PAINT'), findsOneWidget);
+      expect(find.text('350 DPI'), findsOneWidget);
+      expect(find.text('sRGB'), findsOneWidget);
+      expect(find.text('PNG'), findsOneWidget);
+      expect(find.text('Camera'), findsNothing);
+      Navigator.of(tester.element(find.text('CLIP STUDIO PAINT'))).pop();
+      await tester.pumpAndSettle();
+
+      // 3. Video shows Bitrate, FPS, Codec, and Audio summary
+      await tester.tap(find.text('Vid'));
+      await tester.pumpAndSettle();
+      expect(find.text('59.94 fps'), findsOneWidget);
+      expect(find.text('H.265 (HEVC)'), findsOneWidget);
+      expect(find.text('12.4 Mbps'), findsOneWidget);
+      expect(find.text('AAC • Stereo • 48 kHz'), findsOneWidget);
+      Navigator.of(tester.element(find.text('12.4 Mbps'))).pop();
+      await tester.pumpAndSettle();
+
+      // 4. Survives 2.0x text scale on compact phone width without overflow
+      tester.view.physicalSize = const Size(360, 740);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.cleanLight,
+          darkTheme: AppTheme.amoledPure,
+          themeMode: ThemeMode.dark,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(2.0)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => showMediaInfoSheet(
+                  context,
+                  cameraPhoto,
+                  metadata: cameraMeta,
+                ),
+                child: const Text('Open Scaled'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open Scaled'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Sony ILCE-7M4'), findsOneWidget);
     });
   });
 }

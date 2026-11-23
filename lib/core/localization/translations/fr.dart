@@ -233,4 +233,12 @@ const Map<String, String> frTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Aller à la page',
   'jump': 'Aller',
+  'format': 'Format',
+  'bitrate': 'Débit',
+  'audio': 'Audio',
+  'camera': 'Appareil photo',
+  'colorSpace': 'Espace colorimétrique',
+  'software': 'Logiciel',
+  'dpi': 'Résolution (DPI)',
+  'layers': 'Calques',
 };

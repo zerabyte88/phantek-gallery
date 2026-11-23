@@ -1659,14 +1659,26 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
         _didHandoffToVideo ||
         _isMangaMode ||
         _isSlideshowPlaying ||
+        _isSwipingPage.value ||
         _isDraggingDown.value ||
         _isDismissing.value) {
       return;
     }
     if (_current < 0 || _current >= widget.items.length) return;
     if (!widget.items[_current].isVideo) return;
-    _videoHandoffTimer = Timer(const Duration(milliseconds: 220), () {
-      if (!mounted || _isSlideshowPlaying) return;
+    _videoHandoffTimer = Timer(const Duration(milliseconds: 80), () {
+      if (!mounted ||
+          _isSlideshowPlaying ||
+          _isSwipingPage.value ||
+          _isDraggingDown.value ||
+          _isDismissing.value) {
+        return;
+      }
+      if (_page.hasClients) {
+        if (_page.position.isScrollingNotifier.value) return;
+        final page = _page.page;
+        if (page == null || (page - _current).abs() > 0.001) return;
+      }
       _handoffToVideoPlayer(forcePlay: false);
     });
   }
@@ -2498,12 +2510,11 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                               ? _buildMangaView()
                               : NotificationListener<ScrollNotification>(
                                   onNotification: (notification) {
+                                    if (notification.depth != 0) return false;
                                     if (notification
                                         is ScrollStartNotification) {
-                                      if (notification.dragDetails != null) {
-                                        _isSwipingPage.value = true;
-                                        _videoHandoffTimer?.cancel();
-                                      }
+                                      _isSwipingPage.value = true;
+                                      _videoHandoffTimer?.cancel();
                                     } else if (notification
                                         is ScrollEndNotification) {
                                       _isSwipingPage.value = false;
@@ -2537,7 +2548,6 @@ class _ImageViewerScreenState extends ConsumerState<ImageViewerScreen>
                                       if (_translationMode != null) {
                                         _triggerMangaTranslationForActivePage();
                                       }
-                                      _scheduleVideoHandoff();
                                     },
                                     physics: (_isCurrentlyZoomed ||
                                             _isPinching ||

@@ -75,11 +75,148 @@ class MediaUtils {
       return 'H.265 (HEVC)';
     }
     if (c.contains('av01') || c == 'av1') return 'AV1';
-    if (c == 'vp9') return 'VP9';
-    if (c == 'vp8') return 'VP8';
+    if (c.contains('vp9')) return 'VP9';
+    if (c.contains('vp8')) return 'VP8';
     if (c.contains('mpeg4') || c.contains('mp4v')) return 'MPEG-4';
     if (c.contains('mjpeg')) return 'Motion JPEG';
+    if (c.startsWith('video/')) return c.substring(6).toUpperCase();
     return codec.trim().toUpperCase();
+  }
+
+  /// Formats raw audio codec / MIME string into human-friendly name.
+  static String formatAudioCodec(String codec) {
+    final c = codec.trim().toLowerCase();
+    if (c.isEmpty) return '';
+    if (c.contains('mp4a') || c.contains('aac')) return 'AAC';
+    if (c.contains('opus')) return 'Opus';
+    if (c.contains('vorbis')) return 'Vorbis';
+    if (c.contains('flac')) return 'FLAC';
+    if (c.contains('eac3')) return 'E-AC-3';
+    if (c.contains('ac3')) return 'AC-3';
+    if (c.contains('mpeg') || c.contains('mp3')) return 'MP3';
+    if (c.contains('amr')) return 'AMR';
+    if (c.contains('raw') || c.contains('pcm')) return 'PCM';
+    if (c.startsWith('audio/')) return c.substring(6).toUpperCase();
+    return codec.trim().toUpperCase();
+  }
+
+  /// Formats bitrate in bits per second (e.g. "12.4 Mbps", "320 kbps").
+  static String formatBitrate(int bps) {
+    if (bps <= 0) return '';
+    if (bps >= 1000000) {
+      final mbps = bps / 1000000.0;
+      return '${mbps.toStringAsFixed(mbps >= 10 ? 1 : 2)} Mbps';
+    }
+    if (bps >= 1000) {
+      return '${(bps / 1000.0).round()} kbps';
+    }
+    return '$bps bps';
+  }
+
+  /// Formats audio channel count (e.g. 1 -> "Mono", 2 -> "Stereo", 6 -> "5.1").
+  static String formatAudioChannels(int channels) {
+    return switch (channels) {
+      <= 0 => '',
+      1 => 'Mono',
+      2 => 'Stereo',
+      6 => '5.1',
+      8 => '7.1',
+      _ => '$channels ch',
+    };
+  }
+
+  /// Formats aperture f-number (e.g. 1.8 -> "f/1.8", 8.0 -> "f/8").
+  static String formatAperture(double fNumber) {
+    if (fNumber <= 0) return '';
+    if (fNumber == fNumber.roundToDouble()) {
+      return 'f/${fNumber.toInt()}';
+    }
+    final formatted = fNumber.toStringAsFixed(1);
+    return formatted.endsWith('.0')
+        ? 'f/${fNumber.round()}'
+        : 'f/$formatted';
+  }
+
+  /// Formats shutter speed in seconds (e.g. 0.008 -> "1/125 s", 2.0 -> "2 s").
+  static String formatShutterSpeed(double seconds) {
+    if (seconds <= 0) return '';
+    if (seconds >= 1.0) {
+      final str = seconds == seconds.roundToDouble()
+          ? '${seconds.toInt()}'
+          : seconds.toStringAsFixed(1);
+      return '$str s';
+    }
+    final denom = (1.0 / seconds).round();
+    if (denom <= 1) return '${seconds.toStringAsFixed(2)} s';
+    return '1/$denom s';
+  }
+
+  /// Formats focal length in mm (e.g. "26 mm" or "5.4 mm (26 mm eq.)").
+  static String formatFocalLength(double mm, {int? focalLength35mm}) {
+    if (mm <= 0) return '';
+    final base = mm == mm.roundToDouble()
+        ? '${mm.toInt()} mm'
+        : '${mm.toStringAsFixed(1)} mm';
+    if (focalLength35mm != null &&
+        focalLength35mm > 0 &&
+        (focalLength35mm - mm).abs() >= 1.0) {
+      return '$base ($focalLength35mm mm eq.)';
+    }
+    return base;
+  }
+
+  /// Normalizes Android ColorSpace names into concise labels.
+  static String formatColorSpace(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    final lower = trimmed.toLowerCase();
+    if (lower.startsWith('srgb')) return 'sRGB';
+    if (lower.contains('display p3') || lower.contains('dci-p3')) {
+      return 'Display P3';
+    }
+    if (lower.contains('adobe rgb')) return 'Adobe RGB';
+    if (lower.contains('bt.2020') || lower.contains('bt2020')) return 'BT.2020';
+    if (lower.contains('prophoto')) return 'ProPhoto RGB';
+    return trimmed;
+  }
+
+  /// Derives a clean file format label from MIME type or path extension.
+  static String formatFileFormat(String path, {String? mimeType}) {
+    final m = mimeType?.trim().toLowerCase() ?? '';
+    if (m.isNotEmpty) {
+      if (m.contains('photoshop') || m.contains('psd')) return 'PSD';
+      if (m == 'image/jpeg' || m == 'image/jpg') return 'JPEG';
+      if (m == 'image/png') return 'PNG';
+      if (m == 'image/webp') return 'WebP';
+      if (m == 'image/gif') return 'GIF';
+      if (m == 'image/heif' || m == 'image/heic') return 'HEIC';
+      if (m == 'image/avif') return 'AVIF';
+      if (m == 'image/bmp') return 'BMP';
+      if (m == 'image/tiff') return 'TIFF';
+      if (m.contains('dng')) return 'DNG (RAW)';
+    }
+    final dot = path.lastIndexOf('.');
+    if (dot != -1 && dot < path.length - 1) {
+      final ext = path.substring(dot + 1).toLowerCase();
+      return switch (ext) {
+        'jpg' || 'jpeg' => 'JPEG',
+        'png' => 'PNG',
+        'webp' => 'WebP',
+        'gif' => 'GIF',
+        'heic' || 'heif' => 'HEIC',
+        'avif' => 'AVIF',
+        'psd' => 'PSD',
+        'dng' => 'DNG (RAW)',
+        'mp4' || 'm4v' => 'MP4',
+        'mkv' => 'MKV',
+        'webm' => 'WebM',
+        'mov' => 'MOV',
+        'avi' => 'AVI',
+        '3gp' => '3GP',
+        _ => ext.toUpperCase(),
+      };
+    }
+    return '';
   }
 
   /// Computes the scroll offset required to ensure an item at [index] in a fixed-column

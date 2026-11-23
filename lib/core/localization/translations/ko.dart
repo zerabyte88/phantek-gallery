@@ -225,4 +225,12 @@ const Map<String, String> koTranslations = {
   'availableModels': 'Available Models',
   'goToPage': '페이지 이동',
   'jump': '이동',
+  'format': '형식',
+  'bitrate': '비트레이트',
+  'audio': '오디오',
+  'camera': '카메라',
+  'colorSpace': '색 공간',
+  'software': '소프트웨어',
+  'dpi': '인쇄 밀도 (DPI)',
+  'layers': '레이어',
 };

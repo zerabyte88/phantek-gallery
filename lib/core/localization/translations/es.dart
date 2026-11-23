@@ -239,4 +239,12 @@ const Map<String, String> esTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Ir a la página',
   'jump': 'Ir',
+  'format': 'Formato',
+  'bitrate': 'Tasa de bits',
+  'audio': 'Audio',
+  'camera': 'Cámara',
+  'colorSpace': 'Espacio de color',
+  'software': 'Software',
+  'dpi': 'Densidad (DPI)',
+  'layers': 'Capas',
 };

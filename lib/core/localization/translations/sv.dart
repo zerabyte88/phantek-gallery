@@ -230,4 +230,12 @@ const Map<String, String> svTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Gå till sida',
   'jump': 'Gå',
+  'format': 'Format',
+  'bitrate': 'Bithastighet',
+  'audio': 'Ljud',
+  'camera': 'Kamera',
+  'colorSpace': 'Färgrymd',
+  'software': 'Programvara',
+  'dpi': 'Utskriftstäthet (DPI)',
+  'layers': 'Lager',
 };

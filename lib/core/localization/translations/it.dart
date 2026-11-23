@@ -240,4 +240,12 @@ const Map<String, String> itTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Vai alla pagina',
   'jump': 'Vai',
+  'format': 'Formato',
+  'bitrate': 'Bitrate',
+  'audio': 'Audio',
+  'camera': 'Fotocamera',
+  'colorSpace': 'Spazio colore',
+  'software': 'Software',
+  'dpi': 'Densità (DPI)',
+  'layers': 'Livelli',
 };

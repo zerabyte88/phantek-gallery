@@ -257,6 +257,35 @@ class MainActivity : FlutterFragmentActivity() {
                 result.notImplemented()
             }
         }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.phantek.gallery/metadata"
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "getMediaMetadata") {
+                val path = call.argument<String>("path") ?: ""
+                val assetId = call.argument<String>("assetId")
+                val isVideo = call.argument<Boolean>("isVideo") ?: false
+                if (path.isEmpty() && assetId == null) {
+                    result.success(null)
+                    return@setMethodCallHandler
+                }
+                executor.execute {
+                    try {
+                        val map = if (isVideo) {
+                            extractVideoMetadata(path, assetId)
+                        } else {
+                            extractImageMetadata(path, assetId)
+                        }
+                        runOnUiThread { result.success(map) }
+                    } catch (_: Throwable) {
+                        runOnUiThread { result.success(null) }
+                    }
+                }
+            } else {
+                result.notImplemented()
+            }
+        }
     }
 
     private fun extractImageThumbnail(path: String, assetId: String?, targetSize: Int): ByteArray? {
@@ -865,6 +894,491 @@ class MainActivity : FlutterFragmentActivity() {
             releaseActiveScrubRetriever()
         }
         return null
+    }
+
+    private fun parseExifRational(raw: String?): Double? {
+        if (raw.isNullOrBlank()) return null
+        val trimmed = raw.trim()
+        val slashIdx = trimmed.indexOf('/')
+        if (slashIdx > 0 && slashIdx < trimmed.length - 1) {
+            val num = trimmed.substring(0, slashIdx).trim().toDoubleOrNull() ?: return null
+            val den = trimmed.substring(slashIdx + 1).trim().toDoubleOrNull() ?: return null
+            if (den == 0.0) return null
+            return num / den
+        }
+        return trimmed.toDoubleOrNull()
+    }
+
+    private fun extractXmpCreatorTool(xmp: String?): String? {
+        if (xmp.isNullOrBlank()) return null
+        val tagRegex = Regex("<xmp:CreatorTool[^>]*>([^<]+)</xmp:CreatorTool>", RegexOption.IGNORE_CASE)
+        tagRegex.find(xmp)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        val attrRegex = Regex("xmp:CreatorTool=\"([^\"]+)\"", RegexOption.IGNORE_CASE)
+        attrRegex.find(xmp)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        return null
+    }
+
+    private fun readPngMetadata(file: File, out: HashMap<String, Any>) {
+        if (!file.exists() || !file.canRead() || file.length() < 33L) return
+        try {
+            java.io.DataInputStream(java.io.BufferedInputStream(java.io.FileInputStream(file), 8192)).use { dis ->
+                val sig = ByteArray(8)
+                dis.readFully(sig)
+                val pngMagic = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+                if (!sig.contentEquals(pngMagic)) return
+
+                var bytesScanned = 8L
+                val maxScanBytes = 262_144L
+                while (bytesScanned < maxScanBytes) {
+                    val length = dis.readInt()
+                    if (length < 0 || length > 200_000) break
+                    val typeBytes = ByteArray(4)
+                    dis.readFully(typeBytes)
+                    val type = String(typeBytes, Charsets.US_ASCII)
+                    if (type == "IDAT" || type == "IEND") break
+
+                    if (type == "pHYs" && length == 9) {
+                        val ppuX = dis.readInt().toLong() and 0xFFFFFFFFL
+                        dis.readInt() // ppuY
+                        val unit = dis.readUnsignedByte()
+                        if (unit == 1 && ppuX > 0L && !out.containsKey("dpi")) {
+                            val dpi = Math.round(ppuX / 39.3701).toInt()
+                            if (dpi in 1..2400) out["dpi"] = dpi
+                        }
+                        dis.skipBytes(4) // CRC
+                    } else if ((type == "tEXt" || type == "iTXt") && length > 0 && !out.containsKey("software")) {
+                        val data = ByteArray(length)
+                        dis.readFully(data)
+                        dis.skipBytes(4) // CRC
+                        val zeroIdx = data.indexOf(0.toByte())
+                        if (zeroIdx > 0 && zeroIdx < data.size - 1) {
+                            val key = String(data, 0, zeroIdx, Charsets.ISO_8859_1).trim()
+                            if (type == "tEXt" && (key.equals("Software", true) || key.equals("Creator", true) || key.equals("Source", true))) {
+                                val value = String(data, zeroIdx + 1, data.size - zeroIdx - 1, Charsets.ISO_8859_1).trim()
+                                if (value.isNotEmpty() && value.length <= 120) {
+                                    out["software"] = value
+                                }
+                            } else if (type == "iTXt") {
+                                // iTXt: keyword\0 compFlag(1) compMethod(1) langTag\0 translatedKey\0 text
+                                val compFlag = data.getOrNull(zeroIdx + 1)?.toInt() ?: 1
+                                if (compFlag == 0) {
+                                    var pos = zeroIdx + 3
+                                    while (pos < data.size && data[pos] != 0.toByte()) pos++
+                                    pos++ // skip langTag \0
+                                    while (pos < data.size && data[pos] != 0.toByte()) pos++
+                                    pos++ // skip translatedKey \0
+                                    if (pos < data.size) {
+                                        val text = String(data, pos, data.size - pos, Charsets.UTF_8).trim()
+                                        if (key == "XML:com.adobe.xmp") {
+                                            extractXmpCreatorTool(text)?.let { out["software"] = it }
+                                        } else if (key.equals("Software", true) || key.equals("Creator", true)) {
+                                            if (text.isNotEmpty() && text.length <= 120) {
+                                                out["software"] = text
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        var toSkip = length.toLong() + 4L
+                        while (toSkip > 0L) {
+                            val skipped = dis.skip(toSkip)
+                            if (skipped <= 0L) break
+                            toSkip -= skipped
+                        }
+                    }
+                    bytesScanned += 12L + length.toLong()
+                }
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun readPsdMetadata(file: File, out: HashMap<String, Any>) {
+        if (!file.exists() || !file.canRead() || file.length() < 26L) return
+        try {
+            java.io.DataInputStream(java.io.FileInputStream(file)).use { dis ->
+                val sig = ByteArray(4)
+                dis.readFully(sig)
+                if (String(sig, Charsets.US_ASCII) != "8BPS") return
+                dis.readUnsignedShort() // version
+                dis.skipBytes(6) // reserved
+                dis.readUnsignedShort() // channels
+                val height = dis.readInt()
+                val width = dis.readInt()
+                val depth = dis.readUnsignedShort()
+                val colorMode = dis.readUnsignedShort()
+                if (width > 0 && height > 0) {
+                    out["width"] = width
+                    out["height"] = height
+                }
+                val modeName = when (colorMode) {
+                    0 -> "Bitmap"
+                    1 -> "Grayscale"
+                    2 -> "Indexed"
+                    3 -> "RGB"
+                    4 -> "CMYK"
+                    7 -> "Multichannel"
+                    8 -> "Duotone"
+                    9 -> "Lab"
+                    else -> null
+                }
+                if (modeName != null) {
+                    out["colorSpace"] = if (depth > 0) "$modeName ($depth-bit)" else modeName
+                }
+                out["mimeType"] = "image/vnd.adobe.photoshop"
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun extractImageMetadata(path: String, assetId: String?): Map<String, Any> {
+        val out = HashMap<String, Any>()
+        val file = if (path.isNotEmpty()) File(path) else null
+        val lowerPath = path.lowercase()
+
+        if (file != null && lowerPath.endsWith(".psd")) {
+            readPsdMetadata(file, out)
+            return out
+        }
+
+        // 1. Decode bounds, mimeType, and ColorSpace without allocating pixels.
+        if (file != null && file.exists() && file.canRead()) {
+            try {
+                val opts = android.graphics.BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
+                android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
+                if (opts.outWidth > 0 && opts.outHeight > 0) {
+                    out["width"] = opts.outWidth
+                    out["height"] = opts.outHeight
+                }
+                opts.outMimeType?.takeIf { it.isNotBlank() }?.let { out["mimeType"] = it }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    opts.outColorSpace?.name?.takeIf { it.isNotBlank() }?.let {
+                        out["colorSpace"] = it
+                    }
+                }
+            } catch (_: Throwable) {}
+        }
+
+        // 2. EXIF via android.media.ExifInterface
+        var pfd: android.os.ParcelFileDescriptor? = null
+        try {
+            var exif: android.media.ExifInterface? = null
+            if (file != null && file.exists() && file.canRead()) {
+                try {
+                    exif = android.media.ExifInterface(file.absolutePath)
+                } catch (_: Throwable) {}
+            }
+            if (exif == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                val id = assetId?.toLongOrNull()
+                if (id != null) {
+                    val uri = android.content.ContentUris.withAppendedId(
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        id
+                    )
+                    pfd = contentResolver.openFileDescriptor(uri, "r")
+                    if (pfd != null) {
+                        exif = android.media.ExifInterface(pfd.fileDescriptor)
+                    }
+                }
+            }
+            if (exif != null) {
+                val make = exif.getAttribute(android.media.ExifInterface.TAG_MAKE)?.trim().orEmpty()
+                val model = exif.getAttribute(android.media.ExifInterface.TAG_MODEL)?.trim().orEmpty()
+                val camera = when {
+                    make.isNotEmpty() && model.isNotEmpty() -> {
+                        if (model.startsWith(make, ignoreCase = true)) model else "$make $model"
+                    }
+                    model.isNotEmpty() -> model
+                    make.isNotEmpty() -> make
+                    else -> ""
+                }
+                if (camera.isNotEmpty()) out["camera"] = camera
+
+                val isoRaw = exif.getAttribute("ISOSpeedRatings")
+                    ?: exif.getAttribute("PhotographicSensitivity")
+                val isoInt = isoRaw?.trim()?.split(',', ' ')?.firstOrNull()?.toIntOrNull()
+                if (isoInt != null && isoInt > 0) out["iso"] = isoInt
+
+                val fNumber = parseExifRational(exif.getAttribute("FNumber"))
+                if (fNumber != null && fNumber > 0.0) out["aperture"] = fNumber
+
+                val exposure = parseExifRational(exif.getAttribute("ExposureTime"))
+                if (exposure != null && exposure > 0.0) out["shutterSpeed"] = exposure
+
+                val focal = parseExifRational(exif.getAttribute(android.media.ExifInterface.TAG_FOCAL_LENGTH))
+                if (focal != null && focal > 0.0) out["focalLength"] = focal
+
+                val focal35 = exif.getAttribute("FocalLengthIn35mmFilm")?.trim()?.toIntOrNull()
+                if (focal35 != null && focal35 > 0) out["focalLength35mm"] = focal35
+
+                val software = exif.getAttribute("Software")?.trim()
+                if (!software.isNullOrEmpty() && software.length <= 120) {
+                    out["software"] = software
+                }
+
+                if (!out.containsKey("software") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    extractXmpCreatorTool(exif.getAttribute("Xmp"))?.let {
+                        out["software"] = it
+                    }
+                }
+
+                val xRes = parseExifRational(exif.getAttribute("XResolution"))
+                if (xRes != null && xRes > 0.0) {
+                    val unit = exif.getAttributeInt("ResolutionUnit", 2)
+                    val dpi = when (unit) {
+                        3 -> Math.round(xRes * 2.54).toInt()
+                        else -> Math.round(xRes).toInt()
+                    }
+                    if (dpi in 1..2400) out["dpi"] = dpi
+                }
+
+                if (!out.containsKey("colorSpace")) {
+                    when (exif.getAttributeInt("ColorSpace", -1)) {
+                        1 -> out["colorSpace"] = "sRGB"
+                        2 -> out["colorSpace"] = "Adobe RGB"
+                    }
+                }
+
+                val orientation = exif.getAttributeInt(
+                    android.media.ExifInterface.TAG_ORIENTATION,
+                    android.media.ExifInterface.ORIENTATION_NORMAL
+                )
+                if (orientation == android.media.ExifInterface.ORIENTATION_ROTATE_90 ||
+                    orientation == android.media.ExifInterface.ORIENTATION_ROTATE_270
+                ) {
+                    val w = out["width"] as? Int
+                    val h = out["height"] as? Int
+                    if (w != null && h != null && w > 0 && h > 0) {
+                        out["width"] = h
+                        out["height"] = w
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+        } finally {
+            try { pfd?.close() } catch (_: Throwable) {}
+        }
+
+        // 3. Lightweight PNG chunk scan for Photoshop / Clip Studio Paint software & DPI.
+        if (file != null && (lowerPath.endsWith(".png") || out["mimeType"] == "image/png")) {
+            readPngMetadata(file, out)
+        }
+
+        return out
+    }
+
+    private fun extractVideoMetadata(path: String, assetId: String?): Map<String, Any> {
+        val out = HashMap<String, Any>()
+        val file = if (path.isNotEmpty()) File(path) else null
+        val id = assetId?.toLongOrNull()
+        val uri = if (id != null) {
+            android.content.ContentUris.withAppendedId(
+                android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                id
+            )
+        } else null
+
+        // 1. MediaExtractor for video/audio codecs, FPS, channels, sample rate.
+        val extractor = android.media.MediaExtractor()
+        var extPfd: android.os.ParcelFileDescriptor? = null
+        var extFis: java.io.FileInputStream? = null
+        try {
+            var sourceSet = false
+            if (file != null && file.exists() && file.canRead()) {
+                try {
+                    extractor.setDataSource(file.absolutePath)
+                    sourceSet = true
+                } catch (_: Throwable) {
+                    try {
+                        extFis = java.io.FileInputStream(file)
+                        extractor.setDataSource(extFis.fd)
+                        sourceSet = true
+                    } catch (_: Throwable) {}
+                }
+            }
+            if (!sourceSet && uri != null) {
+                try {
+                    extPfd = contentResolver.openFileDescriptor(uri, "r")
+                    if (extPfd != null) {
+                        extractor.setDataSource(extPfd.fileDescriptor)
+                        sourceSet = true
+                    }
+                } catch (_: Throwable) {
+                    try {
+                        extractor.setDataSource(applicationContext, uri, null)
+                        sourceSet = true
+                    } catch (_: Throwable) {}
+                }
+            }
+
+            if (sourceSet) {
+                var gotVideo = false
+                var gotAudio = false
+                for (i in 0 until extractor.trackCount) {
+                    val format = extractor.getTrackFormat(i)
+                    val mime = format.getString(android.media.MediaFormat.KEY_MIME) ?: continue
+                    if (!gotVideo && mime.startsWith("video/")) {
+                        gotVideo = true
+                        out["videoCodec"] = mime
+                        if (format.containsKey(android.media.MediaFormat.KEY_FRAME_RATE)) {
+                            val fps = try {
+                                format.getFloat(android.media.MediaFormat.KEY_FRAME_RATE).toDouble()
+                            } catch (_: Throwable) {
+                                try {
+                                    format.getInteger(android.media.MediaFormat.KEY_FRAME_RATE).toDouble()
+                                } catch (_: Throwable) {
+                                    0.0
+                                }
+                            }
+                            if (fps > 0.0) out["fps"] = fps
+                        }
+                        if (format.containsKey(android.media.MediaFormat.KEY_BIT_RATE)) {
+                            try {
+                                val br = format.getInteger(android.media.MediaFormat.KEY_BIT_RATE)
+                                if (br > 0) out["bitrate"] = br
+                            } catch (_: Throwable) {}
+                        }
+                        if (format.containsKey(android.media.MediaFormat.KEY_WIDTH) &&
+                            format.containsKey(android.media.MediaFormat.KEY_HEIGHT)
+                        ) {
+                            val w = format.getInteger(android.media.MediaFormat.KEY_WIDTH)
+                            val h = format.getInteger(android.media.MediaFormat.KEY_HEIGHT)
+                            val rot = if (format.containsKey("rotation-degrees")) {
+                                try { format.getInteger("rotation-degrees") } catch (_: Throwable) { 0 }
+                            } else 0
+                            if (w > 0 && h > 0) {
+                                if (rot == 90 || rot == 270) {
+                                    out["width"] = h
+                                    out["height"] = w
+                                } else {
+                                    out["width"] = w
+                                    out["height"] = h
+                                }
+                            }
+                        }
+                    } else if (!gotAudio && mime.startsWith("audio/")) {
+                        gotAudio = true
+                        out["audioCodec"] = mime
+                        if (format.containsKey(android.media.MediaFormat.KEY_CHANNEL_COUNT)) {
+                            try {
+                                val ch = format.getInteger(android.media.MediaFormat.KEY_CHANNEL_COUNT)
+                                if (ch > 0) out["audioChannels"] = ch
+                            } catch (_: Throwable) {}
+                        }
+                        if (format.containsKey(android.media.MediaFormat.KEY_SAMPLE_RATE)) {
+                            try {
+                                val sr = format.getInteger(android.media.MediaFormat.KEY_SAMPLE_RATE)
+                                if (sr > 0) out["audioSampleRate"] = sr
+                            } catch (_: Throwable) {}
+                        }
+                    }
+                    if (gotVideo && gotAudio) break
+                }
+            }
+        } catch (_: Throwable) {
+        } finally {
+            try { extractor.release() } catch (_: Throwable) {}
+            try { extPfd?.close() } catch (_: Throwable) {}
+            try { extFis?.close() } catch (_: Throwable) {}
+        }
+
+        // 2. MediaMetadataRetriever for total bitrate & FPS/dimension fallbacks.
+        val retriever = android.media.MediaMetadataRetriever()
+        var retPfd: android.os.ParcelFileDescriptor? = null
+        var retFis: java.io.FileInputStream? = null
+        try {
+            var sourceSet = false
+            if (file != null && file.exists() && file.canRead()) {
+                try {
+                    retriever.setDataSource(file.absolutePath)
+                    sourceSet = true
+                } catch (_: Throwable) {
+                    try {
+                        retFis = java.io.FileInputStream(file)
+                        retriever.setDataSource(retFis.fd)
+                        sourceSet = true
+                    } catch (_: Throwable) {}
+                }
+            }
+            if (!sourceSet && uri != null) {
+                try {
+                    retPfd = contentResolver.openFileDescriptor(uri, "r")
+                    if (retPfd != null) {
+                        retriever.setDataSource(retPfd.fileDescriptor)
+                        sourceSet = true
+                    }
+                } catch (_: Throwable) {
+                    try {
+                        retriever.setDataSource(applicationContext, uri)
+                        sourceSet = true
+                    } catch (_: Throwable) {}
+                }
+            }
+
+            if (sourceSet) {
+                val totalBitrate = retriever.extractMetadata(
+                    android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE
+                )?.toIntOrNull()
+                if (totalBitrate != null && totalBitrate > 0) {
+                    out["bitrate"] = totalBitrate
+                }
+
+                val durationMs = retriever.extractMetadata(
+                    android.media.MediaMetadataRetriever.METADATA_KEY_DURATION
+                )?.toLongOrNull() ?: 0L
+
+                if (!out.containsKey("fps") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    val capFps = retriever.extractMetadata(
+                        android.media.MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE
+                    )?.toDoubleOrNull()
+                    if (capFps != null && capFps > 0.0) {
+                        out["fps"] = capFps
+                    }
+                }
+
+                if (!out.containsKey("fps") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && durationMs > 0L) {
+                    val frameCount = retriever.extractMetadata(
+                        android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT
+                    )?.toDoubleOrNull()
+                    if (frameCount != null && frameCount > 0.0) {
+                        val computedFps = frameCount / (durationMs / 1000.0)
+                        if (computedFps in 1.0..480.0) {
+                            out["fps"] = computedFps
+                        }
+                    }
+                }
+
+                if (!out.containsKey("width") || !out.containsKey("height")) {
+                    val w = retriever.extractMetadata(
+                        android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
+                    )?.toIntOrNull() ?: 0
+                    val h = retriever.extractMetadata(
+                        android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
+                    )?.toIntOrNull() ?: 0
+                    val rot = retriever.extractMetadata(
+                        android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION
+                    )?.toIntOrNull() ?: 0
+                    if (w > 0 && h > 0) {
+                        if (rot == 90 || rot == 270) {
+                            out["width"] = h
+                            out["height"] = w
+                        } else {
+                            out["width"] = w
+                            out["height"] = h
+                        }
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+        } finally {
+            try { retriever.release() } catch (_: Throwable) {}
+            try { retPfd?.close() } catch (_: Throwable) {}
+            try { retFis?.close() } catch (_: Throwable) {}
+        }
+
+        return out
     }
 
     private fun shareFiles(paths: List<String>, mimeType: String) {

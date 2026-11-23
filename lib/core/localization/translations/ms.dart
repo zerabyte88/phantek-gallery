@@ -236,4 +236,12 @@ const Map<String, String> msTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Lompat ke halaman',
   'jump': 'Pergi',
+  'format': 'Format',
+  'bitrate': 'Kadar bit',
+  'audio': 'Audio',
+  'camera': 'Kamera',
+  'colorSpace': 'Ruang Warna',
+  'software': 'Perisian',
+  'dpi': 'Ketumpatan (DPI)',
+  'layers': 'Lapisan',
 };

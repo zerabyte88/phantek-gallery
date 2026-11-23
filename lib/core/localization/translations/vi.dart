@@ -232,4 +232,12 @@ const Map<String, String> viTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Đi tới trang',
   'jump': 'Đi',
+  'format': 'Định dạng',
+  'bitrate': 'Tốc độ bit',
+  'audio': 'Âm thanh',
+  'camera': 'Máy ảnh',
+  'colorSpace': 'Không gian màu',
+  'software': 'Phần mềm',
+  'dpi': 'Mật độ in (DPI)',
+  'layers': 'Lớp',
 };

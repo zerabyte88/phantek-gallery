@@ -233,4 +233,12 @@ const Map<String, String> hiTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'पृष्ठ पर जाएं',
   'jump': 'जाएं',
+  'format': 'फ़ॉर्मैट',
+  'bitrate': 'बिटरेट',
+  'audio': 'ऑडियो',
+  'camera': 'कैमरा',
+  'colorSpace': 'रंग स्थान',
+  'software': 'सॉफ़्टवेयर',
+  'dpi': 'प्रिंट घनत्व (DPI)',
+  'layers': 'लेयर',
 };

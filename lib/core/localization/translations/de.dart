@@ -235,4 +235,12 @@ const Map<String, String> deTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Gehe zu Seite',
   'jump': 'Los',
+  'format': 'Format',
+  'bitrate': 'Bitrate',
+  'audio': 'Audio',
+  'camera': 'Kamera',
+  'colorSpace': 'Farbraum',
+  'software': 'Software',
+  'dpi': 'Druckdichte (DPI)',
+  'layers': 'Ebenen',
 };

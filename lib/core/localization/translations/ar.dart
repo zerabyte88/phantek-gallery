@@ -228,4 +228,12 @@ const Map<String, String> arTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'الانتقال إلى صفحة',
   'jump': 'انتقال',
+  'format': 'التنسيق',
+  'bitrate': 'معدل البت',
+  'audio': 'الصوت',
+  'camera': 'الكاميرا',
+  'colorSpace': 'فضاء الألوان',
+  'software': 'البرنامج',
+  'dpi': 'كثافة الطباعة (DPI)',
+  'layers': 'الطبقات',
 };

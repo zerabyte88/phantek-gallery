@@ -235,4 +235,12 @@ const Map<String, String> ptTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'Ir para a página',
   'jump': 'Ir',
+  'format': 'Formato',
+  'bitrate': 'Taxa de bits',
+  'audio': 'Áudio',
+  'camera': 'Câmera',
+  'colorSpace': 'Espaço de cor',
+  'software': 'Software',
+  'dpi': 'Densidade (DPI)',
+  'layers': 'Camadas',
 };

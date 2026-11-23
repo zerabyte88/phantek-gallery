@@ -225,4 +225,12 @@ const Map<String, String> zhTwTranslations = {
   'availableModels': 'Available Models',
   'goToPage': '跳轉至頁面',
   'jump': '跳轉',
+  'format': '格式',
+  'bitrate': '位元率',
+  'audio': '音訊',
+  'camera': '相機',
+  'colorSpace': '色彩空間',
+  'software': '軟體',
+  'dpi': '列印密度 (DPI)',
+  'layers': '圖層',
 };

@@ -225,4 +225,12 @@ const Map<String, String> jaTranslations = {
   'availableModels': 'Available Models',
   'goToPage': 'ページへ移動',
   'jump': '移動',
+  'format': '形式',
+  'bitrate': 'ビットレート',
+  'audio': 'オーディオ',
+  'camera': 'カメラ',
+  'colorSpace': '色空間',
+  'software': 'ソフトウェア',
+  'dpi': '解像度 (DPI)',
+  'layers': 'レイヤー',
 };
