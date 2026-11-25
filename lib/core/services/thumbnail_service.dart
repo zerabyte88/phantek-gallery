@@ -99,25 +99,40 @@ class ThumbnailService {
   final Set<String> _diskCachedFileNames = {};
   int _activeWorkers = 0;
   int _activeGridHiResWorkers = 0;
+  bool _diskIndexReady = false;
+  int _diskIndexGeneration = 0;
   Directory? _cacheDir;
   String? _cacheDirPath;
   Future<Directory>? _cacheDirFuture;
 
+  @visibleForTesting
+  bool get debugIsDiskIndexReady => _diskIndexReady;
+
+  @visibleForTesting
+  void debugSetDiskIndexReady(bool ready) {
+    _diskIndexGeneration++;
+    _diskIndexReady = ready;
+  }
+
   /// Pre-initializes the persistent cache directory at application launch.
+  /// Disk cache indexing runs in the background so startup is never blocked.
   static Future<void> init() async {
     if (instance._cacheDir == null) {
       // Clear any uncompleted future captured by an earlier disposed test zone.
       instance._cacheDirFuture = null;
     }
     final dir = await instance._getCacheDirectory();
-    await instance._populateDiskCacheIndex(dir);
+    instance._diskIndexReady = false;
+    unawaited(instance._populateDiskCacheIndex(dir));
   }
 
   Future<void> _populateDiskCacheIndex(Directory dir) async {
+    final gen = ++_diskIndexGeneration;
     try {
       if (await dir.exists()) {
         await for (final entity
             in dir.list(recursive: false, followLinks: false)) {
+          if (gen != _diskIndexGeneration) return;
           if (entity is File) {
             final name = p.basename(entity.path);
             if (name.endsWith('.bin') &&
@@ -132,6 +147,10 @@ class ThumbnailService {
       }
     } catch (e) {
       debugPrint('[ThumbnailService] Error indexing disk cache: $e');
+    } finally {
+      if (gen == _diskIndexGeneration) {
+        _diskIndexReady = true;
+      }
     }
   }
 
@@ -561,6 +580,7 @@ class ThumbnailService {
   }
 
   void _processGridHiResQueue() {
+    if (_activeWorkers > 0 || _queue.isNotEmpty) return;
     while (_activeGridHiResWorkers < _maxGridHiResConcurrent &&
         _gridHiResQueue.isNotEmpty) {
       _activeGridHiResWorkers++;
@@ -571,6 +591,7 @@ class ThumbnailService {
   Future<void> _runGridHiResWorker() async {
     try {
       while (_gridHiResQueue.isNotEmpty) {
+        if (_activeWorkers > 0 || _queue.isNotEmpty) break;
         final req = _gridHiResQueue.removeFirst();
         if (req.completer.isCompleted) continue;
         if (req.isCancelled?.call() == true) {
@@ -657,7 +678,9 @@ class ThumbnailService {
       }
     } finally {
       _activeGridHiResWorkers--;
-      if (_gridHiResQueue.isNotEmpty) {
+      if (_gridHiResQueue.isNotEmpty &&
+          _activeWorkers == 0 &&
+          _queue.isEmpty) {
         _processGridHiResQueue();
       }
     }
@@ -909,6 +932,25 @@ class ThumbnailService {
       return completer.future;
     }
 
+    if (!_diskIndexReady) {
+      final dirPath = _cacheDirPath ?? _cacheDir?.path;
+      if (dirPath != null) {
+        final candidateFile = File(p.join(dirPath, _cacheFileName(assetId)));
+        final completer = Completer<Uint8List?>();
+        _inFlight[assetId] = completer;
+        _readDiskCacheFile(
+          candidateFile,
+          assetId,
+          completer,
+          filePath: filePath,
+          isVideo: isVideo,
+          isCancelled: isCancelled,
+          isIndexed: false,
+        );
+        return completer.future;
+      }
+    }
+
     _pruneCancelledThumbnailQueue();
     final completer = Completer<Uint8List?>();
     final req = _ThumbnailRequest(
@@ -932,23 +974,36 @@ class ThumbnailService {
     String? filePath,
     bool isVideo = false,
     bool Function()? isCancelled,
+    bool isIndexed = true,
   }) async {
+    final gen = _diskIndexGeneration;
     try {
-      final bytes = await file.readAsBytes();
-      if (bytes.isNotEmpty) {
-        _putInMemory(assetId, bytes);
-        _inFlight.remove(assetId);
-        _queuedOrInFlightRequests.remove(assetId);
-        completer.complete(bytes);
-        return;
+      if (isIndexed || await file.exists()) {
+        final bytes = await file.readAsBytes();
+        if (bytes.isNotEmpty) {
+          if (!isIndexed && gen == _diskIndexGeneration) {
+            _diskCachedFileNames.add(_cacheFileName(assetId));
+          }
+          _putInMemory(assetId, bytes);
+          _inFlight.remove(assetId);
+          _queuedOrInFlightRequests.remove(assetId);
+          if (!completer.isCompleted) {
+            completer.complete(bytes);
+          }
+          return;
+        }
       }
     } catch (_) {
-      evictDiskCacheIndex(assetId);
+      if (isIndexed) {
+        evictDiskCacheIndex(assetId);
+      }
     }
     _inFlight.remove(assetId);
     _queuedOrInFlightRequests.remove(assetId);
     if (isCancelled?.call() == true) {
-      completer.complete(null);
+      if (!completer.isCompleted) {
+        completer.complete(null);
+      }
       return;
     }
     _pruneCancelledThumbnailQueue();
@@ -964,7 +1019,10 @@ class ThumbnailService {
     _queuedOrInFlightRequests[assetId] = req;
     _queue.add(req);
     _processQueue();
-    completer.complete(await fallbackCompleter.future);
+    final fallbackResult = await fallbackCompleter.future;
+    if (!completer.isCompleted) {
+      completer.complete(fallbackResult);
+    }
   }
 
   void _processQueue() {
@@ -977,8 +1035,9 @@ class ThumbnailService {
   Future<void> _runWorker() async {
     try {
       while (_queue.isNotEmpty) {
-        // LIFO order prioritizes tiles currently visible on screen over scrolled-past tiles.
-        final req = _queue.removeLast();
+        // FIFO order decodes top visible tiles before lower cacheExtent tiles,
+        // while scrolled-past unmounted tiles are skipped immediately via isAllCancelled.
+        final req = _queue.removeFirst();
         if (req.completer.isCompleted) {
           _inFlight.remove(req.id);
           _queuedOrInFlightRequests.remove(req.id);
@@ -1006,6 +1065,8 @@ class ThumbnailService {
       _activeWorkers--;
       if (_queue.isNotEmpty && _activeWorkers < _maxConcurrent) {
         _processQueue();
+      } else if (_activeWorkers == 0 && _queue.isEmpty) {
+        _processGridHiResQueue();
       }
     }
   }
@@ -1016,6 +1077,7 @@ class ThumbnailService {
       if (await diskFile.exists()) {
         final diskBytes = await diskFile.readAsBytes();
         if (diskBytes.isNotEmpty) {
+          _diskCachedFileNames.add(_cacheFileName(req.id));
           _putInMemory(req.id, diskBytes);
           _inFlight.remove(req.id);
           _queuedOrInFlightRequests.remove(req.id);
@@ -1171,7 +1233,7 @@ class ThumbnailService {
     final targetFile = File(targetPath);
     final tmpFile =
         File('$targetPath.${DateTime.now().microsecondsSinceEpoch}.tmp');
-    await tmpFile.writeAsBytes(bytes, flush: true);
+    await tmpFile.writeAsBytes(bytes, flush: false);
     try {
       if (await targetFile.exists()) {
         await targetFile.delete();
@@ -1179,7 +1241,7 @@ class ThumbnailService {
       await tmpFile.rename(targetPath);
     } catch (_) {
       // Fallback if atomic rename encounters filesystem locking.
-      await targetFile.writeAsBytes(bytes, flush: true);
+      await targetFile.writeAsBytes(bytes, flush: false);
       try {
         if (await tmpFile.exists()) await tmpFile.delete();
       } catch (_) {}
@@ -1263,6 +1325,8 @@ class ThumbnailService {
 
   /// Wipes both in-memory cache and persistent disk cache.
   Future<void> clearAll() async {
+    _diskIndexGeneration++;
+    _diskIndexReady = false;
     _diskCachedFileNames.clear();
     _memoryCache.clear();
     _highResVideoCache.clear();
@@ -1293,7 +1357,11 @@ class ThumbnailService {
         final files = dir.listSync();
         for (final entity in files) {
           if (entity is File) {
-            await entity.delete();
+            try {
+              await entity.delete();
+            } on PathNotFoundException {
+              // Concurrent atomic rename/cleanup removed this file already.
+            }
           }
         }
       }

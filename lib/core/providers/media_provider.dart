@@ -16,6 +16,8 @@ final mediaScannerProvider = Provider<MediaScannerService>(
 class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
   final Set<String> _deletedIds = {};
   bool _backgroundRefreshing = false;
+  Future<List<MediaItem>>? _inFlightScan;
+  String? _inFlightExcludedKey;
 
   @override
   Future<List<MediaItem>> build() async {
@@ -41,13 +43,60 @@ class MediaListNotifier extends AsyncNotifier<List<MediaItem>> {
     return _scan(excludedFolders);
   }
 
+  String _excludedKey(List<String> excludedFolders) =>
+      excludedFolders.join('\u0000');
+
   Future<List<MediaItem>> _scan(List<String> excludedFolders) async {
-    final scanner = ref.read(mediaScannerProvider);
-    final items = await scanner.scanAll(excludedFolders: excludedFolders);
-    // Persist full list to cache for subsequent launches.
-    MediaCacheService.instance.save(items);
+    final key = _excludedKey(excludedFolders);
+    Future<List<MediaItem>> scanFuture;
+
+    if (_inFlightScan != null && _inFlightExcludedKey == key) {
+      scanFuture = _inFlightScan!;
+    } else {
+      final previous = _inFlightScan;
+      if (previous != null) {
+        // Wait for any overlapping scan with different excluded folders so two
+        // full scans never run simultaneously.
+        try {
+          await previous;
+        } catch (_) {}
+        if (_inFlightScan != null && _inFlightExcludedKey == key) {
+          scanFuture = _inFlightScan!;
+        } else {
+          scanFuture = _startScan(excludedFolders, key);
+        }
+      } else {
+        scanFuture = _startScan(excludedFolders, key);
+      }
+    }
+
+    final items = await scanFuture;
     if (_deletedIds.isEmpty) return items;
     return items.where((e) => !_deletedIds.contains(e.id)).toList();
+  }
+
+  Future<List<MediaItem>> _startScan(
+    List<String> excludedFolders,
+    String key,
+  ) {
+    final scanner = ref.read(mediaScannerProvider);
+    late final Future<List<MediaItem>> future;
+    future = () async {
+      try {
+        final items = await scanner.scanAll(excludedFolders: excludedFolders);
+        // Persist full list to cache for subsequent launches.
+        MediaCacheService.instance.save(items);
+        return items;
+      } finally {
+        if (identical(_inFlightScan, future)) {
+          _inFlightScan = null;
+          _inFlightExcludedKey = null;
+        }
+      }
+    }();
+    _inFlightScan = future;
+    _inFlightExcludedKey = key;
+    return future;
   }
 
   Future<void> _backgroundRefresh(List<String> excludedFolders) async {

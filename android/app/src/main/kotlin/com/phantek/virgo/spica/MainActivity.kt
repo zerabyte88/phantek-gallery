@@ -18,6 +18,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingAppLockResult: MethodChannel.Result? = null
     private val REQUEST_CODE_APP_LOCK = 9922
     private val scrubExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val scanExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var activeScrubPath: String? = null
     private var activeScrubRetriever: android.media.MediaMetadataRetriever? = null
     private var activeScrubFis: java.io.FileInputStream? = null
@@ -32,6 +33,9 @@ class MainActivity : FlutterFragmentActivity() {
                 scrubExecutor.execute { releaseActiveScrubRetriever() }
             }
             scrubExecutor.shutdown()
+        } catch (_: Throwable) {}
+        try {
+            scanExecutor.shutdown()
         } catch (_: Throwable) {}
         super.onDestroy()
     }
@@ -285,6 +289,195 @@ class MainActivity : FlutterFragmentActivity() {
             } else {
                 result.notImplemented()
             }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.phantek.gallery/media_scanner"
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "scanAllMedia") {
+                val excludedFolders = call.argument<List<String>>("excludedFolders") ?: emptyList()
+                if (!scanExecutor.isShutdown) {
+                    try {
+                        scanExecutor.execute {
+                            try {
+                                val items = scanAllMediaFromMediaStore(excludedFolders)
+                                runOnUiThread { result.success(items) }
+                            } catch (e: Throwable) {
+                                runOnUiThread { result.error("SCAN_FAILED", e.message, null) }
+                            }
+                        }
+                    } catch (e: Throwable) {
+                        result.error("SCAN_FAILED", e.message, null)
+                    }
+                } else {
+                    result.error("SHUTDOWN", "Scanner executor is shut down", null)
+                }
+            } else {
+                result.notImplemented()
+            }
+        }
+    }
+
+    private fun scanAllMediaFromMediaStore(excludedFolders: List<String>): List<Map<String, Any?>>? {
+        val supportedVideoExtensions = hashSetOf(
+            ".mp4", ".mkv", ".mov", ".webm", ".3gp", ".3gpp", ".avi",
+            ".m4v", ".flv", ".ts", ".wmv", ".asf", ".vob", ".ogv"
+        )
+        val supportedVideoMimes = hashSetOf(
+            "video/mp4", "video/x-matroska", "video/mkv", "video/matroska",
+            "application/x-matroska", "video/quicktime", "video/mov",
+            "video/webm", "audio/webm", "video/3gpp", "video/3gpp2",
+            "video/avi", "video/x-msvideo", "video/x-flv", "video/x-m4v",
+            "video/mp2t", "video/x-ms-wmv", "video/ogg"
+        )
+
+        val uri = android.provider.MediaStore.Files.getContentUri("external")
+        @Suppress("DEPRECATION")
+        val projection = arrayOf(
+            android.provider.MediaStore.Files.FileColumns._ID,
+            android.provider.MediaStore.MediaColumns.DATA,
+            android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+            android.provider.MediaStore.Images.ImageColumns.DATE_TAKEN,
+            android.provider.MediaStore.MediaColumns.DATE_ADDED,
+            android.provider.MediaStore.MediaColumns.DATE_MODIFIED,
+            android.provider.MediaStore.MediaColumns.SIZE,
+            android.provider.MediaStore.Video.VideoColumns.DURATION,
+            android.provider.MediaStore.MediaColumns.WIDTH,
+            android.provider.MediaStore.MediaColumns.HEIGHT,
+            android.provider.MediaStore.MediaColumns.MIME_TYPE,
+            android.provider.MediaStore.Images.ImageColumns.ORIENTATION,
+            android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE
+        )
+        val selection = "${android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE} = ? OR ${android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE} = ?"
+        val selectionArgs = arrayOf(
+            android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
+            android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()
+        )
+        val sortOrder = "${android.provider.MediaStore.MediaColumns.DATE_ADDED} DESC, ${android.provider.MediaStore.MediaColumns.DATE_MODIFIED} DESC"
+
+        val nonEmptyExcluded = excludedFolders.filter { it.isNotEmpty() }
+        val cursor = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
+            ?: return null
+
+        cursor.use { c ->
+            val idxId = c.getColumnIndex(android.provider.MediaStore.Files.FileColumns._ID)
+            @Suppress("DEPRECATION")
+            val idxData = c.getColumnIndex(android.provider.MediaStore.MediaColumns.DATA)
+            val idxDisplayName = c.getColumnIndex(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
+            val idxDateTaken = c.getColumnIndex(android.provider.MediaStore.Images.ImageColumns.DATE_TAKEN)
+            val idxDateAdded = c.getColumnIndex(android.provider.MediaStore.MediaColumns.DATE_ADDED)
+            val idxDateModified = c.getColumnIndex(android.provider.MediaStore.MediaColumns.DATE_MODIFIED)
+            val idxSize = c.getColumnIndex(android.provider.MediaStore.MediaColumns.SIZE)
+            val idxDuration = c.getColumnIndex(android.provider.MediaStore.Video.VideoColumns.DURATION)
+            val idxWidth = c.getColumnIndex(android.provider.MediaStore.MediaColumns.WIDTH)
+            val idxHeight = c.getColumnIndex(android.provider.MediaStore.MediaColumns.HEIGHT)
+            val idxMimeType = c.getColumnIndex(android.provider.MediaStore.MediaColumns.MIME_TYPE)
+            val idxOrientation = c.getColumnIndex(android.provider.MediaStore.Images.ImageColumns.ORIENTATION)
+            val idxMediaType = c.getColumnIndex(android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE)
+
+            if (idxId < 0 || idxData < 0) return null
+
+            val results = ArrayList<Map<String, Any?>>(c.count.coerceAtLeast(0))
+            while (c.moveToNext()) {
+                val path = c.getString(idxData)
+                if (path.isNullOrEmpty()) continue
+
+                if (path.contains("/.trash/") ||
+                    path.contains("\\.trash\\") ||
+                    path.endsWith("/.trash") ||
+                    path.endsWith("\\.trash")
+                ) {
+                    continue
+                }
+
+                if (nonEmptyExcluded.isNotEmpty()) {
+                    var excluded = false
+                    for (folder in nonEmptyExcluded) {
+                        if (path.startsWith(folder)) {
+                            excluded = true
+                            break
+                        }
+                    }
+                    if (excluded) continue
+                }
+
+                val file = File(path)
+                if (!file.exists()) continue
+
+                val lastSlash = maxOf(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+                val dotIdx = path.lastIndexOf('.')
+                val ext = if (dotIdx > lastSlash + 1) path.substring(dotIdx).lowercase() else ""
+
+                val mediaType = if (idxMediaType >= 0) c.getInt(idxMediaType) else 0
+                val isVideo = mediaType == android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO ||
+                    supportedVideoExtensions.contains(ext)
+
+                val rawMime = if (idxMimeType >= 0) c.getString(idxMimeType) else null
+                if (isVideo) {
+                    val lowerMime = rawMime?.lowercase() ?: ""
+                    val hasSupportedMime = lowerMime.isNotEmpty() && supportedVideoMimes.contains(lowerMime)
+                    val hasSupportedExt = ext.isNotEmpty() && supportedVideoExtensions.contains(ext)
+                    if (!hasSupportedMime && !hasSupportedExt) continue
+                }
+
+                val id = c.getLong(idxId).toString()
+                val displayName = if (idxDisplayName >= 0) c.getString(idxDisplayName) else null
+                val name = if (!displayName.isNullOrEmpty()) {
+                    displayName
+                } else if (lastSlash >= 0 && lastSlash < path.length - 1) {
+                    path.substring(lastSlash + 1)
+                } else {
+                    path
+                }
+
+                val dateTakenRaw = if (idxDateTaken >= 0) c.getLong(idxDateTaken) else 0L
+                val dateAddedSec = if (idxDateAdded >= 0) c.getLong(idxDateAdded) else 0L
+                val dateModifiedSec = if (idxDateModified >= 0) c.getLong(idxDateModified) else 0L
+
+                val dateMs = when {
+                    dateTakenRaw > 0L -> dateTakenRaw
+                    dateAddedSec > 0L -> dateAddedSec * 1000L
+                    dateModifiedSec > 0L -> dateModifiedSec * 1000L
+                    else -> 0L
+                }
+                val dateAddedMs = when {
+                    dateModifiedSec > 0L -> dateModifiedSec * 1000L
+                    dateAddedSec > 0L -> dateAddedSec * 1000L
+                    else -> 0L
+                }
+
+                val rawSize = if (idxSize >= 0) c.getLong(idxSize) else 0L
+                val size = if (rawSize > 0L) rawSize else file.length()
+
+                val durationMs = if (isVideo && idxDuration >= 0) {
+                    c.getLong(idxDuration).coerceAtLeast(0L)
+                } else {
+                    0L
+                }
+
+                val rawW = if (idxWidth >= 0) c.getInt(idxWidth) else 0
+                val rawH = if (idxHeight >= 0) c.getInt(idxHeight) else 0
+                val orientation = if (idxOrientation >= 0) c.getInt(idxOrientation) else 0
+                val isRotated = orientation == 90 || orientation == 270
+                val width = if (isRotated) rawH else rawW
+                val height = if (isRotated) rawW else rawH
+
+                val item = HashMap<String, Any?>(11)
+                item["id"] = id
+                item["path"] = path
+                item["name"] = name
+                item["dateMs"] = dateMs
+                item["dateAddedMs"] = if (dateAddedMs > 0L) dateAddedMs else null
+                item["size"] = size
+                item["isVideo"] = isVideo
+                item["durationMs"] = if (isVideo) durationMs else null
+                item["width"] = width
+                item["height"] = height
+                item["mimeType"] = rawMime
+                results.add(item)
+            }
+            return results
         }
     }
 

@@ -65,7 +65,6 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  StreamSubscription<bool>? _mediaChangeSub;
   DateTime _lastAutoRefresh = DateTime.fromMillisecondsSinceEpoch(0);
 
   final Map<FilterOption, ScrollController> _scrollControllers = {
@@ -83,10 +82,12 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   bool? _cachedFilterSmall;
   bool? _cachedShowHidden;
 
+  List<MediaItem> _cachedFilteredItems = const [];
   List<MediaItem> _memoizedAll = const [];
   List<MediaItem> _memoizedPhotos = const [];
   List<MediaItem> _memoizedVideos = const [];
   List<Album> _memoizedAlbums = const [];
+  bool _albumsDirty = true;
 
   Map<String, int> _memoizedAllIndex = const {};
   Map<String, int> _memoizedPhotosIndex = const {};
@@ -138,12 +139,17 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   }
 
   void _updateMemoizedTabs(List<MediaItem> allItems, SettingsModel settings) {
-    if (identical(_cachedAllItemsRef, allItems) &&
+    final favoritesChanged = _cachedFavoriteIds != settings.favoriteIds;
+    final tabsUnchanged = identical(_cachedAllItemsRef, allItems) &&
         _cachedSort == settings.defaultSort &&
         _cachedSearchQuery == _searchQuery &&
-        _cachedFavoriteIds == settings.favoriteIds &&
         _cachedFilterSmall == settings.filterSmallImages &&
-        _cachedShowHidden == settings.showHiddenFiles) {
+        _cachedShowHidden == settings.showHiddenFiles;
+    if (tabsUnchanged) {
+      if (favoritesChanged) {
+        _cachedFavoriteIds = settings.favoriteIds;
+        _albumsDirty = true;
+      }
       return;
     }
 
@@ -164,37 +170,32 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
           filteredItems.where((e) => e.isVideo || e.size >= 50 * 1024).toList();
     }
 
-    _memoizedAll = _filterBySearch(
-      applyFiltersAndSort(
-        filteredItems,
-        sort: settings.defaultSort,
-        filter: FilterOption.all,
-      ),
+    _cachedFilteredItems = filteredItems;
+    _memoizedAll = applyFiltersAndSort(
+      _filterBySearch(filteredItems),
+      sort: settings.defaultSort,
+      filter: FilterOption.all,
     );
-    _memoizedPhotos = _filterBySearch(
-      applyFiltersAndSort(
-        filteredItems,
-        sort: settings.defaultSort,
-        filter: FilterOption.photosOnly,
-      ),
-    );
-    _memoizedVideos = _filterBySearch(
-      applyFiltersAndSort(
-        filteredItems,
-        sort: settings.defaultSort,
-        filter: FilterOption.videosOnly,
-      ),
-    );
+    _memoizedPhotos = _memoizedAll.where((e) => !e.isVideo).toList();
+    _memoizedVideos = _memoizedAll.where((e) => e.isVideo).toList();
     _memoizedAllIndex = _buildIndexMap(_memoizedAll);
     _memoizedPhotosIndex = _buildIndexMap(_memoizedPhotos);
     _memoizedVideosIndex = _buildIndexMap(_memoizedVideos);
-    _memoizedAlbums = _filterAlbumsBySearch(
-      groupMediaIntoAlbums(
-        filteredItems,
-        sort: settings.defaultSort,
-        favoriteIds: settings.favoriteIds,
-      ),
-    );
+    _albumsDirty = true;
+  }
+
+  List<Album> _getMemoizedAlbums(SettingsModel settings) {
+    if (_albumsDirty) {
+      _memoizedAlbums = _filterAlbumsBySearch(
+        groupMediaIntoAlbums(
+          _cachedFilteredItems,
+          sort: settings.defaultSort,
+          favoriteIds: settings.favoriteIds,
+        ),
+      );
+      _albumsDirty = false;
+    }
+    return _memoizedAlbums;
   }
 
   List<MediaItem> get _currentTabItems {
@@ -239,12 +240,14 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     _initMediaChangeObserver();
   }
 
+  void _onMediaStoreChanged(MethodCall _) {
+    _triggerAutoRefresh();
+  }
+
   void _initMediaChangeObserver() {
     try {
-      PhotoManager.startChangeNotify();
-      _mediaChangeSub = PhotoManager.notifyStream.listen((_) {
-        _triggerAutoRefresh();
-      });
+      PhotoManager.addChangeCallback(_onMediaStoreChanged);
+      PhotoManager.startChangeNotify().catchError((_) {});
     } catch (_) {}
   }
 
@@ -269,9 +272,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     WidgetsBinding.instance.removeObserver(this);
     _tabTapTimer?.cancel();
     _searchDebounce?.cancel();
-    _mediaChangeSub?.cancel();
     try {
-      PhotoManager.stopChangeNotify();
+      PhotoManager.removeChangeCallback(_onMediaStoreChanged);
+      PhotoManager.stopChangeNotify().catchError((_) {});
     } catch (_) {}
     _searchCurvedAnim.dispose();
     _searchAnimController.dispose();
@@ -425,9 +428,24 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
   }
 
   Future<void> _bootstrap() async {
-    final granted = await PermissionService.instance.requestMediaPermissions();
+    var alreadyHadPermission = false;
+    try {
+      alreadyHadPermission =
+          await PermissionService.instance.hasMediaPermission();
+    } catch (_) {
+      alreadyHadPermission = false;
+    }
     if (!mounted) return;
-    if (granted) {
+
+    final granted = alreadyHadPermission ||
+        await PermissionService.instance.requestMediaPermissions();
+    if (!mounted || !granted) return;
+
+    final mediaState = ref.read(mediaListProvider);
+    final needsRefresh = !alreadyHadPermission ||
+        mediaState.hasError ||
+        (mediaState.hasValue && mediaState.value!.isEmpty);
+    if (needsRefresh) {
       ref.read(mediaListProvider.notifier).refresh();
     }
   }
@@ -1037,7 +1055,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
                       child: GridHiResScope(
                         enabled: _currentPage == index,
                         child: _buildAlbumsGrid(
-                          albums: _memoizedAlbums,
+                          albums: _getMemoizedAlbums(settings),
                           settings: settings,
                           storageKey: 'gallery_tab_albums',
                         ),
@@ -1088,11 +1106,9 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
     if (_selecting) {
       if (isAlbums) {
         final allItems = mediaAsync.value ?? [];
-        final allAlbums = groupMediaIntoAlbums(
-          allItems,
-          sort: settings.defaultSort,
-          favoriteIds: settings.favoriteIds,
-        );
+        final allAlbums = mediaAsync.hasValue
+            ? _getMemoizedAlbums(settings)
+            : const <Album>[];
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [

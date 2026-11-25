@@ -5,6 +5,17 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../models/media_item.dart';
 
+List<MediaItem> _decodeMediaCacheJson(String content) {
+  final list = jsonDecode(content) as List<dynamic>;
+  return list
+      .map((e) => MediaItem.fromJson(e as Map<String, dynamic>))
+      .toList();
+}
+
+String _encodeMediaCacheJson(List<MediaItem> items) {
+  return jsonEncode(items.map((e) => e.toJson()).toList());
+}
+
 /// Persists the last media scan result to disk for instant display on startup.
 class MediaCacheService {
   MediaCacheService._();
@@ -12,8 +23,11 @@ class MediaCacheService {
 
   static const _fileName = 'media_list_cache.json';
 
+  @visibleForTesting
+  Directory? testDirectoryOverride;
+
   Future<File> _file() async {
-    final dir = await getApplicationSupportDirectory();
+    final dir = testDirectoryOverride ?? await getApplicationSupportDirectory();
     return File(p.join(dir.path, _fileName));
   }
 
@@ -24,10 +38,7 @@ class MediaCacheService {
       if (!await f.exists()) return null;
       final content = await f.readAsString();
       if (content.isEmpty) return null;
-      final list = jsonDecode(content) as List;
-      return list
-          .map((e) => MediaItem.fromJson(e as Map<String, dynamic>))
-          .toList();
+      return await compute(_decodeMediaCacheJson, content);
     } catch (e) {
       debugPrint('[MediaCacheService] Load failed: $e');
       return null;
@@ -38,7 +49,11 @@ class MediaCacheService {
   Future<void> save(List<MediaItem> items) async {
     try {
       final f = await _file();
-      await f.writeAsString(jsonEncode(items.map((e) => e.toJson()).toList()));
+      final encoded = await compute(
+        _encodeMediaCacheJson,
+        List<MediaItem>.of(items),
+      );
+      await f.writeAsString(encoded);
     } catch (e) {
       debugPrint('[MediaCacheService] Save failed: $e');
     }

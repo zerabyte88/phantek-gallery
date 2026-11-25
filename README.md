@@ -5,7 +5,7 @@
 
   **Offline Android gallery for photos, videos, PSD files, and manga, with on-device manga OCR and dialogue localization via Local AI Server (LM Studio / Ollama).**
 
-  [![Version](https://img.shields.io/badge/Version-v2.19.26-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
+  [![Version](https://img.shields.io/badge/Version-v2.19.27-3b82f6.svg?style=flat-square)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-10b981.svg?style=flat-square&logo=android&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a-8b5cf6.svg?style=flat-square&logo=arm&logoColor=white)](https://github.com/zerabyte88/phantek-gallery/releases)
   [![Engine](https://img.shields.io/badge/Engine-Flutter%20%7C%20LM%20Studio-6366f1.svg?style=flat-square)](https://lmstudio.ai/)
@@ -28,6 +28,7 @@ For comic and manga readers, Phantek Gallery pairs on-device OCR (**Google ML Ki
 
 ### Gallery and Viewing
 
+- **Fast Startup & Large-Library Thumbnail Pipeline**: Native Android bulk MediaStore scanning, background isolate JSON caching, non-blocking disk cache indexing, top-first thumbnail queue ordering (with deferred hi-res upgrades while initial thumbnails load), and single-pass tab sorting with lazy album grouping for responsive launches even with thousands of photos and videos.
 - **Fast Navigation & Selection**: Instant native-style tab switching across grid and album views, virtualized date-grouped timeline, right-edge fast-scroll handle with Month/Year indicator, frosted-blur search across grid and albums with adaptive debounce and quick clear-search empty states, album-level memoization, and drag-to-select.
 - **Viewport-Aware Idle Hi-Res Thumbnails**: Automatically sharpens visible photo, video, and PSD thumbnails across all grids once scrolling settles so fine text and details are readable without opening each item, then immediately reverts and evicts hi-res bitmaps when scrolling resumes.
 - **PSD Layer Viewer**: Open Adobe Photoshop (`.psd`) documents with embedded-JPEG previews and a dedicated sheet for toggling individual layer visibilities.
@@ -115,7 +116,7 @@ For natural dialogue nuance, comic slang preservation, and contextual localizati
 | **Local AI Server** | OpenAI-compatible REST API | Advanced manga dialogue localization via LM Studio / Ollama |
 | **On-Device OCR** | `google_mlkit_text_recognition` (`^1.0.1`) | Offline script recognition (Japanese, Chinese, Korean, Latin) |
 | **Media Scanning** | `photo_manager`, `permission_handler` | Scoped storage media queries and permission handling |
-| **Native Bridge** | Kotlin MethodChannels | `FLAG_SECURE`, MediaStore thumbnail loader, FileProvider |
+| **Native Bridge** | Kotlin MethodChannels | `FLAG_SECURE`, MediaStore bulk scanner & thumbnail loader, FileProvider |
 | **Storage and Caching** | `shared_preferences`, `path_provider` | Settings persistence and thumbnail disk cache |
 
 </div>

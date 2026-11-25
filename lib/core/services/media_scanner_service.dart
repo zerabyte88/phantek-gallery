@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:photo_manager/photo_manager.dart';
 import '../models/media_item.dart';
@@ -49,6 +52,9 @@ const _kSupportedVideoMimes = {
 /// Uses [photo_manager] so it respects MediaStore indexing on Android and
 /// never touches the network.
 class MediaScannerService {
+  static const MethodChannel _nativeChannel =
+      MethodChannel('com.phantek.gallery/media_scanner');
+
   /// Checks if a file path or extension belongs to a supported video format.
   static bool isSupportedVideo(String pathOrExt) {
     final ext = p.extension(pathOrExt).isNotEmpty
@@ -102,18 +108,34 @@ class MediaScannerService {
       if (!granted) return [];
     }
 
+    // Fast path on Android: single native bulk MediaStore query.
+    if (Platform.isAndroid) {
+      final nativeItems = await _scanAllNative(
+        excludedFolders: excludedFolders,
+        onProgress: onProgress,
+      );
+      if (nativeItems != null) {
+        return nativeItems;
+      }
+    }
+
     final albums = await PhotoManager.getAssetPathList(
       type: RequestType.common, // both image + video
       hasAll: true,
     );
 
-    // Collect unique asset IDs across all albums.
+    // Avoid double-fetching assets when the synthetic "All" album is present.
+    final allAlbums = albums.where((a) => a.isAll).toList();
+    final albumsToScan = allAlbums.isNotEmpty ? [allAlbums.first] : albums;
+
+    // Collect unique asset IDs across target albums.
     final seen = <String>{};
     final assets = <AssetEntity>[];
 
-    for (final album in albums) {
-      final albumAssets = await album.getAssetListRange(
-          start: 0, end: await album.assetCountAsync);
+    for (final album in albumsToScan) {
+      final count = await album.assetCountAsync;
+      if (count <= 0) continue;
+      final albumAssets = await album.getAssetListRange(start: 0, end: count);
       for (final a in albumAssets) {
         if (seen.add(a.id)) {
           assets.add(a);
@@ -140,6 +162,104 @@ class MediaScannerService {
       onProgress?.call(end, total);
     }
 
+    return results;
+  }
+
+  Future<List<MediaItem>?> _scanAllNative({
+    required List<String> excludedFolders,
+    void Function(int loaded, int total)? onProgress,
+  }) async {
+    try {
+      final raw = await _nativeChannel.invokeListMethod<dynamic>(
+        'scanAllMedia',
+        {'excludedFolders': excludedFolders},
+      );
+      if (raw == null) return null;
+      final items = parseNativeScanResults(
+        raw,
+        excludedFolders: excludedFolders,
+      );
+      onProgress?.call(items.length, items.length);
+      return items;
+    } catch (e) {
+      debugPrint(
+          '[MediaScannerService] Native scan failed, falling back to photo_manager: $e');
+      return null;
+    }
+  }
+
+  /// Parses raw maps returned by the Android native bulk MediaStore scanner.
+  @visibleForTesting
+  static List<MediaItem> parseNativeScanResults(
+    List<dynamic> rawList, {
+    List<String> excludedFolders = const [],
+  }) {
+    final results = <MediaItem>[];
+    for (final entry in rawList) {
+      if (entry is! Map) continue;
+      final id = entry['id']?.toString();
+      final path = entry['path'] as String?;
+      if (id == null || id.isEmpty || path == null || path.isEmpty) continue;
+
+      if (path.contains('/.trash/') ||
+          path.contains(r'\.trash\') ||
+          path.endsWith('/.trash') ||
+          path.endsWith(r'\.trash')) {
+        continue;
+      }
+
+      if (excludedFolders
+          .any((excluded) => excluded.isNotEmpty && path.startsWith(excluded))) {
+        continue;
+      }
+
+      final ext = p.extension(path).toLowerCase();
+      final isVideo = (entry['isVideo'] as bool? ?? false) ||
+          _kSupportedVideoExtensions.contains(ext);
+
+      final rawMime = entry['mimeType'] as String?;
+      if (isVideo) {
+        final mime = rawMime?.toLowerCase() ?? '';
+        final hasSupportedMime =
+            mime.isNotEmpty && _kSupportedVideoMimes.contains(mime);
+        final hasSupportedExt = _kSupportedVideoExtensions.contains(ext);
+        if (!hasSupportedMime && !hasSupportedExt) continue;
+      }
+
+      final mimeType = (rawMime != null && rawMime.isNotEmpty)
+          ? rawMime
+          : inferMimeType(path, isVideo: isVideo);
+
+      final rawName = entry['name'] as String?;
+      final name = (rawName != null && rawName.isNotEmpty)
+          ? rawName
+          : path.split('/').last;
+
+      final dateMs = (entry['dateMs'] as num?)?.toInt() ?? 0;
+      final dateAddedMs = (entry['dateAddedMs'] as num?)?.toInt();
+      final size = (entry['size'] as num?)?.toInt() ?? 0;
+      final durationMs = (entry['durationMs'] as num?)?.toInt();
+      final width = (entry['width'] as num?)?.toInt() ?? 0;
+      final height = (entry['height'] as num?)?.toInt() ?? 0;
+
+      results.add(MediaItem(
+        id: id,
+        path: path,
+        name: name,
+        date: DateTime.fromMillisecondsSinceEpoch(dateMs),
+        dateAdded: dateAddedMs != null && dateAddedMs > 0
+            ? DateTime.fromMillisecondsSinceEpoch(dateAddedMs)
+            : null,
+        size: size,
+        isVideo: isVideo,
+        duration: isVideo
+            ? Duration(milliseconds: (durationMs ?? 0) < 0 ? 0 : (durationMs ?? 0))
+            : null,
+        width: width,
+        height: height,
+        mimeType: mimeType,
+      ));
+    }
     return results;
   }
 
