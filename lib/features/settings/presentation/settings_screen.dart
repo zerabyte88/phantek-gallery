@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -234,6 +235,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               children: [
                 _ModernTile(
                   icon: Icons.grid_view_rounded,
+                  leadingIcon: _GridPreviewIcon(
+                    columns: settings.gridColumns,
+                    isAlbum: false,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    compact: true,
+                  ),
                   title: context.tr.gridColumns,
                   subtitle: context.tr.columnsCount(settings.gridColumns),
                   onTap: () async {
@@ -250,6 +258,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 const _CardDivider(),
                 _ModernTile(
                   icon: Icons.photo_library_outlined,
+                  leadingIcon: _GridPreviewIcon(
+                    columns: settings.albumGridColumns,
+                    isAlbum: true,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    compact: true,
+                  ),
                   title: context.tr.albumsGridColumns,
                   subtitle: context.tr.columnsCount(settings.albumGridColumns),
                   onTap: () async {
@@ -957,6 +972,7 @@ class _SettingsCard extends StatelessWidget {
 class _ModernTile extends StatelessWidget {
   const _ModernTile({
     required this.icon,
+    this.leadingIcon,
     this.iconColor,
     required this.title,
     this.subtitle,
@@ -965,6 +981,7 @@ class _ModernTile extends StatelessWidget {
   });
 
   final IconData icon;
+  final Widget? leadingIcon;
   final Color? iconColor;
   final String title;
   final String? subtitle;
@@ -996,10 +1013,13 @@ class _ModernTile extends StatelessWidget {
                           .withValues(alpha: isDark ? 0.50 : 0.65),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: Icon(
-                  icon,
-                  color: iconColor ?? cs.onSurfaceVariant,
-                  size: 18,
+                child: Center(
+                  child: leadingIcon ??
+                      Icon(
+                        icon,
+                        color: iconColor ?? cs.onSurfaceVariant,
+                        size: 18,
+                      ),
                 ),
               ),
               const SizedBox(width: 14),
@@ -2449,6 +2469,14 @@ class _ThemeOptionCard extends StatelessWidget {
   }
 }
 
+@visibleForTesting
+Future<int?> showGridColumnsDialogForTesting(
+  BuildContext context,
+  int currentCols, {
+  required bool isAlbum,
+}) =>
+    _showModernGridColumnsDialog(context, currentCols, isAlbum: isAlbum);
+
 Future<int?> _showModernGridColumnsDialog(
   BuildContext context,
   int currentCols, {
@@ -2464,18 +2492,32 @@ Future<int?> _showModernGridColumnsDialog(
       ? context.tr.chooseAlbumDensity
       : context.tr.chooseThumbnailDensity;
 
+  Widget buildOptionCard(BuildContext ctx, int c) {
+    return Expanded(
+      child: _ColumnOptionCard(
+        columns: c,
+        selected: currentCols == c,
+        isAlbum: isAlbum,
+        onTap: () async {
+          await Future.delayed(const Duration(milliseconds: 100));
+          if (ctx.mounted) Navigator.pop(ctx, c);
+        },
+      ),
+    );
+  }
+
   return showDialog<int>(
     context: context,
     builder: (ctx) => Dialog(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         side: BorderSide(
-          color: cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+          color: cs.onSurface.withValues(alpha: isDark ? 0.10 : 0.08),
           width: 1,
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        padding: const EdgeInsets.all(20),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2488,14 +2530,20 @@ Future<int?> _showModernGridColumnsDialog(
                     height: 36,
                     decoration: BoxDecoration(
                       color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: cs.primary.withValues(alpha: isDark ? 0.24 : 0.18),
+                        width: 1,
+                      ),
                     ),
-                    child: Icon(
-                      isAlbum
-                          ? Icons.photo_library_outlined
-                          : Icons.grid_view_rounded,
-                      color: cs.primary,
-                      size: 18,
+                    child: Center(
+                      child: _GridPreviewIcon(
+                        columns: currentCols,
+                        isAlbum: isAlbum,
+                        size: 20,
+                        color: cs.primary,
+                        compact: true,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -2506,12 +2554,12 @@ Future<int?> _showModernGridColumnsDialog(
                         Text(
                           title,
                           style: TextStyle(
-                            fontSize: 17,
+                            fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: cs.onSurface,
                           ),
                         ),
-                        const SizedBox(height: 1),
+                        const SizedBox(height: 2),
                         Text(
                           subtitle,
                           style: TextStyle(
@@ -2525,15 +2573,25 @@ Future<int?> _showModernGridColumnsDialog(
                 ],
               ),
               const SizedBox(height: 16),
-              ...[2, 3, 4, 5].map(
-                (c) => _ColumnOptionCard(
-                  columns: c,
-                  selected: currentCols == c,
-                  isAlbum: isAlbum,
-                  onTap: () async {
-                    await Future.delayed(const Duration(milliseconds: 100));
-                    if (ctx.mounted) Navigator.pop(ctx, c);
-                  },
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    buildOptionCard(ctx, 2),
+                    const SizedBox(width: 12),
+                    buildOptionCard(ctx, 3),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    buildOptionCard(ctx, 4),
+                    const SizedBox(width: 12),
+                    buildOptionCard(ctx, 5),
+                  ],
                 ),
               ),
             ],
@@ -2562,6 +2620,10 @@ class _ColumnOptionCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    final animDuration =
+        reducedMotion ? Duration.zero : const Duration(milliseconds: 160);
+    const animCurve = Cubic(0.22, 1, 0.36, 1);
 
     final subtitle = switch (columns) {
       2 => context.tr.largeComfortableView,
@@ -2570,101 +2632,120 @@ class _ColumnOptionCard extends StatelessWidget {
       5 => context.tr.denseHighCapacity,
       _ => context.tr.columnsCount(columns),
     };
+    final label = context.tr.columnsCount(columns);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label, $subtitle',
       child: BouncyTap(
         scaleDown: 0.98,
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          duration: animDuration,
+          curve: animCurve,
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: selected
-                ? cs.primary.withValues(alpha: isDark ? 0.12 : 0.08)
+                ? cs.primary.withValues(alpha: isDark ? 0.14 : 0.10)
                 : (isDark ? cs.surfaceContainerLow : cs.surfaceContainerLowest),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: selected
                   ? cs.primary
-                  : cs.outlineVariant.withValues(alpha: isDark ? 0.12 : 0.18),
+                  : cs.onSurface.withValues(alpha: isDark ? 0.10 : 0.08),
               width: selected ? 1.5 : 1,
             ),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                width: 44,
-                height: 34,
-                padding: const EdgeInsets.all(4),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest
-                      .withValues(alpha: isDark ? 0.45 : 0.55),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: List.generate(
-                    columns,
-                    (index) => Expanded(
-                      child: Container(
-                        margin: EdgeInsets.only(
-                          left: index == 0 ? 0 : 2,
-                          right: index == columns - 1 ? 0 : 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? cs.primary
-                              : cs.onSurface.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.tr.columnsCount(columns),
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.w500,
-                        color: selected ? cs.primary : cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 20,
-                height: 20,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: selected ? cs.primary : Colors.transparent,
+                      .withValues(alpha: isDark ? 0.35 : 0.45),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: selected
-                        ? cs.primary
-                        : cs.outlineVariant.withValues(alpha: 0.6),
-                    width: selected ? 2 : 1.5,
+                        ? cs.primary.withValues(alpha: isDark ? 0.28 : 0.22)
+                        : cs.onSurface.withValues(alpha: isDark ? 0.08 : 0.06),
+                    width: 1,
                   ),
                 ),
-                child: selected
-                    ? Icon(Icons.check, size: 13, color: cs.onPrimary)
-                    : null,
+                child: Center(
+                  child: _GridPreviewIcon(
+                    columns: columns,
+                    isAlbum: isAlbum,
+                    size: 60,
+                    color: selected
+                        ? cs.primary
+                        : cs.onSurface.withValues(alpha: isDark ? 0.36 : 0.28),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight:
+                                selected ? FontWeight.w600 : FontWeight.w500,
+                            color: cs.onSurface,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedContainer(
+                    duration: animDuration,
+                    curve: animCurve,
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected ? cs.primary : Colors.transparent,
+                      border: Border.all(
+                        color: selected
+                            ? cs.primary
+                            : cs.onSurface
+                                .withValues(alpha: isDark ? 0.24 : 0.20),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: selected
+                        ? Icon(
+                            Icons.check_rounded,
+                            size: 12,
+                            color: cs.onPrimary,
+                          )
+                        : null,
+                  ),
+                ],
               ),
             ],
           ),
@@ -2672,6 +2753,144 @@ class _ColumnOptionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Renders a true 2D miniature grid icon (square tiles for photos, cover + label
+/// cards for albums) that dynamically adapts to column count and active theme.
+class _GridPreviewIcon extends StatelessWidget {
+  const _GridPreviewIcon({
+    required this.columns,
+    required this.isAlbum,
+    required this.size,
+    required this.color,
+    this.compact = false,
+  });
+
+  final int columns;
+  final bool isAlbum;
+  final double size;
+  final Color color;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeCols = columns.clamp(2, 5);
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _GridPreviewPainter(
+          columns: safeCols,
+          isAlbum: isAlbum,
+          color: color,
+          labelColor: color.withValues(alpha: color.a * 0.48),
+          compact: compact,
+        ),
+      ),
+    );
+  }
+}
+
+class _GridPreviewPainter extends CustomPainter {
+  const _GridPreviewPainter({
+    required this.columns,
+    required this.isAlbum,
+    required this.color,
+    required this.labelColor,
+    required this.compact,
+  });
+
+  final int columns;
+  final bool isAlbum;
+  final Color color;
+  final Color labelColor;
+  final bool compact;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cellPaint = Paint()
+      ..color = color
+      ..isAntiAlias = true;
+
+    if (!isAlbum) {
+      final rows = compact ? math.min(columns, 3) : math.min(columns, 4);
+      final gap = compact
+          ? (columns >= 4 ? 1.5 : 2.0)
+          : (columns >= 5 ? 2.5 : 3.5);
+      final maxCellW = (size.width - gap * (columns - 1)) / columns;
+      final maxCellH = (size.height - gap * (rows - 1)) / rows;
+      final cell = math.min(maxCellW, maxCellH);
+      final totalW = columns * cell + (columns - 1) * gap;
+      final totalH = rows * cell + (rows - 1) * gap;
+      final startX = (size.width - totalW) / 2;
+      final startY = (size.height - totalH) / 2;
+      final radius = Radius.circular((cell * 0.22).clamp(1.0, 4.0));
+
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c < columns; c++) {
+          final x = startX + c * (cell + gap);
+          final y = startY + r * (cell + gap);
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(Rect.fromLTWH(x, y, cell, cell), radius),
+            cellPaint,
+          );
+        }
+      }
+      return;
+    }
+
+    // Album grid: 2 rows of square covers with a short title bar underneath.
+    const rows = 2;
+    final gapX = compact
+        ? (columns >= 4 ? 1.5 : 2.0)
+        : (columns >= 5 ? 3.0 : 4.5);
+    final gapY = compact ? 2.5 : 5.0;
+    final labelH = compact ? 1.4 : (columns >= 5 ? 2.0 : 2.6);
+    final labelGap = compact ? 1.0 : 2.2;
+
+    final maxCoverW = (size.width - gapX * (columns - 1)) / columns;
+    final maxCoverH =
+        (size.height - gapY * (rows - 1)) / rows - labelH - labelGap;
+    final cover = math.min(maxCoverW, maxCoverH);
+    if (cover <= 0) return;
+
+    final cardH = cover + labelGap + labelH;
+    final totalW = columns * cover + (columns - 1) * gapX;
+    final totalH = rows * cardH + (rows - 1) * gapY;
+    final startX = (size.width - totalW) / 2;
+    final startY = (size.height - totalH) / 2;
+    final coverRadius = Radius.circular((cover * 0.22).clamp(1.0, 4.0));
+    final labelRadius = Radius.circular(labelH / 2);
+    final labelPaint = Paint()
+      ..color = labelColor
+      ..isAntiAlias = true;
+
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < columns; c++) {
+        final x = startX + c * (cover + gapX);
+        final y = startY + r * (cardH + gapY);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(x, y, cover, cover), coverRadius),
+          cellPaint,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(x, y + cover + labelGap, cover * 0.72, labelH),
+            labelRadius,
+          ),
+          labelPaint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GridPreviewPainter oldDelegate) =>
+      oldDelegate.columns != columns ||
+      oldDelegate.isAlbum != isAlbum ||
+      oldDelegate.color != color ||
+      oldDelegate.labelColor != labelColor ||
+      oldDelegate.compact != compact;
 }
 
 class _OptionItem<T> {

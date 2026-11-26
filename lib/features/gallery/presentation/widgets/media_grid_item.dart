@@ -164,54 +164,8 @@ class _MediaGridItemState extends State<MediaGridItem> {
       return;
     }
 
-    if (item.isVideo) {
-      final memHi =
-          ThumbnailService.instance.getMemoryHighResThumbnail(item.id);
-      if (memHi != null && memHi.isNotEmpty) {
-        _hiResToken++;
-        _hiResInFlight = false;
-        _evictHiResProvider();
-        _hiResWidth = targetWidth;
-        _activeHiResProvider = ResizeImage(
-          MemoryImage(memHi),
-          width: targetWidth,
-          height: targetWidth,
-          policy: ResizeImagePolicy.fit,
-        );
-        setState(() => _hiResActive = true);
-        return;
-      }
-
-      final token = ++_hiResToken;
-      _hiResWidth = targetWidth;
-      _hiResActive = true;
-      _hiResInFlight = true;
-      ThumbnailService.instance
-          .getGridHiResVideoThumbnail(
-        item.id,
-        filePath: item.path,
-        size: targetWidth,
-        isCancelled: () =>
-            !mounted ||
-            _hiResToken != token ||
-            !(_hiResController?.value.active ?? false),
-      )
-          .then((bytes) {
-        if (!mounted ||
-            _hiResToken != token ||
-            !(_hiResController?.value.active ?? false)) {
-          return;
-        }
-        _hiResInFlight = false;
-        if (bytes == null || bytes.isEmpty) return;
-        _evictHiResProvider();
-        _activeHiResProvider = MemoryImage(bytes);
-        setState(() {});
-      });
-      return;
-    }
-
-    // PSD: decode full cached thumbnail up to targetWidth.
+    // Video & PSD: decode full cached 512px thumbnail up to targetWidth so
+    // video tiles never jump to a different frame on idle hi-res upgrade.
     final mem = ThumbnailService.instance.getMemoryThumbnail(item.id);
     if (mem != null && mem.isNotEmpty) {
       _hiResToken++;
