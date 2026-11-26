@@ -1230,6 +1230,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                                 return AlbumGridItem(
                                   key: ValueKey(sub),
                                   album: subAlbum,
+                                  gridColumns: settings.albumGridColumns,
                                   onTap: () {
                                     setState(() {
                                       _selectedSubfolder = sub;
@@ -1374,6 +1375,8 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen>
                                                   return MediaGridItem(
                                                     key: ValueKey(item.id),
                                                     item: item,
+                                                    gridColumns:
+                                                        settings.gridColumns,
                                                     isSelected: _selected
                                                         .contains(item.id),
                                                     isSelecting: _selecting,

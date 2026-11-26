@@ -1728,6 +1728,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
       key: ValueKey(item.id),
       item: item,
       cropStyle: settings.thumbnailCropStyle,
+      gridColumns: settings.gridColumns,
       isSelected: _selected.contains(item.id),
       isSelecting: _selecting,
       showBadges: settings.showBadges,
@@ -1832,6 +1833,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen>
             return AlbumGridItem(
               key: ValueKey(album.name),
               album: album,
+              gridColumns: settings.albumGridColumns,
               isSelected: _selected.contains(album.name),
               isSelecting: _selecting,
               onTap: () {

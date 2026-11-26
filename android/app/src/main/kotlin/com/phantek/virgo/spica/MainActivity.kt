@@ -667,8 +667,8 @@ class MainActivity : FlutterFragmentActivity() {
             )
         } else null
 
-        // 1. Android Q+ (API 29+): prioritize contentResolver.loadThumbnail in <2ms when targetSize <= 512 and uri != null
-        if (targetSize <= 512 && uri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        // 1. Android Q+ (API 29+): prioritize contentResolver.loadThumbnail when targetSize <= 720 and uri != null
+        if (targetSize <= 720 && uri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 bitmap = contentResolver.loadThumbnail(
                     uri,

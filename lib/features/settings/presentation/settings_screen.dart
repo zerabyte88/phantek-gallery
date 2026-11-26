@@ -2510,91 +2510,96 @@ Future<int?> _showModernGridColumnsDialog(
     context: context,
     builder: (ctx) => Dialog(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         side: BorderSide(
           color: cs.onSurface.withValues(alpha: isDark ? 0.10 : 0.08),
           width: 1,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: cs.primary.withValues(alpha: isDark ? 0.24 : 0.18),
-                        width: 1,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 300),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color:
+                            cs.primary.withValues(alpha: isDark ? 0.14 : 0.10),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: cs.primary
+                              .withValues(alpha: isDark ? 0.24 : 0.18),
+                          width: 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: _GridPreviewIcon(
+                          columns: currentCols,
+                          isAlbum: isAlbum,
+                          size: 20,
+                          color: cs.primary,
+                          compact: true,
+                        ),
                       ),
                     ),
-                    child: Center(
-                      child: _GridPreviewIcon(
-                        columns: currentCols,
-                        isAlbum: isAlbum,
-                        size: 20,
-                        color: cs.primary,
-                        compact: true,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: cs.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    buildOptionCard(ctx, 2),
-                    const SizedBox(width: 12),
-                    buildOptionCard(ctx, 3),
                   ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    buildOptionCard(ctx, 4),
-                    const SizedBox(width: 12),
-                    buildOptionCard(ctx, 5),
-                  ],
+                const SizedBox(height: 16),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      buildOptionCard(ctx, 2),
+                      const SizedBox(width: 8),
+                      buildOptionCard(ctx, 3),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      buildOptionCard(ctx, 4),
+                      const SizedBox(width: 8),
+                      buildOptionCard(ctx, 5),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2625,31 +2630,24 @@ class _ColumnOptionCard extends StatelessWidget {
         reducedMotion ? Duration.zero : const Duration(milliseconds: 160);
     const animCurve = Cubic(0.22, 1, 0.36, 1);
 
-    final subtitle = switch (columns) {
-      2 => context.tr.largeComfortableView,
-      3 => context.tr.standardBalanced,
-      4 => context.tr.compactDetailedView,
-      5 => context.tr.denseHighCapacity,
-      _ => context.tr.columnsCount(columns),
-    };
     final label = context.tr.columnsCount(columns);
 
     return Semantics(
       button: true,
       selected: selected,
-      label: '$label, $subtitle',
+      label: label,
       child: BouncyTap(
         scaleDown: 0.98,
         onTap: onTap,
         child: AnimatedContainer(
           duration: animDuration,
           curve: animCurve,
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: selected
                 ? cs.primary.withValues(alpha: isDark ? 0.14 : 0.10)
                 : (isDark ? cs.surfaceContainerLow : cs.surfaceContainerLowest),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected
                   ? cs.primary
@@ -2658,12 +2656,13 @@ class _ColumnOptionCard extends StatelessWidget {
             ),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest
                       .withValues(alpha: isDark ? 0.35 : 0.45),
@@ -2679,73 +2678,25 @@ class _ColumnOptionCard extends StatelessWidget {
                   child: _GridPreviewIcon(
                     columns: columns,
                     isAlbum: isAlbum,
-                    size: 60,
+                    size: 48,
                     color: selected
                         ? cs.primary
                         : cs.onSurface.withValues(alpha: isDark ? 0.36 : 0.28),
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight:
-                                selected ? FontWeight.w600 : FontWeight.w500,
-                            color: cs.onSurface,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  AnimatedContainer(
-                    duration: animDuration,
-                    curve: animCurve,
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: selected ? cs.primary : Colors.transparent,
-                      border: Border.all(
-                        color: selected
-                            ? cs.primary
-                            : cs.onSurface
-                                .withValues(alpha: isDark ? 0.24 : 0.20),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: selected
-                        ? Icon(
-                            Icons.check_rounded,
-                            size: 12,
-                            color: cs.onPrimary,
-                          )
-                        : null,
-                  ),
-                ],
+              const SizedBox(height: 8),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  color: cs.onSurface,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ],
           ),

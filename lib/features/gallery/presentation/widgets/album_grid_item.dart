@@ -14,6 +14,7 @@ class AlbumGridItem extends StatefulWidget {
     super.key,
     required this.album,
     required this.onTap,
+    this.gridColumns = 3,
     this.isSelected = false,
     this.isSelecting = false,
     this.onLongPress,
@@ -21,6 +22,7 @@ class AlbumGridItem extends StatefulWidget {
 
   final Album album;
   final VoidCallback onTap;
+  final int gridColumns;
   final bool isSelected;
   final bool isSelecting;
   final VoidCallback? onLongPress;
@@ -74,6 +76,11 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
           if (mounted) _onHiResStateChanged();
         });
       }
+    } else if (oldWidget.gridColumns != widget.gridColumns &&
+        _hiResController?.value.active == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onHiResStateChanged();
+      });
     }
   }
 
@@ -110,7 +117,17 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
       return;
     }
 
-    final targetWidth = controller.computeTargetCacheWidth(context);
+    final (hiMin, hiMax) = switch (widget.gridColumns) {
+      <= 2 => (960, 1280),
+      3 => (768, 960),
+      4 => (512, 640),
+      _ => (384, 448),
+    };
+    final targetWidth = controller.computeTargetCacheWidth(
+      context,
+      minWidth: hiMin,
+      maxWidth: hiMax,
+    );
     if (_hiResActive &&
         _hiResWidth == targetWidth &&
         (_activeHiResProvider != null || _hiResInFlight)) {
@@ -274,15 +291,23 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
   }
 
   Widget _buildLowResCover(ColorScheme cs) {
+    final (int? cachedDecodeWidth, int rawFallbackDecodeWidth, FilterQuality quality) =
+        switch (widget.gridColumns) {
+      <= 2 => (null, 512, FilterQuality.medium),
+      3 => (448, 448, FilterQuality.medium),
+      4 => (320, 320, FilterQuality.low),
+      _ => (256, 256, FilterQuality.low),
+    };
+
     final mem =
         ThumbnailService.instance.getMemoryThumbnail(widget.album.coverItem.id);
     if (mem != null) {
       return Image.memory(
         mem,
-        cacheWidth: 320,
+        cacheWidth: cachedDecodeWidth,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.low,
+        filterQuality: quality,
         frameBuilder: (ctx, child, frame, sync) =>
             _lowResFrameBuilder(cs, ctx, child, frame, sync),
       );
@@ -293,10 +318,10 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
     if (diskFile != null) {
       return Image.file(
         diskFile,
-        cacheWidth: 320,
+        cacheWidth: cachedDecodeWidth,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.low,
+        filterQuality: quality,
         frameBuilder: (ctx, child, frame, sync) =>
             _lowResFrameBuilder(cs, ctx, child, frame, sync),
         errorBuilder: (_, __, ___) {
@@ -317,10 +342,10 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
         if (snap.data != null && snap.data!.isNotEmpty) {
           return Image.memory(
             snap.data!,
-            cacheWidth: 320,
+            cacheWidth: cachedDecodeWidth,
             fit: BoxFit.cover,
             gaplessPlayback: true,
-            filterQuality: FilterQuality.low,
+            filterQuality: quality,
             frameBuilder: (ctx, child, frame, sync) =>
                 _lowResFrameBuilder(cs, ctx, child, frame, sync),
           );
@@ -331,10 +356,10 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
           if (currentMem != null) {
             return Image.memory(
               currentMem,
-              cacheWidth: 320,
+              cacheWidth: cachedDecodeWidth,
               fit: BoxFit.cover,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.low,
+              filterQuality: quality,
               frameBuilder: (ctx, child, frame, sync) =>
                   _lowResFrameBuilder(cs, ctx, child, frame, sync),
             );
@@ -344,10 +369,10 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
           if (currentDisk != null) {
             return Image.file(
               currentDisk,
-              cacheWidth: 320,
+              cacheWidth: cachedDecodeWidth,
               fit: BoxFit.cover,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.low,
+              filterQuality: quality,
               frameBuilder: (ctx, child, frame, sync) =>
                   _lowResFrameBuilder(cs, ctx, child, frame, sync),
               errorBuilder: (_, __, ___) {
@@ -362,10 +387,10 @@ class _AlbumGridItemState extends State<AlbumGridItem> {
               widget.album.coverItem.path.isNotEmpty) {
             return Image.file(
               File(widget.album.coverItem.path),
-              cacheWidth: 320,
+              cacheWidth: rawFallbackDecodeWidth,
               fit: BoxFit.cover,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.low,
+              filterQuality: quality,
               frameBuilder: (ctx, child, frame, sync) =>
                   _lowResFrameBuilder(cs, ctx, child, frame, sync),
               errorBuilder: (_, __, ___) => _buildPlaceholder(cs),

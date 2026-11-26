@@ -74,6 +74,7 @@ class ThumbnailService {
   static final ThumbnailService instance = ThumbnailService._();
 
   static const int _thumbnailSize = 512;
+  static const int _videoThumbnailSize = 720;
   static const int _thumbnailQuality = 90;
   static const int _maxMemoryEntries = 500;
   static const int _maxConcurrent = 6;
@@ -714,7 +715,7 @@ class ThumbnailService {
     try {
       final bytes = await _nativeChannel.invokeMethod<Uint8List>(
         'getVideoThumbnail',
-        {'path': filePath, 'assetId': assetId, 'size': _thumbnailSize},
+        {'path': filePath, 'assetId': assetId, 'size': _videoThumbnailSize},
       );
       return bytes;
     } catch (e) {

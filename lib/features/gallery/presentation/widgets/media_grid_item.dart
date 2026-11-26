@@ -15,6 +15,7 @@ class MediaGridItem extends StatefulWidget {
     super.key,
     required this.item,
     this.cropStyle = ThumbnailCropStyle.square,
+    this.gridColumns = 3,
     required this.isSelected,
     required this.isSelecting,
     required this.showBadges,
@@ -24,6 +25,7 @@ class MediaGridItem extends StatefulWidget {
 
   final MediaItem item;
   final ThumbnailCropStyle cropStyle;
+  final int gridColumns;
   final bool isSelected;
   final bool isSelecting;
   final bool showBadges;
@@ -79,6 +81,11 @@ class _MediaGridItemState extends State<MediaGridItem> {
           if (mounted) _onHiResStateChanged();
         });
       }
+    } else if (oldWidget.gridColumns != widget.gridColumns &&
+        _hiResController?.value.active == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onHiResStateChanged();
+      });
     }
   }
 
@@ -115,7 +122,17 @@ class _MediaGridItemState extends State<MediaGridItem> {
       return;
     }
 
-    final targetWidth = controller.computeTargetCacheWidth(context);
+    final (hiMin, hiMax) = switch (widget.gridColumns) {
+      <= 2 => (960, 1280),
+      3 => (768, 960),
+      4 => (512, 640),
+      _ => (384, 448),
+    };
+    final targetWidth = controller.computeTargetCacheWidth(
+      context,
+      minWidth: hiMin,
+      maxWidth: hiMax,
+    );
     if (_hiResActive &&
         _hiResWidth == targetWidth &&
         (_activeHiResProvider != null || _hiResInFlight)) {
@@ -283,15 +300,23 @@ class _MediaGridItemState extends State<MediaGridItem> {
   }
 
   Widget _buildLowResThumbnail(ColorScheme cs, BoxFit fit) {
+    final (int? cachedDecodeWidth, int rawFallbackDecodeWidth, FilterQuality quality) =
+        switch (widget.gridColumns) {
+      <= 2 => (null, 512, FilterQuality.medium),
+      3 => (448, 448, FilterQuality.medium),
+      4 => (288, 288, FilterQuality.low),
+      _ => (224, 224, FilterQuality.low),
+    };
+
     // 1. Memory cache lookup.
     final mem = ThumbnailService.instance.getMemoryThumbnail(widget.item.id);
     if (mem != null) {
       return Image.memory(
         mem,
-        cacheWidth: 288,
+        cacheWidth: cachedDecodeWidth,
         fit: fit,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.low,
+        filterQuality: quality,
         frameBuilder: (ctx, child, frame, sync) =>
             _lowResFrameBuilder(cs, ctx, child, frame, sync),
       );
@@ -303,10 +328,10 @@ class _MediaGridItemState extends State<MediaGridItem> {
     if (diskFile != null) {
       return Image.file(
         diskFile,
-        cacheWidth: 288,
+        cacheWidth: cachedDecodeWidth,
         fit: fit,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.low,
+        filterQuality: quality,
         frameBuilder: (ctx, child, frame, sync) =>
             _lowResFrameBuilder(cs, ctx, child, frame, sync),
         errorBuilder: (_, __, ___) {
@@ -327,10 +352,10 @@ class _MediaGridItemState extends State<MediaGridItem> {
         if (snap.data != null && snap.data!.isNotEmpty) {
           return Image.memory(
             snap.data!,
-            cacheWidth: 288,
+            cacheWidth: cachedDecodeWidth,
             fit: fit,
             gaplessPlayback: true,
-            filterQuality: FilterQuality.low,
+            filterQuality: quality,
             frameBuilder: (ctx, child, frame, sync) =>
                 _lowResFrameBuilder(cs, ctx, child, frame, sync),
           );
@@ -341,10 +366,10 @@ class _MediaGridItemState extends State<MediaGridItem> {
           if (currentMem != null) {
             return Image.memory(
               currentMem,
-              cacheWidth: 288,
+              cacheWidth: cachedDecodeWidth,
               fit: fit,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.low,
+              filterQuality: quality,
               frameBuilder: (ctx, child, frame, sync) =>
                   _lowResFrameBuilder(cs, ctx, child, frame, sync),
             );
@@ -354,10 +379,10 @@ class _MediaGridItemState extends State<MediaGridItem> {
           if (currentDisk != null) {
             return Image.file(
               currentDisk,
-              cacheWidth: 288,
+              cacheWidth: cachedDecodeWidth,
               fit: fit,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.low,
+              filterQuality: quality,
               frameBuilder: (ctx, child, frame, sync) =>
                   _lowResFrameBuilder(cs, ctx, child, frame, sync),
               errorBuilder: (_, __, ___) {
@@ -372,10 +397,10 @@ class _MediaGridItemState extends State<MediaGridItem> {
               widget.item.path.isNotEmpty) {
             return Image.file(
               File(widget.item.path),
-              cacheWidth: 288,
+              cacheWidth: rawFallbackDecodeWidth,
               fit: fit,
               gaplessPlayback: true,
-              filterQuality: FilterQuality.low,
+              filterQuality: quality,
               frameBuilder: (ctx, child, frame, sync) =>
                   _lowResFrameBuilder(cs, ctx, child, frame, sync),
               errorBuilder: (_, __, ___) => _buildPlaceholder(cs),

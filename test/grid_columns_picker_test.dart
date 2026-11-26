@@ -73,10 +73,18 @@ void main() {
           expect(pos5.dx, greaterThan(pos4.dx));
           expect(pos4.dy, greaterThan(pos2.dy));
 
-          // Verify selected checkmark adapts to active theme colorScheme.
-          final checkIcon =
-              tester.widget<Icon>(find.byIcon(Icons.check_rounded));
-          expect(checkIcon.color, entry.value.colorScheme.onPrimary);
+          // Verify checkmark and density descriptions are removed, and labels are centered.
+          expect(find.byIcon(Icons.check_rounded), findsNothing);
+          expect(find.text('Standard balanced'), findsNothing);
+          expect(tester.widget<Text>(col3).textAlign, TextAlign.center);
+
+          // Verify selected card border adapts to active theme colorScheme.primary.
+          final selectedCard = tester.widget<AnimatedContainer>(
+            find.ancestor(of: col3, matching: find.byType(AnimatedContainer)),
+          );
+          final boxDeco = selectedCard.decoration! as BoxDecoration;
+          expect((boxDeco.border! as Border).top.color,
+              entry.value.colorScheme.primary);
           expect(tester.takeException(), isNull);
 
           // Select 4 columns and verify dismissal + update.
